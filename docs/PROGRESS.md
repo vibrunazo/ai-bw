@@ -118,7 +118,10 @@ quicker way to a playable Gary.
   110 games and scenarios and every drill result identical before and after. The arbiter keeps a
   trace (who got Gary's hands, for how long, who waited; `python -m gary.agent.trace`), again
   with every action identical. Gary's hands can ctrl+click (every unit of a type on screen, up to
-  12, by the game's own rule as OpenBW's client has it); nothing uses it yet. Next: intents, and
+  12, by the game's own rule as OpenBW's client has it). Tried in the fight layer (`ctrl_click`:
+  a group that is every unit of one type on screen gets a ctrl+click, not a drag box): rarely
+  applies (52 ctrl+clicks to 3,147 boxes in 16 rush games), no gain (9-pool held 12 / lost 1,
+  home defenses -88 vs v0.9's -77, within noise); not in any manifest. Next: intents, and
   the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs

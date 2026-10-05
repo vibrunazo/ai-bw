@@ -88,7 +88,7 @@ def box_around(hi, pts: list[tuple[int, int]], m: int) -> None:
 
 class FightLayer:
     def __init__(self, g: Gary, model, kind: str, before: list = (), in_fight: list = (),
-                 guard_rail: bool = False, workers: bool = True, seed: int = 0):
+                 guard_rail: bool = False, workers: bool = True, seed: int = 0, ctrl_click: bool = False):
         self.g = g
         self.model = model
         self.kind = kind                         # "per_unit" or "command"
@@ -96,6 +96,8 @@ class FightLayer:
         self.in_fight = list(in_fight)           # rules asked right before the model
         self.guard_rail = guard_rail             # drop the model's plain moves and stops (v0.7)
         self.workers = workers                   # False: workers belong to the rules
+        self.ctrl_click = ctrl_click             # select a group that is every unit of one type on
+                                                 # screen with a ctrl+click, not a drag box
         self.own_radius, self.max_units = (FIGHT_AROUND, PER_UNIT_MAX) if kind == "per_unit" else (OWN_RADIUS, COMMAND_MAX)
         self.next_fight = 0
         self.center: tuple[float, float] | None = None
@@ -328,6 +330,9 @@ class FightLayer:
                 if not on_screen:
                     g.task = None
                     return
+                if self.ctrl_click and self._ctrl_click(obs, on_screen):
+                    t.stage = "order"
+                    return
                 # a generous box: units move while Gary reacts (what it sees is 0.3 s old)
                 box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in on_screen], BOX_MARGIN)
                 t.stage = "order"
@@ -366,6 +371,25 @@ class FightLayer:
             {"stop": hi.stop, "hold": hi.hold, "stim": hi.stim, "return_cargo": hi.return_cargo}[a]()
             g.say(f"fight: {len(sel & want)} {_names(units)} -> {a.replace('_', ' ')}")
         g.task = None
+
+
+    def _ctrl_click(self, obs: dict, group: list[dict]) -> bool:
+        """When the group is every unit of one type on screen (12 at most), select it with a
+        ctrl+click on its unit nearest the group's middle: one click, and nothing else caught (a
+        drag box around marines among SCVs takes the SCVs too). True if Gary clicked."""
+        g = self.g
+        kinds = {u["type"] for u in group}
+        if len(kinds) != 1:
+            return False
+        kind = kinds.pop()
+        same = {u["tag"] for u in obs["units"] if u["owner"] == g.slot and u["type"] == kind
+                and screen_of(obs, u["x"], u["y"])}
+        if same != {u["tag"] for u in group} or len(same) > 12:
+            return False
+        cx, cy = sum(u["x"] for u in group) / len(group), sum(u["y"] for u in group) / len(group)
+        u = min(group, key=lambda u: math.dist((u["x"], u["y"]), (cx, cy)))
+        g.hi.ctrl_click(*screen_of(obs, u["x"], u["y"]))
+        return True
 
 
 def _names(units: list[dict]) -> str:

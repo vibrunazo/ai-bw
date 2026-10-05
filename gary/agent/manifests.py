@@ -180,7 +180,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         models["fight"] = getattr(fight, "path", "?")
         g.fight = FightLayer(g, fight, f["provider"], [RULES[r](g) for r in f.get("before", [])],
                              [RULES[r](g) for r in f.get("in_fight", [])], f.get("guard_rail", False),
-                             f.get("workers", True), seed)
+                             f.get("workers", True), seed, f.get("ctrl_click", False))
     if m["arbiter"] == "drill/v1":
         g.arbiter = DrillArbiter(g, seed, interruptions)
     else:

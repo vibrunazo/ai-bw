@@ -39,6 +39,8 @@ from pathlib import Path
 
 import numpy as np
 
+from gary.agent.manifests import MANIFESTS
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
 
@@ -247,7 +249,7 @@ def main() -> None:
     ap.add_argument("--run", type=int, help="score the first N saved scenarios")
     ap.add_argument("--controllers", nargs="+", default=CONTROLLERS, choices=CONTROLLERS)
     ap.add_argument("--seconds", type=float, default=45)
-    ap.add_argument("--version", default="v04", choices=["v03", "v04", "v05", "v06", "v07", "v07free", "v08", "v09"],
+    ap.add_argument("--version", default="v04", choices=[k for k in MANIFESTS if k != "drill"],
                     help="which Gary takes over (v07free: v0.7 without its guard rail, for RL-trained fight models)")
     ap.add_argument("--style", type=int, default=1)
     ap.add_argument("--parallel", type=int, default=max(1, (os.cpu_count() or 6) * 2 // 3),
