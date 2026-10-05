@@ -368,6 +368,12 @@ class HumanInterface:
         """Left click on the screen: select whatever is drawn there."""
         return self._schedule_click(sx, sy, 16, "click", shift=shift)
 
+    def ctrl_click(self, sx: int, sy: int) -> ActionResult:
+        """Ctrl+click on the screen: every unit on screen of the clicked one's type (up to 12), as
+        the game selects them (a plain click where that isn't a unit of Gary's that can be selected
+        with others, or where the env can't tell)."""
+        return self._schedule_click(sx, sy, 16, "ctrl_click")
+
     def box(self, sx0: int, sy0: int, sx1: int, sy1: int) -> ActionResult:
         """Drag-select a screen rectangle."""
         if not (self._on_screen(sx0, sy0) and self._on_screen(sx1, sy1)):
@@ -513,7 +519,7 @@ class HumanInterface:
 
     def _land(self, a: _Pending) -> None:
         g = self.game
-        click = {"click": "left", "box": "left", "build": "left", "right_click": "right",
+        click = {"click": "left", "ctrl_click": "left", "box": "left", "build": "left", "right_click": "right",
                  "minimap_right_click": "right", "minimap_order": "left"}.get(a.kind)
         act = None                       # what happened, in words, for the POV log
         if a.kind == "camera":
@@ -547,6 +553,22 @@ class HumanInterface:
                     act = f"click: select {name}"
                     if self._send(C.select([tag])):
                         self.selection = [tag]
+        elif a.kind == "ctrl_click":
+            x, y = self._to_map(a.args["sx"], a.args["sy"])
+            cx, cy = self.camera
+            vw, vh = self.p.viewport
+            tags = g.type_select(self.slot, x, y, (cx, cy, cx + vw, cy + vh)) if hasattr(g, "type_select") else []
+            tag = g.unit_at(self.slot, x, y)
+            if tags:
+                act = f"ctrl+click: select {len(tags)} {unit_name(g.unit_type_of(tags[0]))}"
+                if self._send(C.select(tags)):
+                    self.selection = tags
+            elif tag:
+                act = f"click: select {unit_name(g.unit_type_of(tag))}"
+                if self._send(C.select([tag])):
+                    self.selection = [tag]
+            else:
+                act = "click: nothing there"
         elif a.kind == "box":
             x0, y0 = self._to_map(a.args["x0"], a.args["y0"])
             x1, y1 = self._to_map(a.args["sx"], a.args["sy"])

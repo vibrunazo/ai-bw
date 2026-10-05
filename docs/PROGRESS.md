@@ -115,9 +115,11 @@ quicker way to a playable Gary.
 - **Control layers** ([CONTROL.md](CONTROL.md)): each layer (posture, macro, executor, army,
   fight, arbiter) is a swappable provider and every Gary version a manifest (`gary/agent/`; play
   any with `python -m gary.play --gary v09`); the v0.1-v0.9 class chain is gone. Every action of
-  110 games and scenarios and every drill result identical before and after. Next: the arbiter on
-  its own, intents, and the first experiment (one model doing the fight's timing vs intents plus
-  a stutter-step skill).
+  110 games and scenarios and every drill result identical before and after. The arbiter keeps a
+  trace (who got Gary's hands, for how long, who waited; `python -m gary.agent.trace`), again
+  with every action identical. Gary's hands can ctrl+click (every unit of a type on screen, up to
+  12, by the game's own rule as OpenBW's client has it); nothing uses it yet. Next: intents, and
+  the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs
   in front of marines); wall-offs.

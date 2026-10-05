@@ -29,6 +29,7 @@ class Task:
     stage: str = "start"
     data: dict = field(default_factory=dict)
     started: int = 0
+    by: str = ""                       # which layer (or rule) asked for it: the arbiter's trace
 
 
 class Gary:
@@ -42,6 +43,7 @@ class Gary:
         self.verbose = verbose
         self.task: Task | None = None
         self.task_runners: dict[str, Callable] = {}      # task kind -> runner(obs, mine, task)
+        self.trace: list[dict] = []                      # trace events (ARCHITECTURE.md 6.5): event()
         self.army_types: set[int] = set()
         self.production_types: tuple[int, ...] = ()
         self.announce: list[str] = []                    # said in the chat at the start of the game
@@ -92,6 +94,19 @@ class Gary:
     def adopt_hotkeys(self) -> None:
         """For a game Gary takes over midway (eval/scenarios.py)."""
         self.executor.adopt_hotkeys()
+
+    # --- the trace --------------------------------------------------------------------------
+
+    def event(self, kind: str, **payload) -> None:
+        self.trace.append({"frame": self.hi.frame, "kind": kind, **payload})
+
+    def save_trace(self, path) -> None:
+        """The trace as JSON lines, next to the POV log (python -m gary.agent.trace <file> sums it up)."""
+        import json
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"schema": "trace/v1", "gary": self.version, "slot": self.slot}) + "\n")
+            for e in self.trace:
+                f.write(json.dumps(e) + "\n")
 
     # --- tasks ------------------------------------------------------------------------------
 

@@ -3,9 +3,9 @@
 Who decides what, at which timescale, and how each layer becomes a swappable part. This note
 applies [ARCHITECTURE.md](ARCHITECTURE.md) §6.4 (intents), §6.6 (decision slots and providers),
 §6.7 (executors and the Attention Arbiter) and §9.1 (run manifests) to the code as it is at v0.9,
-and plans the way from here to there. Status: step 1 of the plan is done (`gary/agent/`: the
-layers as providers, every Gary version a manifest); the contracts below (`Posture`, `Intent`,
-`Skill`) come with steps 2-3.
+and plans the way from here to there. Status: steps 1-2 of the plan are done (`gary/agent/`: the
+layers as providers, every Gary version a manifest; the arbiter with a trace); the contracts
+below for intents and skills (`Intent`, `Skill`, `Candidate`) come with step 3.
 
 ## Why now
 
@@ -171,8 +171,14 @@ earlier speedups).
    plays) and the same drill results. Kept for parity, to change on its own later: the worker pull
    and v0.9's posture share one "zerglings last seen at home" clock (`Gary.calm_since`), so each
    one's sightings restart the other's calm.
-2. **The arbiter as its own layer.** Today's priority order as `fixed_priority/v1`, with trace
-   events for every action granted and every one kept waiting. Same replays again.
+2. **The arbiter as its own layer, with a trace.** Done: `fixed_priority/v1` names who got the
+   hands for every task (`arbiter` events), how long each task held them and what a fight
+   interrupted (`task_end`), and waits of 1 s or more (`wait`: macro with a decision taken, or a
+   fight going on, while the hands were busy elsewhere), read from state the layers keep anyway.
+   Saved next to every POV log (`*.trace.jsonl`); `python -m gary.agent.trace` sums traces up.
+   Same actions in all 110 parity games and scenarios. A first look (v0.9, immediate 9-pool,
+   seed 1, 8 min): the hands went 42% to macro, 19% to sending idle SCVs to mine, 9% to loading
+   the bunker, 9% to the fight model.
 3. **Intents and leases.** The rules issue intents; "direct" skills turn them into today's clicks.
    Same replays.
 4. **The first skill: STUTTER** (scripted, timed to the cooldown), with a simple L4 for variant B

@@ -49,14 +49,14 @@ class WaveArmy:
         self.army_sent: set[int] = set()
         g.task_runners["attack"] = self._run_attack
 
-    def step(self, obs: dict, mine: list[dict], done: list[dict]) -> bool:
-        """Attack-move with every 16 army units. True if Gary acted."""
+    def step(self, obs: dict, mine: list[dict], done: list[dict]) -> str | None:
+        """Attack-move with every 16 army units. "army" if Gary acted."""
         g = self.g
         army = [u for u in done if u["type"] in g.army_types and u["tag"] not in self.army_sent]
         if len(army) >= WAVE:
             g.task = Task("attack", started=g.hi.frame)
-            return True
-        return False
+            return "army"
+        return None
 
     def _run_attack(self, obs: dict, mine: list[dict], t: Task) -> None:
         """Gather marines at the rally point with drag boxes, attack-move."""
@@ -133,19 +133,20 @@ class LearnedArmy:
             left = [u for u in left if u not in near]
         return out
 
-    def step(self, obs: dict, mine: list[dict], done: list[dict]) -> bool:
+    def step(self, obs: dict, mine: list[dict], done: list[dict]) -> str | None:
+        """Who acted ("rule:pull", "scout", "army"), or None."""
         g = self.g
         hi = g.hi
         if self.pull is not None and self.pull.step(obs, mine):
-            return True
+            return "rule:pull"
         if self._scouting(obs, mine):
-            return True
+            return "scout"
         if hi.frame < self.next_ask:
-            return False
+            return None
         army = [u for u in done if u["type"] in g.army_types]
         clusters = self._clusters(army)
         if not clusters:
-            return False
+            return None
         self.next_ask = hi.frame + ASK_EVERY // len(clusters)       # one cluster per question
         group = clusters[self.ask_turn % len(clusters)]
         self.ask_turn += 1
@@ -160,7 +161,7 @@ class LearnedArmy:
         p_away = float(where[0, away].sum())
         if p_away < MOVE_P:
             self.proposed.pop(here, None)
-            return False                                          # stay
+            return None                                           # stay
         best = int(np.where(away, where[0], -1).argmax())          # where, if moving
         # move or attack-move as the model says, but never walk (rather than fight) into where
         # enemy buildings were seen. (Always attack-moving was tried: the model's plain moves are
@@ -171,10 +172,10 @@ class LearnedArmy:
         attack = attack or bool(near_enemy)
         proposed, self.proposed[here] = self.proposed.get(here), best
         if proposed is None or cell_dist(proposed, best) > 1:
-            return False                                          # wait until it says so twice
+            return None                                           # wait until it says so twice
         last = self.ordered.get(here)
         if last and cell_dist(last[0], best) <= 1 and last[1] == attack and hi.frame - last[2] < REORDER_AFTER:
-            return False
+            return None
         # will it go well? the model's fight estimate for going there vs staying put
         go = self.model.fight(grid, glob, best, attack)
         stay = self.model.fight(grid, glob, here, False)
@@ -183,14 +184,14 @@ class LearnedArmy:
                 g.say(f"army ({len(group)} units) holds: going to {self.tracker.center(best)} "
                       f"looks like {go:+.0%} army share, staying {stay:+.0%}")
             self.held[here] = best
-            return False
+            return None
         self.held.pop(here, None)
         x, y = self.tracker.center(best)
         self.ordered[here] = (best, attack, hi.frame)
         g.task = Task("army_order", data={"tags": [u["tag"] for u in group], "x": x, "y": y,
                                           "attack": attack, "p": p_away, "fight": go, "done": [], "boxes": 0},
                       started=hi.frame)
-        return True
+        return "army"
 
     def _run_army_order(self, obs: dict, mine: list[dict], t: Task) -> None:
         """Drag-box the cluster's units (12 at most per box, like the real game) and give each box

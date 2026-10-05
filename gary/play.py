@@ -56,7 +56,8 @@ def play(map_path: str, minutes: float, seed: int | None, save: str, make_bot, n
         game.save_replay(save)
         pov = save[:-4] + ".pov.jsonl" if save.endswith(".rep") else save + ".pov.jsonl"
         hi.save_pov(pov)
-        print(f"saved {save} and {pov}")
+        gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
+        print(f"saved {save} and {pov} (and Gary's trace)")
 
 
 def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot) -> None:
@@ -70,6 +71,7 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
     from gary.scr_env import ScrGame
     game = ScrGame.connect(pipe)
     hi: HumanInterface | None = None
+    gary = None
     try:
         # wait for a game to start and for Gary's Command Center to exist
         while True:
@@ -106,6 +108,8 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
         if pov and hi is not None:
             try:
                 hi.save_pov(pov)
+                if gary is not None and pov.endswith(".pov.jsonl"):
+                    gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
                 print(f"saved {pov}")
             except Exception as e:
                 print(f"could not save pov: {e}")

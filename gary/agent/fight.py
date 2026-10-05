@@ -40,6 +40,7 @@ from gary.policy.fight_memory import history_inputs
 
 ASK_EVERY = 12                       # frames between fight decisions (half a second)
 INTERRUPTIBLE = {"mine", "gas", "hotkey_building"}   # chores a fight may interrupt
+FIGHT_TASKS = {"fight_cmd", "load", "pull", "unpull", "repair", "reinforce"}
 RESOURCES = {176, 177, 178, 188, 110}
 ACT_IF_NONE_BELOW = 0.2              # act on a unit when the model gives "nothing" less than this
                                      # (with 0.2 Gary acts on about as many units as pros do: 22% vs 27%)
@@ -109,18 +110,20 @@ class FightLayer:
         self.rl_log: list[dict] | None = None
         g.task_runners["fight_cmd"] = self._run_fight_cmd
 
-    def block(self, obs: dict, mine: list[dict]) -> bool:
-        """The fight's own turn: the rules, then the model. True if Gary acted."""
+    def block(self, obs: dict, mine: list[dict]) -> str | None:
+        """The fight's own turn: the rules, then the model. Who acted ("rule:pull", "fight"...), or
+        None."""
         for rule in self.before:
             if rule.step(obs, mine):
-                return True
+                return f"rule:{rule.name}"
         return self.decide(obs, mine)
 
-    def decide(self, obs: dict, mine: list[dict]) -> bool:
+    def decide(self, obs: dict, mine: list[dict]) -> str | None:
         for rule in self.in_fight:
             if rule.step(obs, mine):
-                return True
-        return self._per_unit(obs, mine) if self.kind == "per_unit" else self._command(obs, mine)
+                return f"rule:{rule.name}"
+        acted = self._per_unit(obs, mine) if self.kind == "per_unit" else self._command(obs, mine)
+        return "fight" if acted else None
 
     # --- the models -----------------------------------------------------------------------------
 
@@ -377,6 +380,8 @@ class PullRule:
     minerals to fight them (what players do against an early zergling attack); send them back to
     mining once the base has been calm for 5 s."""
 
+    name = "pull"
+
     def __init__(self, g: Gary):
         self.g = g
         self.next_pull = 0
@@ -482,6 +487,8 @@ class LoadRule:
     enemy is there, from anywhere in the main (preload_bunkers). Marines inside are hidden, so
     Gary counts as loaded the marines it sent that are inside (not seen) or still on their way."""
 
+    name = "load"
+
     def __init__(self, g: Gary):
         self.g = g
         self.next_load = 0
@@ -554,6 +561,8 @@ class LoadRule:
 class RepairRule:
     """A damaged bunker with zerglings near: the 2 nearest free SCVs repair it."""
 
+    name = "repair"
+
     def __init__(self, g: Gary):
         self.g = g
         self.next_repair = 0
@@ -617,6 +626,8 @@ class RepairRule:
 class ReinforceRule:
     """Fighters just out of a Barracks while zerg fighters are at the base: attack-move them to
     the fight (on the minimap). The rally is a plain move, and a moving marine doesn't shoot."""
+
+    name = "reinforce"
 
     def __init__(self, g: Gary):
         self.g = g

@@ -413,6 +413,32 @@ GARY_API int gary_env_box_select(void* h, int slot, int x0, int y0, int x1, int 
 	return n;
 }
 
+// What a ctrl+click (or a double-click) at map pixel (x, y) selects for a player: every unit of the
+// clicked unit's owner and type in the view rectangle (map pixels), siege tanks in either mode as
+// one type, at most 12. The game works this out in the player's own client and sends a plain
+// selection; this follows OpenBW's client (ui.h, end_drag_select): the units in the view in the
+// unit finder's order. 0 when the click hits no own unit that can be selected with others (a
+// building: a plain click). Writes tags, returns count.
+GARY_API int gary_env_type_select(void* h, int slot, int x, int y, int vx0, int vy0, int vx1, int vy1,
+                                  unsigned* out, int max_out) {
+	auto* e = (env*)h;
+	auto& f = *e->funcs;
+	unsigned tag = gary_env_unit_at(h, slot, x, y);
+	const unit_t* clicked = tag ? f.get_unit(unit_id((uint16_t)tag)) : nullptr;
+	if (!clicked || clicked->owner != slot || !f.unit_can_be_multi_selected(clicked)) return 0;
+	auto is_tank = [&](const unit_t* u) {
+		return f.unit_is(u, UnitTypes::Terran_Siege_Tank_Siege_Mode) || f.unit_is(u, UnitTypes::Terran_Siege_Tank_Tank_Mode);
+	};
+	int n = 0;
+	for (const unit_t* u : f.find_units(rect{xy(vx0, vy0), xy(vx1, vy1)})) {
+		if (n == max_out || n == 12) break;
+		if (u->owner != slot || !selectable(u) || f.us_hidden(u)) continue;
+		if (u->unit_type != clicked->unit_type && !(is_tank(u) && is_tank(clicked))) continue;
+		out[n++] = f.get_unit_id(u).raw_value;
+	}
+	return n;
+}
+
 // Renames a player in this game and in replays saved from it (the name the source replay had
 // is kept otherwise). Header layout: 12 player slots of 36 bytes from offset 161, name at +11.
 GARY_API void gary_env_set_name(void* h, int slot, const char* name) {

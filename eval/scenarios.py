@@ -199,6 +199,7 @@ def run_one(sc: dict, controller: str, seconds: float, version: str, style: int 
             game.save_replay(save)
             if hi:
                 hi.save_pov(save[:-4] + ".pov.jsonl")
+                bot.save_trace(save[:-4] + ".trace.jsonl")
     except Exception as e:  # noqa: BLE001 - one broken scenario must not stop the table
         row["error"] = f"{type(e).__name__}: {e}"[:200]
     return row

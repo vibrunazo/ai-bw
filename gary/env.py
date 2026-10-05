@@ -70,6 +70,10 @@ def _load_dll() -> ctypes.CDLL:
     dll.gary_env_save_replay.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     dll.gary_env_unit_at.restype = ctypes.c_uint
     dll.gary_env_unit_at.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+    dll.gary_env_type_select.restype = ctypes.c_int
+    dll.gary_env_type_select.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                         ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_uint),
+                                         ctypes.c_int]
     dll.gary_env_box_select.restype = ctypes.c_int
     dll.gary_env_box_select.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                         ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_uint), ctypes.c_int]
@@ -263,6 +267,14 @@ class Game:
         """Tags a drag box (map pixels) would select for this player (up to 12)."""
         out = (ctypes.c_uint * 12)()
         n = _dll.gary_env_box_select(self._h, slot, x0, y0, x1, y1, out, 12)
+        return list(out[:n])
+
+    def type_select(self, slot: int, x: int, y: int, view: tuple[int, int, int, int]) -> list[int]:
+        """Tags a ctrl+click (or double-click) at map pixel (x, y) would select for this player: the
+        clicked unit's type in the view rectangle (map pixels x0, y0, x1, y1), up to 12; empty if
+        the click hits no own unit that can be selected with others."""
+        out = (ctypes.c_uint * 12)()
+        n = _dll.gary_env_type_select(self._h, slot, x, y, *view, out, 12)
         return list(out[:n])
 
     def unit_type_of(self, tag: int) -> int:

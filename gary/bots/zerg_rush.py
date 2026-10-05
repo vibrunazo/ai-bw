@@ -231,6 +231,8 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
         game.save_replay(save)
         pov = save[:-4] + ".pov.jsonl" if save.endswith(".rep") else save + ".pov.jsonl"
         his["T"].save_pov(pov)
+        if hasattr(gary, "save_trace") and pov.endswith(".pov.jsonl"):
+            gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
         print(f"{result}; saved {save} and {pov}")
 
 

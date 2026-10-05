@@ -15,6 +15,18 @@ asks the layers in a fixed order and the first that wants the hands gets them (i
                      5. macro
   drill/v1           micro drills (gary/drills.py): the fight layer, plus a chore and camera
                      interruptions so the fight doesn't get all of Gary's hands
+
+The trace (Gary.trace, saved next to the POV log; python -m gary.agent.trace <file> sums it up):
+
+  arbiter   a task started: who asked (granted_to: "macro", "army", "scout", "fight", "rule:pull",
+            "executor:gas"...), the task, and the task a fight turn interrupted, if any
+  task_end  a task ended: how long it held Gary's hands, whether it was interrupted
+  wait      a layer wanted the hands while they were busy elsewhere, for 1 s or more: macro (a
+            decision taken, not yet carried out) or the fight (one going on, the hands on a task
+            the fight may not interrupt); with the tasks that held the hands meanwhile
+
+Waits are read from what the layers already keep (the macro's goal, the fight's last snapshot):
+the arbiter asks no layer more than it did before, so tracing changes nothing Gary does.
 """
 
 from __future__ import annotations
@@ -23,15 +35,28 @@ import math
 import random
 
 from gary import terran as T
-from gary.agent.fight import INTERRUPTIBLE
+from gary.agent.fight import FIGHT_TASKS, INTERRUPTIBLE
 from gary.agent.gary import Gary, Task
+
+
+WAIT_MIN = 24                        # waits shorter than a second aren't traced
 
 
 class FixedPriority:
     def __init__(self, g: Gary):
         self.g = g
+        self.interrupted = None          # the task the last fight turn dropped
+        self.waits: dict[str, tuple[int, set[str]]] = {}   # layer -> (waiting since, tasks on the hands)
+        self.wanted: dict[str, str | None] = {}            # layer -> what it was waiting to do
 
     def act(self) -> None:
+        before = self.g.task
+        self.interrupted = None
+        who = self._act()
+        self._trace(before, who)
+
+    def _act(self) -> str | None:
+        """One turn; who got the hands (or acted without a task), or None."""
         g = self.g
         hi = g.hi
         g.posture.update()
@@ -41,9 +66,10 @@ class FixedPriority:
                 obs = hi.observe()               # to buildings and production, not to chores
                 mine = [u for u in obs["units"] if u["owner"] == g.slot]   # (refilling gas, mining)
                 g.executor.release_reservations(mine)
-                if not g.executor.resume_construction(mine):
-                    g.macro.step(obs, mine, [u for u in mine if u["completed"]], obs["me"])
-                return
+                if g.executor.resume_construction(mine):
+                    return "executor:resume"
+                g.macro.step(obs, mine, [u for u in mine if u["completed"]], obs["me"])
+                return "macro"
             if not hi.pending and g.setup_done and hi.frame >= g.fight.next_fight and \
                     (g.task is None or g.task.kind in INTERRUPTIBLE):
                 obs = hi.observe()
@@ -51,41 +77,87 @@ class FixedPriority:
                 mine = [u for u in obs["units"] if u["owner"] == g.slot]
                 task = g.task
                 g.task = None
-                if g.fight.block(obs, mine):
-                    return
+                who = g.fight.block(obs, mine)
+                if who:
+                    self.interrupted = task
+                    return who
                 g.task = task
         if g.army.remembers and not hi.pending:  # whatever Gary looks at, it remembers
             g.army.remember(hi.observe())
         if hi.pending:
-            return
+            return None
         obs = hi.observe()
         if not g.setup_done:
-            return g.setup(obs)
+            g.setup(obs)
+            return "setup"
         me = obs["me"]
         mine = [u for u in obs["units"] if u["owner"] == g.slot]
         done = [u for u in mine if u["completed"]]
         ex = g.executor
         ex.release_reservations(mine)
         if g.task:
-            return g.run_task(obs, mine)
-        if ex.resume_construction(mine) or ex.idle_mining(obs, done) or ex.idle_sweep(obs, done) or \
-                ex.hotkey_new_buildings(done) or ex.refill_gas(obs, done):
-            return
-        if self._army(obs, mine, done):
-            return
+            g.run_task(obs, mine)
+            return None
+        for who, chore in (("executor:resume", lambda: ex.resume_construction(mine)),
+                           ("executor:mine", lambda: ex.idle_mining(obs, done)),
+                           ("executor:sweep", lambda: ex.idle_sweep(obs, done)),
+                           ("executor:hotkey", lambda: ex.hotkey_new_buildings(done)),
+                           ("executor:gas", lambda: ex.refill_gas(obs, done))):
+            if chore():
+                return who
+        who = self._army(obs, mine, done)
+        if who:
+            return who
         g.macro.step(obs, mine, done, me)
+        return "macro"
 
-    def _army(self, obs: dict, mine: list[dict], done: list[dict]) -> bool:
+    def _army(self, obs: dict, mine: list[dict], done: list[dict]) -> str | None:
         g = self.g
         if g.posture.army_home:          # the army model's moves leave the bunker empty: none now
             done = [u for u in done if u["type"] not in g.army_types]
         if g.fight is not None:
-            if g.fight.decide(obs, mine):
-                return True
+            who = g.fight.decide(obs, mine)
+            if who:
+                return who
             if g.fight.center is not None:   # the army layer leaves units in a fight alone
                 cx, cy = g.fight.center
                 done = [u for u in done if math.dist((u["x"], u["y"]), (cx, cy)) > 12 * 32]
         return g.army.step(obs, mine, done)
+
+    # --- the trace -------------------------------------------------------------------------------
+
+    def _trace(self, before, who: str | None) -> None:
+        g = self.g
+        now = g.hi.frame
+        task = g.task
+        if task is not before:
+            if before is not None:
+                g.event("task_end", task=before.kind, by=before.by, frames=now - before.started,
+                        interrupted=before is self.interrupted)
+            if task is not None:
+                task.by = who or "?"
+                g.event("arbiter", granted_to=task.by, task=task.kind,
+                        interrupted=self.interrupted.kind if self.interrupted is not None else None)
+        busy = task.kind if task is not None else None
+        self._wait("macro", g.macro is not None and g.macro.goal is not None and busy is not None
+                   and busy not in ("build", "command"), busy, now,
+                   lambda: g.macro.goal["name"] if g.macro.goal else None)
+        self._wait("fight", g.fight is not None and g.fight.center is not None and busy is not None
+                   and busy not in FIGHT_TASKS and busy not in INTERRUPTIBLE, busy, now, lambda: None)
+
+    def _wait(self, layer: str, waiting: bool, busy: str | None, now: int, what) -> None:
+        if waiting:
+            since, on = self.waits.get(layer, (now, set()))
+            on.add(busy)
+            if layer not in self.waits:
+                self.waits[layer] = (since, on)
+                self.wanted[layer] = what()
+            return
+        if layer in self.waits:
+            since, on = self.waits.pop(layer)
+            if now - since >= WAIT_MIN:
+                self.g.event("wait", layer=layer, frames=now - since, hands_on=sorted(on),
+                             wanted=self.wanted.get(layer))
 
 
 HK_CC = 4
