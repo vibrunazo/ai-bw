@@ -422,6 +422,8 @@ Decision slots answer questions. **Executors** issue commands. Two executors exi
 - Otherwise macro has priority.
 - Every starvation interval is logged (`arbiter` trace events). That makes "why was I supply-blocked?" answerable.
 
+How the code maps onto these executors, the finer layers below them (fight intents, motor skills) and the plan to make each one swappable: [CONTROL.md](CONTROL.md).
+
 **Adherence modes** (in *z*):
 - `adherence: strict` → scripted macro, low variance. For drills: "hit this timing 20 times".
 - `adherence: loose` → neural macro. More human variety and adaptation.

@@ -487,8 +487,9 @@ class HumanInterface:
         self._mouse_moves = [m for m in self._mouse_moves if m[1] >= self.frame - 1] or self._mouse_moves[-1:]
         return pos if pos is not None else self.cursor
 
-    def _log_pov(self, click: str | None = None, act: str | None = None) -> None:
-        """One POV entry: camera, cursor, the click if any, and what Gary did, in words ("act")."""
+    def _log_pov(self, click: str | None = None, act: str | None = None, at: tuple[int, int] | None = None) -> None:
+        """One POV entry: camera, cursor, the click if any, and what Gary did, in words ("act");
+        at: where on the screen a minimap click landed (the cursor model doesn't move for those)."""
         cur = self._displayed_cursor()
         key = (self.camera, cur)
         if click is None and act is None and key == self._last_pov and self.frame % 24:
@@ -497,13 +498,16 @@ class HumanInterface:
         entry = {"frame": self.frame, "camera": list(self.camera), "cursor": list(cur), "click": click}
         if act:
             entry["act"] = act
+        if at:
+            entry["at"] = [round(at[0]), round(at[1])]
         self.pov.append(entry)
 
     def save_pov(self, path) -> None:
         """Write the point-of-view log (one JSON object per line) for viewer/gary_view --pov."""
         import json
         with open(path, "w", encoding="utf-8") as f:
-            f.write(json.dumps({"schema": "pov/v1", "slot": self.slot, "viewport": list(self.p.viewport)}) + "\n")
+            f.write(json.dumps({"schema": "pov/v1", "slot": self.slot, "viewport": list(self.p.viewport),
+                                "minimap": list(self.p.minimap_rect)}) + "\n")
             for e in self.pov:
                 f.write(json.dumps(e) + "\n")
 
@@ -618,7 +622,11 @@ class HumanInterface:
             act = f"{a.args['n']} (select group)"
             if tags and self._send(C.select(tags)):
                 self.selection = list(tags)
-        self._log_pov(click, act)
+        at = None
+        if a.kind in ("minimap_right_click", "minimap_order"):
+            mx, my, mw, mh = self.p.minimap_rect
+            at = (mx + a.args["x"] * mw / self.map_size[0], my + a.args["y"] * mh / self.map_size[1])
+        self._log_pov(click, act, at)
 
 RESOURCES = {176, 177, 178, 188, 110, 157, 149}      # mineral fields, geyser, refineries / extractor
 OTHER_NAMES = {176: "Mineral Field", 177: "Mineral Field", 178: "Mineral Field", 188: "Vespene Geyser",

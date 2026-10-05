@@ -18,8 +18,10 @@
 // With --pov (written by gary.interface.HumanInterface.save_pov), the view follows that
 // player's camera frame by frame and draws their mouse: a cross for the cursor, and a ring
 // that opens out where a click landed, green for a left click and red for a right click.
-// (v1: no fog of war; you see everything inside the camera area.) The minimap is drawn
-// bottom-left as in the game, and the POV player's minerals, gas and supply top-right.
+// (v1: no fog of war; you see everything inside the camera area.) With a POV log the picture is
+// the player's whole screen: the game view, and below it a console strip with the minimap where
+// the player's minimap is (clicks on it show there); the player's minerals, gas and supply are
+// top-right. Without one, the minimap is bottom-left.
 //
 // Keys: space pauses, left/right seek 10 s (with shift: 60 s), up/down change speed,
 // WASD moves the view when there's no POV log, Esc quits. The title bar shows the time.
@@ -95,11 +97,13 @@ struct data_loader {
 	}
 };
 
-// One line of a POV log: {"frame": F, "camera": [x, y], "cursor": [x, y], "click": "left"|"right"|null}
+// One line of a POV log: {"frame": F, "camera": [x, y], "cursor": [x, y], "click": "left"|"right"|null,
+// "at": [x, y] (a minimap click: where on the screen)}
 struct pov_entry {
 	int frame;
 	int cam_x, cam_y, cur_x, cur_y;
 	int click;  // 0 none, 1 left, 2 right
+	int at_x = -1, at_y = -1;
 };
 
 int json_int_after(const std::string& line, const char* key, int index = 0) {
@@ -125,6 +129,7 @@ struct pov_log {
 	std::vector<pov_entry> entries;
 	int view_w = 0, view_h = 0;
 	int slot = -1;  // whose minerals, gas and supply to show
+	int minimap_x = -1, minimap_y = -1;  // where the player's minimap is on the screen
 };
 
 pov_log load_pov(const std::string& path) {
@@ -137,6 +142,10 @@ pov_log load_pov(const std::string& path) {
 			out.view_w = json_int_after(line, "\"viewport\"", 0);
 			out.view_h = json_int_after(line, "\"viewport\"", 1);
 			if (line.find("\"slot\"") != std::string::npos) out.slot = json_int_after(line, "\"slot\"");
+			if (line.find("\"minimap\"") != std::string::npos) {
+				out.minimap_x = json_int_after(line, "\"minimap\"", 0);
+				out.minimap_y = json_int_after(line, "\"minimap\"", 1);
+			}
 		}
 		if (line.find("\"frame\"") == std::string::npos) continue;
 		pov_entry e{};
@@ -147,12 +156,17 @@ pov_log load_pov(const std::string& path) {
 		e.cur_y = json_int_after(line, "\"cursor\"", 1);
 		std::string click = json_str_after(line, "\"click\"");
 		e.click = click == "left" ? 1 : click == "right" ? 2 : 0;
+		if (line.find("\"at\"") != std::string::npos) {
+			e.at_x = json_int_after(line, "\"at\"", 0);
+			e.at_y = json_int_after(line, "\"at\"", 1);
+		}
 		out.entries.push_back(e);
 	}
 	return out;
 }
 
 constexpr int click_mark_frames = 24;  // a click stays marked for a second of game time
+constexpr int console_h = 80;          // the console strip below a 640x400 view (a 640x480 screen)
 
 // A 3x5 pixel font for the resource counts: digits and '/', one row per byte (3 low bits).
 const uint8_t* glyph(char c) {
@@ -166,11 +180,14 @@ const uint8_t* glyph(char c) {
 
 struct pov_ui : scr_replay<ui_functions> {
 	std::vector<pov_entry> pov;
-	// Cursor and recent clicks in map pixels, so they stay on the right spot whatever the view.
+	// The cursor in screen pixels; recent clicks in map pixels, so they stay on the right spot
+	// whatever the view (minimap clicks in screen pixels: on_screen).
 	int cursor_x = -1, cursor_y = -1;
 	int cursor_click = 0;
-	struct mark { int x, y, kind, age; };
+	struct mark { int x, y, kind, age; bool on_screen; };
 	std::vector<mark> marks;
+	int view_h = 0;                         // the game view's height; below it, the console strip
+	int minimap_x = -1, minimap_y = -1;
 
 	using scr_replay<ui_functions>::scr_replay;
 
@@ -183,15 +200,20 @@ struct pov_ui : scr_replay<ui_functions> {
 		size_t i = (it - pov.begin()) - 1;
 		const auto& e = pov[i];
 		screen_pos = xy(e.cam_x, e.cam_y);
-		cursor_x = e.cam_x + e.cur_x;
-		cursor_y = e.cam_y + e.cur_y;
+		cursor_x = e.cur_x;
+		cursor_y = e.cur_y;
 		cursor_click = 0;
 		marks.clear();
 		for (size_t j = i + 1; j-- > 0 && pov[j].frame > now - click_mark_frames;) {
 			const auto& c = pov[j];
 			if (!c.click) continue;
-			marks.push_back({c.cam_x + c.cur_x, c.cam_y + c.cur_y, c.click, now - c.frame});
-			if (now - c.frame < 6 && !cursor_click) cursor_click = c.click;
+			bool minimap = c.at_x >= 0;
+			marks.push_back({minimap ? c.at_x : c.cam_x + c.cur_x, minimap ? c.at_y : c.cam_y + c.cur_y, c.click,
+			                 now - c.frame, minimap});
+			if (now - c.frame < 6 && !cursor_click) {
+				cursor_click = c.click;
+				if (minimap) cursor_x = c.at_x, cursor_y = c.at_y;   // the hand is on the minimap
+			}
 		}
 	}
 
@@ -247,8 +269,23 @@ struct pov_ui : scr_replay<ui_functions> {
 		}
 	}
 
+	// The console strip below the game view, with the minimap where the player has it.
+	void draw_console(uint8_t* data, size_t pitch) {
+		auto area = get_minimap_area();
+		if (view_h <= 0 || view_h >= (int)screen_height) {
+			draw_minimap(data, pitch);              // no POV: OpenBW's place, bottom-left
+			return;
+		}
+		const uint8_t dark = nearest_color(24, 24, 32);
+		for (int y = view_h; y != (int)screen_height; ++y) memset(data + y * pitch, dark, screen_width);
+		int dx = minimap_x >= 0 ? minimap_x - area.from.x : 0, dy = minimap_y >= 0 ? minimap_y - area.from.y : 0;
+		if (area.to.x + dx > (int)screen_width || area.to.y + dy > (int)screen_height || area.from.x + dx < 1 ||
+		    area.from.y + dy < 1) dx = dy = 0;
+		draw_minimap(data + dy * (ptrdiff_t)pitch + dx, pitch);
+	}
+
 	void draw_callback(uint8_t* data, size_t pitch) override {
-		draw_minimap(data, pitch);
+		draw_console(data, pitch);
 		draw_resources(data, pitch);
 		if (pov.empty() || cursor_x < 0) return;
 		auto put = [&](int x, int y, uint8_t c) {
@@ -258,7 +295,7 @@ struct pov_ui : scr_replay<ui_functions> {
 		const uint8_t green = nearest_color(40, 255, 40), red = nearest_color(255, 40, 40);
 		// Clicks: a ring that opens from 4 to 20 pixels over the mark's life, 2 pixels thick.
 		for (auto& m : marks) {
-			int sx = m.x - screen_pos.x, sy = m.y - screen_pos.y;
+			int sx = m.on_screen ? m.x : m.x - screen_pos.x, sy = m.on_screen ? m.y : m.y - screen_pos.y;
 			double r = 4 + 16.0 * m.age / click_mark_frames;
 			uint8_t c = m.kind == 1 ? green : red;
 			for (int a = 0; a != 96; ++a) {
@@ -267,7 +304,7 @@ struct pov_ui : scr_replay<ui_functions> {
 			}
 		}
 		// Cursor: a cross with a dark outline, in the click color right after a click.
-		int cx = cursor_x - screen_pos.x, cy = cursor_y - screen_pos.y;
+		int cx = cursor_x, cy = cursor_y;
 		uint8_t c = cursor_click == 1 ? green : cursor_click == 2 ? red : white;
 		for (int d = -9; d <= 9; ++d) {
 			for (int o : {-1, 1}) {
@@ -368,7 +405,7 @@ int run(int argc, char** argv) {
 	if (!pov_file.empty()) pov = load_pov(pov_file);
 	if (width <= 0 || height <= 0) {
 		width = pov.view_w > 0 ? pov.view_w : 640;
-		height = pov.view_h > 0 ? pov.view_h : 400;
+		height = pov.view_h > 0 ? pov.view_h + console_h : 400;   // the player's screen: view and console
 	}
 
 	data_loader loader(data_dir);
@@ -390,6 +427,9 @@ int run(int argc, char** argv) {
 	}
 	ui.pov = std::move(pov.entries);
 	ui.slot = pov.slot;
+	ui.view_h = pov.view_h;
+	ui.minimap_x = pov.minimap_x;
+	ui.minimap_y = pov.minimap_y;
 	ui.resize(width, height);
 	ui.screen_pos = {0, 0};
 	ui.set_image_data();

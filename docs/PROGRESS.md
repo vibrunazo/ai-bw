@@ -21,7 +21,7 @@ quicker way to a playable Gary.
 | P1 Data | ◐ | ~70k replays indexed, resim with Remastered support (go decided: it works), fog-of-war views | Camera logger, camera inference, fitting human profiles from data (the interface's numbers are still placeholders) |
 | P1b Taxonomy | ◐ | TvZ build clusters with readable rules (`taxonomy/discover.py`) | A reviewed `taxonomy/tvz/v1.yaml`, stability and gold-set reports |
 | P1c Strategy stats | — | | Win-rate table, feature library, guide claims |
-| **P2 Micro** | **◐ (current)** | Fight and command models learned from pro skirmishes; scenario suite from pro replays (`eval/scenarios.py`); first reinforcement learning on scenarios (`train/fight_rl.py`) | Responses within the human band: on home-defense scenarios v0.9 is the best Gary (fuller score: pro +1, v0.9 −77, v0.8 −102, v0.7 −120, v0.3 −156, nothing −302); it holds the immediate 9-pool in 11 of 16 games (v0.3 5, v0.8 1) |
+| **P2 Micro** | **◐ (current)** | Fight and command models learned from pro skirmishes; scenario suite from pro replays (`eval/scenarios.py`); first reinforcement learning on scenarios (`train/fight_rl.py`) | Responses within the human band: on home-defense scenarios v0.9 is the best Gary (fuller score: pro +1, v0.9 −77, v0.8 −102, v0.7 −120, v0.3 −156, nothing −302); it holds the immediate 9-pool in 13 of 16 games (v0.3 5, v0.8 2) |
 | P2b First playable | ◐ | Full games against people, offline, via the bridge; learned macro steered by build style | Build timings within tolerance (≥18/20 unharassed runs); supply blocks and idle production under harass within the human band |
 | P2c Debug viewer | ● | POV viewer with cursor, clicks and every action in words; videos | Trace overlays beyond actions |
 | P3 BC full game | ◐ (early) | Separate imitation models for macro, army movement and fights | One policy with intent and belief heads, Opponent Model, value network |
@@ -93,14 +93,28 @@ quicker way to a playable Gary.
   in most games, not never); only the army stays home, no expansion, until it's 1.5x the biggest
   zerg army seen. New marines out of a Barracks while zerglings are at the base get an
   attack-move to the fight (the rally walked them past it, not shooting). Depots start while each
-  producer has 2 supply left. Immediate 9-pool: held 12, lost 3; the 7:00 rush: held 16 of 16
-  (v0.8 15, lost 1), more built (38 buildings at 12:00, v0.8 35). Home defenses: −77, unchanged.
+  producer has 2 supply left. Home defenses: −77, unchanged.
+- **The benchmark's Zerg was unfair** (seen in a side-by-side: one Gary got its first wave a minute
+  later): the dummy box-selected a larva with a tiny box, new zerglings stood on the larvae, the
+  box caught one, and the dummy reselected for up to 50 s, depending on where larvae spawned (the
+  shared random numbers, so on how Gary played). It now rallies its hatchery away from the larvae
+  and picks a clear larva: both Zergs now match to the second until the fighting. Its waves come a
+  little earlier (first at 3:42, was 3:51). Rerun on it (earlier numbers aren't comparable):
+  immediate 9-pool, held / lost: **v0.9 13 / 1**, v0.3 5 / 8, v0.8 2 / 8; 7:00 rush: 16 / 0 for all
+  three, 37 buildings at 12:00 for v0.9 (v0.3 39, v0.8 38). Tried and dropped: holding until the
+  Zerg army has been seen (or 6:00); against the 7:00 rush, whose zerglings stay home, it kept
+  Gary on one base until 6:00 and two games nearly died (25 buildings on average).
 - **Marine timing** (`eval/micro_timing.py`, the 114 home defenses, ~71 marine-minutes of
   fighting each): pros' marines get 8.4 move orders per minute of fighting and shoot again 0.84 s
   after a move (median; 46% within 1 s); v0.9's get 1.5 and shoot again after 1.6 s (15% within
   1 s); after a move 14% die before shooting again (pros 7%); 271 marines lost to the pros' 221.
   Gary doesn't move too much: it moves too rarely and too long, no stutter step.
-- **Viewer:** videos show the minimap and the POV player's minerals, gas and supply.
+- **Viewer:** with a POV log, videos show the player's whole 640x480 screen: the view, the console
+  strip with the minimap where the player has it (minimap clicks show there; the POV log now
+  records where they land), the actions on the right, and minerals, gas and supply top-right.
+- **Control layers** ([CONTROL.md](CONTROL.md)): a design for making each layer (posture, macro,
+  army, fight, motor skills, arbiter) a swappable provider chosen by a manifest, with the first
+  experiment: one model doing the fight's timing vs intents plus a stutter-step skill.
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs
   in front of marines); wall-offs.

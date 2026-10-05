@@ -3,6 +3,11 @@
 It exists to test Gary (does it defend? does it hold its ramp, pull back, counter?). Like Gary it
 plays through the human interface (fog of war, mouse and camera, APM), so neither side cheats.
 
+Its timing should depend on the seed, not on how Gary plays: once the pool is down it rallies the
+hatchery away from the larvae, and it picks a larva with nothing else around it. (New zerglings
+used to stand on the larvae, so the tiny box around a larva caught a zergling too, and the dummy
+kept reselecting: up to 50 s without a zergling, depending on where larvae happened to spawn.)
+
     python -m gary.bots.zerg_rush --vs v03 --map path/to/map.scx --minutes 10
 """
 
@@ -20,6 +25,7 @@ POOL, LING, OVERLORD, DRONE, HATCH = 142, 37, 42, 41, 131
 MINING = 87                     # order: mining minerals (the drone stands at the field)
 DRONES = 9
 WAVE = 12
+RALLY = 5 * 32                  # the hatchery's rally: this far from it, toward the map's middle
 
 
 class ZergRush:
@@ -39,6 +45,11 @@ class ZergRush:
         self.stage = ""
         self.overlord_at = -10**9
         self.attack_after = 0                 # frame of the first allowed attack
+        self.rallied = False
+        w, h = mapinfo.size
+        d = math.dist(self.home, (w / 2, h / 2)) or 1
+        self.rally = (round(self.home[0] + (w / 2 - self.home[0]) / d * RALLY),
+                      round(self.home[1] + (h / 2 - self.home[1]) / d * RALLY))
 
     def act(self) -> None:
         hi = self.hi
@@ -123,6 +134,19 @@ class ZergRush:
                 self.stage = "attack"
                 return
 
+        # once the pool is down: the hatchery's rally away from the larvae (click the hatchery's top,
+        # above the larvae, then right-click the rally spot)
+        if pool and not self.rallied:
+            p = screen_of(obs, *self.rally)
+            if obs["selection"] == [self.hatch] and p:
+                hi.right_click(*p)
+                self.rallied = True
+                return
+            top = screen_of(obs, self.home[0], self.home[1] - 24)
+            if top:
+                hi.click(*top)
+                return
+
         # larvae: overlords when supply runs short, drones to 9, then zerglings
         if not larva or me["minerals"] < 50:
             return
@@ -139,7 +163,10 @@ class ZergRush:
         # a click on a larva usually picks the hatchery behind it: drag a tiny box around it instead
         sel = [u for u in mine if u["tag"] in obs["selection"]]
         if not sel or any(u["type"] != C.LARVA for u in sel):
-            lv = larva[(hi.frame // 48) % len(larva)]
+            clear = [lv for lv in larva if not any(u["type"] != C.LARVA and abs(u["x"] - lv["x"]) < 12
+                                                   and abs(u["y"] - lv["y"]) < 12 for u in mine)]
+            pick = clear or larva
+            lv = pick[(hi.frame // 48) % len(pick)]
             x, y = screen_of(obs, lv["x"], lv["y"])
             hi.box(max(0, x - 3), max(0, y - 3), x + 3, y + 3)
             return
