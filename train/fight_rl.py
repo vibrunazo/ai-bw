@@ -31,7 +31,8 @@ import torch
 import torch.nn.functional as F
 
 from eval import scenarios as S
-from gary.bots.terran_v04 import DEST_NOISE, latest_fight_model
+from gary.agent.fight import DEST_NOISE
+from gary.agent.manifests import latest_fight_model
 from gary.policy.fight import ACTIONS, DEST_SCALE, FightModel, tensors
 
 REPO_ROOT = Path(__file__).resolve().parent.parent

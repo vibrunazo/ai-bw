@@ -199,9 +199,8 @@ def drill_gary(game: Game, drill: Drill, fight_model, seed: int, verbose: bool =
     budget varies from play to play (4-7 actions a second, bursts of 10-20), so a model can't
     learn to count on one."""
     import dataclasses
-    from gary.bots.drill_gary import DrillGary
-    from gary.bots.terran_v01 import PROFILES
-    from gary.interface import HumanInterface
+    from gary.agent.manifests import build_gary
+    from gary.interface import PROFILES, HumanInterface
     r = random.Random(drill.seed * 1_000_003 + seed)
     profile = dataclasses.replace(PROFILES["pro"], apm_per_second=r.uniform(4.0, 7.0), apm_capacity=r.uniform(10.0, 20.0))
     hi = HumanInterface(game, TERRAN_SLOT, profile, seed=1)
@@ -211,7 +210,7 @@ def drill_gary(game: Game, drill: Drill, fight_model, seed: int, verbose: bool =
     vw, vh = hi.p.viewport
     hi.camera = (max(0, int(x - vw / 2)), max(0, int(y - vh / 2)))
     w, h = hi.map_size
-    bot = DrillGary(hi, fight_model, flip=(x > w / 2, y > h / 2), seed=seed, verbose=verbose)
+    bot = build_gary(hi, None, "drill", verbose=verbose, seed=seed, flip=(x > w / 2, y > h / 2), fight_model=fight_model)
     return bot, hi
 
 
@@ -232,7 +231,7 @@ def run_drill(drill: Drill, controller: str = "gary", fight_path: str | None = N
         if controller == "gary":
             bot, hi = drill_gary(game, drill, _fight_model(fight_path), sample_seed, verbose)
             if log:
-                bot.rl_log = []
+                bot.fight.rl_log = []
         obs = game.observe()
         start = {u["tag"]: (u["owner"], u["type"]) for u in obs["units"] if u["owner"] in (TERRAN_SLOT, ZERG_SLOT)}
         goal = tuple(drill.info["goal"]) if "goal" in drill.info else None
@@ -268,7 +267,7 @@ def run_drill(drill: Drill, controller: str = "gary", fight_path: str | None = N
         row.update(res, T_left=left[TERRAN_SLOT], Z_left=left[ZERG_SLOT], SCVs_lost=res["T_workers_lost"],
                    **{k: v for k, v in drill.info.items() if k not in ("goal", "minerals")})
         if bot and log:
-            row["log"] = bot.rl_log
+            row["log"] = bot.fight.rl_log
         if hi:
             row["acts"] = sum(1 for e in hi.pov if "act" in e)
         if save:
@@ -289,7 +288,7 @@ def _fight_model(path: str | None):
     if path not in _models:
         import torch
         torch.set_num_threads(1)
-        from gary.bots.terran_v05 import latest_command_model
+        from gary.agent.manifests import latest_command_model
         from gary.policy.fight_cmd import load_fight_policy
         _models.clear()
         _models[path] = load_fight_policy(path or latest_command_model(memory=True))

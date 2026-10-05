@@ -30,10 +30,10 @@ unpacked into `external/sdl2`. Run `viewer\build.bat`; it produces `viewer\build
 ## Try it
 
 ```
-python -m gary.bots.terran_v01 --map tests\fixtures\replays\stardata_tvz_standard_ozp3w.rep --minutes 10 --save data\interim\gary_games\gary_v01.rep
-eplaysstardata_tvz_standard_ozp3w.rep --minutes 10 --save data\interim\gary_games\gary_v01.rep
-viewer\build\gary_view.exe --data data\gamedata\scr --replay data\interim\gary_games\gary_v01.rep --pov data\interim\gary_games\gary_v01.pov.jsonl
-viewer\build\gary_view.exe --data data\gamedata\scr --replay data\interim\gary_games\gary_v01.rep --pov data\interim\gary_games\gary_v01.pov.jsonl --record gary_v01.mp4 --to 240
+python -m gary.play --gary v09 --map tests\fixtures\replays\stardata_tvz_standard_ozp3w.rep --minutes 10 --save data\interim\gary_games\gary_v09.rep
+viewer\build\gary_view.exe --data data\gamedata\scr --replay data\interim\gary_games\gary_v09.rep --pov data\interim\gary_games\gary_v09.pov.jsonl
+vieweruild\gary_view.exe --data data\gamedata\scr --replay data\interim\gary_games\gary_v09.rep --pov data\interim\gary_games\gary_v09.pov.jsonl
+python viewer\watch.py data\interim\gary_games\gary_v09.rep --pov data\interim\gary_games\gary_v09.pov.jsonl --record gary_v09.mp4 --to 240
 ```
 
 Remastered replays (and any other) through the wrapper, which decodes them first:

@@ -35,7 +35,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from gary.bots.terran_v05 import latest_command_model
+from gary.agent.manifests import latest_command_model
 from gary.drills import behavior, make_drill, run_drill
 from gary.policy.fight import tensors
 from gary.policy.fight_cmd import HANDS_FEATURES, MOVES, POINTER, CommandModel, CommandNet

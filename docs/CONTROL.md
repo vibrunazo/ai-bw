@@ -3,7 +3,9 @@
 Who decides what, at which timescale, and how each layer becomes a swappable part. This note
 applies [ARCHITECTURE.md](ARCHITECTURE.md) §6.4 (intents), §6.6 (decision slots and providers),
 §6.7 (executors and the Attention Arbiter) and §9.1 (run manifests) to the code as it is at v0.9,
-and plans the way from here to there. Status: design, not built yet (see the plan at the end).
+and plans the way from here to there. Status: step 1 of the plan is done (`gary/agent/`: the
+layers as providers, every Gary version a manifest); the contracts below (`Posture`, `Intent`,
+`Skill`) come with steps 2-3.
 
 ## Why now
 
@@ -123,23 +125,23 @@ model, a human) can label later, and the gold set keeps them honest.
 
 ### Manifests: a Gary is a choice per layer
 
-```yaml
-gary: v0.9
-layers:
-  posture:  {provider: rules/early_pool_v1}
-  macro:    {provider: learned, model: macro/TvZ_T_20261004-071331, style: 1,
-             builds: {early_pool_defense: scripted/one_base_defense_v1}}
-  executor: {provider: scripted/v1}
-  army:     {provider: learned, model: army/TvZ_T_20261004-141356}
-  fight:    {provider: cascade, chain: [rules/pull_load_repair_reinforce_v1, command_model/rl_run4]}
-  motor:    {provider: direct}
-  arbiter:  {provider: fixed_priority/v1}
+v0.9, as it is in `gary/agent/manifests.py`:
+
+```python
+"v09": {"version": "v0.9",
+        "posture": "early_pool/v1",
+        "macro": {"provider": "learned", "model": "macro/latest", "builds": ["one_base_defense"]},
+        "army": {"provider": "learned", "model": "army/latest"},
+        "fight": {"provider": "command", "model": "fight_cmd_rl/v08",
+                  "before": ["repair", "pull", "load"], "in_fight": ["reinforce"], "workers": False},
+        "arbiter": "fixed_priority/v1"}
 ```
 
-Variant B for the experiment changes two lines (`fight: intent_model/...`, `motor: scripted/v1`).
-A version number becomes a named manifest; the bot classes become one composer that builds a
-Gary from a manifest. The old versions stay runnable as baselines as long as their providers
-exist (v0.3 and v0.8 are still the benchmarks' reference points).
+The executor is `scripted/v1` whenever there is a macro or an army; there is no motor layer yet
+(step 3). Variant B for the experiment will change the fight layer and add a motor one. Every
+version from v0.2 is a manifest (`v02`...`v09`, `v07free` for judging RL models, `drill` for
+drills), built by `build_gary`; `python -m gary.play --gary v09` plays any of them, and the
+benchmarks take the same names. v0.1's scripted build order was dropped (git history has it).
 
 ## Where today's code goes
 
@@ -162,9 +164,13 @@ Each step keeps Gary playable, and each step that only moves code must not chang
 v0.9 manifest has to reproduce v0.9's games bit for bit (same replays for fixed seeds, as for the
 earlier speedups).
 
-1. **Contracts and the composer.** The dataclasses above, a manifest loader, and the existing code
-   wrapped as providers: v0.9 rebuilt as a manifest, checked for identical replays. The v0.1–v0.9
-   class chain then goes (old versions as manifests).
+1. **The layers as providers, versions as manifests.** Done: `gary/agent/` (gary, executor,
+   posture, macro, army, fight, arbiter, manifests), `gary/play.py`; the class chain is gone.
+   Parity: Gary's every action identical before and after in 110 games and scenarios (the rush
+   benchmarks for v0.2-v0.9, 64 home defenses for v0.3, v0.4, v0.7free and v0.9, sampled RL
+   plays) and the same drill results. Kept for parity, to change on its own later: the worker pull
+   and v0.9's posture share one "zerglings last seen at home" clock (`Gary.calm_since`), so each
+   one's sightings restart the other's calm.
 2. **The arbiter as its own layer.** Today's priority order as `fixed_priority/v1`, with trace
    events for every action granted and every one kept waiting. Same replays again.
 3. **Intents and leases.** The rules issue intents; "direct" skills turn them into today's clicks.

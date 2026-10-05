@@ -112,9 +112,12 @@ quicker way to a playable Gary.
 - **Viewer:** with a POV log, videos show the player's whole 640x480 screen: the view, the console
   strip with the minimap where the player has it (minimap clicks show there; the POV log now
   records where they land), the actions on the right, and minerals, gas and supply top-right.
-- **Control layers** ([CONTROL.md](CONTROL.md)): a design for making each layer (posture, macro,
-  army, fight, motor skills, arbiter) a swappable provider chosen by a manifest, with the first
-  experiment: one model doing the fight's timing vs intents plus a stutter-step skill.
+- **Control layers** ([CONTROL.md](CONTROL.md)): each layer (posture, macro, executor, army,
+  fight, arbiter) is a swappable provider and every Gary version a manifest (`gary/agent/`; play
+  any with `python -m gary.play --gary v09`); the v0.1-v0.9 class chain is gone. Every action of
+  110 games and scenarios and every drill result identical before and after. Next: the arbiter on
+  its own, intents, and the first experiment (one model doing the fight's timing vs intents plus
+  a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs
   in front of marines); wall-offs.
@@ -134,7 +137,7 @@ quicker way to a playable Gary.
 - **How we got here:** drills alone taught it to run away (nothing to defend) or overfit them;
   drills with something to defend helped some; training on real positions with real validation is
   what transferred. Replays of each stage: `eval/record.py`, and the trainer records at every test.
-- **Fights share Gary's hands** (`gary/bots/drill_gary.py`, `train/fight_cmd_rl.py`): drills got
+- **Fights share Gary's hands** (drills' Gary, now the `drill` manifest in `gary/agent/manifests.py`; `train/fight_cmd_rl.py`): drills got
   a macro chore (checking the Command Center between fight commands), camera interruptions and a
   random APM budget; the command model can take Gary's hand state as input (APM tokens left,
   production waiting, time since the last macro action, camera on the fight); each command costs a

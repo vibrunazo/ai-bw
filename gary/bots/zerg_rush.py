@@ -17,6 +17,7 @@ import argparse
 import math
 
 from gary import commands as C
+from gary.agent.manifests import MANIFESTS
 from gary.env import LIVE_COMMAND_DELAY, Game
 from gary.interface import PROFILES, HumanInterface, screen_of
 from gary.mapinfo import MapInfo
@@ -235,7 +236,7 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--vs", default="v03", choices=["v01", "v02", "v03", "v04", "v05", "v06", "v07", "v08", "v09"], help="which Gary plays Terran")
+    ap.add_argument("--vs", default="v03", choices=[k for k in MANIFESTS if k != "drill"], help="which Gary plays Terran")
     ap.add_argument("--map", required=True)
     ap.add_argument("--minutes", type=float, default=10)
     ap.add_argument("--seed", type=int)
@@ -243,55 +244,8 @@ def main() -> None:
     ap.add_argument("--attack-after", type=float, default=0, help="no attack before this many seconds")
     ap.add_argument("--style", type=int, help="build style (taxonomy cluster) to steer Gary's macro toward")
     args = ap.parse_args()
-    if args.vs == "v01":
-        from gary.bots.terran_v01 import TerranGary as make
-    elif args.vs == "v02":
-        from gary.bots.terran_v02 import TerranGaryV2, latest_model
-        from gary.policy.macro import MacroModel
-        macro = MacroModel.load(latest_model())
-        make = lambda hi, m: TerranGaryV2(hi, m, macro, args.style)
-    elif args.vs == "v04":
-        from gary.bots.terran_v02 import latest_model
-        from gary.bots.terran_v03 import latest_army_model
-        from gary.bots.terran_v04 import TerranGaryV4, latest_fight_model
-        from gary.policy.army import ArmyModel
-        from gary.policy.fight import FightModel
-        from gary.policy.macro import MacroModel
-        macro, army = MacroModel.load(latest_model()), ArmyModel.load(latest_army_model())
-        fight = FightModel.load(latest_fight_model())
-        make = lambda hi, m: TerranGaryV4(hi, m, macro, army, fight, args.style)
-    elif args.vs in ("v08", "v09"):
-        from gary.bots.terran_v02 import latest_model
-        from gary.bots.terran_v03 import latest_army_model
-        from gary.bots.terran_v08 import TerranGaryV8, latest_rl_fight_model
-        from gary.bots.terran_v09 import TerranGaryV9
-        from gary.policy.army import ArmyModel
-        from gary.policy.fight_cmd import CommandModel
-        from gary.policy.macro import MacroModel
-        macro, army = MacroModel.load(latest_model()), ArmyModel.load(latest_army_model())
-        command = CommandModel.load(latest_rl_fight_model())
-        cls = TerranGaryV9 if args.vs == "v09" else TerranGaryV8
-        make = lambda hi, m: cls(hi, m, macro, army, command, args.style)
-    elif args.vs in ("v05", "v06", "v07"):
-        from gary.bots.terran_v02 import latest_model
-        from gary.bots.terran_v03 import latest_army_model
-        from gary.bots.terran_v05 import TerranGaryV5, latest_command_model
-        from gary.bots.terran_v06 import TerranGaryV6
-        from gary.bots.terran_v07 import TerranGaryV7
-        from gary.policy.army import ArmyModel
-        from gary.policy.fight_cmd import CommandModel
-        from gary.policy.macro import MacroModel
-        macro, army = MacroModel.load(latest_model()), ArmyModel.load(latest_army_model())
-        command = CommandModel.load(latest_command_model(memory=args.vs != "v05"))
-        cls = {"v05": TerranGaryV5, "v06": TerranGaryV6, "v07": TerranGaryV7}[args.vs]
-        make = lambda hi, m: cls(hi, m, macro, army, command, args.style)
-    else:
-        from gary.bots.terran_v02 import latest_model
-        from gary.bots.terran_v03 import TerranGaryV3, latest_army_model
-        from gary.policy.army import ArmyModel
-        from gary.policy.macro import MacroModel
-        macro, army = MacroModel.load(latest_model()), ArmyModel.load(latest_army_model())
-        make = lambda hi, m: TerranGaryV3(hi, m, macro, army, args.style)
+    from gary.agent.manifests import build_gary
+    make = lambda hi, m: build_gary(hi, m, args.vs, args.style)
     play_match(args.map, args.minutes, args.seed, args.save, make, f"Gary {args.vs}", args.attack_after)
 
 

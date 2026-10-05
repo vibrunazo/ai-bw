@@ -173,7 +173,7 @@ def run_one(sc: dict, controller: str, seconds: float, version: str, style: int 
         if controller == "gary":
             bot, hi = make_gary(game, slot, version, style, verbose, fight_path)
             if sample_seed is not None:
-                bot.rng, bot.rl_log = np.random.default_rng(sample_seed), []
+                bot.fight.rng, bot.fight.rl_log = np.random.default_rng(sample_seed), []
         while game.frame < end:
             if bot:
                 bot.act()
@@ -187,8 +187,8 @@ def run_one(sc: dict, controller: str, seconds: float, version: str, style: int 
         score.finish(game.observe(), game, fighter)
         row.update(score.result())
         row["stalled"] = stalled_buildings(game.observe(), slot)
-        if bot and getattr(bot, "rl_log", None) is not None:   # (v0.4+ bots)
-            row["log"] = bot.rl_log
+        if bot and bot.fight is not None and bot.fight.rl_log is not None:
+            row["log"] = bot.fight.rl_log
         if hi:
             acts = [e["act"] for e in hi.pov if "act" in e]
             row["acts"] = len(acts)
@@ -222,32 +222,13 @@ def _model(kind: str, path: str):
 
 def make_gary(game, slot: int, version: str, style: int | None, verbose: bool = False,
               fight_path: str | None = None):
-    from gary.bots import terran_v01 as v01
-    from gary.bots.terran_v02 import latest_model
-    from gary.bots.terran_v03 import TerranGaryV3, latest_army_model
-    from gary.interface import HumanInterface
+    """Gary (a manifest, gary/agent/manifests.py) taking over a game midway."""
+    from gary.agent.manifests import build_gary
+    from gary.interface import PROFILES, HumanInterface
     from gary.mapinfo import MapInfo
-    hi = HumanInterface(game, slot, v01.PROFILES["pro"], seed=1)
-    macro, army = _model("macro", str(latest_model())), _model("army", str(latest_army_model()))
-    if version == "v04":
-        from gary.bots.terran_v04 import TerranGaryV4, latest_fight_model
-        bot = TerranGaryV4(hi, MapInfo.from_game(game), macro, army,
-                           _model("fight", str(fight_path or latest_fight_model())), style, verbose=verbose)
-    elif version in ("v08", "v09"):
-        from gary.bots.terran_v08 import TerranGaryV8, latest_rl_fight_model
-        from gary.bots.terran_v09 import TerranGaryV9
-        bot = {"v08": TerranGaryV8, "v09": TerranGaryV9}[version](
-            hi, MapInfo.from_game(game), macro, army, _model("fight", str(fight_path or latest_rl_fight_model())), style,
-            verbose=verbose)
-    elif version in ("v05", "v06", "v07", "v07free"):
-        from gary.bots.terran_v05 import TerranGaryV5, latest_command_model
-        from gary.bots.terran_v06 import TerranGaryV6
-        from gary.bots.terran_v07 import TerranGaryV7, TerranGaryV7Free
-        cls = {"v05": TerranGaryV5, "v06": TerranGaryV6, "v07": TerranGaryV7, "v07free": TerranGaryV7Free}[version]
-        bot = cls(hi, MapInfo.from_game(game), macro, army,
-                  _model("fight", str(fight_path or latest_command_model(memory=version != "v05"))), style, verbose=verbose)
-    else:
-        bot = TerranGaryV3(hi, MapInfo.from_game(game), macro, army, style, verbose=verbose)
+    hi = HumanInterface(game, slot, PROFILES["pro"], seed=1)
+    bot = build_gary(hi, MapInfo.from_game(game), version, style, verbose=verbose, fight_path=fight_path,
+                     load=lambda kind, path: _model(kind, path))
     bot.announce = []                # mid-game: no hello in the chat
     bot.adopt_hotkeys()              # as if Gary had played the game so far
     return bot, hi
