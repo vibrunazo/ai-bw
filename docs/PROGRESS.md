@@ -127,10 +127,12 @@ quicker way to a playable Gary.
   (traced conflicts: in one 9-pool game the fight model and the bunker-load rule took marines
   from each other 9 times in 8 minutes). Every action identical in the 110 parity games.
 - **What marines' moves are for** (`eval/micro_intents.py`, a script's labels on the 114 home
-  defenses): pros give 253 move commands to fighting marines, v0.9 72. Pros: approach 46%,
-  retreat 19%, stutter 11%, kite 9%, pull back (a third of the marines, the ones under attack,
-  while the rest shoot) 5.5%, other 11%. v0.9: retreat 40%, approach 33%, stutter 7%, kite 6%,
-  pull back 1%. Gary moves rarely, and mostly away. Next: intents, and
+  defenses): pros give 253 move commands to fighting marines, v0.9 72. Pros: approach 34%, tap
+  (under half a tile: cut short or a nudge) 19%, retreat 17%, stutter 8%, kite 8%, pull back (a
+  third of the marines, the ones under attack, while the rest shoot) 4%, other 10%. v0.9:
+  retreat 40%, approach 28%, tap 8%, stutter 7%, kite 4%, pull back 1%. Gary moves rarely, and
+  mostly away. Clips of pro examples per label, to check the labels by eye:
+  `data/interim/videos/label_check/` (made from the saved replays and events). Next: intents, and
   the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs

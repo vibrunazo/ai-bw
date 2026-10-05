@@ -4,6 +4,7 @@ On the home defenses of eval/scenarios.py, under each controller, every move ord
 marines get (a zerg fighter within 7 tiles) is one event: the marines whose order turns to "move"
 in the same quarter second (one command). After it plays out (2.5 s), it is labeled:
 
+  tap        a move of under half a tile (cut short by the next command, or a nudge in place)
   approach   the moved marines go toward the zerg
   stutter    most of the fighting marines move (half or more), a short way (under 2.5 tiles), and
              shoot again within a second
@@ -19,6 +20,10 @@ script's, a first provider for the intent_label slot (ARCHITECTURE.md 6.6): chec
 the replays before trusting them.
 
     python -m eval.micro_intents --run 114 --parallel 16
+    python -m eval.micro_intents --controllers pro --save runs/micro_intents --out events.jsonl
+
+With --out, each scenario's labeled events (frame, label, marines moved of those fighting, where
+the moved ones stood) are saved too; with --save, the replays, to watch the labels.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ import json
 import math
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
 
 import numpy as np
 
@@ -48,6 +54,7 @@ class Probe:
         self.away_moves: dict[int, int] = {}      # marine -> frame of its last move away
         self.labels: Counter = Counter()
         self.shares: dict[str, list[float]] = {}
+        self.labeled: list[dict] = []             # every labeled event, to check the labels
 
     def __call__(self, game, slot: int) -> None:
         from gary.policy.army import is_building, is_worker, supply_x2
@@ -116,7 +123,9 @@ class Probe:
         median_dist = float(np.median(dist))
         pressed = len(moved & ev["pressed"]) / max(1, len(moved))
         cycled = sum(1 for t in moved if ev["frame"] - self.away_moves.get(t, -10**9) <= SETTLE) / max(1, len(moved))
-        if away_share < 0.5:
+        if median_dist < 0.5:
+            label = "tap"
+        elif away_share < 0.5:
             label = "approach"
         elif cycled >= 0.5:
             label = "kite"
@@ -134,18 +143,24 @@ class Probe:
         ev["label"] = label
         self.labels[label] += 1
         self.shares.setdefault(label, []).append(share)
+        pts = [ev["start"][t] for t in moved if t in ev["start"]]
+        self.labeled.append({"frame": ev["frame"], "label": label, "moved": len(moved & fighting),
+                             "fighting": len(fighting), "x": round(float(np.mean([p[0] for p in pts]))),
+                             "y": round(float(np.mean([p[1] for p in pts]))), "dist": round(median_dist, 1)})
 
     def result(self) -> dict:
         self.finish()
-        return {"labels": dict(self.labels), "shares": {k: v for k, v in self.shares.items()}}
+        return {"labels": dict(self.labels), "shares": {k: v for k, v in self.shares.items()}, "events": self.labeled}
 
 
 def _job(args: tuple) -> dict:
     from eval.scenarios import run_one
-    sc, controller, version, style = args
+    sc, controller, version, style, save = args
     probe = Probe()
-    row = run_one(sc, controller, 45, version, style, on_step=probe)
-    return {"sha1": row["sha1"], "controller": controller, "error": row.get("error"), **probe.result()}
+    path = f"{save}/{sc['sha1'][:8]}_{controller}.rep" if save else None
+    row = run_one(sc, controller, 45, version, style, save=path, on_step=probe)
+    return {"sha1": row["sha1"], "controller": controller, "slot": sc["terran_slot"], "error": row.get("error"),
+            **probe.result()}
 
 
 def summarize(rows: list[dict]) -> dict:
@@ -172,10 +187,13 @@ def main() -> None:
     ap.add_argument("--style", type=int, default=1)
     ap.add_argument("--parallel", type=int, default=16)
     ap.add_argument("--out", help="also save the per-scenario rows here (JSON lines)")
+    ap.add_argument("--save", help="save each play's replay in this folder")
     args = ap.parse_args()
     from eval.scenarios import scenarios_path
     scs = [json.loads(line) for line in scenarios_path(args.split).read_text(encoding="utf-8").splitlines()][:args.run]
-    jobs = [(sc, c, args.version, args.style) for sc in scs for c in args.controllers]
+    if args.save:
+        Path(args.save).mkdir(parents=True, exist_ok=True)
+    jobs = [(sc, c, args.version, args.style, args.save) for sc in scs for c in args.controllers]
     with ProcessPoolExecutor(args.parallel) as pool:
         rows = list(pool.map(_job, jobs, chunksize=len(args.controllers)))
     if args.out:
