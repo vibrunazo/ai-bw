@@ -62,7 +62,7 @@ class TerranGary:
         self.hi = hi
         self.map = mapinfo
         self.slot = hi.slot
-        self._buildable = None              # the map's buildable tiles (see _fits)
+        self._terrain_cache = None          # see _terrain
         obs = hi.observe()
         cc = next(u for u in obs["units"] if u["owner"] == self.slot and u["type"] == CC)
         self.main = mapinfo.base_near((cc["x"], cc["y"]))
@@ -115,13 +115,18 @@ class TerranGary:
         return None
 
     def _spot_near(self, unit_type: int, near: tuple[int, int], builder: int) -> tuple[int, int] | None:
-        """The free spot closest to a point (e.g. a bunker at the top of the main ramp)."""
+        """The free spot closest to a point (e.g. a bunker at the top of the main ramp), on the same
+        ground level as the point: the closest free tile to the top of a ramp can be at its bottom."""
         w, h = SIZE[unit_type]
         cx, cy = near[0] // 32, near[1] // 32
+        terrain = self._terrain()
+        level = int(terrain[1][near[1] // 8, near[0] // 8]) if terrain else None
         cands = sorted((math.dist((tx * 32 + w * 16, ty * 32 + h * 16), near), tx, ty)
                        for ty in range(cy - 8, cy + 8) for tx in range(cx - 8, cx + 8))
         for _, tx, ty in cands:
             if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.reserved):
+                continue
+            if level is not None and (terrain[1][ty * 4:(ty + h) * 4, tx * 4:(tx + w) * 4] != level).any():
                 continue
             if self._fits(unit_type, tx, ty, builder):
                 return tx, ty
@@ -134,18 +139,24 @@ class TerranGary:
         map's terrain is map knowledge, so Gary checks it too (where the env can tell it)."""
         if not self.hi.game.can_place(self.slot, unit_type, tx, ty, builder):
             return False
-        if self._buildable is None:
-            terrain = getattr(self.hi.game, "terrain", None)
-            if terrain is None:
-                self._buildable = False
-            else:
-                walk, _, build = terrain()
-                th, tw = build.shape            # a tile is buildable if no 8x8 part of it is unwalkable
-                self._buildable = build & walk.reshape(th, 4, tw, 4).all(axis=(1, 3))
-        if self._buildable is False:
+        terrain = self._terrain()
+        if terrain is None:
             return True
         w, h = SIZE[unit_type]
-        return bool(self._buildable[ty:ty + h, tx:tx + w].all())
+        return bool(terrain[0][ty:ty + h, tx:tx + w].all())
+
+    def _terrain(self):
+        """The map's buildable tiles (no 8x8 part unwalkable) and ground height per 8x8 minitile,
+        or None where the env can't tell (the live Remastered client)."""
+        if self._terrain_cache is None:
+            terrain = getattr(self.hi.game, "terrain", None)
+            if terrain is None:
+                self._terrain_cache = False
+            else:
+                walk, height, build = terrain()
+                th, tw = build.shape
+                self._terrain_cache = (build & walk.reshape(th, 4, tw, 4).all(axis=(1, 3)), height)
+        return self._terrain_cache or None
 
     # --- camera ---------------------------------------------------------------------------
 

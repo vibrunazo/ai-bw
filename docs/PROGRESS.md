@@ -60,8 +60,10 @@ quicker way to a playable Gary.
 ### v0.9 (October 2026): holding early pools (#2)
 
 - **What it is:** v0.8 that notices an early Spawning Pool (seen before 3:00 with one hatchery,
-  zerglings before 4:00, or 6 at once before 5:00) and answers it like a player: a bunker just
-  inside the top of the main ramp (from the new map analysis), the Barracks rallied behind it,
+  zerglings before 4:00, or 6 at once before 5:00) and answers it like a player: a bunker on the
+  main's high ground by the top of the ramp (from the new map analysis; the closest free spot to
+  the ramp's top can be at its bottom, so only spots on the main's level count), the Barracks
+  rallied behind it,
   marines into the bunker as soon as it's done, 2 SCVs repairing it under attack, the army model
   kept from walking the marines off, and a scripted one-base build (depots on time, marines and
   SCVs nonstop, a second and third Barracks on spare money) instead of the learned macro until
@@ -82,7 +84,10 @@ quicker way to a playable Gary.
   the SCV kept mining. Gary now checks the map's buildable tiles too. Loading a bunker gave up
   when the marines and the bunker didn't fit on one screen; it now selects the marines, then
   moves the camera. Start locations ignored a base whose geyser had an Extractor on it, which
-  crashed scouting in 5 of the 114 scenarios (their earlier scores left them out).
+  crashed scouting in 5 of the 114 scenarios (their earlier scores left them out). Gas: Gary
+  lost count of its gas workers (one stepping out of the refinery has a different order for a
+  moment, and the SCV that built the refinery starts on gas by itself) and kept sending more, up
+  to 10 on one refinery; it now counts every SCV it sees heading into the refinery.
 - **Most urgently missing:** spotting the pool in time when the scout checks the Zerg's start
   last; terrain in the fight model; the screen (SCVs in front of marines); wall-offs.
 

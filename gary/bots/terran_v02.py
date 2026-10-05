@@ -42,6 +42,7 @@ MIN_P = 0.05                    # never take a decision the model gives less tha
                                 # choices lead into states pros rarely reach, where it knows less
 BUSY = {T.ORDER_RESEARCH, T.ORDER_UPGRADE, T.ORDER_BUILD_ADDON}
 WAIT = {"kind": "wait"}         # _plan: possible, but not right now
+RESET_HARVEST = 151             # the order of a worker stepping out of a refinery (or off a mineral)
 
 
 def latest_model(matchup: str = "TvZ", race: str = "T") -> Path:
@@ -414,11 +415,14 @@ class TerranGaryV2(TerranGary):
         t.stage = "send"
 
     def _on_gas(self, obs: dict, refinery: int) -> int:
-        """Workers Gary sent to this refinery that are still on gas: on a gas order, or out of
-        sight (a worker inside a refinery isn't visible)."""
+        """Workers on this refinery: the ones Gary sent that are still on gas (on a gas order, just
+        out of the refinery, or out of sight: a worker inside a refinery isn't visible), and any
+        worker seen heading into it (the SCV that built it starts on gas by itself)."""
         seen = {u["tag"]: u for u in obs["units"] if u["owner"] == self.slot}
         alive = {w for w in self.gas_workers.get(refinery, set())
-                 if w not in seen or seen[w]["order"] in T.GAS_ORDERS}
+                 if w not in seen or seen[w]["order"] in T.GAS_ORDERS or seen[w]["order"] == RESET_HARVEST}
+        alive |= {t for t, u in seen.items() if u["type"] == T.SCV and u["order"] in T.GAS_ORDERS
+                  and u.get("order_target") == refinery}
         self.gas_workers[refinery] = alive
         return len(alive)
 
