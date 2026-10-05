@@ -18,7 +18,8 @@
 // With --pov (written by gary.interface.HumanInterface.save_pov), the view follows that
 // player's camera frame by frame and draws their mouse: a cross for the cursor, and a ring
 // that opens out where a click landed, green for a left click and red for a right click.
-// (v1: no fog of war; you see everything inside the camera area.)
+// (v1: no fog of war; you see everything inside the camera area.) The minimap is drawn
+// bottom-left as in the game, and the POV player's minerals, gas and supply top-right.
 //
 // Keys: space pauses, left/right seek 10 s (with shift: 60 s), up/down change speed,
 // WASD moves the view when there's no POV log, Esc quits. The title bar shows the time.
@@ -123,6 +124,7 @@ std::string json_str_after(const std::string& line, const char* key) {
 struct pov_log {
 	std::vector<pov_entry> entries;
 	int view_w = 0, view_h = 0;
+	int slot = -1;  // whose minerals, gas and supply to show
 };
 
 pov_log load_pov(const std::string& path) {
@@ -134,6 +136,7 @@ pov_log load_pov(const std::string& path) {
 		if (line.find("\"viewport\"") != std::string::npos) {
 			out.view_w = json_int_after(line, "\"viewport\"", 0);
 			out.view_h = json_int_after(line, "\"viewport\"", 1);
+			if (line.find("\"slot\"") != std::string::npos) out.slot = json_int_after(line, "\"slot\"");
 		}
 		if (line.find("\"frame\"") == std::string::npos) continue;
 		pov_entry e{};
@@ -150,6 +153,16 @@ pov_log load_pov(const std::string& path) {
 }
 
 constexpr int click_mark_frames = 24;  // a click stays marked for a second of game time
+
+// A 3x5 pixel font for the resource counts: digits and '/', one row per byte (3 low bits).
+const uint8_t* glyph(char c) {
+	static const uint8_t digits[10][5] = {
+	    {7, 5, 5, 5, 7}, {2, 6, 2, 2, 7}, {7, 1, 7, 4, 7}, {7, 1, 7, 1, 7}, {5, 5, 7, 1, 1},
+	    {7, 4, 7, 1, 7}, {7, 4, 7, 5, 7}, {7, 1, 1, 1, 1}, {7, 5, 7, 5, 7}, {7, 5, 7, 1, 7}};
+	static const uint8_t slash[5] = {1, 1, 2, 4, 4};
+	if (c >= '0' && c <= '9') return digits[c - '0'];
+	return c == '/' ? slash : nullptr;
+}
 
 struct pov_ui : scr_replay<ui_functions> {
 	std::vector<pov_entry> pov;
@@ -193,7 +206,50 @@ struct pov_ui : scr_replay<ui_functions> {
 		return (uint8_t)best;
 	}
 
+	int slot = -1;
+
+	// The POV player's minerals, gas and supply, top-right: a colored square, then the number.
+	void draw_resources(uint8_t* data, size_t pitch) {
+		if (slot < 0 || slot >= 8) return;
+		auto put = [&](int x, int y, uint8_t c) {
+			if (x >= 0 && y >= 0 && x < (int)screen_width && y < (int)screen_height) data[y * pitch + x] = c;
+		};
+		int race = (int)st.players[slot].race;
+		int ri = race >= 0 && race < 3 ? race : 0;
+		int used = (st.supply_used[slot][ri].raw_value + 1) / 2;
+		int avail = std::min(200, st.supply_available[slot][ri].raw_value / 2);
+		struct item { uint8_t color; std::string text; };
+		const item items[] = {{nearest_color(80, 200, 255), std::to_string(st.current_minerals[slot])},
+		                      {nearest_color(40, 220, 80), std::to_string(st.current_gas[slot])},
+		                      {nearest_color(255, 255, 255), std::to_string(used) + "/" + std::to_string(avail)}};
+		const int k = 2;  // font scale
+		int width = 0;
+		for (auto& it : items) width += 6 * k + 4 + (int)it.text.size() * 4 * k + 8;
+		int x = (int)screen_width - width - 4, y = 4;
+		const uint8_t black = nearest_color(0, 0, 0), white = nearest_color(255, 255, 255);
+		for (int yy = y - 2; yy != y + 5 * k + 2; ++yy)
+			for (int xx = x - 4; xx != (int)screen_width - 2; ++xx) put(xx, yy, black);
+		for (auto& it : items) {
+			for (int yy = 0; yy != 5 * k; ++yy)
+				for (int xx = 0; xx != 5 * k; ++xx) put(x + xx, y + yy, it.color);
+			x += 6 * k + 4;
+			for (char c : it.text) {
+				if (const uint8_t* g = glyph(c)) {
+					for (int r = 0; r != 5; ++r)
+						for (int b = 0; b != 3; ++b)
+							if (g[r] >> (2 - b) & 1)
+								for (int dy = 0; dy != k; ++dy)
+									for (int dx = 0; dx != k; ++dx) put(x + b * k + dx, y + r * k + dy, white);
+				}
+				x += 4 * k;
+			}
+			x += 8;
+		}
+	}
+
 	void draw_callback(uint8_t* data, size_t pitch) override {
+		draw_minimap(data, pitch);
+		draw_resources(data, pitch);
 		if (pov.empty() || cursor_x < 0) return;
 		auto put = [&](int x, int y, uint8_t c) {
 			if (x >= 0 && y >= 0 && x < (int)screen_width && y < (int)screen_height) data[y * pitch + x] = c;
@@ -333,6 +389,7 @@ int run(int argc, char** argv) {
 		ui.load_replay_file(replay_file.c_str());
 	}
 	ui.pov = std::move(pov.entries);
+	ui.slot = pov.slot;
 	ui.resize(width, height);
 	ui.screen_pos = {0, 0};
 	ui.set_image_data();

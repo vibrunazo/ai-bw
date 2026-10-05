@@ -152,10 +152,10 @@ def scenario_game(sc: dict):
 
 def run_one(sc: dict, controller: str, seconds: float, version: str, style: int | None,
             save: str | None = None, verbose: bool = False, fight_path: str | None = None,
-            sample_seed: int | None = None) -> dict:
+            sample_seed: int | None = None, on_step=None) -> dict:
     """One scenario under one controller. Gary: fight_path picks the fight model (default the
     latest trained); sample_seed seeds its sampled fight decisions and the row gets them
-    ("log")."""
+    ("log"). on_step(game, slot), if given, is called after every step (eval/micro_timing.py)."""
     row = {"sha1": sc["sha1"][:8], "controller": controller}
     try:
         game = scenario_game(sc)
@@ -180,6 +180,8 @@ def run_one(sc: dict, controller: str, seconds: float, version: str, style: int 
                 hi.step(2)
             else:
                 game.step(2)
+            if on_step:
+                on_step(game, slot)
             if game.frame % 12 < 2:            # (the interface's own snapshot when it took one)
                 score.note((hi and hi.latest_observation()) or game.observe(), game)
         score.finish(game.observe(), game, fighter)

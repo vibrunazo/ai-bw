@@ -6,19 +6,22 @@ does what a player does against an early pool:
 
   detect   a Spawning Pool seen before 3:00 while only one hatchery is known, zerglings before
            4:00, or 6 at once before 5:00 (from the scout or at home)
-  bunker   at the top of the main ramp (gary/terrain.py; only where the map analysis is reliable,
-           else between the main and its natural), Barracks rallied just behind it; marines load
-           in (v0.7)
-  hold     the army model doesn't send the marines anywhere: they stay behind the bunker (the
-           fight model still fights with them)
-  macro    the standard answer to a one-base all-in, not the learned macro (whose likely picks,
-           expansion, gas and tech, are what it mustn't do now, and the rest fall below its
-           threshold: v0.9 built nothing for minutes): a depot when supply runs low, marines and
-           SCVs nonstop, a second and third Barracks when money piles up. Until it's safe: from
-           5:00, a finished bunker and as many marines as half the most zerglings seen at once, 6
-           at least. A one-base all-in that keeps coming keeps Gary home
-  load     marines go into the bunker as soon as it's done, from anywhere in the main, not when
-           the zerglings are already there (v0.4's rule)
+  bunker   on the main's level by the top of the main ramp (gary/terrain.py; only where the map
+           analysis is reliable, else between the main and its natural), Barracks rallied just
+           behind it
+  macro    until the bunker stands with 4 marines and no zerglings are at home: the standard answer
+           to a one-base all-in, not the learned macro (whose likely picks, expansion, gas and
+           tech, are what it mustn't do now, and the rest fall below its threshold: v0.9 built
+           nothing for minutes): depots ahead of production, marines and SCVs nonstop, a second
+           Barracks on spare money. Then the learned macro again, gas and tech included, only no
+           expansion while Gary holds
+  hold     until Gary's army is half again the biggest army the Zerg showed: no expansion, the
+           army model doesn't send the army anywhere (the fight model still fights with it), and
+           marines go into the bunker as soon as it's done, from anywhere in the main, not when the
+           zerglings are already there (v0.4's rule). Leaving the bunker for a counter-attack is
+           what lost the defended games
+  reinforce  a marine out of a Barracks while zerglings are at the base gets an attack-move to
+           the fight: walking the rally path (a plain move) it would die without firing
   repair   2 SCVs repair the bunker when it's damaged and zerglings are near
 
 Everything else is v0.8.
@@ -32,6 +35,7 @@ from __future__ import annotations
 import argparse
 import math
 
+from gary import commands as C
 from gary import terran as T
 from gary.bots import terran_v01 as v01
 from gary.bots.terran_v01 import Task
@@ -50,8 +54,11 @@ HATCHERIES = {131, 132, 133}
 POOL_BY = 3 * 60 * 24                # a Spawning Pool seen before 3:00 with one hatchery is an early pool...
 LINGS_BY = 4 * 60 * 24               # ...and so are zerglings before 4:00
 MANY_LINGS, MANY_LINGS_BY = 6, 5 * 60 * 24   # ...or this many at once before 5:00
-SAFE_MARINES = 6
-SAFE_FROM = 5 * 60 * 24              # the first wave comes around 4:00: not safe before this
+RUSH_MARINES = 4                     # in or at the finished bunker: the rush build can end...
+CALM = 20 * 24                       # ...once no zerg fighter was at home for this long
+HOLD_ARMY, HOLD_RATIO = 6, 1.5       # Gary holds until its army supply is this, and this many times
+                                     # the biggest zerg army seen at once
+HOME = 12 * 32                       # zerg fighters this close to a Command Center or bunker: at home
 RUSH_SCVS = 20                       # SCVs to keep making while defending (one base)
 RUSH_RAX = 3
 RAX_MONEY = 200                      # minerals left over: another Barracks
@@ -68,10 +75,13 @@ class TerranGaryV9(TerranGaryV8):
 
     def __init__(self, hi, mapinfo, *args, **kwargs):
         super().__init__(hi, mapinfo, *args, **kwargs)
-        self.rush = False                # an early pool was seen: defend first
+        self.rush = False                # an early pool was seen: the rush build
+        self.hold = False                # ...and the army stays home
         self.rush_over = False
         self.hatcheries_seen: set[int] = set()
-        self.most_lings = 0              # the most zerglings seen at once
+        self.most_enemy = 0.0            # the biggest zerg army (supply) seen at once
+        self.calm_since = 0              # since when no zerg fighter was at home
+        self.known_army: set[int] | None = None   # fighters Gary has seen (for _reinforce)
         self.next_bunker = 0
         self.next_repair = 0
         analysis = map_analysis(hi.game, mapinfo)["starts"]
@@ -94,11 +104,13 @@ class TerranGaryV9(TerranGaryV8):
             enemy = [u for u in obs["units"] if u["owner"] not in (self.slot, 11)]
             self.hatcheries_seen |= {u["tag"] for u in enemy if u["type"] in HATCHERIES}
             lings = sum(1 for u in enemy if u["type"] == LING)
-            self.most_lings = max(self.most_lings, lings)
-            if not self.rush and ((hi.frame <= POOL_BY and any(u["type"] == POOL for u in enemy)
-                                   and len(self.hatcheries_seen) <= 1) or
-                                  (hi.frame <= LINGS_BY and lings) or (hi.frame <= MANY_LINGS_BY and lings >= MANY_LINGS)):
-                self.rush = True
+            fighters = self._fighters(obs)
+            self.most_enemy = max(self.most_enemy, sum(supply_x2(u["type"]) for u in fighters) / 2)
+            if not self.rush and not self.hold and ((hi.frame <= POOL_BY and any(u["type"] == POOL for u in enemy)
+                                                     and len(self.hatcheries_seen) <= 1) or
+                                                    (hi.frame <= LINGS_BY and lings) or
+                                                    (hi.frame <= MANY_LINGS_BY and lings >= MANY_LINGS)):
+                self.rush = self.hold = True
                 # marines gather a few tiles behind the bunker, toward the main (not on its spot,
                 # where they'd keep the SCV from placing it)
                 bx, by = self.bunker_spot
@@ -106,36 +118,76 @@ class TerranGaryV9(TerranGaryV8):
                 d = math.dist((bx, by), (mx, my)) or 1
                 self.rally = (int(bx + (mx - bx) / d * 4 * 32), int(by + (my - by) / d * 4 * 32))
                 self._say("early pool: bunker at the ramp, marines first, no expansion or tech yet")
-            if self.rush:
+            if self.hold:
                 mine = [u for u in obs["units"] if u["owner"] == self.slot]
+                if self._near_home(mine, fighters):
+                    self.calm_since = hi.frame
                 bunker = any(u["type"] == T.BUNKER and u["completed"] for u in mine)
-                seen = {u["tag"] for u in mine if u["type"] == T.MARINE}
                 tags = {u["tag"] for u in mine}
                 inside = set().union(set(), *(m for b, m in self.loaded.items() if b in tags)) - tags
-                marines = len(seen) + len(inside)   # the ones in the bunker aren't seen
-                if hi.frame >= SAFE_FROM and bunker and marines >= max(SAFE_MARINES, self.most_lings // 2):
-                    self.rush, self.rush_over = False, True
-                    self._say("the early pool is held: back to the usual plan")
+                marines = sum(1 for u in mine if u["type"] == T.MARINE) + len(inside)   # the ones in the bunker aren't seen
+                army = sum(supply_x2(u["type"]) for u in mine if u["type"] in self.army_types) / 2 + len(inside)
+                if self.rush and bunker and marines >= RUSH_MARINES and hi.frame - self.calm_since >= CALM:
+                    self.rush = False
+                    self._say(f"bunker up with {marines} marines, no zerglings at home: gas and tech again, still home")
+                if not self.rush and army >= max(HOLD_ARMY, HOLD_RATIO * self.most_enemy):
+                    self.hold, self.rush_over = False, True
+                    self._say(f"the early pool is held: army {army:.0f} vs the zerg's {self.most_enemy:.0f} at most, back to the usual plan")
         super().act()
+
+    def _fighters(self, obs: dict) -> list[dict]:
+        return [u for u in obs["units"] if u["owner"] not in (self.slot, 11) and supply_x2(u["type"]) > 0
+                and not is_worker(u["type"]) and not is_building(u["type"])]
+
+    def _near_home(self, mine: list[dict], fighters: list[dict]) -> list[dict]:
+        """The zerg fighters at Gary's base: near a Command Center or a bunker."""
+        home = [(u["x"], u["y"]) for u in mine if u["type"] in (T.CC, T.BUNKER)]
+        return [e for e in fighters if any(math.dist((e["x"], e["y"]), h) < HOME for h in home)]
 
     # --- the army stays home during the rush, in the bunker ------------------------------------
 
     @property
     def bunker_from(self) -> int:
-        return LOAD_FROM if self.rush else super().bunker_from
+        return LOAD_FROM if self.hold else super().bunker_from
 
     def _bunker_wanted(self, b: dict, enemy: list[dict]) -> bool:
-        return self.rush or super()._bunker_wanted(b, enemy)
+        return self.hold or super()._bunker_wanted(b, enemy)
 
     def _army(self, obs: dict, mine: list[dict], done: list[dict]) -> bool:
-        if self.rush:                    # the army model's moves leave the bunker empty: none now
+        if self.hold:                    # the army model's moves leave the bunker empty: none now
             done = [u for u in done if u["type"] not in self.army_types]
         return super()._army(obs, mine, done)
+
+    # --- reinforce ----------------------------------------------------------------------------
+
+    def _fight(self, obs: dict, mine: list[dict]) -> bool:
+        return self._reinforce(obs, mine) or super()._fight(obs, mine)
+
+    def _reinforce(self, obs: dict, mine: list[dict]) -> bool:
+        """Fighters just out of a Barracks while zerg fighters are at the base: attack-move them to
+        the fight (on the minimap). The rally is a plain move, and a moving marine doesn't shoot."""
+        army = [u for u in mine if u["type"] in self.army_types and u["completed"]]
+        if self.known_army is None:
+            self.known_army = {u["tag"] for u in army}
+        new = [u for u in army if u["tag"] not in self.known_army]
+        self.known_army |= {u["tag"] for u in army}
+        if not new:
+            return False
+        at_home = self._near_home(mine, self._fighters(obs))
+        if not at_home:
+            return False
+        cx, cy = sum(u["x"] for u in new) / len(new), sum(u["y"] for u in new) / len(new)
+        target = min(at_home, key=lambda e: math.dist((e["x"], e["y"]), (cx, cy)))
+        self.task = Task("reinforce", data={"tags": [u["tag"] for u in new], "x": target["x"], "y": target["y"]},
+                         started=self.hi.frame)
+        return True
 
     # --- macro: defense only during the rush, the bunker first --------------------------------
 
     def _plan(self, act: int, uid: int, obs: dict, mine: list[dict], done: list[dict], me: dict):
         if self.rush and (act == EXPAND or act not in (TRAIN, BUILD) or uid not in DEFENSE):
+            return None
+        if self.hold and act == EXPAND:
             return None
         return super()._plan(act, uid, obs, mine, done, me)
 
@@ -144,7 +196,8 @@ class TerranGaryV9(TerranGaryV8):
             budget = me["minerals"] - sum(v01.COST[ut] for ut, *_ in self.reserved)
             if budget >= T.COST[T.BUNKER][0] - 40 and self.hi.frame >= self.next_bunker:
                 self.next_bunker = self.hi.frame + BUNKER_RETRY
-                self.task = Task("build", T.BUNKER, "main", data={"near": self.bunker_spot}, started=self.hi.frame)
+                self.task = Task("build", T.BUNKER, "main", data={"near": self.bunker_spot, "level_at": self.main.center},
+                                 started=self.hi.frame)
                 self._say("builds a bunker at the ramp")
             return                       # save for the bunker
         if self.rush and self.goal is None:
@@ -159,15 +212,19 @@ class TerranGaryV9(TerranGaryV8):
         goal = lambda act, uid, name: {"act": act, "id": uid, "p": 1.0, "since": self.hi.frame, "name": name}
         coming = lambda ut: any(u["type"] == ut and not u["completed"] for u in mine) or \
             any(r == ut for r, *_ in self.reserved)
-        if me["supply_max"] - me["supply_used"] < 3 * T.SUPPLY[T.MARINE] and not coming(T.DEPOT) and \
-                self._plan(BUILD, T.DEPOT, obs, mine, done, me) not in (None, WAIT):
+        doable = lambda act, uid: self._plan(act, uid, obs, mine, done, me) not in (None, WAIT)
+        # a depot takes longer than a marine or an SCV: start it while each producer has 2 left
+        producers = sum(1 for u in done if u["type"] in (T.CC, T.RAX))
+        if me["supply_max"] - me["supply_used"] < 2 * producers and me["supply_max"] < 200 and \
+                not coming(T.DEPOT) and doable(BUILD, T.DEPOT):
             return goal(BUILD, T.DEPOT, "Supply Depot")
-        if self._plan(TRAIN, T.MARINE, obs, mine, done, me) not in (None, WAIT):
+        if doable(TRAIN, T.MARINE):
             return goal(TRAIN, T.MARINE, "Marine")
-        if sum(1 for u in mine if u["type"] == T.SCV) < RUSH_SCVS and self._plan(TRAIN, T.SCV, obs, mine, done, me) not in (None, WAIT):
+        if sum(1 for u in mine if u["type"] == T.SCV) < RUSH_SCVS and doable(TRAIN, T.SCV):
             return goal(TRAIN, T.SCV, "SCV")
         budget = me["minerals"] - sum(v01.COST[ut] for ut, *_ in self.reserved)
-        if budget >= RAX_MONEY and sum(1 for u in mine if u["type"] == T.RAX) < RUSH_RAX and not coming(T.RAX):
+        if budget >= RAX_MONEY and sum(1 for u in mine if u["type"] == T.RAX) < RUSH_RAX and not coming(T.RAX) and \
+                doable(BUILD, T.RAX):
             return goal(BUILD, T.RAX, "Barracks")
         return None
 
@@ -208,6 +265,8 @@ class TerranGaryV9(TerranGaryV8):
 
     def _run_task(self, obs: dict, mine: list[dict]) -> None:
         t = self.task
+        if t.kind == "reinforce":
+            return self._task_reinforce(obs, mine, t)
         if t.kind != "repair":
             return super()._run_task(obs, mine)
         hi, d = self.hi, t.data
@@ -238,6 +297,34 @@ class TerranGaryV9(TerranGaryV8):
         if p and set(obs["selection"]) & set(d["scvs"]):
             hi.right_click(*p)                   # an SCV's right-click on a damaged building: repair
             self._say(f"{len(set(obs['selection']) & set(d['scvs']))} SCVs repair the bunker")
+        self.task = None
+
+
+    def _task_reinforce(self, obs: dict, mine: list[dict], t: Task) -> None:
+        """Camera on the new fighters, drag-select them, attack-move on the minimap to the fight."""
+        hi, d = self.hi, t.data
+        units = [u for u in mine if u["tag"] in set(d["tags"])]
+        if hi.frame - t.started > 24 * 3 or not units:
+            self.task = None
+            return
+        if t.stage == "start":
+            on_screen = [u for u in units if screen_of(obs, u["x"], u["y"])]
+            if not on_screen:
+                if d.get("camera_moved"):
+                    self.task = None
+                    return
+                d["camera_moved"] = True
+                self._camera_to(int(units[0]["x"]), int(units[0]["y"]))
+                return
+            pts = [screen_of(obs, u["x"], u["y"]) for u in on_screen]
+            hi.box(max(0, min(p[0] for p in pts) - 12), max(0, min(p[1] for p in pts) - 12),
+                   min(hi.p.viewport[0] - 1, max(p[0] for p in pts) + 12), min(hi.p.viewport[1] - 1, max(p[1] for p in pts) + 12))
+            t.stage = "order"
+            return
+        chosen = set(obs["selection"]) & set(d["tags"])
+        if chosen:
+            hi.minimap_command(C.ORDER_ATTACK_MOVE, int(d["x"]), int(d["y"]))
+            self._say(f"reinforce: {len(chosen)} new {'units' if len(chosen) > 1 else 'unit'} attack-move to the fight")
         self.task = None
 
 

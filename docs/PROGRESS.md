@@ -88,8 +88,22 @@ quicker way to a playable Gary.
   lost count of its gas workers (one stepping out of the refinery has a different order for a
   moment, and the SCV that built the refinery starts on gas by itself) and kept sending more, up
   to 10 on one refinery; it now counts every SCV it sees heading into the refinery.
-- **Most urgently missing:** spotting the pool in time when the scout checks the Zerg's start
-  last; terrain in the fight model; the screen (SCVs in front of marines); wall-offs.
+- **Less over-reaction** (after watching it): the rush build (bunker, marines, no gas) now ends
+  once the bunker stands with 4 marines and no zerglings are at home (gas between 3:17 and 5:20
+  in most games, not never); only the army stays home, no expansion, until it's 1.5x the biggest
+  zerg army seen. New marines out of a Barracks while zerglings are at the base get an
+  attack-move to the fight (the rally walked them past it, not shooting). Depots start while each
+  producer has 2 supply left. Immediate 9-pool: held 12, lost 3; the 7:00 rush: held 16 of 16
+  (v0.8 15, lost 1), more built (38 buildings at 12:00, v0.8 35). Home defenses: −77, unchanged.
+- **Marine timing** (`eval/micro_timing.py`, the 114 home defenses, ~71 marine-minutes of
+  fighting each): pros' marines get 8.4 move orders per minute of fighting and shoot again 0.84 s
+  after a move (median; 46% within 1 s); v0.9's get 1.5 and shoot again after 1.6 s (15% within
+  1 s); after a move 14% die before shooting again (pros 7%); 271 marines lost to the pros' 221.
+  Gary doesn't move too much: it moves too rarely and too long, no stutter step.
+- **Viewer:** videos show the minimap and the POV player's minerals, gas and supply.
+- **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
+  time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs
+  in front of marines); wall-offs.
 
 ### v0.8 (October 2026): fight model trained by reinforcement learning (in progress, #2)
 

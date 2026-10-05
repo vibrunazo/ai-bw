@@ -114,22 +114,25 @@ class TerranGary:
                 return tx, ty
         return None
 
-    def _spot_near(self, unit_type: int, near: tuple[int, int], builder: int) -> tuple[int, int] | None:
-        """The free spot closest to a point (e.g. a bunker at the top of the main ramp), on the same
-        ground level as the point: the closest free tile to the top of a ramp can be at its bottom."""
+    def _spot_near(self, unit_type: int, near: tuple[int, int], builder: int,
+                   level_at: tuple[int, int] | None = None) -> tuple[int, int] | None:
+        """The free spot closest to a point (e.g. a bunker at the top of the main ramp), on the ground
+        level of level_at (e.g. the main: the closest free tile to the top of a ramp can be at its
+        bottom). On a flat map every tile is on that level; if no spot on it fits, any level does."""
         w, h = SIZE[unit_type]
         cx, cy = near[0] // 32, near[1] // 32
         terrain = self._terrain()
-        level = int(terrain[1][near[1] // 8, near[0] // 8]) if terrain else None
+        level = int(terrain[1][level_at[1] // 8, level_at[0] // 8]) if terrain and level_at else None
         cands = sorted((math.dist((tx * 32 + w * 16, ty * 32 + h * 16), near), tx, ty)
                        for ty in range(cy - 8, cy + 8) for tx in range(cx - 8, cx + 8))
-        for _, tx, ty in cands:
-            if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.reserved):
-                continue
-            if level is not None and (terrain[1][ty * 4:(ty + h) * 4, tx * 4:(tx + w) * 4] != level).any():
-                continue
-            if self._fits(unit_type, tx, ty, builder):
-                return tx, ty
+        for same_level in ((True, False) if level is not None else (False,)):
+            for _, tx, ty in cands:
+                if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.reserved):
+                    continue
+                if same_level and (terrain[1][ty * 4:(ty + h) * 4, tx * 4:(tx + w) * 4] != level).any():
+                    continue
+                if self._fits(unit_type, tx, ty, builder):
+                    return tx, ty
         return None
 
     def _fits(self, unit_type: int, tx: int, ty: int, builder: int) -> bool:
@@ -514,7 +517,7 @@ class TerranGary:
                 if not self._look_at(obs, t.where):
                     return
                 spot = self._town_hall_spot(base, t.data["worker"]) if t.unit_type == CC else \
-                    self._spot_near(t.unit_type, t.data["near"], t.data["worker"]) if "near" in t.data else \
+                    self._spot_near(t.unit_type, t.data["near"], t.data["worker"], t.data.get("level_at")) if "near" in t.data else \
                     self._spot(t.unit_type, base, t.data["worker"])
                 if not spot:
                     self._fail_build(t)
