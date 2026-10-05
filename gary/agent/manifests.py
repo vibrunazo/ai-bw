@@ -19,6 +19,7 @@ from gary.agent.executor import ScriptedExecutor
 from gary.agent.fight import RULES, FightLayer, PullRule
 from gary.agent.gary import Gary
 from gary.agent.macro import LearnedMacro, OneBaseDefense
+from gary.agent.motor import DirectMotor
 from gary.agent.posture import EarlyPoolPosture, NormalPosture
 from gary.version import announcement
 
@@ -158,6 +159,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     if flip is not None:
         g.flip = flip
     models: dict[str, str] = {}
+    g.motor = DirectMotor(g)
     if m["macro"] is not None or m["army"] is not None:
         g.executor = ScriptedExecutor(g)
     g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture}[m["posture"]](g)

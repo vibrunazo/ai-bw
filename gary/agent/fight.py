@@ -1,7 +1,7 @@
 """The fight (layer L4, docs/CONTROL.md): what Gary's units do when enemy fighters are near.
 
-A fight layer is a model plus rules. Models (one command per half second, carried out with human
-hands: camera on the fight, drag box or the current selection, then right-click / A-click / key):
+A fight layer is a model plus rules. Each decision is an intent (intents.py) that the motor layer
+(motor.py) carries out with Gary's hands. Models (one command per half second):
 
   per_unit  the fight model (gary/policy/fight.py; Gary v0.4): what each unit should do, regrouped
             into one command per order
@@ -28,10 +28,10 @@ import math
 
 import numpy as np
 
-from gary import commands as C
 from gary import terran as T
-from gary.agent.gary import Gary, Task
-from gary.interface import screen_of, unit_name
+from gary.agent.gary import Gary
+from gary.agent.intents import Intent
+from gary.interface import screen_of
 from gary.policy.army import is_building, is_worker, supply_x2
 from gary.policy.fight import ACTIONS, FIGHT_AROUND, snapshot
 from gary.policy.fight import MAX_UNITS as PER_UNIT_MAX
@@ -45,7 +45,6 @@ RESOURCES = {176, 177, 178, 188, 110}
 ACT_IF_NONE_BELOW = 0.2              # act on a unit when the model gives "nothing" less than this
                                      # (with 0.2 Gary acts on about as many units as pros do: 22% vs 27%)
 SAME_POINT = 96                      # moves to points this close count as the same order
-BOX_MARGIN = 20                      # screen pixels around the group's units when drag-selecting
 BUNKER, MARINE = 125, 0
 BUNKER_THREAT = 9 * 32               # enemy fighters this close to a bunker: load it
 BUNKER_FROM = 10 * 32                # with marines from this far
@@ -81,9 +80,10 @@ def near_home(mine: list[dict], fighters: list[dict]) -> list[dict]:
     return [e for e in fighters if any(math.dist((e["x"], e["y"]), h) < HOME for h in home)]
 
 
-def box_around(hi, pts: list[tuple[int, int]], m: int) -> None:
-    hi.box(max(0, min(p[0] for p in pts) - m), max(0, min(p[1] for p in pts) - m),
-           min(hi.p.viewport[0] - 1, max(p[0] for p in pts) + m), min(hi.p.viewport[1] - 1, max(p[1] for p in pts) + m))
+def command_intent(key: tuple, tags: list[int], center) -> Intent:
+    """A fight model's command as an intent: ("move", x, y), ("attack_unit", tag), ("stim",)..."""
+    target = key[1] if len(key) == 2 else (key[1], key[2]) if len(key) == 3 else None
+    return Intent(key[0].upper(), list(tags), target, {"key": key, "tags": tags, "center": center}, "fight")
 
 
 class FightLayer:
@@ -110,7 +110,6 @@ class FightLayer:
         self.temperature = 1.0                   # < 1: draw commands closer to the model's likeliest
         self.rng = np.random.default_rng(seed)
         self.rl_log: list[dict] | None = None
-        g.task_runners["fight_cmd"] = self._run_fight_cmd
 
     def block(self, obs: dict, mine: list[dict]) -> str | None:
         """The fight's own turn: the rules, then the model. Who acted ("rule:pull", "fight"...), or
@@ -220,8 +219,7 @@ class FightLayer:
             self.rl_log.append({"rows": rows, "time": obs["frame"] * 42 / 1000,
                                 "unit": [d[0] for d in done], "act": [d[1] for d in done],
                                 "target": [d[2] for d in done], "dest": [d[3] for d in done]})
-        g.task = Task("fight_cmd", data={"key": key, "tags": groups[key][:12], "center": center},
-                      started=hi.frame)
+        g.motor.start(command_intent(key, groups[key][:12], center))
         return True
 
     def _hand_state(self, obs: dict, center) -> np.ndarray:
@@ -276,7 +274,7 @@ class FightLayer:
             return False
         for t in chosen:
             self.told[t] = (key, g.hi.frame)
-        g.task = Task("fight_cmd", data={"key": key, "tags": chosen, "center": center}, started=g.hi.frame)
+        g.motor.start(command_intent(key, chosen, center))
         if self.rl_log:
             self.rl_log[-1]["executed"] = True   # (decisions Gary didn't carry out cost no action)
         return True
@@ -296,107 +294,6 @@ class FightLayer:
         return (a == "gather" and order in HARVEST_ORDERS) or (a == "hold" and order in HOLD_ORDERS) or \
             (a == "stop" and order in IDLE_ORDERS) or (a == "return_cargo" and not u.get("carrying"))
 
-    # --- carrying a command out ---------------------------------------------------------------
-
-    def _run_fight_cmd(self, obs: dict, mine: list[dict], t: Task) -> None:
-        g = self.g
-        if g.hi.frame - t.started > 24 * 3:
-            g.task = None
-        else:
-            self._task_fight(obs, mine, t)
-        g.macro_turn = g.task is None            # after each fight command, production gets a turn
-
-    def _task_fight(self, obs: dict, mine: list[dict], t: Task) -> None:
-        """Select the group (or keep the selection if it already is the group), with the camera on
-        the group, then give the order."""
-        g, hi, d = self.g, self.g.hi, t.data
-        units = [u for u in mine if u["tag"] in set(d["tags"])]
-        if not units:
-            g.task = None
-            return
-        sel = set(obs["selection"])
-        want = {u["tag"] for u in units}
-        if t.stage == "start":
-            # the group is already selected (kiting the same units): straight to the order
-            if (want <= sel and len(sel) <= len(want) + 2) or (sel and sel <= want and len(sel) >= 0.7 * len(want)):
-                t.stage = "order"
-            else:
-                on_screen = [u for u in units if screen_of(obs, u["x"], u["y"])]
-                if len(on_screen) < len(units) and not d.get("camera_moved"):
-                    d["camera_moved"] = True             # once: then take whoever is on screen
-                    g.camera_to(int(sum(u["x"] for u in units) / len(units)),
-                                int(sum(u["y"] for u in units) / len(units)))
-                    return
-                if not on_screen:
-                    g.task = None
-                    return
-                if self.ctrl_click and self._ctrl_click(obs, on_screen):
-                    t.stage = "order"
-                    return
-                # a generous box: units move while Gary reacts (what it sees is 0.3 s old)
-                box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in on_screen], BOX_MARGIN)
-                t.stage = "order"
-                return
-        if not sel & want:
-            g.task = None
-            return
-        want = sel & want
-        key = d["key"]
-        a = key[0]
-        if a in ("attack_unit", "gather", "own_unit"):
-            target = next((u for u in obs["units"] if u["tag"] == key[1]), None)
-            p = target and screen_of(obs, target["x"], target["y"])
-            if p:
-                hi.right_click(*p)
-                g.say(f"fight: {len(sel & want)} {_names(units)} -> {a.replace('_', ' ')} "
-                      f"{unit_name(target['type'])}")
-            elif target and a == "attack_unit":   # off screen: attack-move there on the minimap
-                hi.minimap_command(C.ORDER_ATTACK_MOVE, target["x"], target["y"])
-                g.say(f"fight: {len(want)} {_names(units)} -> attack move (minimap)")
-            elif target:
-                hi.minimap_right_click(target["x"], target["y"])
-                g.say(f"fight: {len(want)} {_names(units)} -> move (minimap)")
-        elif a in ("move", "attack_move"):
-            p = screen_of(obs, key[1], key[2])
-            if p and a == "move":
-                hi.right_click(*p)
-            elif p:
-                hi.order_click(C.ORDER_ATTACK_MOVE, *p)
-            elif a == "move":                    # off screen: on the minimap, like a player would
-                hi.minimap_right_click(key[1], key[2])
-            else:
-                hi.minimap_command(C.ORDER_ATTACK_MOVE, key[1], key[2])
-            g.say(f"fight: {len(sel & want)} {_names(units)} -> {a.replace('_', ' ')}")
-        else:
-            {"stop": hi.stop, "hold": hi.hold, "stim": hi.stim, "return_cargo": hi.return_cargo}[a]()
-            g.say(f"fight: {len(sel & want)} {_names(units)} -> {a.replace('_', ' ')}")
-        g.task = None
-
-
-    def _ctrl_click(self, obs: dict, group: list[dict]) -> bool:
-        """When the group is every unit of one type on screen (12 at most), select it with a
-        ctrl+click on its unit nearest the group's middle: one click, and nothing else caught (a
-        drag box around marines among SCVs takes the SCVs too). True if Gary clicked."""
-        g = self.g
-        kinds = {u["type"] for u in group}
-        if len(kinds) != 1:
-            return False
-        kind = kinds.pop()
-        same = {u["tag"] for u in obs["units"] if u["owner"] == g.slot and u["type"] == kind
-                and screen_of(obs, u["x"], u["y"])}
-        if same != {u["tag"] for u in group} or len(same) > 12:
-            return False
-        cx, cy = sum(u["x"] for u in group) / len(group), sum(u["y"] for u in group) / len(group)
-        u = min(group, key=lambda u: math.dist((u["x"], u["y"]), (cx, cy)))
-        g.hi.ctrl_click(*screen_of(obs, u["x"], u["y"]))
-        return True
-
-
-def _names(units: list[dict]) -> str:
-    kinds = {unit_name(u["type"]) for u in units}
-    return "/".join(sorted(kinds))
-
-
 # --- rules ------------------------------------------------------------------------------------
 
 class PullRule:
@@ -409,8 +306,6 @@ class PullRule:
     def __init__(self, g: Gary):
         self.g = g
         self.next_pull = 0
-        g.task_runners["pull"] = self._run
-        g.task_runners["unpull"] = self._run
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
         g = self.g
@@ -430,79 +325,15 @@ class PullRule:
                 self.next_pull = hi.frame + 24 * 3              # one pull at a time
                 tx = sum(u["x"] for u in near) // len(near)
                 ty = sum(u["y"] for u in near) // len(near)
-                g.task = Task("pull", data={"cc": (cc["x"], cc["y"]), "to": (tx, ty), "n": 2 * len(near) + 1},
-                              started=hi.frame)
+                g.motor.start(Intent("PULL", [], (tx, ty), {"cc": (cc["x"], cc["y"]), "to": (tx, ty),
+                                                            "n": 2 * len(near) + 1}, "rule:pull"))
                 g.say(f"pulls workers: {len(near)} enemy units at the base, outnumbering the army there")
                 return True
             return False
         if g.pulled and hi.frame - g.calm_since > CALM_FRAMES:
-            g.task = Task("unpull", started=hi.frame)
+            g.motor.start(Intent("UNPULL", sorted(g.pulled), None, {}, "rule:pull"))
             return True
         return False
-
-    def _run(self, obs: dict, mine: list[dict], t: Task) -> None:
-        if self.g.hi.frame - t.started > 24 * 8:
-            self.g.task = None
-            return
-        (self._pull if t.kind == "pull" else self._unpull)(obs, mine, t)
-
-    def _pull(self, obs: dict, mine: list[dict], t: Task) -> None:
-        g, hi, d = self.g, self.g.hi, t.data
-        if t.stage == "selected":
-            workers = [u["tag"] for u in mine if u["tag"] in obs["selection"] and u["type"] == T.SCV]
-            if workers:
-                hi.minimap_command(C.ORDER_ATTACK_MOVE, *d["to"])
-                g.pulled.update(workers)
-            g.task = None
-            return
-        cx, cy = d["cc"]
-        if not screen_of(obs, cx, cy):
-            hi.camera_minimap(cx, cy)
-            return
-        miners = [u for u in mine if u["type"] == T.SCV and u["tag"] not in g.pulled
-                  and math.dist((u["x"], u["y"]), (cx, cy)) < 8 * 32 and screen_of(obs, u["x"], u["y"])]
-        if not miners:
-            g.task = None
-            return
-        # about two workers per attacker, the ones closest to the attackers
-        tx, ty = d["to"]
-        miners.sort(key=lambda u: math.dist((u["x"], u["y"]), (tx, ty)))
-        box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in miners[:min(10, d["n"] - len(g.pulled))]], 6)
-        t.stage = "selected"
-
-    def _unpull(self, obs: dict, mine: list[dict], t: Task) -> None:
-        """Pulled workers back to the minerals of the nearest base."""
-        g, hi = self.g, self.g.hi
-        back = [u for u in mine if u["tag"] in g.pulled]
-        if not back:
-            g.pulled.clear()
-            g.task = None
-            return
-        if t.stage == "selected":
-            sel = [u for u in back if u["tag"] in obs["selection"]]
-            if sel:
-                w = sel[0]
-                base = min(g.map.bases, key=lambda b: math.dist(b.center, (w["x"], w["y"])))
-                fields = [m for m in base.minerals if screen_of(obs, *m)]
-                if fields:
-                    hi.right_click(*screen_of(obs, *fields[0]))
-                else:
-                    hi.minimap_right_click(*base.minerals[0])
-                g.pulled -= {u["tag"] for u in sel}
-            t.stage = "start"
-            t.data["boxes"] = t.data.get("boxes", 0) + 1
-            if t.data["boxes"] >= 3:
-                g.pulled.clear()
-                g.task = None
-            return
-        cx = sorted(u["x"] for u in back)[len(back) // 2]
-        cy = sorted(u["y"] for u in back)[len(back) // 2]
-        here = [u for u in back if screen_of(obs, u["x"], u["y"])]
-        if not here:
-            hi.camera_minimap(cx, cy)
-            return
-        box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in here], 6)
-        t.stage = "selected"
 
 
 class LoadRule:
@@ -516,7 +347,6 @@ class LoadRule:
     def __init__(self, g: Gary):
         self.g = g
         self.next_load = 0
-        g.task_runners["load"] = self._run
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
         g = self.g
@@ -541,45 +371,11 @@ class LoadRule:
             if free <= 0 or not marines:
                 continue
             self.next_load = hi.frame + 24 * 2
-            g.task = Task("load", data={"bunker": b["tag"], "x": b["x"], "y": b["y"],
-                                        "marines": [u["tag"] for u in marines]}, started=hi.frame)
+            g.motor.start(Intent("LOAD", [u["tag"] for u in marines], b["tag"],
+                                 {"bunker": b["tag"], "x": b["x"], "y": b["y"],
+                                  "marines": [u["tag"] for u in marines]}, "rule:load"))
             return True
         return False
-
-    def _run(self, obs: dict, mine: list[dict], t: Task) -> None:
-        """Drag-select the marines (camera on them first if needed), camera on the bunker if it isn't
-        on screen, right-click the bunker."""
-        g, hi, d = self.g, self.g.hi, t.data
-        if hi.frame - t.started > 24 * 3:
-            g.task = None
-            return
-        units = [u for u in mine if u["tag"] in set(d["marines"])]
-        if not units:
-            g.task = None
-            return
-        if t.stage == "start":
-            on_screen = [u for u in units if screen_of(obs, u["x"], u["y"])]
-            if not on_screen:
-                if d.get("camera_moved"):
-                    g.task = None
-                    return
-                d["camera_moved"] = True             # on the marines nearest the bunker
-                g.camera_to(int(units[0]["x"]), int(units[0]["y"]))
-                return
-            box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in on_screen], BOX_MARGIN)
-            t.stage = "order"
-            return
-        chosen = set(obs["selection"]) & {u["tag"] for u in units}
-        p = screen_of(obs, d["x"], d["y"])
-        if chosen and not p and not d.get("to_bunker"):
-            d["to_bunker"] = True
-            g.camera_to(int(d["x"]), int(d["y"]))
-            return
-        if chosen and p:
-            hi.right_click(*p)
-            g.loaded.setdefault(d["bunker"], set()).update(chosen)
-            g.say(f"loads {len(chosen)} marine{'s' * (len(chosen) != 1)} into the bunker")
-        g.task = None
 
 
 class RepairRule:
@@ -590,7 +386,6 @@ class RepairRule:
     def __init__(self, g: Gary):
         self.g = g
         self.next_repair = 0
-        g.task_runners["repair"] = self._run
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
         g = self.g
@@ -613,38 +408,10 @@ class RepairRule:
         if not scvs:
             return False
         self.next_repair = hi.frame + 24 * 3
-        g.task = Task("repair", data={"bunker": bunker["tag"], "x": bunker["x"], "y": bunker["y"],
-                                      "scvs": [u["tag"] for u in scvs]}, started=hi.frame)
+        g.motor.start(Intent("REPAIR", [u["tag"] for u in scvs], bunker["tag"],
+                             {"bunker": bunker["tag"], "x": bunker["x"], "y": bunker["y"],
+                              "scvs": [u["tag"] for u in scvs]}, "rule:repair"))
         return True
-
-    def _run(self, obs: dict, mine: list[dict], t: Task) -> None:
-        g, hi, d = self.g, self.g.hi, t.data
-        if hi.frame - t.started > 24 * 3:
-            g.task = None
-            return
-        units = [u for u in mine if u["tag"] in set(d["scvs"])]
-        if not units:
-            g.task = None
-            return
-        if t.stage == "start":
-            if not screen_of(obs, d["x"], d["y"]) or not all(screen_of(obs, u["x"], u["y"]) for u in units):
-                if d.get("camera_moved"):
-                    units = [u for u in units if screen_of(obs, u["x"], u["y"])]
-                    if not units or not screen_of(obs, d["x"], d["y"]):
-                        g.task = None
-                        return
-                else:
-                    d["camera_moved"] = True
-                    g.camera_to(int(d["x"]), int(d["y"]))
-                    return
-            box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in units], 12)
-            t.stage = "order"
-            return
-        p = screen_of(obs, d["x"], d["y"])
-        if p and set(obs["selection"]) & set(d["scvs"]):
-            hi.right_click(*p)                   # an SCV's right-click on a damaged building: repair
-            g.say(f"{len(set(obs['selection']) & set(d['scvs']))} SCVs repair the bunker")
-        g.task = None
 
 
 class ReinforceRule:
@@ -656,7 +423,6 @@ class ReinforceRule:
     def __init__(self, g: Gary):
         self.g = g
         self.known: set[int] | None = None       # fighters Gary has seen
-        g.task_runners["reinforce"] = self._run
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
         g = self.g
@@ -672,34 +438,9 @@ class ReinforceRule:
             return False
         cx, cy = sum(u["x"] for u in new) / len(new), sum(u["y"] for u in new) / len(new)
         target = min(at_home, key=lambda e: math.dist((e["x"], e["y"]), (cx, cy)))
-        g.task = Task("reinforce", data={"tags": [u["tag"] for u in new], "x": target["x"], "y": target["y"]},
-                      started=g.hi.frame)
+        g.motor.start(Intent("REINFORCE", [u["tag"] for u in new], (target["x"], target["y"]),
+                             {"tags": [u["tag"] for u in new], "x": target["x"], "y": target["y"]}, "rule:reinforce"))
         return True
-
-    def _run(self, obs: dict, mine: list[dict], t: Task) -> None:
-        """Camera on the new fighters, drag-select them, attack-move on the minimap to the fight."""
-        g, hi, d = self.g, self.g.hi, t.data
-        units = [u for u in mine if u["tag"] in set(d["tags"])]
-        if hi.frame - t.started > 24 * 3 or not units:
-            g.task = None
-            return
-        if t.stage == "start":
-            on_screen = [u for u in units if screen_of(obs, u["x"], u["y"])]
-            if not on_screen:
-                if d.get("camera_moved"):
-                    g.task = None
-                    return
-                d["camera_moved"] = True
-                g.camera_to(int(units[0]["x"]), int(units[0]["y"]))
-                return
-            box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in on_screen], 12)
-            t.stage = "order"
-            return
-        chosen = set(obs["selection"]) & set(d["tags"])
-        if chosen:
-            hi.minimap_command(C.ORDER_ATTACK_MOVE, int(d["x"]), int(d["y"]))
-            g.say(f"reinforce: {len(chosen)} new {'units' if len(chosen) > 1 else 'unit'} attack-move to the fight")
-        g.task = None
 
 
 RULES = {"pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule}

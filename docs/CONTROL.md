@@ -3,9 +3,10 @@
 Who decides what, at which timescale, and how each layer becomes a swappable part. This note
 applies [ARCHITECTURE.md](ARCHITECTURE.md) §6.4 (intents), §6.6 (decision slots and providers),
 §6.7 (executors and the Attention Arbiter) and §9.1 (run manifests) to the code as it is at v0.9,
-and plans the way from here to there. Status: steps 1-2 of the plan are done (`gary/agent/`: the
-layers as providers, every Gary version a manifest; the arbiter with a trace); the contracts
-below for intents and skills (`Intent`, `Skill`, `Candidate`) come with step 3.
+and plans the way from here to there. Status: steps 1-3 of the plan are done (`gary/agent/`: the
+layers as providers, every Gary version a manifest; the arbiter with a trace; intents, leases and
+the "direct" motor layer). Not yet: `Candidate` (the arbiter still hands the one task slot to the
+first layer that wants it), and leases are recorded, not enforced.
 
 ## Why now
 
@@ -179,8 +180,13 @@ earlier speedups).
    Same actions in all 110 parity games and scenarios. A first look (v0.9, immediate 9-pool,
    seed 1, 8 min): the hands went 42% to macro, 19% to sending idle SCVs to mine, 9% to loading
    the bunker, 9% to the fight model.
-3. **Intents and leases.** The rules issue intents; "direct" skills turn them into today's clicks.
-   Same replays.
+3. **Intents and leases.** Done: the fight rules, the fight models and the army issue `Intent`s
+   (`gary/agent/intents.py`: kind, units, target, the skill's data, source, ttl); the motor layer
+   (`gary/agent/motor.py`, `direct/v1`) carries each out with a skill, today's clicks moved there.
+   A skill's order takes its units' leases; an order to units another source still holds is
+   traced (`lease_conflict`), not prevented yet. Same actions in all 110 parity games and
+   scenarios. A first look (v0.9, immediate 9-pool, seed 1): the fight model and the bunker-load
+   rule took marines from each other 9 times in 8 minutes.
 4. **The first skill: STUTTER** (scripted, timed to the cooldown), with a simple L4 for variant B
    (the command model's move-then-attack on ranged units becomes STUTTER). Variant A vs B on the
    three benchmarks. This is the first real experiment.

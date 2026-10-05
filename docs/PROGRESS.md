@@ -121,7 +121,16 @@ quicker way to a playable Gary.
   12, by the game's own rule as OpenBW's client has it). Tried in the fight layer (`ctrl_click`:
   a group that is every unit of one type on screen gets a ctrl+click, not a drag box): rarely
   applies (52 ctrl+clicks to 3,147 boxes in 16 rush games), no gain (9-pool held 12 / lost 1,
-  home defenses -88 vs v0.9's -77, within noise); not in any manifest. Next: intents, and
+  home defenses -88 vs v0.9's -77, within noise); not in any manifest.
+- **Intents and leases** (CONTROL.md step 3): the fight rules, models and the army issue intents;
+  a motor layer carries them out with today's clicks; leases record who last ordered each unit
+  (traced conflicts: in one 9-pool game the fight model and the bunker-load rule took marines
+  from each other 9 times in 8 minutes). Every action identical in the 110 parity games.
+- **What marines' moves are for** (`eval/micro_intents.py`, a script's labels on the 114 home
+  defenses): pros give 253 move commands to fighting marines, v0.9 72. Pros: approach 46%,
+  retreat 19%, stutter 11%, kite 9%, pull back (a third of the marines, the ones under attack,
+  while the rest shoot) 5.5%, other 11%. v0.9: retreat 40%, approach 33%, stutter 7%, kite 6%,
+  pull back 1%. Gary moves rarely, and mostly away. Next: intents, and
   the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs

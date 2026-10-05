@@ -7,6 +7,8 @@
   fights    tasks a fight turn interrupted, by kind
   waits     per layer: how often and how long it waited for the hands (macro with a decision
             taken, the fight with one going on), the longest, and what held the hands
+  intents   per source and kind (motor.py), and lease conflicts: units a source ordered while
+            another's intent still held them (intents.py)
 """
 
 from __future__ import annotations
@@ -23,6 +25,8 @@ def summarize(paths: list[Path]) -> dict:
     hands: dict[str, list[float]] = defaultdict(lambda: [0, 0.0])
     interrupted: Counter = Counter()
     waits: dict[str, list] = defaultdict(list)
+    intents: Counter = Counter()
+    conflicts: Counter = Counter()
     for path in paths:
         for line in path.read_text(encoding="utf-8").splitlines()[1:]:
             e = json.loads(line)
@@ -34,6 +38,11 @@ def summarize(paths: list[Path]) -> dict:
                     interrupted[e["task"]] += 1
             elif e["kind"] == "wait":
                 waits[e["layer"]].append(e)
+            elif e["kind"] == "intent":
+                intents[f"{e['source']} {e['intent']}"] += 1
+            elif e["kind"] == "lease_conflict":
+                for held, n in e["held_by"].items():
+                    conflicts[f"{e['taker']} {e['intent']} took from {held}"] += n
     total = sum(h[1] for h in hands.values()) or 1
     return {
         "hands": {who: {"tasks": n, "seconds": round(s, 1), "share": round(s / total, 3)}
@@ -43,6 +52,8 @@ def summarize(paths: list[Path]) -> dict:
                           "longest_s": round(max(w["frames"] for w in ws) / FPS, 1),
                           "hands_on": dict(Counter(t for w in ws for t in w["hands_on"]).most_common(5))}
                   for layer, ws in waits.items()},
+        "intents": dict(intents.most_common()),
+        "lease_conflicts": dict(conflicts.most_common()),
     }
 
 
@@ -59,6 +70,10 @@ def main() -> None:
     for layer, w in s["waits"].items():
         print(f"{layer} waited {w['count']} times, {w['seconds']} s in all (longest {w['longest_s']} s); "
               f"hands on: {w['hands_on']}")
+    print("intents (source kind: count):")
+    for k, n in s["intents"].items():
+        print(f"  {k:32s} {n:5d}")
+    print("lease conflicts (units):", s["lease_conflicts"] or "none")
 
 
 if __name__ == "__main__":

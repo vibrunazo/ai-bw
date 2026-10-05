@@ -30,6 +30,7 @@ class Task:
     data: dict = field(default_factory=dict)
     started: int = 0
     by: str = ""                       # which layer (or rule) asked for it: the arbiter's trace
+    intent: object = None              # the intent it carries out (intents.py), if a skill's
 
 
 class Gary:
@@ -81,6 +82,8 @@ class Gary:
             self.rally = self.toward_center(self.natural.center, 6 * 32)
             self.flip = (self.main.center[0] > mapinfo.size[0] / 2, self.main.center[1] > mapinfo.size[1] / 2)
         # the layers (set by build_gary)
+        self.motor = None
+        self.leases = None
         self.executor = None
         self.posture = None
         self.macro = None

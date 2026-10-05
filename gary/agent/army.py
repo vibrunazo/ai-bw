@@ -8,7 +8,8 @@
             Also the scout: one worker at 9 SCVs to the enemy start locations.
 
 Units in a fight are the fight layer's; the arbiter leaves them out (and the posture can keep the
-army home altogether).
+army home altogether). Orders are intents (ARMY_MOVE, ARMY_ATTACK, SCOUT, ATTACK_WAVE) that the
+motor layer (motor.py) carries out.
 """
 
 from __future__ import annotations
@@ -17,14 +18,12 @@ import math
 
 import numpy as np
 
-from gary import commands as C
 from gary import terran as T
-from gary.agent.gary import Gary, Task
-from gary.interface import screen_of
+from gary.agent.gary import Gary
+from gary.agent.intents import Intent
 from gary.policy.army import GRID, ArmyModel, ArmyTracker, is_building
 
 WAVE = 16
-HK_ARMY = [1, 2]
 ASK_EVERY = 24 * 2                  # how often Gary asks the model about its army
 MOVE_CELLS = 2                      # destinations closer than this are "stay"
 MOVE_P = 0.5                        # move when the model puts more belief than this away from here
@@ -33,7 +32,6 @@ FIGHT_MARGIN = 0.01                 # ...or if going looks worse than staying by
 REORDER_AFTER = 24 * 8              # don't repeat the same order to a group within 8 s
 SCOUT_AT = 24 * 45                  # send a scouting worker from 0:45, at 9 SCVs (like pros)
 SCOUT_WORKERS = 9
-SCOUT_KEY = 0
 
 
 def cell_dist(a: int, b: int) -> int:
@@ -47,57 +45,16 @@ class WaveArmy:
         self.g = g
         self.attacks_sent = 0
         self.army_sent: set[int] = set()
-        g.task_runners["attack"] = self._run_attack
 
     def step(self, obs: dict, mine: list[dict], done: list[dict]) -> str | None:
         """Attack-move with every 16 army units. "army" if Gary acted."""
         g = self.g
         army = [u for u in done if u["type"] in g.army_types and u["tag"] not in self.army_sent]
         if len(army) >= WAVE:
-            g.task = Task("attack", started=g.hi.frame)
+            g.motor.start(Intent("ATTACK_WAVE", [], None, {}, "army"))
             return "army"
         return None
 
-    def _run_attack(self, obs: dict, mine: list[dict], t: Task) -> None:
-        """Gather marines at the rally point with drag boxes, attack-move."""
-        g, hi = self.g, self.g.hi
-        if hi.frame - t.started > 24 * 40:
-            g.task = None
-            return
-        waiting = [u for u in mine if u["type"] in g.army_types and u["completed"]
-                   and u["tag"] not in self.army_sent]
-        if not waiting:
-            self.attacks_sent += 1
-            g.task = None
-            return
-        # look where the waiting marines are (normally the rally point)
-        cx = sorted(u["x"] for u in waiting)[len(waiting) // 2]
-        cy = sorted(u["y"] for u in waiting)[len(waiting) // 2]
-        if not screen_of(obs, cx, cy):
-            hi.camera_minimap(cx, cy)
-            return
-        target = g.enemy_starts[self.attacks_sent % len(g.enemy_starts)]
-        group = t.data.get("group", 0)
-        if t.stage in ("start", "box"):
-            here = [u for u in waiting if screen_of(obs, u["x"], u["y"])]
-            if not here or group >= len(HK_ARMY) * 3:
-                self.attacks_sent += 1
-                g.task = None
-                return
-            xs = [screen_of(obs, u["x"], u["y"]) for u in here]
-            x0 = max(0, min(p[0] for p in xs) - 12)
-            y0 = max(0, min(p[1] for p in xs) - 12)
-            x1 = min(hi.p.viewport[0] - 1, max(p[0] for p in xs) + 12)
-            y1 = min(hi.p.viewport[1] - 1, max(p[1] for p in xs) + 12)
-            hi.box(x0, y0, x1, y1)
-            t.stage = "attack"
-            return
-        if t.stage == "attack":
-            sent = [tag for tag in obs["selection"]]
-            hi.minimap_command(C.ORDER_ATTACK_MOVE, *target)
-            self.army_sent.update(sent)
-            t.data["group"] = group + 1
-            t.stage = "box"
 
 
 class LearnedArmy:
@@ -115,8 +72,6 @@ class LearnedArmy:
         self.held: dict[int, int] = {}                # cluster cell -> destination Gary decided against
         self.scout_targets: list[tuple[int, int]] = []
         self.scout_done = False
-        g.task_runners["scout"] = self._run_scout
-        g.task_runners["army_order"] = self._run_army_order
 
     def remember(self, obs: dict) -> None:
         self.tracker.remember(obs)
@@ -188,47 +143,10 @@ class LearnedArmy:
         self.held.pop(here, None)
         x, y = self.tracker.center(best)
         self.ordered[here] = (best, attack, hi.frame)
-        g.task = Task("army_order", data={"tags": [u["tag"] for u in group], "x": x, "y": y,
-                                          "attack": attack, "p": p_away, "fight": go, "done": [], "boxes": 0},
-                      started=hi.frame)
+        g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
+                             {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": p_away,
+                              "fight": go, "done": [], "boxes": 0}, "army"))
         return "army"
-
-    def _run_army_order(self, obs: dict, mine: list[dict], t: Task) -> None:
-        """Drag-box the cluster's units (12 at most per box, like the real game) and give each box
-        the order on the minimap, until all of them have it."""
-        g, hi, d = self.g, self.g.hi, t.data
-        if hi.frame - t.started > 24 * 10:
-            g.task = None
-            return
-        if t.stage == "selected":
-            sel = [s for s in obs["selection"] if s in set(d["tags"])]
-            if sel:
-                if d["attack"]:
-                    hi.minimap_command(C.ORDER_ATTACK_MOVE, d["x"], d["y"])
-                else:
-                    hi.minimap_right_click(d["x"], d["y"])
-                d["done"] += sel
-            t.stage = "start"
-            return
-        left = [u for u in mine if u["tag"] in set(d["tags"]) - set(d["done"])]
-        if not left or d["boxes"] >= 4:
-            if d["done"]:
-                g.say(f"army ({len(d['done'])} units): {'attack' if d['attack'] else 'move'} "
-                      f"to ({d['x']}, {d['y']}) ({d['p']:.0%} sure it should move; fight estimate {d['fight']:+.0%})")
-            g.task = None
-            return
-        cx = sorted(u["x"] for u in left)[len(left) // 2]
-        cy = sorted(u["y"] for u in left)[len(left) // 2]
-        here = [u for u in left if screen_of(obs, u["x"], u["y"])]
-        if not here:
-            hi.camera_minimap(cx, cy)
-            return
-        pts = [screen_of(obs, u["x"], u["y"]) for u in here]
-        hi.box(max(0, min(p[0] for p in pts) - 10), max(0, min(p[1] for p in pts) - 10),
-               min(hi.p.viewport[0] - 1, max(p[0] for p in pts) + 10),
-               min(hi.p.viewport[1] - 1, max(p[1] for p in pts) + 10))
-        d["boxes"] += 1
-        t.stage = "selected"
 
     # --- scouting (scripted for now) -----------------------------------------------------------
 
@@ -244,7 +162,7 @@ class LearnedArmy:
             workers = sum(1 for u in mine if u["type"] == T.SCV)
             if hi.frame >= SCOUT_AT and workers >= SCOUT_WORKERS:
                 self.scout_targets = sorted(g.enemy_starts, key=lambda p: math.dist(p, g.main.center))
-                g.task = Task("scout", data={"to": self.scout_targets[0]}, started=hi.frame)
+                g.motor.start(Intent("SCOUT", [], self.scout_targets[0], {"to": self.scout_targets[0]}, "scout"))
                 return True
             return False
         scout = next((u for u in mine if u["tag"] == g.scout), None)
@@ -252,52 +170,12 @@ class LearnedArmy:
             self.scout_done = True
             return False
         if any(u["owner"] not in (g.slot, 11) and is_building(u["type"]) for u in obs["units"]):
-            g.task = Task("scout", data={"to": g.main.minerals[0], "home": True}, started=hi.frame)
+            g.motor.start(Intent("SCOUT", [g.scout], g.main.minerals[0], {"to": g.main.minerals[0], "home": True}, "scout"))
             return True                                    # found them: home again
         if self.scout_targets and math.dist((scout["x"], scout["y"]), self.scout_targets[0]) < 6 * 32:
             self.scout_targets.pop(0)                      # nobody here: try the next start
             if self.scout_targets:
-                g.task = Task("scout", data={"to": self.scout_targets[0]}, started=hi.frame)
+                g.motor.start(Intent("SCOUT", [g.scout], self.scout_targets[0], {"to": self.scout_targets[0]}, "scout"))
                 return True
             self.scout_done = True
         return False
-
-    def _run_scout(self, obs: dict, mine: list[dict], t: Task) -> None:
-        g, hi, d = self.g, self.g.hi, t.data
-        if hi.frame - t.started > 24 * 10:
-            g.task = None
-            return
-        if g.scout is None:                                # pick a worker, give it a hotkey
-            if t.stage == "start":
-                if not g.look_at(obs, "main"):
-                    return
-                w = g.executor.pick_worker(obs, mine)
-                if w is None:
-                    g.task = None
-                    return
-                x, y = screen_of(obs, w["x"], w["y"])
-                hi.box(max(0, x - 5), max(0, y - 5), min(hi.p.viewport[0] - 1, x + 5), min(hi.p.viewport[1] - 1, y + 5))
-                t.stage = "picked"
-                return
-            sel = [u for u in mine if u["tag"] in obs["selection"] and u["type"] == T.SCV]
-            if len(sel) != 1:
-                g.task = None                              # try again later
-                return
-            g.scout = sel[0]["tag"]
-            hi.hotkey_set(SCOUT_KEY)
-            t.stage = "go"
-            return
-        if obs["selection"] != [g.scout]:
-            if t.stage == "recalled":
-                g.task = None
-                return
-            hi.hotkey_recall(SCOUT_KEY)
-            t.stage = "recalled"
-            return
-        hi.minimap_right_click(*d["to"])
-        if d.get("home"):
-            self.scout_done = True
-            g.say("scout found the enemy base, heading home")
-        else:
-            g.say(f"scouting {d['to']}")
-        g.task = None
