@@ -143,13 +143,13 @@ class TerranGaryV4(TerranGaryV3):
         for b in mine:
             if b["type"] != BUNKER or not b["completed"]:
                 continue
-            if not any(math.dist((e["x"], e["y"]), (b["x"], b["y"])) < BUNKER_THREAT for e in enemy):
+            if not self._bunker_wanted(b, enemy):
                 continue
             sent = self.loaded.setdefault(b["tag"], set())
             sent &= {t for t in sent if t not in seen or seen[t].get("order_target") == b["tag"]}
             free = BUNKER_SLOTS - len(sent)
             marines = sorted((u for u in mine if u["type"] == MARINE and u["completed"] and u["tag"] not in sent
-                              and math.dist((u["x"], u["y"]), (b["x"], b["y"])) < BUNKER_FROM),
+                              and math.dist((u["x"], u["y"]), (b["x"], b["y"])) < self.bunker_from),
                              key=lambda u: math.dist((u["x"], u["y"]), (b["x"], b["y"])))[:free]
             if free <= 0 or not marines:
                 continue
@@ -159,8 +159,15 @@ class TerranGaryV4(TerranGaryV3):
             return True
         return False
 
+    bunker_from = BUNKER_FROM
+
+    def _bunker_wanted(self, b: dict, enemy: list[dict]) -> bool:
+        """Whether marines should be in this bunker now: when enemy fighters come near it."""
+        return any(math.dist((e["x"], e["y"]), (b["x"], b["y"])) < BUNKER_THREAT for e in enemy)
+
     def _task_load(self, obs: dict, mine: list[dict], t: Task) -> None:
-        """Camera on the bunker, drag-select the marines, right-click the bunker."""
+        """Drag-select the marines (camera on them first if needed), camera on the bunker if it isn't
+        on screen, right-click the bunker."""
         hi, d = self.hi, t.data
         units = [u for u in mine if u["tag"] in set(d["marines"])]
         if not units:
@@ -168,12 +175,12 @@ class TerranGaryV4(TerranGaryV3):
             return
         if t.stage == "start":
             on_screen = [u for u in units if screen_of(obs, u["x"], u["y"])]
-            if not on_screen or not screen_of(obs, d["x"], d["y"]):
+            if not on_screen:
                 if d.get("camera_moved"):
                     self.task = None
                     return
-                d["camera_moved"] = True
-                self._camera_to(int(d["x"]), int(d["y"]))
+                d["camera_moved"] = True             # on the marines nearest the bunker
+                self._camera_to(int(units[0]["x"]), int(units[0]["y"]))
                 return
             pts = [screen_of(obs, u["x"], u["y"]) for u in on_screen]
             m = BOX_MARGIN
@@ -184,6 +191,10 @@ class TerranGaryV4(TerranGaryV3):
             return
         chosen = set(obs["selection"]) & {u["tag"] for u in units}
         p = screen_of(obs, d["x"], d["y"])
+        if chosen and not p and not d.get("to_bunker"):
+            d["to_bunker"] = True
+            self._camera_to(int(d["x"]), int(d["y"]))
+            return
         if chosen and p:
             hi.right_click(*p)
             self.loaded.setdefault(d["bunker"], set()).update(chosen)

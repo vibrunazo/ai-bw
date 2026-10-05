@@ -14,6 +14,7 @@ from gary import commands as C
 from gary.env import Game
 
 GEYSER = 188
+GEYSERS = {GEYSER, 110, 149, 157}    # a geyser, or the Refinery / Extractor / Assimilator on it
 
 
 @dataclass
@@ -35,7 +36,7 @@ class MapInfo:
     def from_game(cls, game: Game) -> "MapInfo":
         obs = game.observe()
         size = (obs["map"]["w"], obs["map"]["h"])
-        resources = [u for u in obs["units"] if u["type"] in C.MINERAL_FIELDS or u["type"] == GEYSER]
+        resources = [u for u in obs["units"] if u["type"] in C.MINERAL_FIELDS or u["type"] in GEYSERS]
         bases = [b for b in (_base_for(game, cl) for cl in _clusters(resources)) if b]
         # player start locations have a full base (maps may add observer slots, e.g. by small
         # mineral clusters in the middle): a mineral line and a geyser within 10 tiles
@@ -97,4 +98,4 @@ def _base_for(game: Game, cluster: list[dict]) -> Base | None:
         return None
     return Base(best, (best[0] * 32 + 64, best[1] * 32 + 48),
                 [(u["x"], u["y"]) for u in cluster if u["type"] in C.MINERAL_FIELDS],
-                [(u["x"], u["y"]) for u in cluster if u["type"] == GEYSER])
+                [(u["x"], u["y"]) for u in cluster if u["type"] in GEYSERS])

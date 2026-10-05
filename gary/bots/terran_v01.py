@@ -62,6 +62,7 @@ class TerranGary:
         self.hi = hi
         self.map = mapinfo
         self.slot = hi.slot
+        self._buildable = None              # the map's buildable tiles (see _fits)
         obs = hi.observe()
         cc = next(u for u in obs["units"] if u["owner"] == self.slot and u["type"] == CC)
         self.main = mapinfo.base_near((cc["x"], cc["y"]))
@@ -108,11 +109,43 @@ class TerranGary:
             if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.reserved):
                 continue
             # keep a walkable gap around buildings: the bigger footprint must fit too
-            if self.hi.game.can_place(self.slot, unit_type, tx, ty, builder) and \
-                    self.hi.game.can_place(self.slot, unit_type, tx - 1, ty - 1, builder) and \
-                    self.hi.game.can_place(self.slot, unit_type, tx + 1, ty + 1, builder):
+            if self._fits(unit_type, tx, ty, builder) and self._fits(unit_type, tx - 1, ty - 1, builder) and \
+                    self._fits(unit_type, tx + 1, ty + 1, builder):
                 return tx, ty
         return None
+
+    def _spot_near(self, unit_type: int, near: tuple[int, int], builder: int) -> tuple[int, int] | None:
+        """The free spot closest to a point (e.g. a bunker at the top of the main ramp)."""
+        w, h = SIZE[unit_type]
+        cx, cy = near[0] // 32, near[1] // 32
+        cands = sorted((math.dist((tx * 32 + w * 16, ty * 32 + h * 16), near), tx, ty)
+                       for ty in range(cy - 8, cy + 8) for tx in range(cx - 8, cx + 8))
+        for _, tx, ty in cands:
+            if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.reserved):
+                continue
+            if self._fits(unit_type, tx, ty, builder):
+                return tx, ty
+        return None
+
+    def _fits(self, unit_type: int, tx: int, ty: int, builder: int) -> bool:
+        """The game accepts the building there, and the terrain under it is buildable. The game's
+        check skips the terrain of fogged tiles (you can order a build into the fog): a spot at the
+        fogged edge of a ramp passes, then fails once a unit sees it and the SCV keeps mining. The
+        map's terrain is map knowledge, so Gary checks it too (where the env can tell it)."""
+        if not self.hi.game.can_place(self.slot, unit_type, tx, ty, builder):
+            return False
+        if self._buildable is None:
+            terrain = getattr(self.hi.game, "terrain", None)
+            if terrain is None:
+                self._buildable = False
+            else:
+                walk, _, build = terrain()
+                th, tw = build.shape            # a tile is buildable if no 8x8 part of it is unwalkable
+                self._buildable = build & walk.reshape(th, 4, tw, 4).all(axis=(1, 3))
+        if self._buildable is False:
+            return True
+        w, h = SIZE[unit_type]
+        return bool(self._buildable[ty:ty + h, tx:tx + w].all())
 
     # --- camera ---------------------------------------------------------------------------
 
@@ -379,7 +412,7 @@ class TerranGary:
         tx, ty = base.tile
         near = sorted(((dx, dy) for dx in range(-2, 3) for dy in range(-2, 3)), key=lambda d: abs(d[0]) + abs(d[1]))
         for dx, dy in near:
-            if self.hi.game.can_place(self.slot, CC, tx + dx, ty + dy, builder):
+            if self._fits(CC, tx + dx, ty + dy, builder):
                 return tx + dx, ty + dy
         return base.tile
 
@@ -470,6 +503,7 @@ class TerranGary:
                 if not self._look_at(obs, t.where):
                     return
                 spot = self._town_hall_spot(base, t.data["worker"]) if t.unit_type == CC else \
+                    self._spot_near(t.unit_type, t.data["near"], t.data["worker"]) if "near" in t.data else \
                     self._spot(t.unit_type, base, t.data["worker"])
                 if not spot:
                     self._fail_build(t)

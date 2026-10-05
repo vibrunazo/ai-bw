@@ -213,10 +213,14 @@ def draw(game: Game, mapinfo: MapInfo, analysis: dict, path: str | Path) -> None
     pic.save(path)
 
 
-def map_analysis(game: Game, mapinfo: MapInfo, name: str) -> dict:
-    """The analysis for a map, cached by name under data/interim/maps/."""
-    from ingest.inventory import data_root
-    cache = data_root() / "interim" / "maps" / f"{''.join(c if c.isalnum() else '_' for c in name)}.json"
+def map_analysis(game: Game, mapinfo: MapInfo) -> dict:
+    """The analysis for a map, cached under data/interim/maps/ by the map's size and start locations
+    (the same map in any replay or game gets the same file)."""
+    import hashlib
+    import os
+    root = Path(os.environ.get("GARY_DATA", Path(__file__).resolve().parent.parent / "data"))
+    key = hashlib.sha1(json.dumps([mapinfo.size, sorted(mapinfo.starts)]).encode()).hexdigest()[:16]
+    cache = root / "interim" / "maps" / f"{mapinfo.size[0] // 32}x{mapinfo.size[1] // 32}_{key}.json"
     if cache.exists():
         a = json.loads(cache.read_text(encoding="utf-8"))
         a["starts"] = {int(k): v for k, v in a["starts"].items()}
