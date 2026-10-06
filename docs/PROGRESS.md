@@ -156,7 +156,13 @@ quicker way to a playable Gary.
   pro home defenses by a wide margin, and do somewhat worse against the 9-pool. Their worst home
   defense (1316133c: 15 SCVs lost vs 3) retreats the marines and leaves the SCVs to the lings.
   The first version retreated away from the bunker too (9-pool held 6, lost 5): now a retreat
-  goes into a bunker with room first. Videos (pro | v0.9 | roles): `data/interim/videos/roles_vs/`. Next: intents, and
+  goes into a bunker with room first. Videos (pro | v0.9 | roles): `data/interim/videos/roles_vs/`.
+  Then: no walking away at home (a Command Center within 14 tiles: only into a bunker, else the
+  army fights with the SCVs), and SCVs fighting with the group count in its strength. Home
+  defenses **-28**, immediate 9-pool held 11 / lost 0, 7:00 rush 16 / 0 (38 buildings): the
+  roles' hand rules now beat v0.9 on the home defenses by 49 points and lose no rush game. Still
+  bad: 1316133c (17 zerglings at the base, the roles hardly act, the pulled SCVs die: 15 lost,
+  v0.9 3, the pro 8). Next: intents, and
   the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs

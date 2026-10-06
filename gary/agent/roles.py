@@ -6,9 +6,11 @@ a baseline for a role model learned from the pros' labels); each role's skill pi
 from the threats around (their positions and weapon ranges, the walkable ground), and the motor
 layer's command skill clicks it. One role group per turn (12 units at most), the most urgent:
 
-  retreat    the zerg near Gary's group outweigh it (supply) 2.5 to 1: to safety. Into a bunker of
-             Gary's with room, within 15 tiles (the nearest marines, as many as fit); else away
-             from them, to the edge of their weapon range plus a margin
+  retreat    the zerg near Gary's group outweigh it (supply, SCVs fighting with it counted) 2.5 to
+             1: to safety. Into a bunker of Gary's with room, within 15 tiles (the nearest marines,
+             as many as fit); else, away from home, away from them to the edge of their weapon
+             range plus a margin. At home (a Command Center within 14 tiles) there is no walking
+             away: the SCVs would be left to the zerg, so the army fights with them
   pull_back  units in contact with an attacker that targets them, under half HP, with other units
              near them firing: each steps 1.5 tiles away from its attackers (a walkable direction)
   fire       units with an enemy in range that aren't attacking: attack-move at the enemy group
@@ -40,6 +42,7 @@ PULL_TILES = 1.5
 RETREAT_MARGIN = 3 * 32
 REPEAT = 24                          # the same role isn't given to a unit again within a second (but pull back)
 SHELTER = 15 * 32                    # a bunker this close is where a retreat goes
+HOME = 14 * 32                       # a Command Center this close: the group is defending home
 BUNKER, MARINE = 125, 0
 BUNKER_SLOTS = 4
 MAX_GROUP = 12
@@ -68,7 +71,11 @@ class RoleRules:
             return None
         now = g.hi.frame
         mx, my = _mid(mine)
-        ours = sum(supply_x2(u["type"]) for u in mine if math.dist((u["x"], u["y"]), (mx, my)) < NEAR)
+        workers = [u for u in by_tag.values() if u["owner"] == g.slot and u["type"] == T.SCV
+                   and (u.get("order") in ATTACK or u["tag"] in g.pulled)]
+        ours = sum(supply_x2(u["type"]) for u in mine + workers if math.dist((u["x"], u["y"]), (mx, my)) < NEAR)
+        home = any(u["owner"] == g.slot and u["type"] == T.CC and math.dist((u["x"], u["y"]), (mx, my)) < HOME
+                   for u in by_tag.values())
         theirs = sum(supply_x2(u["type"]) for u in enemy if math.dist((u["x"], u["y"]), (mx, my)) < NEAR)
         fresh = lambda u, role: not (self.told.get(u["tag"], ("", -10**9))[0] == role
                                      and now - self.told[u["tag"]][1] < REPEAT)
@@ -86,7 +93,7 @@ class RoleRules:
                 if inside:
                     return self._enter(inside, bunker)
             group = group[:MAX_GROUP]
-            if group:
+            if group and not home:
                 return self._intent("RETREAT", group, self._retreat_point(group, enemy), "move")
         # pull back: units under attack, hurt, with others firing near them
         targeted = {e.get("order_target") for e in enemy}
