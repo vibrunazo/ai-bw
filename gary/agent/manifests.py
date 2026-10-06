@@ -187,6 +187,9 @@ OPTIONS = {
     "post": _roles(post=3),                 # hold a post by the Command Center (and leash)     +8 ± 9, [239] +7 ± 5; 9-pool lost 1
     "post0": _roles(post=0),                # ...at the Command Center                          +6 ± 10, [239] +4 ± 5
     "post6": _roles(post=6),                # ...6 tiles from it                                -4 ± 8
+    # vultures skirmish (move away, shoot, ease off; roles.py): [239] −14 ± 4, worse in 36 of the
+    # 47 with vultures: 18% fewer vultures lost, but fewer zerg killed and more SCVs lost
+    "vultures": _roles(vultures=True),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     "pull_attacked": _pull_when_attacked,   # fight.py: pull workers only when zerg attack      +2 ± 3, [239] +3 ± 3
     # a fight interrupts waiting builds: +3 ± 6, [239] +6 ± 4; but 9-pool lost 3 (the bunker comes late)

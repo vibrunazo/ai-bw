@@ -49,6 +49,15 @@ urgent. The hand rules:
              at home, the pros' stand nearer the Command Center than v0.10's (within 6 tiles 46%
              of the time, v0.10's 37%), in bigger groups (7, v0.10's 5), and the standoff lasts:
              twice the marine-minutes of v0.10's, who close the distance
+  vultures   (an option) vultures skirmish as a group, apart from the other roles (selected with a
+             ctrl+click: every vulture on screen, no marines): any zerg within its reach + 2 tiles of
+             a vulture, they move away 3.5 tiles (toward Gary's other fighters, not into a corner,
+             not into the workers: the zerg follow);
+             else, weapons ready and a zerg in range, they
+             shoot the nearest; else, reloading with zerg near, they step away. They never close
+             in. With zerg within 8 tiles the pros' vultures move 44% of the time, attack a unit
+             33%, hold 8% (patrol 1%, mines rare this early), at 2.9 tiles/s; v0.10's attack 65%,
+             move 7%, at 1.3 tiles/s, and lose twice as many (home defenses)
   regroup    (an option) only the pack closes in: units with nothing in range that are away from
              the pack (the biggest bunch of Gary's fighters, linked within 4 tiles; a bunker and
              SCVs fighting count) rejoin it, attack-moving to its middle, instead of closing in
@@ -102,6 +111,12 @@ HOLD = 107                           # the hold position order
 VULTURE = 2
 MELEE = {37, 39}                     # zergling, ultralisk
 KITE_PX = 80                         # kite: melee zerg this close to a vulture
+ZERG_REACH = {37: 16, 38: 128, 39: 32, 103: 192, 146: 224, 40: 16}   # ling, hydra, ultra, lurker, sunken, broodling
+VULTURE_RANGE = 160
+SKIRMISH_NEAR = 8 * 32               # vultures: zerg this close to the group are its business
+TOO_CLOSE = 2 * 32                   # ...within reach + this: move away
+AWAY = 3.5 * 32
+EASE = 3 * 32                        # reloading, zerg within reach + this: step away
 POST_FROM_CC = 3 * 32               # post: this far from the Command Center toward the zerg
 POST_SLACK = 3 * 32                  # post: units farther than this from it go back
 PACK_LINK = 4 * 32                   # regroup: units this close to each other are one bunch
@@ -121,9 +136,11 @@ class RoleRules:
     """rules/v1: hand rules for roles (see the module's docstring)."""
 
     def __init__(self, g, brace: bool = False, leash: bool = False, volley: bool = False, regroup: bool = False,
-                 holds: bool = False, kite: bool = False, fire: str = "enemy", post: float | str | None = None):
+                 holds: bool = False, kite: bool = False, fire: str = "enemy", post: float | str | None = None,
+                 vultures: bool = False):
         self.g = g
         self.post = post                             # post: tiles from the CC toward the zerg, or "minerals"
+        self.vultures = vultures
         self.kite, self.fire = kite, fire
         self.brace, self.leash, self.volley, self.regroup, self.holds = brace, leash or post is not None, volley, regroup, holds
         self.closing: dict[int, frozenset] = {}      # volley: unit -> its closing group
@@ -197,6 +214,14 @@ class RoleRules:
         g = self.g
         if not mine or not enemy:
             return None
+        vultures = []
+        if self.vultures:
+            vultures = [u for u in mine if u["type"] == VULTURE]
+            mine = [u for u in mine if u["type"] != VULTURE]
+            self.friends = _mid(mine) if mine else None
+            self.scvs = [(u["x"], u["y"]) for u in by_tag.values() if u["owner"] == g.slot and u["type"] == T.SCV]
+            if not mine:
+                return self._skirmish(vultures, enemy, urgent=False)
         now = g.hi.frame
         mx, my = _mid(mine)
         workers = [u for u in by_tag.values() if u["owner"] == g.slot and u["type"] == T.SCV
@@ -265,6 +290,16 @@ class RoleRules:
                 return self._intent("FIRE", group, (int(mid[0]), int(mid[1])), "attack_move")
             target = min(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
             return self._intent("FIRE", group, (int(target["x"]), int(target["y"])), "attack_move")
+        # vultures (after the others' fire: one group a turn): away from zerg too close
+        if vultures:
+            run = self._skirmish(vultures, enemy, urgent=True)
+            if run is not None:
+                return run
+        # vultures: shoot, or ease off while reloading
+        if vultures:
+            shot = self._skirmish(vultures, enemy, urgent=False)
+            if shot is not None:
+                return shot
         # close in: nothing in range, not weaker, and they aren't coming at us
         if ours >= CLOSE_RATIO * theirs and not coming:
             prey = enemy
@@ -300,6 +335,61 @@ class RoleRules:
                     for t in members:
                         self.closing[t] = members
                 return intent
+        return None
+
+    def _escape(self, frm, threats: list[dict], dist: float, friends):
+        """vultures: a walkable point dist away (12 directions) far from the threats and nearer
+        Gary's other units (friends: a point, or None); None if every way is blocked."""
+        best = None
+        for k in range(12):
+            a = k * math.pi / 6
+            x, y = frm[0] + math.cos(a) * dist, frm[1] + math.sin(a) * dist
+            if not all(self._walkable(frm[0] + (x - frm[0]) * f, frm[1] + (y - frm[1]) * f) for f in (0.33, 0.66, 1.0)):
+                continue
+            score = min(math.dist((x, y), (e["x"], e["y"])) for e in threats)
+            if friends is not None:
+                score -= 0.5 * math.dist((x, y), friends)
+            if any(math.dist((x, y), s) < 5 * 32 for s in getattr(self, "scvs", ())):
+                score -= 8 * 32                              # not into the workers: the zerg follow
+
+            if best is None or score > best[0]:
+                best = (score, (x, y))
+        return best and best[1]
+
+    def _skirmish(self, vultures: list[dict], enemy: list[dict], urgent: bool) -> Intent | None:
+        """vultures: move away from zerg too close (urgent), else shoot or ease off (module doc)."""
+        mid = _mid(vultures)
+        near = [e for e in enemy if math.dist((e["x"], e["y"]), mid) < SKIRMISH_NEAR]
+        if not near:
+            return None
+        gap = lambda e: min(math.dist((u["x"], u["y"]), (e["x"], e["y"])) for u in vultures) - ZERG_REACH.get(e["type"], 32)
+        close = [e for e in near if gap(e) < TOO_CLOSE]
+        now = self.g.hi.frame
+        tags = [u["tag"] for u in vultures][:MAX_GROUP]
+        params = lambda key: {"key": key, "tags": tags, "center": mid, "ctrl_click": True}
+        if urgent:
+            if not close:
+                return None
+            point = self._escape(mid, close, AWAY, self.friends)
+            if point is None:
+                return None
+            for t in tags:
+                self.told[t] = ("SKIRMISH", now)
+            return Intent("SKIRMISH", tags, point, params(("move", int(point[0]), int(point[1]))), "roles")
+        ready = [u for u in vultures if not u.get("cooldown")]
+        target = min(near, key=lambda e: math.dist((e["x"], e["y"]), mid))
+        if ready and math.dist((target["x"], target["y"]), mid) <= VULTURE_RANGE + 16 \
+                and not all(u.get("order") == 10 and u.get("order_target") == target["tag"] for u in vultures):
+            for t in tags:
+                self.told[t] = ("SKIRMISH", now)
+            return Intent("SKIRMISH", tags, target["tag"], params(("attack_unit", target["tag"])), "roles")
+        easing = [e for e in near if gap(e) < EASE]
+        if not ready and easing and any(u.get("order") != 6 for u in vultures):
+            point = self._escape(mid, easing, AWAY / 2, self.friends)
+            if point is not None:
+                for t in tags:
+                    self.told[t] = ("SKIRMISH", now)
+                return Intent("SKIRMISH", tags, point, params(("move", int(point[0]), int(point[1]))), "roles")
         return None
 
     def _post(self, by_tag: dict, at, enemy: list[dict]):

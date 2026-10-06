@@ -34,7 +34,7 @@ BOX_MARGIN = 20                      # screen pixels around the group's units wh
 SCOUT_KEY = 0
 HK_ARMY = [1, 2]
 COMMANDS = {"MOVE", "ATTACK_MOVE", "ATTACK_UNIT", "GATHER", "OWN_UNIT", "STOP", "HOLD", "STIM", "RETURN_CARGO"}
-ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT", "BRACE", "REGROUP", "POST"}  # roles.py: carried out as commands
+ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT", "BRACE", "REGROUP", "POST", "SKIRMISH"}  # roles.py: carried out as commands
 TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL": "unpull", "LOAD": "load",
            "REPAIR": "repair", "REINFORCE": "reinforce", "ARMY_MOVE": "army_order", "ARMY_ATTACK": "army_order",
            "SCOUT": "scout", "ATTACK_WAVE": "attack"}
@@ -102,7 +102,7 @@ class DirectMotor:
                 if not on_screen:
                     g.task = None
                     return
-                if g.fight.ctrl_click and self._ctrl_click(obs, on_screen):
+                if (g.fight.ctrl_click or d.get("ctrl_click")) and self._ctrl_click(obs, on_screen):
                     t.stage = "order"
                     return
                 # a generous box: units move while Gary reacts (what it sees is 0.3 s old)

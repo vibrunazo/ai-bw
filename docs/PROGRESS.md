@@ -112,6 +112,14 @@ quicker way to a playable Gary.
   8 draws): 60 rounds +8 ± 10 to v0.10; 200 rounds with twice the data drifted worse after
   round 20 (validation on 4 draws each: −71 at the start, −84 at the end; its best, round 20,
   +3 ± 9). Not adopted.
+- **Vultures** (239, zerg within 8 tiles): the pros' move 44% of the time, attack a unit 33%,
+  hold 8% (patrol 1%, spider mines 14 in 53 games: rare this early), at 2.9 tiles/s; v0.10's
+  attack a unit 65%, move 7%, at 1.3 tiles/s, and lose twice as many (51, the pros' 25). A
+  skirmish rule (`+vultures`: away from zerg too close, toward the marines, not into the
+  workers; shoot when ready; ease off while reloading) brought the orders near the pros' (move
+  42%, attack 29%, 1.8 tiles/s) and lost 18% fewer vultures, but scored −14 ± 4: fewer zerg
+  killed, more SCVs lost. Vulture micro (keeping them at speed while shooting: patrol, move
+  shots) needs finer hands than half-second turns; later, with supervision or learning.
 - **How we got here:** see v0.9's last bullets (CONTROL.md steps 1-5): the layer refactor with
   parity checks, per-command intent labels that didn't hold up when watched, roles per unit that
   did, then the rules beating both the learned fight model and a role model learned by
