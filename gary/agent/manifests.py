@@ -77,6 +77,10 @@ MANIFESTS: dict[str, dict] = {
     "v09roles": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
                  "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY,
                  "fight": {**_V09_FIGHT, "provider": "roles", "model": None}, "arbiter": "fixed_priority/v1"},
+    # step 5: the roles named by a model learned from the pros' role labels
+    "v09roleml": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
+                  "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY,
+                  "fight": {**_V09_FIGHT, "provider": "roles", "model": "roles/latest"}, "arbiter": "fixed_priority/v1"},
     # the fight layer alone, for micro drills (gary/drills.py)
     "drill": {"version": "drill", "posture": "normal", "macro": None, "army": None,
               "fight": {"provider": "command", "model": "fight_cmd/latest_memory", "workers": False},
@@ -127,7 +131,15 @@ def latest_rl_fight_model() -> Path:
     return found[-1]
 
 
-MODEL_PATHS = {"macro/latest": latest_macro_model, "army/latest": latest_army_model,
+def latest_role_model() -> Path:
+    """The newest role model (train/roles.py)."""
+    found = sorted((REPO_ROOT / "runs" / "roles").glob("*/model.pt"))
+    if not found:
+        raise SystemExit("no trained role model in runs/roles (python -m ingest.role_dataset, python -m train.roles)")
+    return found[-1]
+
+
+MODEL_PATHS = {"roles/latest": latest_role_model, "macro/latest": latest_macro_model, "army/latest": latest_army_model,
                "fight/latest": latest_fight_model, "fight_cmd/latest": lambda: latest_command_model(False),
                "fight_cmd/latest_memory": lambda: latest_command_model(True), "fight_cmd_rl/v08": latest_rl_fight_model}
 
@@ -186,9 +198,13 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None)
     if m["fight"] is not None:
         f = m["fight"]
-        if f["provider"] == "roles":
+        if f["provider"] == "roles" and f.get("model") is None:
             fight = None
             models["fight"] = "roles/rules_v1"   # (the chat says so: as many lines as with a model)
+        elif f["provider"] == "roles":
+            from gary.policy.roles import RoleModel
+            fight = RoleModel.load(model_path(f["model"]))
+            models["fight"] = fight.path
         else:
             fight = fight_model or load("fight", str(fight_path or model_path(f["model"])))
             models["fight"] = getattr(fight, "path", "?")

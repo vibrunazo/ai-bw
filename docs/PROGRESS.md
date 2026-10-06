@@ -162,7 +162,16 @@ quicker way to a playable Gary.
   defenses **-28**, immediate 9-pool held 11 / lost 0, 7:00 rush 16 / 0 (38 buildings): the
   roles' hand rules now beat v0.9 on the home defenses by 49 points and lose no rush game. Still
   bad: 1316133c (17 zerglings at the base, the roles hardly act, the pulled SCVs die: 15 lost,
-  v0.9 3, the pro 8). Next: intents, and
+  v0.9 3, the pro 8).
+- **A learned role model** (CONTROL.md step 5: `ingest/role_dataset.py`, `gary/policy/roles.py`,
+  `train/roles.py`): the pros' units in the 552 training home defenses, every half second, the
+  fight as the Terran sees it plus each unit's motion and how many enemies target it, labeled
+  with its role (17,522 snapshots, 48,344 units). Held out: 77% right (always "fire": 52%); recall
+  / precision fire 0.87 / 0.92, close in 0.53 / 0.46, pull back 0.56 / 0.21, retreat 0.46 / 0.53,
+  stand 0.92 / 0.91. In play (`v09roleml`, the same skills): home defenses **-98** (hand rules
+  -28, v0.9 -77), immediate 9-pool held 9 / lost 3, 7:00 rush 16 / 0. It names "stand" for 28%
+  of fighting marine time (no command), and fires less: it learned what the pros' units were
+  doing, mostly the continuing effect of earlier commands, not when a player decides something. Next: intents, and
   the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs

@@ -103,8 +103,8 @@ class FightLayer:
         self.own_radius, self.max_units = (FIGHT_AROUND, PER_UNIT_MAX) if kind == "per_unit" else (OWN_RADIUS, COMMAND_MAX)
         self.roles = None
         if kind == "roles":
-            from gary.agent.roles import RoleRules
-            self.roles = RoleRules(g)
+            from gary.agent.roles import RoleLearned, RoleRules
+            self.roles = RoleLearned(g, model) if model is not None else RoleRules(g)
         self.next_fight = 0
         self.center: tuple[float, float] | None = None
         self.told: dict[int, tuple[tuple, int]] = {}    # unit tag -> (order key, frame given)
@@ -131,7 +131,7 @@ class FightLayer:
                 return f"rule:{rule.name}"
         if self.kind == "roles":
             snap = self._snapshot(obs)
-            intent = self.roles.decide(obs, snap[3]) if snap is not None else None
+            intent = self.roles.decide(obs, snap) if snap is not None or self.model is not None else None
             if intent is None:
                 return None
             self.g.motor.start(intent)
