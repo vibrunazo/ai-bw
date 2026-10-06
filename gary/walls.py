@@ -1,4 +1,4 @@
-"""Walls: which units get between two buildings (sim city).
+"""Walls: which units get between two buildings (sim city), and where a base's openings are.
 
 A building takes whole tiles to place, but what units collide with is its collision box from the
 game data (units.dat), smaller than its tiles by a different number of pixels on each side. So the
@@ -13,6 +13,18 @@ an Academy; a Zerg with Evolution Chambers).
     python -m gary.walls --check                 # the arithmetic against the engine: buildings
                                                  # placed side by side in an OpenBW game, units
                                                  # sent through the opening
+
+The gap finder (gaps(): a window around two points, e.g. inside the natural and past its choke)
+works at pixel resolution: obstacles are unwalkable minitiles and the collision boxes of
+buildings, mineral fields and geysers; where a unit can stand is where its box clears them all,
+so whether a zergling, a marine or an SCV gets from outside in is exact. The openings are found
+narrowest first: the widest way in, its narrowest place (by clearance), then that place closed
+and the next way in. In the pros' 239 home defenses (at the takeover): no main ramp is walled
+or narrowed by buildings (median 56 pixels of clearance, as bare); the natural's choke is
+narrowed from a median 176 pixels bare to 74 by the buildings (to half or less in 95 of 114
+bases that took it), but closed to zerglings in only 5. Their marines on hold position stand at
+such an opening 23% of the time (open ground 34%, by a building 16%, by a bunker 13%, between
+buildings 11%, the mineral line 3%).
 
 Everything is read from the installed game's data at run time (Game.unit_type_info). Checked
 against the engine (--check; 5 Terran buildings in every pairing and way they touch, 7 units):
@@ -112,6 +124,148 @@ def neighbors(fp: Footprints, a: int, b: int):
         gx, gy = opening(fp.box_at_tile(a, 0, 0), fp.box_at_tile(b, dx, ah))
         if gx < 0:
             yield "below", (dx, ah), gy
+
+
+# --- the gap finder: where units get through a base's buildings and cliffs ------------------------
+
+RESOURCES = {176, 177, 178, 188}      # mineral fields, vespene geyser
+GAP_UNITS = (37, 0, 7)                # zergling, marine, SCV: who gets through each opening
+MAX_OPENINGS = 6
+
+
+@dataclass
+class Opening:
+    """A narrowest place on a way from outside in: its middle (map pixels), its width (pixels a
+    unit has there, roughly: the clearance across it), and which unit types fit through it."""
+    x: int
+    y: int
+    width: int
+    passes: list[int]
+
+
+def obstacles(game, obs: dict, fp: Footprints, window: tuple[int, int, int, int]):
+    """What ground units collide with in a window of the map (x0, y0, x1, y1 pixels): a boolean
+    array [y, x], True where unwalkable terrain (8x8-pixel minitiles) or a building's, mineral
+    field's or geyser's collision box is."""
+    import numpy as np
+    from gary.policy.army import is_building
+    x0, y0, x1, y1 = window
+    walk = getattr(game, "_walk_cache", None)
+    if walk is None:
+        walk = game._walk_cache = game.terrain()[0]
+    mini = walk[y0 // 8:(y1 + 7) // 8, x0 // 8:(x1 + 7) // 8]
+    blocked = np.repeat(np.repeat(~mini, 8, axis=0), 8, axis=1)[y0 % 8:y0 % 8 + (y1 - y0), x0 % 8:x0 % 8 + (x1 - x0)]
+    for u in obs["units"]:
+        if u["type"] in RESOURCES or is_building(u["type"]):
+            bx0, by0, bx1, by1 = fp.box_at(u["type"], u["x"], u["y"])
+            bx0, by0, bx1, by1 = max(bx0, x0), max(by0, y0), min(bx1, x1 - 1), min(by1, y1 - 1)
+            if bx0 <= bx1 and by0 <= by1:
+                blocked[by0 - y0:by1 - y0 + 1, bx0 - x0:bx1 - x0 + 1] = True
+    return blocked
+
+
+def fits(blocked, unit: Footprint):
+    """Where a unit can stand: True at positions [y, x] where its collision box clears every
+    obstacle (and stays in the window)."""
+    import numpy as np
+    h, w = blocked.shape
+    s = np.zeros((h + 1, w + 1), np.int32)
+    s[1:, 1:] = blocked.cumsum(0).cumsum(1)
+    free = np.zeros((h, w), bool)
+    ys, xs = slice(unit.up, h - unit.down), slice(unit.left, w - unit.right)
+    y0, y1 = np.arange(h)[ys] - unit.up, np.arange(h)[ys] + unit.down + 1
+    x0, x1 = np.arange(w)[xs] - unit.left, np.arange(w)[xs] + unit.right + 1
+    total = s[y1][:, x1] - s[y0][:, x1] - s[y1][:, x0] + s[y0][:, x0]
+    free[ys, xs] = total == 0
+    return free
+
+
+SNAP = 32                             # a point in an obstacle stands for the free cell this near
+
+
+def _seed(free, p, snap: int = SNAP):
+    """The free cell nearest p (window coordinates [y, x]) within snap pixels, or None."""
+    import numpy as np
+    y0, x0 = max(0, p[0] - snap), max(0, p[1] - snap)
+    ys, xs = np.nonzero(free[y0:p[0] + snap + 1, x0:p[1] + snap + 1])
+    if not len(ys):
+        return None
+    k = int(np.argmin((ys + y0 - p[0]) ** 2 + (xs + x0 - p[1]) ** 2))
+    return int(ys[k] + y0), int(xs[k] + x0)
+
+
+def connected(free, a, b) -> bool:
+    from scipy import ndimage
+    labels, _ = ndimage.label(free)
+    sa, sb = _seed(free, a), _seed(free, b)
+    return sa is not None and sb is not None and labels[sa] == labels[sb] != 0
+
+
+def gaps(game, obs: dict, inside: tuple[int, int], outside: tuple[int, int], margin: int = 12 * 32,
+         units=GAP_UNITS) -> dict:
+    """The openings between outside and inside (map pixels; e.g. the main's Command Center and its
+    ramp's bottom), through the buildings and cliffs in between: for each unit type whether it gets
+    in at all ("walled": False if it does), and the openings, narrowest first, each with who fits.
+    The window is the box around both points plus margin."""
+    import numpy as np
+    from scipy import ndimage
+    fp = Footprints(game)
+    W, H = obs["map"]["w"], obs["map"]["h"]
+    x0, y0 = max(0, min(inside[0], outside[0]) - margin), max(0, min(inside[1], outside[1]) - margin)
+    x1, y1 = min(W, max(inside[0], outside[0]) + margin), min(H, max(inside[1], outside[1]) + margin)
+    blocked = obstacles(game, obs, fp, (x0, y0, x1, y1))
+    a, b = (inside[1] - y0, inside[0] - x0), (outside[1] - y0, outside[0] - x0)
+    # points on a building (the natural's Command Center...): the open ground nearest them, once
+    a, b = _seed(fits(blocked, fp[37]), a, 160) or a, _seed(fits(blocked, fp[37]), b, 160) or b
+    free = {t: fits(blocked, fp[t]) for t in units}
+    walled = {t: not connected(free[t], a, b) for t in units}
+    openings = []
+    clear = ndimage.distance_transform_cdt(~blocked, metric="chessboard")
+    work = clear.copy()
+    for _ in range(MAX_OPENINGS):
+        # the widest way in: the largest clearance t with inside and outside connected over >= t
+        lo, hi = 0, int(work.max())
+        while lo < hi:
+            t = (lo + hi + 1) // 2
+            if connected(work >= t, a, b):
+                lo = t
+            else:
+                hi = t - 1
+        t = lo
+        if t < 1:
+            break
+        # its narrowest place: every way in at t crosses cells of clearance exactly t (above t the
+        # two sides aren't connected); the piece of those touching both sides' open ground (each
+        # side: the ground above t around its point, or the point's own neighborhood)
+        reach, _ = ndimage.label(work >= t)
+        if reach[_seed(work >= t, a)] != reach[_seed(work >= t, b)]:
+            break
+        ridge = (reach == reach[_seed(work >= t, a)]) & (work == t)
+        rest, _ = ndimage.label((reach == reach[_seed(work >= t, a)]) & (work > t))
+
+        def side(p):
+            near = np.zeros_like(ridge)
+            near[max(0, p[0] - 8):p[0] + 9, max(0, p[1] - 8):p[1] + 9] = True
+            ids = set(np.unique(rest[near])) - {0}
+            return ndimage.binary_dilation(np.isin(rest, list(ids)) | (near & ridge), iterations=1)
+        side_a, side_b = side(_seed(work >= t, a)), side(_seed(work >= t, b))
+        pieces, n = ndimage.label(ridge, structure=np.ones((3, 3)))
+        found = None
+        for k in range(1, n + 1):
+            piece = pieces == k
+            if (piece & side_a).any() and (piece & side_b).any():
+                found = piece
+                break
+        if found is None:
+            break
+        ys, xs = np.nonzero(found)
+        cy, cx = int(ys.mean()), int(xs.mean())
+        across = ndimage.binary_dilation(found, iterations=2)          # (asymmetric boxes: a pixel or two off)
+        openings.append(Opening(cx + x0, cy + y0, 2 * t, [u for u in units if (free[u] & across).any()]))
+        if not any(openings[-1].passes):
+            break
+        work[ndimage.binary_dilation(found, iterations=t + 3)] = 0     # closed: the next way in
+    return {"walled": walled, "openings": openings, "window": (x0, y0, x1, y1)}
 
 
 # --- the check against the engine ----------------------------------------------------------------

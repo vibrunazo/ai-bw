@@ -36,7 +36,7 @@ quicker way to a playable Gary.
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays; known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
 | Human interface | The only path to the game: screen clicks, camera, fog, reaction delay, APM (§6.3) | Clicks, drag boxes, camera hotkeys, fog, reaction delay, APM budget; pro-speed hands fitted to pro replays' select-to-order times yet | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| Perception and memory | What Gary knows: visible units, remembered enemy units (§6.9, §6.10) | Fog and hidden enemy HP; remembers enemy buildings and the enemy army seen in the last 3 min; map analysis (`gary/terrain.py`): main ramp, natural, natural choke | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ |
+| Perception and memory | What Gary knows: visible units, remembered enemy units (§6.9, §6.10) | Fog and hidden enemy HP; remembers enemy buildings and the enemy army seen in the last 3 min; map analysis (`gary/terrain.py`): main ramp, natural, natural choke; walls (`gary/walls.py`): which units get between buildings and cliffs, and where the openings are (not used in play yet) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ |
 | Macro decisions | What to build, train, research, and when | Learned from ~14k pro TvZ games; steerable by build style | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ○ | — |
 | Macro executor | Carries out macro decisions: placement, production, gas, mining (§5) | Scripted: any Terran building, unit, add-on, research, upgrade, expansion | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |
 | Army decisions | Where armies go, move vs attack, whether a fight is worth taking | Learned destinations and a learned fight estimate; holds attacks it expects to lose | ● | ● | ● | ● | ● | ● | ● | ● | ● | ○ | ○ | — |
@@ -87,8 +87,12 @@ quicker way to a playable Gary.
   239 bases (at the takeovers), 38% of the touching building pairs stop zerglings: mostly Supply
   Depots stacked (125 times, all tight; side by side, 100 times, none), a Supply Depot above a
   Barracks or an Academy, and an Academy left of a Supply Depot (tight; right of it, not). Many
-  touching pairs are clusters (depot fields, rows of Barracks), not walls: which are walls needs
-  the openings between buildings and cliffs at the chokes (next).
+  touching pairs are clusters (depot fields, rows of Barracks), not walls. The gap finder
+  (`gaps()` in gary/walls.py: pixel-exact, buildings and cliffs, who gets through and the
+  openings narrowest first) shows the pros' TvZ sim city at 4-6 min is at the natural: its choke
+  narrowed from a median 176 pixels to 74 by buildings (half or less in 95 of 114), closed to
+  zerglings in only 5; the main ramp is never walled. Their marines on hold stand at an opening
+  23% of the hold time (open ground 34%, by a building 16%, a bunker 13%, between buildings 11%).
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 
