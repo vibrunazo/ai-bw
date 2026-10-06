@@ -194,7 +194,14 @@ quicker way to a playable Gary.
   Then decisions (`train/roles.py --decisions`): a unit's role only where it changed from half a
   second before, else "keep" (70% of labels). Held out, recall / precision: fire 0.48 / 0.37,
   close in 0.47 / 0.25, pull back 0.40 / 0.24, retreat 0.15 / 0.10. In play: home defenses -70
-  (states -98, hand rules -28, v0.9 -77), immediate 9-pool 11 / 2, 7:00 rush 16 / 0. Next: intents, and
+  (states -98, hand rules -28, v0.9 -77), immediate 9-pool 11 / 2, 7:00 rush 16 / 0.
+- **RL on roles** (`ingest/role_distill.py`, `train/roles_rl.py`): RL needs a model to start from
+  and the best decisions were the hand rules, so they were distilled into the role network first
+  (v0.10 playing the 552 training defenses, its decisions as labels: home defenses -31 unweighted,
+  -71 with rare roles weighted up). Then 60 rounds on the training home defenses (32 positions x
+  8 draws, roles drawn per unit, per-unit PPO, KL to the start): validation -97 -> -74 at round
+  30, then drifting back (-89 at 60), as the command model's runs did. Held out, round 30: **-28**,
+  the same as the hand rules. RL on roles is stable and reaches the rules, not beyond them yet. Next: intents, and
   the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs
