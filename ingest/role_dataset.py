@@ -140,7 +140,7 @@ def _job(sc: dict) -> dict:
     probe = Probe()
     row = run_one(sc, "pro", 45, "v09", 1, on_step=probe)
     labels = probe.labels() if not row.get("error") else {}
-    rows, extra, lab, times = [], [], [], []
+    rows, extra, lab, times, units = [], [], [], [], []
     for f, r, e, tags in probe.snaps:
         y = np.array([ROLES.index(labels[(t, f)]) if (t, f) in labels and r[i][1] == 1 else -1
                       for i, t in enumerate(tags)], np.int8)
@@ -149,7 +149,9 @@ def _job(sc: dict) -> dict:
             extra.append(e)
             lab.append(y)
             times.append(f * 42 / 1000)
-    return {"sha1": sc["sha1"], "error": row.get("error"), "rows": rows, "extra": extra, "labels": lab, "time": times}
+            units.append(tags)
+    return {"sha1": sc["sha1"], "error": row.get("error"), "rows": rows, "extra": extra, "labels": lab, "time": times,
+            "tags": units}
 
 
 def main() -> None:
@@ -170,18 +172,20 @@ def main() -> None:
     rows = np.zeros((n, MAX_UNITS, 11), np.int16)
     extra = np.zeros((n, MAX_UNITS, EXTRA), np.float32)
     labels = np.full((n, MAX_UNITS), -1, np.int8)
+    unit_tags = np.zeros((n, MAX_UNITS), np.int32)
     count = np.zeros(n, np.int16)
     time_s = np.zeros(n, np.float32)
     game = np.zeros(n, np.int32)
     i = 0
     for gi, r in enumerate(results):
-        for rr, e, y, t in zip(r["rows"], r["extra"], r["labels"], r["time"]):
+        for rr, e, y, t, tg in zip(r["rows"], r["extra"], r["labels"], r["time"], r["tags"]):
             k = min(len(rr), MAX_UNITS)
             rows[i, :k], extra[i, :k], labels[i, :k], count[i], time_s[i], game[i] = rr[:k], e[:k], y[:k], k, t, gi
+            unit_tags[i, :k] = tg[:k]
             i += 1
     out = Path(args.out) if args.out else data_root() / "interim" / "roles" / f"roles_{args.split}.npz"
     out.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(out, rows=rows, extra=extra, labels=labels, count=count, time=time_s, game=game,
+    np.savez_compressed(out, rows=rows, extra=extra, labels=labels, count=count, time=time_s, game=game, tags=unit_tags,
                         sha1=np.array([r["sha1"] for r in results]))
     y = labels[labels >= 0]
     print(f"{len(results)} scenarios ({sum(1 for r in results if r['error'])} errors), {n} snapshots, {len(y)} labeled units -> {out}")

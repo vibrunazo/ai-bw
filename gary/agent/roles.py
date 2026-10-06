@@ -222,7 +222,8 @@ class RoleRules:
 
 class RoleLearned(RoleRules):
     """learned/v1: the role model (gary/policy/roles.py) names each unit's role (its likeliest);
-    the same skills as the hand rules carry the groups out. Reposition, stand and other: no command."""
+    the same skills as the hand rules carry the groups out. Reposition, stand and other: no command;
+    nor "keep", for a model of decisions (train/roles.py --decisions)."""
 
     def __init__(self, g, model):
         super().__init__(g)
@@ -231,7 +232,8 @@ class RoleLearned(RoleRules):
         self.prev_frame = None
 
     def decide(self, obs: dict, snap) -> Intent | None:
-        from gary.policy.roles import MAX_UNITS, ROLES, extra_features
+        from gary.policy.roles import MAX_UNITS, extra_features
+        names = self.model.config.get("roles")
         g = self.g
         now = g.hi.frame
         positions = {u["tag"]: (u["x"], u["y"]) for u in obs["units"]}
@@ -257,7 +259,7 @@ class RoleLearned(RoleRules):
         index = {t: i for i, t in enumerate(tags[:MAX_UNITS])}
         roles: dict[str, list[dict]] = {}
         for u in mine:
-            roles.setdefault(ROLES[int(probs[index[u["tag"]]].argmax())].upper(), []).append(u)
+            roles.setdefault(names[int(probs[index[u["tag"]]].argmax())].upper(), []).append(u)
         mx, my = _mid(mine)
         home = any(u["owner"] == g.slot and u["type"] == T.CC and math.dist((u["x"], u["y"]), (mx, my)) < HOME
                    for u in by_tag.values())

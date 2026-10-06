@@ -20,6 +20,7 @@ from torch import nn
 from gary.policy.fight import N_ORDERS, N_TYPES, ORDER, OTARGET, SIDE, TYPE, numeric
 
 ROLES = ["fire", "close_in", "pull_back", "retreat", "reposition", "stand", "other"]
+DECISIONS = ROLES + ["keep"]         # the decision model: a new role when the unit's changes, else keep
 MAX_UNITS = 64
 EXTRA = 3                            # motion x, y over the last half second (tiles), enemies targeting it
 MOTION_SCALE = 32.0
@@ -43,7 +44,7 @@ def extra_features(rows: np.ndarray, tags: list[int], positions: dict[int, tuple
 
 
 class RoleNet(nn.Module):
-    def __init__(self, d: int = 128, layers: int = 3, heads: int = 4):
+    def __init__(self, d: int = 128, layers: int = 3, heads: int = 4, n_roles: int = len(ROLES)):
         super().__init__()
         self.type_emb = nn.Embedding(N_TYPES, 48)
         self.side_emb = nn.Embedding(3, 8)
@@ -51,7 +52,7 @@ class RoleNet(nn.Module):
         self.inp = nn.Linear(48 + 8 + 16 + 9 + EXTRA, d)
         layer = nn.TransformerEncoderLayer(d, heads, 4 * d, dropout=0.1, batch_first=True, norm_first=True)
         self.body = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False)
-        self.role = nn.Linear(d, len(ROLES))
+        self.role = nn.Linear(d, n_roles)
 
     def forward(self, kind, side, order, num, extra, pad):
         """kind, side, order (B, N) long; num (B, N, 9); extra (B, N, EXTRA); pad (B, N) True where

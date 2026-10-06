@@ -190,7 +190,11 @@ quicker way to a playable Gary.
   stand 0.92 / 0.91. In play (`v09roleml`, the same skills): home defenses **-98** (hand rules
   -28, v0.9 -77), immediate 9-pool held 9 / lost 3, 7:00 rush 16 / 0. It names "stand" for 28%
   of fighting marine time (no command), and fires less: it learned what the pros' units were
-  doing, mostly the continuing effect of earlier commands, not when a player decides something. Next: intents, and
+  doing, mostly the continuing effect of earlier commands, not when a player decides something.
+  Then decisions (`train/roles.py --decisions`): a unit's role only where it changed from half a
+  second before, else "keep" (70% of labels). Held out, recall / precision: fire 0.48 / 0.37,
+  close in 0.47 / 0.25, pull back 0.40 / 0.24, retreat 0.15 / 0.10. In play: home defenses -70
+  (states -98, hand rules -28, v0.9 -77), immediate 9-pool 11 / 2, 7:00 rush 16 / 0. Next: intents, and
   the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs
