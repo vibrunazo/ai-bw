@@ -52,7 +52,7 @@ quicker way to a playable Gary.
 | Learning beyond imitation | Outcome-weighted learning, reinforcement learning | Fight estimate learned from outcomes; reinforcement learning on pro scenarios runs, no gain yet | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — | — | — |
 | POV viewer | Watch any game from Gary's screen (`viewer/`) | Cursor, clicks, every action in words; Remastered replays; videos | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | — |
 | Trace | Gary's decisions and reasons, recorded (§6.5) | Decision log with model probabilities and fight estimates; POV action log | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
-| Evaluation | Matches against opponents, many seeds, a scoreboard (§9) | `eval/vs_rush.py`: several seeds against one scripted Zerg rush; `eval/scenarios.py`: 114 pro home defenses where Gary takes over the Terran | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ○ | ○ | — |
+| Evaluation | Matches against opponents, many seeds, a scoreboard (§9) | `eval/vs_rush.py`: several seeds against one scripted Zerg rush; `eval/scenarios.py`: 114 pro home defenses where Gary takes over the Terran, the Zerg reacting once the game leaves the pro's, several draws of Gary's hands | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ○ | ○ | — |
 | Matchups and races | | Terran in TvZ only | T | T | T | T | T | T | T | T | T | T | T |
 
 ## Versions
@@ -65,9 +65,23 @@ quicker way to a playable Gary.
   a bunker with room; away only when not at home), by hand rules (`gary/agent/roles.py`), each
   role's skill choosing where to go from the threats' weapon ranges and the walkable ground.
   Leases enforced: the rules' units (loading, repairing, pulled SCVs) aren't taken by the fight.
-- **Results:** 114 home defenses **−28** (v0.9 −77, pro +1); immediate 9-pool held 11, lost 0
+- **Results:** 114 home defenses **−46** with the reactive Zerg, mean of 8 draws of Gary's hands
+  (v0.9 −76, pro +1; one draw had said −28 vs −77); immediate 9-pool held 11, lost 0
   (v0.9 13 / 1); 7:00 rush 16 / 0, 38 buildings at 12:00. Worst case: 1316133c (17 zerglings
   at the base, 15 SCVs lost; v0.9 3, the pro 8).
+- **The benchmark, made fairer and steadier:** the scenario Zerg replayed the pro Zerg's
+  commands even after Gary's play had moved away from the pro's, so its zerglings never reacted
+  to where Gary's units really were. Now it reacts once the game diverges (`--zerg reactive`, the
+  default; eval/scenarios.py's doc): stale moves become a surround past the nearest Terran unit,
+  then an attack once half the group is wrapped around (lings dying while they move in is
+  normal TvZ; attack-moving them in one by one would be the Zerg's mistake). And one draw per
+  scenario was a coin flip: the same fight under slightly different hands differs by ~95 value
+  (hold, or lose 10 SCVs), so `--draws 8` scores the mean over Gary's hands seeded 8 ways.
+  The bias turned out small: only 0-1% of the Zerg value Gary or the pro killed was zerglings
+  moving to a spot no Terran unit was near; the reactive Zerg is a little *easier* (v0.10 −54
+  with the replay, −46 reactive). Versions, reactive Zerg, 8 draws, paired with v0.10 (± 1
+  s.e.): learned roles after RL −43 (+3 ± 9), v0.10 with brace −54 (−8 ± 11), v0.9 −76 (−30 ±
+  16), v0.8 −81 (−35 ± 14), v0.3 −146 (−100 ± 20).
 - **How we got here:** see v0.9's last bullets (CONTROL.md steps 1-5): the layer refactor with
   parity checks, per-command intent labels that didn't hold up when watched, roles per unit that
   did, then the rules beating both the learned fight model and a role model learned by

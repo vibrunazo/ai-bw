@@ -198,6 +198,9 @@ class HumanInterface:
                 continue
             v = dict(u)
             v.pop("visible_to", None)
+            if not mine:
+                v.pop("tx", None)                    # (where an enemy unit is going: not on screen)
+                v.pop("ty", None)
             if not mine and u["owner"] != 11 and u["tag"] not in inspected:
                 v["hp"] = v["shields"] = None        # the UI doesn't show enemy HP unless selected
                 v.pop("energy", None)                # (nor energy)

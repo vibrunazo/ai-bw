@@ -288,14 +288,14 @@ GARY_API const char* gary_env_observe(void* h) {
 		snprintf(buf, sizeof buf,
 		         "{\"tag\":%u,\"owner\":%d,\"type\":%d,\"x\":%d,\"y\":%d,\"hp\":%d,\"shields\":%d,"
 		         "\"completed\":%d,\"visible_to\":%d,\"order\":%d,\"resources\":%d,\"queue\":%d,"
-		         "\"cooldown\":%d,\"order_target\":%u,\"carrying\":%d,\"hp_max\":%d,\"energy\":%d}",
+		         "\"cooldown\":%d,\"order_target\":%u,\"tx\":%d,\"ty\":%d,\"carrying\":%d,\"hp_max\":%d,\"energy\":%d}",
 		         (unsigned)f.get_unit_id(u).raw_value, u->owner, (int)u->unit_type->id, u->sprite->position.x,
 		         u->sprite->position.y, u->hp.integer_part(),
 		         u->unit_type->has_shield ? u->shield_points.integer_part() : 0,
 		         f.u_completed(u) ? 1 : 0, u->sprite->visibility_flags, (int)u->order_type->id,
 		         f.ut_resource(u->unit_type) ? u->building.resource.resource_count : 0, (int)u->build_queue.size(),
 		         (int)u->ground_weapon_cooldown, target ? (unsigned)f.get_unit_id(target).raw_value : 0u,
-		         (int)u->carrying_flags, u->unit_type->hitpoints.integer_part(), u->energy.integer_part());
+		         u->order_target.pos.x, u->order_target.pos.y, (int)u->carrying_flags, u->unit_type->hitpoints.integer_part(), u->energy.integer_part());
 		o += buf;
 	}
 	o += "]}";
@@ -409,6 +409,20 @@ GARY_API int gary_env_box_select(void* h, int slot, int x0, int y0, int x1, int 
 	for (const unit_t* u : units) {
 		if (n == max_out || n == 12) break;
 		out[n++] = f.get_unit_id(u).raw_value;
+	}
+	return n;
+}
+
+// The units a player has selected right now (tags, at most 12). Scenarios override some of a
+// replayed player's units and must put the replay's selection back after (eval/scenarios.py).
+GARY_API int gary_env_selection(void* h, int slot, unsigned* out, int max_out) {
+	auto* e = (env*)h;
+	auto& f = *e->funcs;
+	if (slot < 0 || slot >= 8) return 0;
+	int n = 0;
+	for (unit_t* u : e->action_st.selection.at(slot)) {
+		if (n == max_out) break;
+		if (u) out[n++] = f.get_unit_id(u).raw_value;
 	}
 	return n;
 }
