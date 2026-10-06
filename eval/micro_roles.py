@@ -6,7 +6,7 @@ eval/scenarios.py, under each controller, every marine with a zerg fighter withi
 for each half second:
 
   fire        attacking (most of the half second)
-  engage      moving toward the zerg
+  close_in    moving toward the zerg, closing the distance (a move, not an attack)
   pull_back   moving away from the zerg, a short stretch (under 4 tiles), starting while threatened
               (a zerg fighter targeted it in the last second, or one is within 1.5 tiles)
   retreat     moving away, 4 tiles or more in one stretch
@@ -111,7 +111,7 @@ class Probe:
                         kind = "fire"
                     elif sum(o in MOVE for o in orders) * 2 >= len(orders):
                         along = (x1 - x0) * axis[0] + (y1 - y0) * axis[1] if axis else 0.0
-                        kind = "engage" if along > SIDEWAYS else "away" if along < -SIDEWAYS else "reposition"
+                        kind = "close_in" if along > SIDEWAYS else "away" if along < -SIDEWAYS else "reposition"
                     elif sum(o in STAND for o in orders) * 2 >= len(orders):
                         kind = "stand"
                     else:
@@ -159,7 +159,7 @@ class Probe:
                     calm = f0 if kind is None or not sl[7] else calm
                 else:
                     calm = f0 + 24
-            if any(st["marine"] == tag and st["role"] in ("pull_back", "retreat", "engage", "reposition") for st in stretches):
+            if any(st["marine"] == tag and st["role"] in ("pull_back", "retreat", "close_in", "reposition") for st in stretches):
                 tracks[tag] = [(p[0], p[1], p[2]) for p in s[::2]]
         return {"roles": dict(slice_roles), "stretches": stretches, "responses": responses, "tracks": tracks}
 
@@ -187,7 +187,7 @@ def summarize(rows: list[dict]) -> dict:
            "roles": {k: round(n / total, 3) for k, n in roles.most_common()},
            "contacts": len(resp), "pulled_within_1s": round(sum(x["pulled"] for x in resp) / max(1, len(resp)), 3),
            "pull_delay_median_s": float(np.median([x["delay_s"] for x in resp if x["pulled"]])) if any(x["pulled"] for x in resp) else None}
-    for role in ("pull_back", "retreat", "engage"):
+    for role in ("pull_back", "retreat", "close_in"):
         s = [x for x in st if x["role"] == role]
         out[role] = {"per_marine_minute": round(len(s) / max(minutes, 1e-9), 1),
                      "median_s": round(float(np.median([x["slices"] * SLICE / FPS for x in s])), 2) if s else None,
@@ -223,7 +223,7 @@ def main() -> None:
         print("  time by role:", ", ".join(f"{k} {v:.1%}" for k, v in s["roles"].items()))
         print(f"  zerg on a marine: {s['contacts']} times; pulled back within 1 s: {s['pulled_within_1s']:.1%}"
               f" (median after {s['pull_delay_median_s']} s)")
-        for role in ("pull_back", "retreat", "engage"):
+        for role in ("pull_back", "retreat", "close_in"):
             v = s[role]
             print(f"  {role:10s} {v['per_marine_minute']} per marine-minute, median {v['median_s']} s, {v['median_tiles']} tiles")
 

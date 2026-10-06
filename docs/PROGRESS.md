@@ -136,11 +136,11 @@ quicker way to a playable Gary.
   Watched: per-command labels don't hold up (most moments mix techniques: the front marines
   step back while the rest shoot); approach, retreat and pull back read clearly.
 - **Roles per unit** (`eval/micro_roles.py`): every fighting marine, every half second: fire,
-  engage, pull back (a short stretch away, started under threat), retreat (4+ tiles away),
+  close in (move toward the zerg), pull back (a short stretch away, started under threat), retreat (4+ tiles away),
   reposition, stand. Toward and away are group against group (along the line from the marines
   around to the zerg around): measured unit to unit, marines retreating through interlaced
   zerglings looked like they chased the ones ahead (watched). Pros: fire 58%, stand 21%,
-  reposition 7.1%, engage 5.0%, retreat 4.0%, pull back 2.4%; v0.9: fire 67%, stand 12%, engage
+  reposition 7.1%, close in 5.0%, retreat 4.0%, pull back 2.4%; v0.9: fire 67%, stand 12%, close in
   5.5%, retreat 4.4%, reposition 3.3%, pull back 1.1%. Zerglings got onto a marine 154 times
   against the pros, 246 against v0.9 (same scenarios); pulled back within a second 25% vs 18%. Clips of single pro marines per role:
   `data/interim/videos/role_check/`. Next: intents, and
