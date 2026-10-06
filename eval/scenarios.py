@@ -10,8 +10,8 @@ Controllers:
   gary      Gary (v0.4 by default) takes over the Terran with human hands
   nothing   nobody touches the Terran: units keep their last orders (the floor)
 
-    python -m eval.scenarios --pick 200 --screen      # find scenarios in held-out games
-    python -m eval.scenarios --run 30 --parallel 8    # score them under each controller
+    python -m eval.scenarios --pick 2500 --screen     # find scenarios in (all) held-out games
+    python -m eval.scenarios --run 239 --draws 8      # score them under each controller
 
 --pick proposes up to 3 early fights per game; --screen plays each under the pro and under
 nothing and keeps, per game, the first that is at the Terran's home (decided from the game at the

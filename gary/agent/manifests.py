@@ -173,7 +173,8 @@ def _pull_when_attacked(m):
 
 
 # options to try on top of a manifest, "v010+post+suspend" (docs/CONTROL.md: every layer swappable);
-# home defenses, reactive Zerg, 8 draws, vs v0.10 (+ is better, ± 1 s.e.; 2026-10-06)
+# home defenses (114; [239]: the 239 of all held-out games), reactive Zerg, 8 draws, vs v0.10 (+ is
+# better, ± 1 s.e.), and immediate 9-pools lost of 16 (v0.10: 0); 2026-10-06
 OPTIONS = {
     "brace": _roles(brace=True),            # roles.py: let the zerg come, nobody closes in     -8 ± 11
     "leash": _roles(leash=True),            # close in only on zerg attacking or by buildings   -9 ± 9
@@ -183,12 +184,13 @@ OPTIONS = {
     "kite": _roles(kite=True),              # vultures pull back from zerglings                  -5 ± 2
     "fire_here": _roles(fire="here"),       # fire: attack-move to the group's own middle       -8 ± 5
     "fire_hold": _roles(fire="hold"),       # fire: hold position                              -23 ± 10
-    "post": _roles(post=3),                 # hold a post by the Command Center (and leash)     +8 ± 9
-    "post0": _roles(post=0),
-    "post6": _roles(post=6),
-    "post_minerals": _roles(post="minerals"),
-    "pull_attacked": _pull_when_attacked,   # fight.py: pull workers only when zerg attack      +2 ± 3
-    "suspend": lambda m: m.update(arbiter="fixed_priority/v2"),   # a fight interrupts waiting builds  +3 ± 6
+    "post": _roles(post=3),                 # hold a post by the Command Center (and leash)     +8 ± 9, [239] +7 ± 5; 9-pool lost 1
+    "post0": _roles(post=0),                # ...at the Command Center                          +6 ± 10, [239] +4 ± 5
+    "post6": _roles(post=6),                # ...6 tiles from it                                -4 ± 8
+    "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
+    "pull_attacked": _pull_when_attacked,   # fight.py: pull workers only when zerg attack      +2 ± 3, [239] +3 ± 3
+    # a fight interrupts waiting builds: +3 ± 6, [239] +6 ± 4; but 9-pool lost 3 (the bunker comes late)
+    "suspend": lambda m: m.update(arbiter="fixed_priority/v2"),
 }
 
 

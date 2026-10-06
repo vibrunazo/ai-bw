@@ -103,7 +103,11 @@ quicker way to a playable Gary.
   place or on hold, pulling workers only when attacked, fights interrupting waiting builds (the
   waits fell to 54 s, the score didn't move), and a post by the Command Center (+8 ± 9, the best).
   v0.10's rules look like a local optimum on this benchmark, whose noise (± 9 paired) hides
-  changes under ~15.
+  changes under ~15. So the scenarios now come from all 1,411 held-out games (`--pick 2500
+  --screen`: 1,982 early fights, 239 decisive home defenses, one per game; pro −5, nothing −305,
+  v0.10 −69, v0.9 −98, −30 ± 12): there the post was +7 ± 5 and fights interrupting waiting
+  builds +6 ± 4, but against the immediate 9-pool (16 seeds) the first lost 1 game and the second
+  3, v0.10 none: the build a fight would interrupt is the bunker that holds the rush.
 - **How we got here:** see v0.9's last bullets (CONTROL.md steps 1-5): the layer refactor with
   parity checks, per-command intent labels that didn't hold up when watched, roles per unit that
   did, then the rules beating both the learned fight model and a role model learned by
