@@ -6,11 +6,16 @@ eval/scenarios.py, under each controller, every marine with a zerg fighter withi
 for each half second:
 
   fire        attacking (most of the half second)
-  engage      moving, closer to the nearest zerg fighter by the end
-  pull_back   moving away from it, a short stretch (under 4 tiles), starting while threatened (a
-              zerg fighter targeted it in the last second, or one is within 1.5 tiles)
+  engage      moving toward the zerg
+  pull_back   moving away from the zerg, a short stretch (under 4 tiles), starting while threatened
+              (a zerg fighter targeted it in the last second, or one is within 1.5 tiles)
   retreat     moving away, 4 tiles or more in one stretch
-  reposition  moving sideways, or a short stretch away without a threat
+  reposition  moving across, or a short stretch away without a threat
+
+Toward and away are group against group: along the line from the marines around this one (within
+10 tiles) to the zerg fighters around it, not to the nearest zergling. When the groups interlace
+in a retreat, a back marine is closer to the zergling ahead of it than to the ones behind, and
+measured unit to unit it would look like it chases them.
   stand       idle, stopped or holding
   other       anything else (entering a bunker...)
 
@@ -46,13 +51,15 @@ CONTACT = 48                         # a zerg fighter this close (1.5 tiles) is 
 TARGETED_FOR = 24                    # frames: targeted this recently counts as threatened
 SLICE = 12                           # frames: a role every half second
 RETREAT_PX = 4 * 32
-SIDEWAYS = 8                         # pixels: closer or farther by less than this is sideways
+SIDEWAYS = 8                         # pixels along the groups' line: less than this is across
+GROUP = 10 * 32                      # units this close to the marine make its group and the zerg's
 FPS = 1000 / 42
 
 
 class Probe:
     def __init__(self):
-        self.samples: dict[int, list] = {}   # marine -> [(frame, x, y, order, nearest zerg px, targeted frame)]
+        self.samples: dict[int, list] = {}   # marine -> [(frame, x, y, order, nearest zerg px, targeted frame,
+                                             #             the groups' line: unit vector to the zerg, or None)]
         self.targeted: dict[int, int] = {}   # marine -> last frame a zerg fighter targeted it
         self.start = None
 
@@ -67,12 +74,19 @@ class Probe:
         for z in zerg:
             if z.get("order_target"):
                 self.targeted[z["order_target"]] = f
-        for u in obs["units"]:
-            if u["owner"] != slot or u["type"] != MARINE or not u["completed"]:
-                continue
+        marines = [u for u in obs["units"] if u["owner"] == slot and u["type"] == MARINE and u["completed"]]
+        for u in marines:
             near = min((math.dist((u["x"], u["y"]), (z["x"], z["y"])) for z in zerg), default=1e9)
+            axis = None
+            theirs = [z for z in zerg if math.dist((u["x"], u["y"]), (z["x"], z["y"])) < GROUP]
+            if theirs:
+                ours = [m for m in marines if math.dist((u["x"], u["y"]), (m["x"], m["y"])) < GROUP]
+                ox, oy = sum(m["x"] for m in ours) / len(ours), sum(m["y"] for m in ours) / len(ours)
+                zx, zy = sum(z["x"] for z in theirs) / len(theirs), sum(z["y"] for z in theirs) / len(theirs)
+                d = math.dist((ox, oy), (zx, zy))
+                axis = ((zx - ox) / d, (zy - oy) / d) if d > 1 else None
             self.samples.setdefault(u["tag"], []).append(
-                (f, u["x"], u["y"], u["order"], near, self.targeted.get(u["tag"], -10**9)))
+                (f, u["x"], u["y"], u["order"], near, self.targeted.get(u["tag"], -10**9), axis))
 
     def result(self) -> dict:
         """Role stretches per marine, the response to contact, and the tracks of moving marines."""
@@ -86,8 +100,8 @@ class Probe:
                 while j < len(s) and s[j][0] < s[i][0] + SLICE:
                     j += 1
                 part = s[i:j]
-                f0, x0, y0, _, near0, tgt0 = part[0]
-                f1, x1, y1, _, near1, _ = part[-1]
+                f0, x0, y0, _, near0, tgt0, axis = part[0]
+                f1, x1, y1 = part[-1][:3]
                 threatened = f0 - tgt0 <= TARGETED_FOR or near0 < CONTACT
                 if near0 >= NEAR:
                     kind = None
@@ -96,7 +110,8 @@ class Probe:
                     if sum(o in ATTACK for o in orders) * 2 >= len(orders):
                         kind = "fire"
                     elif sum(o in MOVE for o in orders) * 2 >= len(orders):
-                        kind = "engage" if near1 < near0 - SIDEWAYS else "away" if near1 > near0 + SIDEWAYS else "reposition"
+                        along = (x1 - x0) * axis[0] + (y1 - y0) * axis[1] if axis else 0.0
+                        kind = "engage" if along > SIDEWAYS else "away" if along < -SIDEWAYS else "reposition"
                     elif sum(o in STAND for o in orders) * 2 >= len(orders):
                         kind = "stand"
                     else:
