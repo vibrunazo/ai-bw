@@ -471,6 +471,35 @@ GARY_API int gary_env_unit_type(void* h, unsigned tag) {
 	return u ? (int)u->unit_type->id : -1;
 }
 
+// A unit type's numbers from the game data (units.dat, as the installed game has them): out[0..10] =
+// placement width, height (pixels: whole tiles); collision box left, up, right, down (pixels from
+// its position, inclusive: the box spans x - left .. x + right); minerals, gas, build time (frames),
+// hit points, supply (x2, as the game counts). Returns false for an unknown type.
+GARY_API bool gary_env_unit_type_info(void* h, int unit_type, int* out) {
+	auto* e = (env*)h;
+	auto& f = *e->funcs;
+	if (unit_type < 0 || unit_type >= 228) return false;
+	const unit_type_t* ut = f.get_unit_type((UnitTypes)unit_type);
+	if (!ut) return false;
+	out[0] = ut->placement_size.x; out[1] = ut->placement_size.y;
+	out[2] = ut->dimensions.from.x; out[3] = ut->dimensions.from.y;
+	out[4] = ut->dimensions.to.x; out[5] = ut->dimensions.to.y;
+	out[6] = ut->mineral_cost; out[7] = ut->gas_cost; out[8] = ut->build_time;
+	out[9] = ut->hitpoints.integer_part(); out[10] = ut->supply_required.raw_value;
+	return true;
+}
+
+// For test scenarios (the wall checks, gary/walls.py): a finished unit of a player at a map pixel,
+// as the game places start units (a building exactly there; a ground unit at the nearest free
+// spot). Returns its tag, or 0 if it can't be placed.
+GARY_API unsigned gary_env_create_unit(void* h, int owner, int unit_type, int x, int y) {
+	auto* e = (env*)h;
+	auto& f = *e->funcs;
+	if (owner < 0 || owner >= 12 || unit_type < 0 || unit_type >= 228) return 0;
+	unit_t* u = f.create_initial_unit(f.get_unit_type((UnitTypes)unit_type), xy(x, y), owner);
+	return u ? (unsigned)f.get_unit_id(u).raw_value : 0u;
+}
+
 // --- new games from a map --------------------------------------------------------------------
 
 namespace {

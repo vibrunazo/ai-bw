@@ -77,6 +77,13 @@ quicker way to a playable Gary.
   lost 4 too: a few losses in 16 is noise.
 - **Most urgently missing:** the gap to the pros (−54 vs −5) is still in what Gary loses
   (marines and SCVs); vulture micro (finer hands); positioning behind walls.
+- **Walls, started:** while zerg are near, the pros' marines hold position 16% of the time
+  (v0.11's 2%), and the 59 home defenses where the pro holds a lot carry 28% of the gap. Which
+  units get between two buildings now comes from the game data (`gary/walls.py`: each building's
+  collision box is smaller than its tiles by a different margin on each side, so a Supply Depot
+  on top of another stops zerglings and side by side doesn't), checked against the engine
+  (buildings placed in an OpenBW game, units sent through: the arithmetic agrees to the pixel in
+  1,144 of 1,148 cases; an Academy above a Supply Depot is tighter than it says).
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

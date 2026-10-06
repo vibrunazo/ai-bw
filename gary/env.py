@@ -79,6 +79,10 @@ def _load_dll() -> ctypes.CDLL:
     dll.gary_env_box_select.restype = ctypes.c_int
     dll.gary_env_box_select.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                         ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_uint), ctypes.c_int]
+    dll.gary_env_unit_type_info.restype = ctypes.c_bool
+    dll.gary_env_unit_type_info.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
+    dll.gary_env_create_unit.restype = ctypes.c_uint
+    dll.gary_env_create_unit.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
     dll.gary_env_unit_type.restype = ctypes.c_int
     dll.gary_env_unit_type.argtypes = [ctypes.c_void_p, ctypes.c_uint]
     dll.gary_env_set_name.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p]
@@ -270,6 +274,19 @@ class Game:
         out = (ctypes.c_uint * 12)()
         n = _dll.gary_env_box_select(self._h, slot, x0, y0, x1, y1, out, 12)
         return list(out[:n])
+
+    def unit_type_info(self, unit_type: int) -> dict | None:
+        """A unit type's numbers from the game data: placement size (w, h, pixels), collision box
+        (left, up, right, down: pixels from its position, inclusive), cost, build time, hit points."""
+        out = (ctypes.c_int * 11)()
+        if not _dll.gary_env_unit_type_info(self._h, unit_type, out):
+            return None
+        return {"w": out[0], "h": out[1], "left": out[2], "up": out[3], "right": out[4], "down": out[5],
+                "minerals": out[6], "gas": out[7], "build_frames": out[8], "hp": out[9], "supply_x2": out[10]}
+
+    def create_unit(self, owner: int, unit_type: int, x: int, y: int) -> int:
+        """Test scenarios only: a finished unit at a map pixel (a building exactly there). Its tag, or 0."""
+        return _dll.gary_env_create_unit(self._h, owner, unit_type, x, y)
 
     def selection(self, slot: int) -> list[int]:
         """The units this player has selected right now (tags)."""
