@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 
 from gary import commands as C
-from gary.agent.manifests import MANIFESTS, build_gary
+from gary.agent.manifests import build_gary, manifest_name, manifest_of
 from gary.env import LIVE_COMMAND_DELAY, Game, GameError
 from gary.interface import PROFILES, HumanInterface
 from gary.mapinfo import MapInfo
@@ -118,7 +118,7 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--gary", default="v010", choices=[k for k in MANIFESTS if k != "drill"], help="which Gary")
+    ap.add_argument("--gary", default="v010", type=manifest_name, help="which Gary (a manifest, options with +: v010+post)")
     ap.add_argument("--map", help="a .scm/.scx map (or a pre-1.18 replay) for headless play")
     ap.add_argument("--minutes", type=float, default=12)
     ap.add_argument("--seed", type=int)
@@ -135,7 +135,7 @@ def main() -> None:
     args = ap.parse_args()
     make = lambda hi, mapinfo: build_gary(hi, mapinfo, args.gary, args.style, verbose=not args.quiet,
                                           fight_path=args.fight_model)
-    version = MANIFESTS[args.gary]["version"]
+    version = manifest_of(args.gary)["version"]
     if args.live:
         play_live(args.pipe, args.minutes, args.profile, args.pov or f"gary_{args.gary}_live.pov.jsonl", make)
     else:

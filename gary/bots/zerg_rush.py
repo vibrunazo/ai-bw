@@ -17,7 +17,7 @@ import argparse
 import math
 
 from gary import commands as C
-from gary.agent.manifests import MANIFESTS
+from gary.agent.manifests import manifest_name
 from gary.env import LIVE_COMMAND_DELAY, Game
 from gary.interface import PROFILES, HumanInterface, screen_of
 from gary.mapinfo import MapInfo
@@ -238,7 +238,7 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--vs", default="v03", choices=[k for k in MANIFESTS if k != "drill"], help="which Gary plays Terran")
+    ap.add_argument("--vs", default="v03", type=manifest_name, help="which Gary plays Terran")
     ap.add_argument("--map", required=True)
     ap.add_argument("--minutes", type=float, default=10)
     ap.add_argument("--seed", type=int)

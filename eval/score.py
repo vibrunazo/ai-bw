@@ -56,6 +56,7 @@ class Score:
         self.parts = {"deaths": 0.0, "damage": 0.0, "energy": 0.0, "threats": 0.0}
         self.lost = {"T": 0, "Z": 0}
         self.workers_lost = {"T": 0, "Z": 0}
+        self.lost_by_type: dict[str, dict[int, int]] = {"T": {}, "Z": {}}   # value lost per unit type
 
     def _add(self, frame: int, part: str, v: float) -> None:
         if v:
@@ -93,6 +94,8 @@ class Score:
                 sign = 1 if s["side"] == "Z" else -1
                 self._add(frame, "deaths", sign * (s["value"] - s["credited"]))
                 self.lost[s["side"]] += s["value"]
+                by = self.lost_by_type[s["side"]]
+                by[s["type"]] = by.get(s["type"], 0) + s["value"]
                 self.workers_lost[s["side"]] += s["type"] in WORKERS
 
     def finish(self, obs: dict, game, is_fighter) -> None:
@@ -107,6 +110,7 @@ class Score:
     def result(self) -> dict:
         return {"net": round(sum(v for _, v in self.events)), "T_lost": self.lost["T"], "Z_lost": self.lost["Z"],
                 "T_workers_lost": self.workers_lost["T"], "Z_workers_lost": self.workers_lost["Z"],
+                "T_lost_by_type": dict(self.lost_by_type["T"]), "Z_lost_by_type": dict(self.lost_by_type["Z"]),
                 **{f"net_{k}": round(v) for k, v in self.parts.items()}, "events": list(self.events)}
 
 

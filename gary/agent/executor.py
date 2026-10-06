@@ -308,6 +308,27 @@ class ScriptedExecutor:
             p = screen_of(obs, w["x"], w["y"])
             hi.click(*p)
             return
+        if t.stage == "reselect":                    # a fight put the build aside: the same worker again
+            w = next((u for u in mine if u["tag"] == t.data["worker"]), None)
+            if not w or w["tag"] in g.pulled:
+                self.fail_build(t)
+                return
+            if obs["selection"] == [w["tag"]]:
+                t.stage = t.data.pop("resume")
+                return
+            if len(obs["selection"]) == 1 and t.data.get("clicked"):   # a neighbor in a stack: use it
+                got = next((u for u in mine if u["tag"] == obs["selection"][0]), None)
+                if got and self.free_worker(obs, got):
+                    t.data["worker"] = got["tag"]
+                    t.stage = t.data.pop("resume")
+                    return
+            p = screen_of(obs, w["x"], w["y"])
+            if not p:
+                hi.camera_minimap(w["x"], w["y"])
+                return
+            t.data["clicked"] = True
+            hi.click(*p)
+            return
         if t.stage == "travel":                      # walk the worker to the base
             hi.minimap_right_click(*g.base(t.where).center)
             t.stage = "wait_arrival"

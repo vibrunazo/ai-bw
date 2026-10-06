@@ -30,8 +30,11 @@ moving to surround an army that isn't there walk on past it, and a gap the pro n
 never run through. So by default (--zerg reactive) the Zerg reacts once the game has diverged (a
 Terran unit 4+ tiles from where the pro's was at that moment, or dead when the pro's wasn't; the
 pro's positions are recorded from the pro's own play of the scenario, cached under
-data/interim/scenarios/pro_tracks/). Then zerg fighters within 6 tiles of Terran units that
-stand, or move toward a spot no Terran unit is near any more, do what pro zergs do: a group of up
+data/interim/scenarios/pro_tracks/). Then, around the Terran units that aren't where the pro's were
+(4+ tiles off, or units the pro didn't have; Terran units where the pro's were keep facing the pro
+Zerg's own choices, like marines holding a wall gap the pro Zerg chose not to attack), zerg
+fighters within 6 tiles that stand, or move toward a spot no Terran unit is near any more, do what
+pro zergs do: a group of up
 to 12 moves past the nearest Terran unit (attack-moving lings trickle in one by one; pros move
 them around the marines first, losing a few on the way), then attack-moves once half of it is
 wrapped around Terran units (or after 2 s). Replayed moves that still fit (to within 4 tiles of a
@@ -54,7 +57,7 @@ from pathlib import Path
 
 import numpy as np
 
-from gary.agent.manifests import MANIFESTS
+from gary.agent.manifests import manifest_name
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
@@ -215,8 +218,8 @@ def diverged(obs: dict, slot: int, then: dict[int, tuple[int, int]]) -> bool:
 class ReactiveZerg:
     """The scenario Zerg's fighters reacting to where the Terran's units really are (module doc)."""
 
-    def __init__(self, slot: int, zerg: int):
-        self.slot, self.zerg = slot, zerg
+    def __init__(self, slot: int, zerg: int, track: dict):
+        self.slot, self.zerg, self.track = slot, zerg, track
         self.surrounding: list[tuple[list[int], int]] = []     # (tags, since frame)
         self.orders = 0
 
@@ -225,10 +228,12 @@ class ReactiveZerg:
         obs = game.observe()
         terran = [u for u in obs["units"] if u["owner"] == self.slot]
         terran = [u for u in terran if not is_building(u["type"])] or terran
-        if not terran:
+        then = self.track[max((f for f in self.track if f <= game.frame), default=min(self.track))] if self.track else {}
+        moved = [u for u in terran if u["tag"] not in then or math.dist((u["x"], u["y"]), then[u["tag"]]) > DIVERGE_PX]
+        if not moved:
             return
         zerg = {u["tag"]: u for u in obs["units"] if u["owner"] == self.zerg}
-        near = lambda u, d: any(math.dist((u["x"], u["y"]), (t["x"], t["y"])) < d for t in terran)
+        near = lambda u, d: any(math.dist((u["x"], u["y"]), (t["x"], t["y"])) < d for t in moved)
         for g in list(self.surrounding):                # wrapped around them: attack
             tags, since = g
             moving = [zerg[t] for t in tags if t in zerg and zerg[t]["order"] == MOVE]   # (else the replay took them)
@@ -237,7 +242,7 @@ class ReactiveZerg:
                 continue
             if 2 * sum(near(u, WRAPPED_PX) for u in moving) >= len(moving) or game.frame - since >= SURROUND_FOR:
                 self.surrounding.remove(g)
-                self._order(game, moving, C.targeted_order(C.ORDER_ATTACK_MOVE, *self._nearest(moving, terran)))
+                self._order(game, moving, C.targeted_order(C.ORDER_ATTACK_MOVE, *self._nearest(moving, moved)))
                 return
         busy = {t for tags, _ in self.surrounding for t in tags}
         idle = [u for u in zerg.values() if fighter(u["type"]) and u["type"] != 103 and u["tag"] not in busy
@@ -246,7 +251,7 @@ class ReactiveZerg:
             return
         group = sorted(idle, key=lambda u: math.dist((u["x"], u["y"]), (idle[0]["x"], idle[0]["y"])))[:12]
         cx, cy = _center(group)
-        tx, ty = self._nearest(group, terran)
+        tx, ty = self._nearest(group, moved)
         d = math.dist((cx, cy), (tx, ty)) or 1
         px, py = tx + (tx - cx) / d * SURROUND_PAST, ty + (ty - cy) / d * SURROUND_PAST
         self.surrounding.append(([u["tag"] for u in group], game.frame))
@@ -300,7 +305,7 @@ def run_one(sc: dict, controller: str, seconds: float, version: str, style: int 
         zerg = next(p["slot"] for p in obs["players"] if p["slot"] != slot and p["race"] == 0)
         score = Score(slot, zerg)
         split_at, next_react = None, 0
-        reactive = ReactiveZerg(slot, zerg)
+        reactive = ReactiveZerg(slot, zerg, track)
         score.note(obs, game)
         if "cx" in sc:                         # (the fight's center, from the data)
             row["home"] = at_home(obs, slot, (sc["cx"], sc["cy"]))
@@ -378,7 +383,7 @@ def make_gary(game, slot: int, version: str, style: int | None, verbose: bool = 
     bot = build_gary(hi, MapInfo.from_game(game), version, style, verbose=verbose, fight_path=fight_path,
                      load=lambda kind, path: _model(kind, path))
     bot.announce = []                # mid-game: no hello in the chat
-    bot.adopt_hotkeys()              # as if Gary had played the game so far
+    bot.adopt()                      # as if Gary had played the game so far
     return bot, hi
 
 
@@ -394,7 +399,7 @@ def main() -> None:
     ap.add_argument("--run", type=int, help="score the first N saved scenarios")
     ap.add_argument("--controllers", nargs="+", default=CONTROLLERS, choices=CONTROLLERS)
     ap.add_argument("--seconds", type=float, default=45)
-    ap.add_argument("--version", default="v04", choices=[k for k in MANIFESTS if k != "drill"],
+    ap.add_argument("--version", default="v04", type=manifest_name,
                     help="which Gary takes over (v07free: v0.7 without its guard rail, for RL-trained fight models)")
     ap.add_argument("--style", type=int, default=1)
     ap.add_argument("--parallel", type=int, default=max(1, (os.cpu_count() or 6) * 2 // 3),

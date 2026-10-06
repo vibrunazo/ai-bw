@@ -91,7 +91,7 @@ def command_intent(key: tuple, tags: list[int], center) -> Intent:
 class FightLayer:
     def __init__(self, g: Gary, model, kind: str, before: list = (), in_fight: list = (),
                  guard_rail: bool = False, workers: bool = True, seed: int = 0, ctrl_click: bool = False,
-                 watch: int = 0, brace: bool = False):
+                 watch: int = 0, role_options: dict | None = None):
         self.g = g
         self.model = model
         self.kind = kind                         # "per_unit", "command" or "roles"
@@ -106,7 +106,7 @@ class FightLayer:
         self.roles = None
         if kind == "roles":
             from gary.agent.roles import RoleLearned, RoleRules
-            self.roles = RoleLearned(g, model) if model is not None else RoleRules(g, brace)
+            self.roles = RoleLearned(g, model) if model is not None else RoleRules(g, **(role_options or {}))
         self.next_fight = 0
         self.center: tuple[float, float] | None = None
         self.told: dict[int, tuple[tuple, int]] = {}    # unit tag -> (order key, frame given)
@@ -318,6 +318,7 @@ class PullRule:
     mining once the base has been calm for 5 s."""
 
     name = "pull"
+    attacked_only = False
 
     def __init__(self, g: Gary):
         self.g = g
@@ -329,6 +330,8 @@ class PullRule:
         enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0]
         for cc in (u for u in mine if u["type"] == T.CC and u["completed"]):
             near = [u for u in enemy if math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < THREAT_PX]
+            if self.attacked_only and not any(u.get("order_target") in {m["tag"] for m in mine} for u in near):
+                near = []
             if not near:
                 continue
             ours = sum(supply_x2(u["type"]) for u in mine if u["type"] in g.army_types and u["completed"]
@@ -350,6 +353,14 @@ class PullRule:
             g.motor.start(Intent("UNPULL", sorted(g.pulled), None, {}, "rule:pull"))
             return True
         return False
+
+
+class PullWhenAttacked(PullRule):
+    """PullRule, but only zerg attacking something of Gary's (a worker, a building, a unit) make a
+    pull, not zerg hovering near the base: Gary's SCVs fought 40% more than the pros' (SCV-seconds
+    with an attack order, home defenses) and died 18% more."""
+
+    attacked_only = True
 
 
 class LoadRule:
@@ -459,4 +470,4 @@ class ReinforceRule:
         return True
 
 
-RULES = {"pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule}
+RULES = {"pull": PullRule, "pull_attacked": PullWhenAttacked, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule}

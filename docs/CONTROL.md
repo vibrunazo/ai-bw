@@ -143,6 +143,8 @@ The executor is `scripted/v1` whenever there is a macro or an army; there is no 
 version from v0.2 is a manifest (`v02`...`v09`, `v07free` for judging RL models, `drill` for
 drills), built by `build_gary`; `python -m gary.play --gary v09` plays any of them, and the
 benchmarks take the same names. v0.1's scripted build order was dropped (git history has it).
+Options try one change on top of a manifest without a manifest of its own: `v010+post+suspend`
+(`OPTIONS` in manifests.py, each with its measured result).
 
 ## Where today's code goes
 

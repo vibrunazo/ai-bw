@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 TTL = {"PULL": 24 * 30, "UNPULL": 24 * 3, "LOAD": 24 * 3, "REPAIR": 24 * 3, "REINFORCE": 24 * 3,
        "ARMY_MOVE": 24 * 10, "ARMY_ATTACK": 24 * 10, "SCOUT": 24 * 600, "ATTACK_WAVE": 24 * 60}
 COMMAND_TTL = 48
-ROLE_TTL = {"PULL_BACK": 12, "FIRE": 24, "CLOSE_IN": 24, "RETREAT": 48, "BRACE": 24}   # roles.py: re-decided every half second
+ROLE_TTL = {"PULL_BACK": 12, "FIRE": 24, "CLOSE_IN": 24, "RETREAT": 48, "BRACE": 24, "REGROUP": 24, "POST": 24}   # roles.py: re-decided every half second
 
 
 def priority(source: str) -> int:

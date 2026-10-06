@@ -65,8 +65,9 @@ quicker way to a playable Gary.
   a bunker with room; away only when not at home), by hand rules (`gary/agent/roles.py`), each
   role's skill choosing where to go from the threats' weapon ranges and the walkable ground.
   Leases enforced: the rules' units (loading, repairing, pulled SCVs) aren't taken by the fight.
-- **Results:** 114 home defenses **−46** with the reactive Zerg, mean of 8 draws of Gary's hands
-  (v0.9 −76, pro +1; one draw had said −28 vs −77); immediate 9-pool held 11, lost 0
+- **Results:** 114 home defenses **−57** with the reactive Zerg, mean of 8 draws of Gary's hands
+  (v0.9 −70, pro +1; one draw had said −28 vs −77; see the next bullets for why the numbers
+  moved); immediate 9-pool held 11, lost 0
   (v0.9 13 / 1); 7:00 rush 16 / 0, 38 buildings at 12:00. Worst case: 1316133c (17 zerglings
   at the base, 15 SCVs lost; v0.9 3, the pro 8).
 - **The benchmark, made fairer and steadier:** the scenario Zerg replayed the pro Zerg's
@@ -82,13 +83,34 @@ quicker way to a playable Gary.
   with the replay, −46 reactive). Versions, reactive Zerg, 8 draws, paired with v0.10 (± 1
   s.e.): learned roles after RL −43 (+3 ± 9), v0.10 with brace −54 (−8 ± 11), v0.9 −76 (−30 ±
   16), v0.8 −81 (−35 ± 14), v0.3 −146 (−100 ± 20).
+  Two more fixes then: the Zerg reacts only around Terran units that aren't where the pro's were
+  (marines holding the pro's wall gap keep facing the pro Zerg's own choice not to attack them),
+  and a Gary taking over midway has done its early scouting (it used to send an SCV across the
+  map at the takeover, which drew zerglings off: v0.10 −57, v0.9 −70, −13 ± 17 to v0.10).
+- **Where the gap to the pro is** (home defenses, 8 draws): all in what Gary loses (53 more value
+  per scenario; it kills as much), mostly marines (+22) and SCVs (+17; Gary's fight 40% more
+  SCV-seconds, in more scenarios), then vultures (+8: attack-moved into zerglings; the pros lay
+  mines and hold behind the wall). 10 scenarios make up 44 of the 56. Gary's marines die alone
+  (48% with at most one friend within 4 tiles, the pros' 29%), alone already 3 s before; while
+  the zerg approach at home the pros stand nearer the Command Center in bigger groups, and the
+  standoff lasts twice as long. And Gary's fight waited for its hands 55 times (166 s), mostly
+  behind a build that was only waiting for its worker or money.
+- **Tried against it, none a clear gain** (options on top of a manifest, `--version v010+post`;
+  gary/agent/manifests.py OPTIONS, each with its result): letting the zerg come (brace), closing
+  in only on zerg attacking (leash), closing in by moving then firing together (volley: −38; a
+  moving marine doesn't shoot, and Gary's half-second turns plus reaction time can't stop it in
+  time), loose units rejoining the pack, staying on hold position, vultures kiting, firing in
+  place or on hold, pulling workers only when attacked, fights interrupting waiting builds (the
+  waits fell to 54 s, the score didn't move), and a post by the Command Center (+8 ± 9, the best).
+  v0.10's rules look like a local optimum on this benchmark, whose noise (± 9 paired) hides
+  changes under ~15.
 - **How we got here:** see v0.9's last bullets (CONTROL.md steps 1-5): the layer refactor with
   parity checks, per-command intent labels that didn't hold up when watched, roles per unit that
   did, then the rules beating both the learned fight model and a role model learned by
   imitation.
-- **Most urgently missing:** a learned role decision that beats the hand rules (labels for when
-  the pro decides, then RL); positioning before contact (zerglings reach Gary's marines 60% more
-  often than the pros'); the fight model's inputs (terrain, threats coming).
+- **Most urgently missing:** a learned role decision that beats the hand rules (RL on the fairer
+  benchmark); positioning before contact; a sharper benchmark (more scenarios); vulture play
+  (mines).
 
 ### v0.9 (October 2026): holding early pools (#2)
 

@@ -13,6 +13,11 @@ asks the layers in a fixed order and the first that wants the hands gets them (i
                      4. the army: the fight model first (units in a fight are its), then the army
                         layer with the rest (none of it if the posture keeps the army home)
                      5. macro
+  fixed_priority/v2  v1, and a fight turn may also interrupt a build that is only waiting (its
+                     worker walking to the base, or waiting for money with the worker selected):
+                     the build is put aside and goes on when the fight leaves the hands free, the
+                     same worker selected again. With v1 the fight waited for builds 43 times in
+                     the 114 home defenses, up to 9.7 s
   drill/v1           micro drills (gary/drills.py): the fight layer, plus a chore and camera
                      interruptions so the fight doesn't get all of Gary's hands
 
@@ -42,9 +47,14 @@ from gary.agent.gary import Gary, Task
 WAIT_MIN = 24                        # waits shorter than a second aren't traced
 
 
+BUILD_WAITS = {"wait_arrival", "place"}   # v2: build stages a fight may interrupt (and resume)
+
+
 class FixedPriority:
-    def __init__(self, g: Gary):
+    def __init__(self, g: Gary, suspend_builds: bool = False):
         self.g = g
+        self.suspend_builds = suspend_builds
+        self.suspended = None            # v2: a build a fight turn put aside, to go on after
         self.interrupted = None          # the task the last fight turn dropped
         self.waits: dict[str, tuple[int, set[str]]] = {}   # layer -> (waiting since, tasks on the hands)
         self.wanted: dict[str, str | None] = {}            # layer -> what it was waiting to do
@@ -70,8 +80,7 @@ class FixedPriority:
                     return "executor:resume"
                 g.macro.step(obs, mine, [u for u in mine if u["completed"]], obs["me"])
                 return "macro"
-            if not hi.pending and g.setup_done and hi.frame >= g.fight.next_fight and \
-                    (g.task is None or g.task.kind in INTERRUPTIBLE):
+            if not hi.pending and g.setup_done and hi.frame >= g.fight.next_fight and self._interruptible(g.task):
                 obs = hi.observe()
                 g.army.remember(obs)
                 mine = [u for u in obs["units"] if u["owner"] == g.slot]
@@ -80,6 +89,9 @@ class FixedPriority:
                 who = g.fight.block(obs, mine)
                 if who:
                     self.interrupted = task
+                    if task is not None and task.kind == "build":
+                        task.data["resume"], task.stage = task.stage, "reselect"
+                        self.suspended = task
                     return who
                 g.task = task
         if g.army.remembers and not hi.pending:  # whatever Gary looks at, it remembers
@@ -95,6 +107,10 @@ class FixedPriority:
         done = [u for u in mine if u["completed"]]
         ex = g.executor
         ex.release_reservations(mine)
+        if g.task is None and self.suspended is not None:     # v2: the build a fight put aside
+            g.task, self.suspended = self.suspended, None
+            g.run_task(obs, mine)
+            return "macro:resumed"
         if g.task:
             g.run_task(obs, mine)
             return None
@@ -110,6 +126,10 @@ class FixedPriority:
             return who
         g.macro.step(obs, mine, done, me)
         return "macro"
+
+    def _interruptible(self, task) -> bool:
+        return task is None or task.kind in INTERRUPTIBLE or \
+            self.suspend_builds and task.kind == "build" and task.stage in BUILD_WAITS
 
     def _army(self, obs: dict, mine: list[dict], done: list[dict]) -> str | None:
         g = self.g
@@ -143,7 +163,7 @@ class FixedPriority:
                    and busy not in ("build", "command"), busy, now,
                    lambda: g.macro.goal["name"] if g.macro.goal else None)
         self._wait("fight", g.fight is not None and g.fight.center is not None and busy is not None
-                   and busy not in FIGHT_TASKS and busy not in INTERRUPTIBLE, busy, now, lambda: None)
+                   and busy not in FIGHT_TASKS and not self._interruptible(task), busy, now, lambda: None)
 
     def _wait(self, layer: str, waiting: bool, busy: str | None, now: int, what) -> None:
         if waiting:

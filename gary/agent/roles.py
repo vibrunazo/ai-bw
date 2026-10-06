@@ -23,6 +23,37 @@ urgent. The hand rules:
              v0.10, whose close in caused 72% of its marines' attack-moves while zerglings came.
              While none is within 7 tiles yet, units ahead of the pack (2+ tiles closer to the
              threat than its median) step back to it, and units attack-moving at it stop
+  leash      (an option) at home, close in only on zerg that are near Gary's buildings (5 tiles) or
+             attacking its units: the pros hold their base early, they don't hunt zerglings
+             hovering outside it
+  volley     (an option) close in by moving (not attack-moving: in BW the front marines stop to
+             shoot one by one as they come in range, and the rest trickle in behind), to the edge
+             of the marines' range from the nearest zerg; nobody of the group fires until 5 of it
+             (or all, if fewer) are in range or one of it is attacked, then they fire together
+  holds      (an option) units on hold position are left there by fire and close in (they shoot
+             whatever comes in range): a pro's marines holding a gap in a wall or a choke stay in it
+             (scenario 0c50ac60: the pro's 3 marines hold a gap against 17 zerglings for 45 s and
+             live; v0.10 attack-moved them out at 5 s and lost them all)
+  kite       (an option) vultures pull back from melee zerg (zerglings, ultralisks) within 2.5
+             tiles at any HP, alone or not: hit and run (fire sends them back in). v0.10 attack-moved
+             them into zergling packs like marines and lost 2.5x the pros' vulture value
+  fire=      (an option) how fire fires: "enemy" (attack-move at the nearest enemy, as above: after
+             each kill the units walk on toward where it was, off their spot), "here" (attack-move
+             to the group's own middle: they shoot what comes in range and stay), or "hold" (hold
+             position: they shoot what is in range, never chase). The pros' marines die on attack
+             unit 52%, hold position 9%, a move 17%; v0.10's on attack unit 74%
+  post       (an option) at home, the army holds a post by the Command Center, 3 tiles from it
+             toward the zerg: units with nothing in range more than 3 tiles from it go back to it
+             (attack-moving), and only zerg attacking something of Gary's or standing by its
+             buildings are closed in on (the leash). While zerg are 7-16 tiles from their marines
+             at home, the pros' stand nearer the Command Center than v0.10's (within 6 tiles 46%
+             of the time, v0.10's 37%), in bigger groups (7, v0.10's 5), and the standoff lasts:
+             twice the marine-minutes of v0.10's, who close the distance
+  regroup    (an option) only the pack closes in: units with nothing in range that are away from
+             the pack (the biggest bunch of Gary's fighters, linked within 4 tiles; a bunker and
+             SCVs fighting count) rejoin it, attack-moving to its middle, instead of closing in
+             alone. The pros' marines die among 3.8 friends (within 4 tiles), v0.10's among 2.5;
+             48% of v0.10's die with at most one friend near, 29% of the pros'
 
 Units another source holds by lease (a rule loading them into a bunker...) are left out.
 
@@ -65,6 +96,21 @@ BUNKER, MARINE = 125, 0
 BUNKER_SLOTS = 4
 MAX_GROUP = 12
 SIDEWAYS_PX = 8                      # closer by less than this isn't coming
+LEASH = 5 * 32                       # leash: zerg this close to Gary's buildings may be closed in on
+VOLLEY = 5                           # volley: this many of a closing group in range fire together
+HOLD = 107                           # the hold position order
+VULTURE = 2
+MELEE = {37, 39}                     # zergling, ultralisk
+KITE_PX = 80                         # kite: melee zerg this close to a vulture
+POST_FROM_CC = 3 * 32               # post: this far from the Command Center toward the zerg
+POST_SLACK = 3 * 32                  # post: units farther than this from it go back
+PACK_LINK = 4 * 32                   # regroup: units this close to each other are one bunch
+
+
+def _known(role: str) -> str:
+    """A role as the role model names it (it knows no brace or regroup: they reposition)."""
+    from gary.policy.roles import DECISIONS
+    return role if role in DECISIONS else "reposition"
 
 
 def _mid(units) -> tuple[float, float]:
@@ -74,9 +120,13 @@ def _mid(units) -> tuple[float, float]:
 class RoleRules:
     """rules/v1: hand rules for roles (see the module's docstring)."""
 
-    def __init__(self, g, brace: bool = False):
+    def __init__(self, g, brace: bool = False, leash: bool = False, volley: bool = False, regroup: bool = False,
+                 holds: bool = False, kite: bool = False, fire: str = "enemy", post: float | str | None = None):
         self.g = g
-        self.brace = brace
+        self.post = post                             # post: tiles from the CC toward the zerg, or "minerals"
+        self.kite, self.fire = kite, fire
+        self.brace, self.leash, self.volley, self.regroup, self.holds = brace, leash or post is not None, volley, regroup, holds
+        self.closing: dict[int, frozenset] = {}      # volley: unit -> its closing group
         self.told: dict[int, tuple[str, int]] = {}   # unit -> (role, frame)
         self._walk = None
         self.prev: dict[int, tuple[float, float]] = {}
@@ -118,7 +168,7 @@ class RoleRules:
         index = {t: i for i, t in enumerate(snap[1])}
         units = [index[u["tag"]] for u in mine]
         self.g.fight.rl_log.append({"rows": snap[0], "extra": extra, "time": obs["frame"] * 42 / 1000, "units": units,
-                                    "roles": [DECISIONS.index(decided.get(u["tag"], "keep")) for u in mine],
+                                    "roles": [DECISIONS.index(_known(decided.get(u["tag"], "keep"))) for u in mine],
                                     "executed": intent is not None})
 
     def decide(self, obs: dict, snap) -> Intent | None:
@@ -186,26 +236,142 @@ class RoleRules:
         pull = [u for u in mine if u["tag"] in targeted and u.get("hp_max") and u["hp"] < PULL_HP * u["hp_max"]
                 and any(math.dist((u["x"], u["y"]), (e["x"], e["y"])) < CONTACT for e in enemy)
                 and any(f["tag"] != u["tag"] and math.dist((u["x"], u["y"]), (f["x"], f["y"])) < 4 * 32 for f in firing)]
+        if self.kite:
+            pull += [u for u in mine if u["type"] == VULTURE and u not in pull and any(
+                e["type"] in MELEE and math.dist((u["x"], u["y"]), (e["x"], e["y"])) < KITE_PX for e in enemy)]
         if pull:
             group = pull[:MAX_GROUP]
-            attackers = [e for e in enemy if e.get("order_target") in {u["tag"] for u in group}] or enemy
+            attackers = ([e for e in enemy if e.get("order_target") in {u["tag"] for u in group}]
+                         or [e for e in enemy if any(math.dist((u["x"], u["y"]), (e["x"], e["y"])) < 128 for u in group)]
+                         or enemy)
             point = self._step_away(_mid(group), _mid(attackers), PULL_TILES * 32)
             if point:
                 return self._intent("PULL_BACK", group, point, "move")
         # fire: an enemy in range, not attacking
-        idle = [u for u in mine if u.get("order") not in ATTACK and in_range(u) and fresh(u, "FIRE")]
+        held = {HOLD} if self.holds else set()
+        firing = held | ({HOLD} if self.fire == "hold" else set())
+        idle = [u for u in mine if u.get("order") not in ATTACK | firing and in_range(u) and fresh(u, "FIRE")]
+        if self.volley:
+            idle = self._volley_ready(idle, mine, enemy, in_range, targeted)
         if idle:
             group = sorted(idle, key=lambda u: min(math.dist((u["x"], u["y"]), (e["x"], e["y"])) for e in enemy))[:MAX_GROUP]
+            if self.fire == "hold":
+                for u in group:
+                    self.told[u["tag"]] = ("FIRE", now)
+                tags = [u["tag"] for u in group]
+                return Intent("FIRE", tags, None, {"key": ("hold",), "tags": tags, "center": _mid(group)}, "roles")
+            if self.fire == "here":
+                mid = _mid(group)
+                return self._intent("FIRE", group, (int(mid[0]), int(mid[1])), "attack_move")
             target = min(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
             return self._intent("FIRE", group, (int(target["x"]), int(target["y"])), "attack_move")
         # close in: nothing in range, not weaker, and they aren't coming at us
         if ours >= CLOSE_RATIO * theirs and not coming:
-            far = [u for u in mine if not in_range(u) and u.get("order") not in ATTACK and fresh(u, "CLOSE_IN")]
-            if far:
+            prey = enemy
+            if self.leash and home:
+                mine_tags = {u["tag"] for u in by_tag.values() if u["owner"] == g.slot}
+                built = [u for u in by_tag.values() if u["owner"] == g.slot and is_building(u["type"])]
+                prey = [e for e in enemy if e.get("order_target") in mine_tags
+                        or any(math.dist((e["x"], e["y"]), (b["x"], b["y"])) < LEASH for b in built)]
+            far = [u for u in mine if not in_range(u) and u.get("order") not in ATTACK | held and fresh(u, "CLOSE_IN")]
+            if self.post is not None and home and not prey:
+                post = self._post(by_tag, (mx, my), enemy)
+                away = [u for u in mine if not in_range(u) and fresh(u, "POST") and u.get("order") not in ATTACK
+                        and math.dist((u["x"], u["y"]), post) > POST_SLACK]
+                if post and away:
+                    group = sorted(away, key=lambda u: math.dist((u["x"], u["y"]), post))[:MAX_GROUP]
+                    return self._intent("POST", group, (int(post[0]), int(post[1])), "attack_move")
+            if far and prey and self.regroup:
+                pack = self._pack(mine, workers, by_tag)
+                loose = [u for u in far if u["tag"] not in pack["tags"] and fresh(u, "REGROUP")]
+                if loose:
+                    group = sorted(loose, key=lambda u: math.dist((u["x"], u["y"]), pack["mid"]))[:MAX_GROUP]
+                    return self._intent("REGROUP", group, (int(pack["mid"][0]), int(pack["mid"][1])), "attack_move")
+                far = [u for u in far if u["tag"] in pack["tags"]]
+            if far and prey:
                 group = far[:MAX_GROUP]
-                target = min(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
-                return self._intent("CLOSE_IN", group, (int(target["x"]), int(target["y"])), "attack_move")
+                target = min(prey, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
+                if not self.volley:
+                    return self._intent("CLOSE_IN", group, (int(target["x"]), int(target["y"])), "attack_move")
+                point = self._edge_of_range(group, target)
+                intent = self._intent("CLOSE_IN", group, point, "move")
+                if intent is not None:
+                    members = frozenset(u["tag"] for u in group)
+                    for t in members:
+                        self.closing[t] = members
+                return intent
         return None
+
+    def _post(self, by_tag: dict, at, enemy: list[dict]):
+        """post: by the Command Center nearest the group, POST_FROM_CC toward the zerg (walkable)."""
+        ccs = [u for u in by_tag.values() if u["owner"] == self.g.slot and u["type"] == T.CC]
+        if not ccs:
+            return None
+        cc = min(ccs, key=lambda u: math.dist((u["x"], u["y"]), at))
+        if self.post == "minerals":                  # between the CC and its mineral line
+            fields = [u for u in by_tag.values() if u["owner"] == 11 and u["type"] in (176, 177, 178)
+                      and math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < 10 * 32]
+            if fields:
+                mx, my = _mid(fields)
+                return (cc["x"] + mx) / 2, (cc["y"] + my) / 2
+        zx, zy = _mid(enemy)
+        d = math.dist((cc["x"], cc["y"]), (zx, zy)) or 1
+        for f in (1.0, 0.75, 1.25, 0.5):
+            tiles = self.post if isinstance(self.post, (int, float)) and self.post is not True else POST_FROM_CC / 32
+            x = cc["x"] + (zx - cc["x"]) / d * tiles * 32 * f
+            y = cc["y"] + (zy - cc["y"]) / d * tiles * 32 * f
+            if self._walkable(x, y):
+                return x, y
+        return cc["x"], cc["y"]
+
+    def _pack(self, mine: list[dict], workers: list[dict], by_tag: dict) -> dict:
+        """regroup: the biggest bunch (by supply) of Gary's fighters, SCVs fighting and bunkers,
+        linked within PACK_LINK: {"tags", "mid"} (the middle of its fighters)."""
+        bunkers = [u for u in by_tag.values() if u["owner"] == self.g.slot and u["type"] == BUNKER and u["completed"]]
+        units = mine + workers + bunkers
+        weight = lambda u: 8 if u["type"] == BUNKER else supply_x2(u["type"])
+        left, best = set(range(len(units))), None
+        while left:
+            todo, bunch = [left.pop()], []
+            while todo:
+                i = todo.pop()
+                bunch.append(units[i])
+                near = [j for j in left if math.dist((units[i]["x"], units[i]["y"]), (units[j]["x"], units[j]["y"])) < PACK_LINK]
+                left -= set(near)
+                todo += near
+            if best is None or sum(map(weight, bunch)) > sum(map(weight, best)):
+                best = bunch
+        fighters = [u for u in best if u in mine] or best
+        return {"tags": {u["tag"] for u in best}, "mid": _mid(fighters)}
+
+    def _volley_ready(self, idle: list[dict], mine: list[dict], enemy: list[dict], in_range, targeted) -> list[dict]:
+        """volley: of the units that could fire, those of a closing group wait for the rest of it."""
+        by = {u["tag"]: u for u in mine}
+        ready = []
+        for u in idle:
+            members = self.closing.get(u["tag"])
+            if members is None:
+                ready.append(u)
+                continue
+            moving = [by[t] for t in members if t in by and by[t].get("order") in MOVE]
+            if (u["tag"] in targeted or u.get("order") not in MOVE
+                    or sum(in_range(m) for m in moving) >= min(VOLLEY, len(moving))
+                    or any(m["tag"] in targeted for m in moving)):
+                for t in members:                  # the group fires: it closes in no more
+                    self.closing.pop(t, None)
+                ready.append(u)
+        return ready
+
+    def _edge_of_range(self, group: list[dict], target: dict):
+        """volley: where the group closes in to, just outside its range from the target (standing
+        there, a unit fires at whatever comes in range; moving, it wouldn't)."""
+        mid = _mid(group)
+        reach = min(RANGE.get(u["type"], 160) for u in group)
+        d = math.dist(mid, (target["x"], target["y"])) or 1
+        if d <= reach:
+            return int(target["x"]), int(target["y"])
+        f = (reach + 24) / d
+        return int(target["x"] + (mid[0] - target["x"]) * f), int(target["y"] + (mid[1] - target["y"]) * f)
 
     def _intent(self, role: str, group: list[dict], point, order: str) -> Intent | None:
         if point is None:

@@ -94,9 +94,13 @@ class Gary:
     def act(self) -> None:
         self.arbiter.act()
 
-    def adopt_hotkeys(self) -> None:
-        """For a game Gary takes over midway (eval/scenarios.py)."""
+    def adopt(self) -> None:
+        """For a game Gary takes over midway (eval/scenarios.py), as if it had played it so far: the
+        hotkeys its production buildings would have, and the early scouting done (else a worker
+        leaves for the enemy start at the takeover, minutes late, into the zerglings)."""
         self.executor.adopt_hotkeys()
+        if hasattr(self.army, "scout_done"):
+            self.army.scout_done = True
 
     # --- the trace --------------------------------------------------------------------------
 
