@@ -83,7 +83,12 @@ quicker way to a playable Gary.
   collision box is smaller than its tiles by a different margin on each side, so a Supply Depot
   on top of another stops zerglings and side by side doesn't), checked against the engine
   (buildings placed in an OpenBW game, units sent through: the arithmetic agrees to the pixel in
-  1,144 of 1,148 cases; an Academy above a Supply Depot is tighter than it says).
+  1,144 of 1,148 cases; an Academy above a Supply Depot is tighter than it says). In the pros'
+  239 bases (at the takeovers), 38% of the touching building pairs stop zerglings: mostly Supply
+  Depots stacked (125 times, all tight; side by side, 100 times, none), a Supply Depot above a
+  Barracks or an Academy, and an Academy left of a Supply Depot (tight; right of it, not). Many
+  touching pairs are clusters (depot fields, rows of Barracks), not walls: which are walls needs
+  the openings between buildings and cliffs at the chokes (next).
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 
