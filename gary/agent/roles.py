@@ -19,11 +19,19 @@ urgent. The hand rules:
              the nearest enemy group
 
 Units another source holds by lease (a rule loading them into a bunker...) are left out.
+
+With a decision log open (the fight layer's rl_log), each turn is recorded: the model's inputs
+(the snapshot and the units' motion) and each of Gary's units' decision (its new role, or keep).
+The hand rules' log is data to distill them into a model (ingest/role_distill.py); the learned
+provider then draws roles from its probabilities instead of taking the likeliest, and its log is
+what reinforcement learning trains on (train/roles_rl.py).
 """
 
 from __future__ import annotations
 
 import math
+
+import numpy as np
 
 from gary import terran as T
 from gary.agent.intents import Intent
@@ -60,15 +68,71 @@ class RoleRules:
         self.g = g
         self.told: dict[int, tuple[str, int]] = {}   # unit -> (role, frame)
         self._walk = None
+        self.prev: dict[int, tuple[float, float]] = {}
+        self.prev_frame = None
+
+    def _motion(self, obs: dict, snap):
+        """The units' motion over the last half second (the role model's extra inputs), keeping
+        track of where everyone was; None without a snapshot."""
+        from gary.policy.roles import extra_features
+        now = self.g.hi.frame
+        positions = {u["tag"]: (u["x"], u["y"]) for u in obs["units"]}
+        prev, elapsed = self.prev, (now - self.prev_frame) if self.prev_frame is not None else 0
+        self.prev, self.prev_frame = positions, now
+        if snap is None:
+            return None
+        rows, tags = snap[0], snap[1]
+        if 0 < elapsed != 12:                  # motion per half second, as the model learned it
+            prev = {t: (positions[t][0] - (positions[t][0] - p[0]) * 12 / elapsed,
+                        positions[t][1] - (positions[t][1] - p[1]) * 12 / elapsed)
+                    for t, p in prev.items() if t in positions}
+        return extra_features(rows, tags, positions, prev if elapsed else {}, self.g.flip)
+
+    def _units(self, snap):
+        """Gary's units the roles may command (in the snapshot, not held by a rule), and the enemy's."""
+        from gary.policy.roles import MAX_UNITS
+        g = self.g
+        rows, tags, _, by_tag = snap
+        free = set(g.leases.free(tags, "roles"))
+        mine = [by_tag[t] for i, t in enumerate(tags[:MAX_UNITS]) if rows[i][1] == 1 and t in free
+                and supply_x2(by_tag[t]["type"]) > 0 and not is_worker(by_tag[t]["type"])
+                and not is_building(by_tag[t]["type"]) and by_tag[t]["completed"]]
+        enemy = [u for u in by_tag.values() if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0
+                 and not is_worker(u["type"]) and not is_building(u["type"])]
+        return mine, enemy
+
+    def _log(self, obs: dict, snap, extra, mine: list[dict], decided: dict[int, str], intent) -> None:
+        """One turn in the decision log: inputs, each unit's decision (a role, or keep)."""
+        from gary.policy.roles import DECISIONS
+        index = {t: i for i, t in enumerate(snap[1])}
+        units = [index[u["tag"]] for u in mine]
+        self.g.fight.rl_log.append({"rows": snap[0], "extra": extra, "time": obs["frame"] * 42 / 1000, "units": units,
+                                    "roles": [DECISIONS.index(decided.get(u["tag"], "keep")) for u in mine],
+                                    "executed": intent is not None})
 
     def decide(self, obs: dict, snap) -> Intent | None:
         g = self.g
-        by_tag = snap[3]
-        mine = [u for u in by_tag.values() if u["owner"] == g.slot and u["completed"] and supply_x2(u["type"]) > 0
-                and not is_worker(u["type"]) and not is_building(u["type"])]
-        enemy = [u for u in by_tag.values() if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0
-                 and not is_worker(u["type"]) and not is_building(u["type"])]
-        mine = [u for u in mine if u["tag"] in set(g.leases.free([u["tag"] for u in mine], "roles"))]
+        logging = g.fight.rl_log is not None
+        extra = self._motion(obs, snap) if logging else None
+        if snap is None:
+            return None
+        if not logging:                        # (as before the log existed)
+            by_tag = snap[3]
+            mine = [u for u in by_tag.values() if u["owner"] == g.slot and u["completed"] and supply_x2(u["type"]) > 0
+                    and not is_worker(u["type"]) and not is_building(u["type"])]
+            enemy = [u for u in by_tag.values() if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0
+                     and not is_worker(u["type"]) and not is_building(u["type"])]
+            mine = [u for u in mine if u["tag"] in set(g.leases.free([u["tag"] for u in mine], "roles"))]
+            return self._rules(snap[3], mine, enemy)
+        mine, enemy = self._units(snap)
+        intent = self._rules(snap[3], mine, enemy)
+        if mine and enemy:
+            decided = {t: intent.kind.lower() for t in intent.units} if intent is not None else {}
+            self._log(obs, snap, extra, mine, decided, intent)
+        return intent
+
+    def _rules(self, by_tag: dict, mine: list[dict], enemy: list[dict]) -> Intent | None:
+        g = self.g
         if not mine or not enemy:
             return None
         now = g.hi.frame
@@ -228,41 +292,34 @@ class RoleLearned(RoleRules):
     def __init__(self, g, model):
         super().__init__(g)
         self.model = model
-        self.prev: dict[int, tuple[float, float]] = {}
-        self.prev_frame = None
 
     def decide(self, obs: dict, snap) -> Intent | None:
-        from gary.policy.roles import MAX_UNITS, extra_features
         names = self.model.config.get("roles")
         g = self.g
         now = g.hi.frame
-        positions = {u["tag"]: (u["x"], u["y"]) for u in obs["units"]}
-        prev, elapsed = self.prev, (now - self.prev_frame) if self.prev_frame is not None else 0
-        self.prev, self.prev_frame = positions, now
+        extra = self._motion(obs, snap)
         if snap is None:
             return None
         rows, tags, center, by_tag = snap
-        if 0 < elapsed != 12:                  # motion per half second, as the model learned it
-            prev = {t: (positions[t][0] - (positions[t][0] - p[0]) * 12 / elapsed,
-                        positions[t][1] - (positions[t][1] - p[1]) * 12 / elapsed)
-                    for t, p in prev.items() if t in positions}
-        extra = extra_features(rows, tags, positions, prev if elapsed else {}, g.flip)
         probs = self.model.predict(rows, extra, obs["frame"] * 42 / 1000)
-        free = set(g.leases.free(tags, "roles"))
-        mine = [by_tag[t] for i, t in enumerate(tags[:MAX_UNITS]) if rows[i][1] == 1 and t in free
-                and supply_x2(by_tag[t]["type"]) > 0 and not is_worker(by_tag[t]["type"])
-                and not is_building(by_tag[t]["type"]) and by_tag[t]["completed"]]
-        enemy = [u for u in by_tag.values() if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0
-                 and not is_worker(u["type"]) and not is_building(u["type"])]
+        mine, enemy = self._units(snap)
         if not mine or not enemy:
             return None
-        index = {t: i for i, t in enumerate(tags[:MAX_UNITS])}
+        index = {t: i for i, t in enumerate(tags)}
+        logging = g.fight.rl_log is not None
+        decided: dict[int, str] = {}
         roles: dict[str, list[dict]] = {}
         for u in mine:
-            roles.setdefault(names[int(probs[index[u["tag"]]].argmax())].upper(), []).append(u)
+            p = probs[index[u["tag"]]].astype(np.float64)
+            k = int(g.fight.rng.choice(len(p), p=p / p.sum())) if logging else int(p.argmax())
+            decided[u["tag"]] = names[k]
+            roles.setdefault(names[k].upper(), []).append(u)
         mx, my = _mid(mine)
         home = any(u["owner"] == g.slot and u["type"] == T.CC and math.dist((u["x"], u["y"]), (mx, my)) < HOME
                    for u in by_tag.values())
         fresh = lambda u, role: not (self.told.get(u["tag"], ("", -10**9))[0] == role
                                      and now - self.told[u["tag"]][1] < REPEAT)
-        return self._act(roles, mine, enemy, by_tag, home, fresh)
+        intent = self._act(roles, mine, enemy, by_tag, home, fresh)
+        if logging:
+            self._log(obs, snap, extra, mine, decided, intent)
+        return intent

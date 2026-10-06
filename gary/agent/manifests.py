@@ -207,7 +207,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             models["fight"] = "roles/rules_v1"   # (the chat says so: as many lines as with a model)
         elif f["provider"] == "roles":
             from gary.policy.roles import RoleModel
-            fight = RoleModel.load(model_path(f["model"]))
+            fight = fight_model or RoleModel.load(fight_path or model_path(f["model"]))
             models["fight"] = fight.path
         else:
             fight = fight_model or load("fight", str(fight_path or model_path(f["model"])))

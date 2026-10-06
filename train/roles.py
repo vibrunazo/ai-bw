@@ -54,13 +54,20 @@ def decision_labels(d) -> np.ndarray:
 
 
 def load(path: Path, decisions: bool = False):
+    """Train and validation arrays, and the label names (a dataset can name its own: the hand rules'
+    decisions, ingest/role_distill.py)."""
     d = np.load(path)
     val_game = np.array([int(s[:8], 16) % 10 == 1 for s in d["sha1"]])
     val = val_game[d["game"]]
-    labels = decision_labels(d) if decisions else d["labels"]
+    if "names" in d:
+        names = [str(x) for x in d["names"]]
+        labels = d["labels"]
+    else:
+        names = DECISIONS if decisions else ROLES
+        labels = decision_labels(d) if decisions else d["labels"]
     arrays = {"rows": d["rows"], "extra": d["extra"], "labels": labels, "count": d["count"], "time": d["time"]}
     pick = lambda m: tuple(arrays[k][m] for k in ("rows", "extra", "labels", "count", "time"))
-    return pick(~val), pick(val)
+    return pick(~val), pick(val), names
 
 
 def batch(data, idx, device):
@@ -102,15 +109,17 @@ def main() -> None:
     ap.add_argument("--d", type=int, default=128)
     ap.add_argument("--layers", type=int, default=3)
     ap.add_argument("--decisions", action="store_true", help="learn when the role changes (else keep)")
+    ap.add_argument("--no-weights", action="store_true", help="plain cross entropy (rare roles not weighted up)")
     args = ap.parse_args()
-    names = DECISIONS if args.decisions else ROLES
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(0)
-    train, val = load(Path(args.data), args.decisions)
+    train, val, names = load(Path(args.data), args.decisions)
+    decisions = "keep" in names
     y = train[2][train[2] >= 0]
     share = np.bincount(y, minlength=len(names)) / len(y)
     weights = torch.as_tensor(1 / np.sqrt(np.maximum(share, 1e-3)), dtype=torch.float32, device=device)
-    weights = weights / weights[0]
+    weights = weights / weights[0] if not args.no_weights else torch.ones_like(weights)
     print(f"train {len(train[0])} snapshots, {len(y)} units; validation {len(val[0])} snapshots; "
           + ", ".join(f"{r} {s:.1%}" for r, s in zip(names, share)), flush=True)
     config = {"net": {"d": args.d, "layers": args.layers, "heads": 4, "n_roles": len(names)}, "data": args.data,
@@ -134,7 +143,7 @@ def main() -> None:
         # model choice: over the roles that drive commands (not just the majority), mean recall; for
         # decisions mean F1 (a decision named wrongly is a needless command)
         f1 = lambda r: 2 * res[r]["recall"] * res[r]["precision"] / max(1e-9, res[r]["recall"] + res[r]["precision"])
-        score = np.mean([f1(r) if args.decisions else res[r]["recall"] for r in ("fire", "close_in", "pull_back", "retreat")])
+        score = np.mean([f1(r) if decisions else res[r]["recall"] for r in ("fire", "close_in", "pull_back", "retreat")])
         history.append({"epoch": epoch, "loss": round(total / len(order), 4), "val": res, "score": round(float(score), 3)})
         print(f"epoch {epoch:2d} loss {total / len(order):.3f} val acc {res['accuracy']:.3f} "
               + " ".join(f"{r} {res[r]['recall']:.2f}/{res[r]['precision']:.2f}" for r in ROLES[:4]), flush=True)

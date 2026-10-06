@@ -131,7 +131,7 @@ class FightLayer:
                 return f"rule:{rule.name}"
         if self.kind == "roles":
             snap = self._snapshot(obs)
-            intent = self.roles.decide(obs, snap) if snap is not None or self.model is not None else None
+            intent = self.roles.decide(obs, snap)
             if intent is None:
                 return None
             self.g.motor.start(intent)
