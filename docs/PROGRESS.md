@@ -108,6 +108,10 @@ quicker way to a playable Gary.
   v0.10 −69, v0.9 −98, −30 ± 12): there the post was +7 ± 5 and fights interrupting waiting
   builds +6 ± 4, but against the immediate 9-pool (16 seeds) the first lost 1 game and the second
   3, v0.10 none: the build a fight would interrupt is the bunker that holds the rush.
+  RL on the roles against the reactive Zerg (train/roles_rl.py, from the rules distilled; 239,
+  8 draws): 60 rounds +8 ± 10 to v0.10; 200 rounds with twice the data drifted worse after
+  round 20 (validation on 4 draws each: −71 at the start, −84 at the end; its best, round 20,
+  +3 ± 9). Not adopted.
 - **How we got here:** see v0.9's last bullets (CONTROL.md steps 1-5): the layer refactor with
   parity checks, per-command intent labels that didn't hold up when watched, roles per unit that
   did, then the rules beating both the learned fight model and a role model learned by

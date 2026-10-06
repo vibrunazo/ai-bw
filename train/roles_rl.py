@@ -50,8 +50,8 @@ def play_real(args: tuple) -> dict:
 
 def play_greedy(args: tuple) -> dict:
     from eval import scenarios as S
-    sc, path = args
-    return S.run_one(sc, "gary", 45, MANIFEST, 1, fight_path=path)
+    sc, path, hands = args
+    return S.run_one(sc, "gary", 45, MANIFEST, 1, fight_path=path, hands_seed=1 + hands)
 
 
 def batch(decs: list, device: str):
@@ -107,8 +107,11 @@ def update(net, ref, opt, decs: list, args, device: str) -> dict:
     return {k: round(v / max(1, stats["n"]), 4) for k, v in stats.items() if k != "n"}
 
 
-def validate(pool, val: list[dict], path: str) -> float:
-    rows = [r for r in pool.map(play_greedy, [(sc, path) for sc in val], chunksize=1) if "error" not in r]
+def validate(pool, val: list[dict], path: str, draws: int) -> float:
+    """The validation home defenses' mean net, each played draws times (Gary's hands seeded apart:
+    one play of a fight is a coin flip)."""
+    rows = [r for r in pool.map(play_greedy, [(sc, path, h) for sc in val for h in range(draws)], chunksize=draws)
+            if "error" not in r]
     return float(np.mean([r["net"] for r in rows]))
 
 
@@ -119,6 +122,7 @@ def main() -> None:
     ap.add_argument("--real", type=int, default=32, help="training home defenses per round")
     ap.add_argument("--draws", type=int, default=8, help="plays of each per round")
     ap.add_argument("--test-every", type=int, default=10)
+    ap.add_argument("--val-draws", type=int, default=4, help="plays of each validation home defense")
     ap.add_argument("--horizon", type=float, default=HORIZON_S)
     ap.add_argument("--command-cost", type=float, default=5.0)
     ap.add_argument("--lr", type=float, default=3e-5)
@@ -152,7 +156,7 @@ def main() -> None:
             path = str(out / f"round{rnd}.pt")
             model.save(path)
             if rnd % args.test_every == 0 or rnd == args.rounds:
-                score = validate(pool, val_real, path)
+                score = validate(pool, val_real, path, args.val_draws)
                 print(f"round {rnd}: validation home defenses net {score:.0f}", flush=True)
                 history.append({"round": rnd, "validation": round(score, 1)})
                 if best is None or score > best[0]:
