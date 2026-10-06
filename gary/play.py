@@ -1,8 +1,8 @@
 """Play Gary: headless in OpenBW (fast, deterministic, saves a replay and Gary's POV log), or live in a
 StarCraft: Remastered client through the bridge. Any version (a manifest, gary/agent/manifests.py).
 
-    python -m gary.play --gary v09 --map path/to/map.scx --minutes 12 --style 1
-    python -m gary.play --gary v09 --live --style 1
+    python -m gary.play --gary v010 --map path/to/map.scx --minutes 12 --style 1
+    python -m gary.play --gary v010 --live --style 1
 """
 
 from __future__ import annotations
@@ -118,7 +118,7 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--gary", default="v09", choices=[k for k in MANIFESTS if k != "drill"], help="which Gary")
+    ap.add_argument("--gary", default="v010", choices=[k for k in MANIFESTS if k != "drill"], help="which Gary")
     ap.add_argument("--map", help="a .scm/.scx map (or a pre-1.18 replay) for headless play")
     ap.add_argument("--minutes", type=float, default=12)
     ap.add_argument("--seed", type=int)

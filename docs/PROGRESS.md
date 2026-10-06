@@ -21,7 +21,7 @@ quicker way to a playable Gary.
 | P1 Data | ◐ | ~70k replays indexed, resim with Remastered support (go decided: it works), fog-of-war views | Camera logger, camera inference, fitting human profiles from data (the interface's numbers are still placeholders) |
 | P1b Taxonomy | ◐ | TvZ build clusters with readable rules (`taxonomy/discover.py`) | A reviewed `taxonomy/tvz/v1.yaml`, stability and gold-set reports |
 | P1c Strategy stats | — | | Win-rate table, feature library, guide claims |
-| **P2 Micro** | **◐ (current)** | Fight and command models learned from pro skirmishes; scenario suite from pro replays (`eval/scenarios.py`); first reinforcement learning on scenarios (`train/fight_rl.py`) | Responses within the human band: on home-defense scenarios v0.9 is the best Gary (fuller score: pro +1, v0.9 −77, v0.8 −102, v0.7 −120, v0.3 −156, nothing −302); it holds the immediate 9-pool in 13 of 16 games (v0.3 5, v0.8 2) |
+| **P2 Micro** | **◐ (current)** | Fight and command models learned from pro skirmishes; scenario suite from pro replays (`eval/scenarios.py`); first reinforcement learning on scenarios (`train/fight_rl.py`) | Responses within the human band: on home-defense scenarios v0.10 is the best Gary (fuller score: pro +1, v0.10 −28, v0.9 −77, v0.8 −102, v0.7 −120, v0.3 −156, nothing −302), with hand rules for roles, not a learned model; it holds the immediate 9-pool in 11 of 16 games and loses none (v0.9 13 / 1, v0.3 5 / 8) |
 | P2b First playable | ◐ | Full games against people, offline, via the bridge; learned macro steered by build style | Build timings within tolerance (≥18/20 unharassed runs); supply blocks and idle production under harass within the human band |
 | P2c Debug viewer | ● | POV viewer with cursor, clicks and every action in words; videos | Trace overlays beyond actions |
 | P3 BC full game | ◐ (early) | Separate imitation models for macro, army movement and fights | One policy with intent and belief heads, Opponent Model, value network |
@@ -31,31 +31,50 @@ quicker way to a playable Gary.
 
 ## Components by version
 
-| Component | What it is | Now (v0.9) | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays; known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
-| Human interface | The only path to the game: screen clicks, camera, fog, reaction delay, APM (§6.3) | Clicks, drag boxes, camera hotkeys, fog, reaction delay, APM budget; pro-speed hands fitted to pro replays' select-to-order times yet | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| Perception and memory | What Gary knows: visible units, remembered enemy units (§6.9, §6.10) | Fog and hidden enemy HP; remembers enemy buildings and the enemy army seen in the last 3 min; map analysis (`gary/terrain.py`): main ramp, natural, natural choke | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ |
-| Macro decisions | What to build, train, research, and when | Learned from ~14k pro TvZ games; steerable by build style | ● | ● | ● | ● | ● | ● | ● | ● | ○ | — |
-| Macro executor | Carries out macro decisions: placement, production, gas, mining (§5) | Scripted: any Terran building, unit, add-on, research, upgrade, expansion | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |
-| Army decisions | Where armies go, move vs attack, whether a fight is worth taking | Learned destinations and a learned fight estimate; holds attacks it expects to lose | ● | ● | ● | ● | ● | ● | ● | ○ | ○ | — |
-| Micro | Unit control in fights: stim, spread, siege, focus fire, spells | Command model with memory, trained by imitation then reinforcement learning on real home defenses and drills (#2), for everything but workers; marines loaded into bunkers by rule (against an early pool, as soon as the bunker is done) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — | — | — | — |
-| Scouting | Finding out what the opponent does | One worker at 9 SCVs to the enemy start locations | ○ | ○ | ○ | ○ | ○ | ○ | ○ | — | — | — |
-| Reflexes | Quick reactions outside the plan (worker defense, repair, retreat) | Scripted worker pull (v0.3's rule; v0.4–v0.6 left it to the fight models, which did worse); unfinished buildings get a new SCV; SCVs repair a bunker under attack | ○ | ○ | ○ | ○ | ○ | ○ | ○ | — | — | — |
-| Attention arbiter | One camera and one APM budget shared by all tasks (§6.7) | One task at a time in a fixed priority order | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |
-| Strategy layer | Picks the build and switches plans from what it sees (§6.8) | You pick the build style by hand (`--style`); an early pool switches Gary to a scripted one-base defense until it's held | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | — | — |
-| Opponent model | Beliefs about the opponent's build and army | Not started | — | — | — | — | — | — | — | — | — | — |
-| Replay pipeline | Inventory, build orders, resim, desync checks (§7.1–7.2) | ~70k replays indexed; TvZ re-simulated with fog-of-war views | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| Build taxonomy | Build styles discovered from replays (§7.3) | TvZ clusters with readable rules; style labels for ~45% of players | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
-| Training sets | Data for the learned models | Macro, army and fight sets for TvZ (fight v3: own units from twice as far, unit IDs, every command) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — | — |
-| Learning beyond imitation | Outcome-weighted learning, reinforcement learning | Fight estimate learned from outcomes; reinforcement learning on pro scenarios runs, no gain yet | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — | — | — |
-| POV viewer | Watch any game from Gary's screen (`viewer/`) | Cursor, clicks, every action in words; Remastered replays; videos | ● | ● | ● | ● | ● | ● | ● | ● | ● | — |
-| Trace | Gary's decisions and reasons, recorded (§6.5) | Decision log with model probabilities and fight estimates; POV action log | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
-| Evaluation | Matches against opponents, many seeds, a scoreboard (§9) | `eval/vs_rush.py`: several seeds against one scripted Zerg rush; `eval/scenarios.py`: 114 pro home defenses where Gary takes over the Terran | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ○ | ○ | — |
-| Matchups and races | | Terran in TvZ only | T | T | T | T | T | T | T | T | T | T |
+| Component | What it is | Now (v0.10) | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays; known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
+| Human interface | The only path to the game: screen clicks, camera, fog, reaction delay, APM (§6.3) | Clicks, drag boxes, camera hotkeys, fog, reaction delay, APM budget; pro-speed hands fitted to pro replays' select-to-order times yet | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| Perception and memory | What Gary knows: visible units, remembered enemy units (§6.9, §6.10) | Fog and hidden enemy HP; remembers enemy buildings and the enemy army seen in the last 3 min; map analysis (`gary/terrain.py`): main ramp, natural, natural choke | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ |
+| Macro decisions | What to build, train, research, and when | Learned from ~14k pro TvZ games; steerable by build style | ● | ● | ● | ● | ● | ● | ● | ● | ● | ○ | — |
+| Macro executor | Carries out macro decisions: placement, production, gas, mining (§5) | Scripted: any Terran building, unit, add-on, research, upgrade, expansion | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |
+| Army decisions | Where armies go, move vs attack, whether a fight is worth taking | Learned destinations and a learned fight estimate; holds attacks it expects to lose | ● | ● | ● | ● | ● | ● | ● | ● | ○ | ○ | — |
+| Micro | Unit control in fights: stim, spread, siege, focus fire, spells | A role per unit every half second (fire, close in, pull back, retreat) by hand rules, each role's skill choosing where to go from the threats and the ground (docs/CONTROL.md); a learned role model and the command model (imitation, then RL) exist but play worse; marines loaded into bunkers by rule | ○ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — | — | — | — |
+| Scouting | Finding out what the opponent does | One worker at 9 SCVs to the enemy start locations | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | — | — | — |
+| Reflexes | Quick reactions outside the plan (worker defense, repair, retreat) | Scripted worker pull (v0.3's rule; v0.4–v0.6 left it to the fight models, which did worse); unfinished buildings get a new SCV; SCVs repair a bunker under attack | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | — | — | — |
+| Attention arbiter | One camera and one APM budget shared by all tasks (§6.7) | One task at a time in a fixed priority order | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ |
+| Strategy layer | Picks the build and switches plans from what it sees (§6.8) | You pick the build style by hand (`--style`); an early pool switches Gary to a scripted one-base defense until it's held | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | ○ | — | — |
+| Opponent model | Beliefs about the opponent's build and army | Not started | — | — | — | — | — | — | — | — | — | — | — |
+| Replay pipeline | Inventory, build orders, resim, desync checks (§7.1–7.2) | ~70k replays indexed; TvZ re-simulated with fog-of-war views | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| Build taxonomy | Build styles discovered from replays (§7.3) | TvZ clusters with readable rules; style labels for ~45% of players | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| Training sets | Data for the learned models | Macro, army and fight sets for TvZ (fight v3: own units from twice as far, unit IDs, every command) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — | — |
+| Learning beyond imitation | Outcome-weighted learning, reinforcement learning | Fight estimate learned from outcomes; reinforcement learning on pro scenarios runs, no gain yet | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — | — | — |
+| POV viewer | Watch any game from Gary's screen (`viewer/`) | Cursor, clicks, every action in words; Remastered replays; videos | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | — |
+| Trace | Gary's decisions and reasons, recorded (§6.5) | Decision log with model probabilities and fight estimates; POV action log | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
+| Evaluation | Matches against opponents, many seeds, a scoreboard (§9) | `eval/vs_rush.py`: several seeds against one scripted Zerg rush; `eval/scenarios.py`: 114 pro home defenses where Gary takes over the Terran | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ○ | ○ | — |
+| Matchups and races | | Terran in TvZ only | T | T | T | T | T | T | T | T | T | T | T |
 
 ## Versions
+
+### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
+
+- **What it is:** v0.9 with Gary built from layers (`gary/agent/`, every version a manifest), and
+  its fight decided as a role per unit every half second instead of by the fight command model:
+  fire, close in, pull back (hurt units in contact step away from their attackers), retreat (into
+  a bunker with room; away only when not at home), by hand rules (`gary/agent/roles.py`), each
+  role's skill choosing where to go from the threats' weapon ranges and the walkable ground.
+  Leases enforced: the rules' units (loading, repairing, pulled SCVs) aren't taken by the fight.
+- **Results:** 114 home defenses **−28** (v0.9 −77, pro +1); immediate 9-pool held 11, lost 0
+  (v0.9 13 / 1); 7:00 rush 16 / 0, 38 buildings at 12:00. Worst case: 1316133c (17 zerglings
+  at the base, 15 SCVs lost; v0.9 3, the pro 8).
+- **How we got here:** see v0.9's last bullets (CONTROL.md steps 1-5): the layer refactor with
+  parity checks, per-command intent labels that didn't hold up when watched, roles per unit that
+  did, then the rules beating both the learned fight model and a role model learned by
+  imitation.
+- **Most urgently missing:** a learned role decision that beats the hand rules (labels for when
+  the pro decides, then RL); positioning before contact (zerglings reach Gary's marines 60% more
+  often than the pros'); the fight model's inputs (terrain, threats coming).
 
 ### v0.9 (October 2026): holding early pools (#2)
 

@@ -70,6 +70,10 @@ MANIFESTS: dict[str, dict] = {
     "v09": {"version": "v0.9", "posture": "early_pool/v1",
             "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
             "arbiter": "fixed_priority/v1"},
+    # v0.10: roles instead of the fight model (hand rules, roles.py), leases enforced
+    "v010": {"version": "v0.10", "posture": "early_pool/v1", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY,
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None}, "arbiter": "fixed_priority/v1"},
     # step 4 (docs/CONTROL.md): v0.9 with leases enforced; and with roles instead of the fight model
     "v09lease": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
                  "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
