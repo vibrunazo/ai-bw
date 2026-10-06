@@ -4,8 +4,9 @@
 intent kind, each a task on Gary's hands:
 
   command      the fight model's commands (MOVE, ATTACK_MOVE, ATTACK_UNIT, GATHER, OWN_UNIT, STOP,
-               HOLD, STIM, RETURN_CARGO): select the group (or keep the selection when it already
-               is the group), camera on it if needed, then right-click / A-click / the key
+               HOLD, STIM, RETURN_CARGO), and the roles (FIRE, CLOSE_IN, PULL_BACK, RETREAT: roles.py
+               picks the point): select the group (or keep the selection when it already is the
+               group), camera on it if needed, then right-click / A-click / the key
   PULL         camera on the base, drag-box the miners nearest the attackers, attack-move there
   UNPULL       drag-box the pulled workers, right-click minerals
   LOAD         drag-select the marines (camera on them if needed), camera on the bunker,
@@ -33,7 +34,8 @@ BOX_MARGIN = 20                      # screen pixels around the group's units wh
 SCOUT_KEY = 0
 HK_ARMY = [1, 2]
 COMMANDS = {"MOVE", "ATTACK_MOVE", "ATTACK_UNIT", "GATHER", "OWN_UNIT", "STOP", "HOLD", "STIM", "RETURN_CARGO"}
-TASK_OF = {**{k: "fight_cmd" for k in COMMANDS}, "PULL": "pull", "UNPULL": "unpull", "LOAD": "load",
+ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT"}           # roles.py: carried out as commands
+TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL": "unpull", "LOAD": "load",
            "REPAIR": "repair", "REINFORCE": "reinforce", "ARMY_MOVE": "army_order", "ARMY_ATTACK": "army_order",
            "SCOUT": "scout", "ATTACK_WAVE": "attack"}
 
@@ -139,12 +141,16 @@ class DirectMotor:
                 hi.minimap_right_click(key[1], key[2])
             else:
                 hi.minimap_command(C.ORDER_ATTACK_MOVE, key[1], key[2])
-            g.say(f"fight: {len(sel & want)} {_names(units)} -> {a.replace('_', ' ')}")
+            what = t.intent.kind.lower().replace("_", " ") if t.intent is not None and t.intent.kind in ROLES \
+                else a.replace("_", " ")
+            g.say(f"fight: {len(sel & want)} {_names(units)} -> {what}")
         else:
             {"stop": hi.stop, "hold": hi.hold, "stim": hi.stim, "return_cargo": hi.return_cargo}[a]()
             g.say(f"fight: {len(sel & want)} {_names(units)} -> {a.replace('_', ' ')}")
         if ordered:
             g.leases.take(want, t.intent)
+            if "bunker" in d:                    # a retreat into a bunker: they're its marines now
+                g.loaded.setdefault(d["bunker"], set()).update(want)
         g.task = None
 
     def _ctrl_click(self, obs: dict, group: list[dict]) -> bool:

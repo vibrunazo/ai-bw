@@ -5,6 +5,8 @@ A fight layer is a model plus rules. Each decision is an intent (intents.py) tha
 
   per_unit  the fight model (gary/policy/fight.py; Gary v0.4): what each unit should do, regrouped
             into one command per order
+  roles     no model: a role per unit (roles.py: fire, close in, pull back, retreat), by hand rules
+            for now, each role's skill choosing where to go
   command   the command model (gary/policy/fight_cmd.py; v0.5+): one command at a time to a
             selection, as a player gives it; with memory of its recent commands (v0.6+), trained
             further by reinforcement learning (v0.8+). Options: a guard rail that drops its plain
@@ -91,7 +93,7 @@ class FightLayer:
                  guard_rail: bool = False, workers: bool = True, seed: int = 0, ctrl_click: bool = False):
         self.g = g
         self.model = model
-        self.kind = kind                         # "per_unit" or "command"
+        self.kind = kind                         # "per_unit", "command" or "roles"
         self.before = list(before)               # rules asked first in a fight
         self.in_fight = list(in_fight)           # rules asked right before the model
         self.guard_rail = guard_rail             # drop the model's plain moves and stops (v0.7)
@@ -99,6 +101,10 @@ class FightLayer:
         self.ctrl_click = ctrl_click             # select a group that is every unit of one type on
                                                  # screen with a ctrl+click, not a drag box
         self.own_radius, self.max_units = (FIGHT_AROUND, PER_UNIT_MAX) if kind == "per_unit" else (OWN_RADIUS, COMMAND_MAX)
+        self.roles = None
+        if kind == "roles":
+            from gary.agent.roles import RoleRules
+            self.roles = RoleRules(g)
         self.next_fight = 0
         self.center: tuple[float, float] | None = None
         self.told: dict[int, tuple[tuple, int]] = {}    # unit tag -> (order key, frame given)
@@ -123,6 +129,13 @@ class FightLayer:
         for rule in self.in_fight:
             if rule.step(obs, mine):
                 return f"rule:{rule.name}"
+        if self.kind == "roles":
+            snap = self._snapshot(obs)
+            intent = self.roles.decide(obs, snap[3]) if snap is not None else None
+            if intent is None:
+                return None
+            self.g.motor.start(intent)
+            return "roles"
         acted = self._per_unit(obs, mine) if self.kind == "per_unit" else self._command(obs, mine)
         return "fight" if acted else None
 
@@ -270,6 +283,7 @@ class FightLayer:
         chosen = [tags[i] for i in cmd["select"] if self.workers or by_tag[tags[i]]["type"] != T.SCV]
         chosen = [t for t in chosen if not self._already(a, by_tag[t]) and not self._just_told(t, key)
                   and not (len(key) == 2 and by_tag[t].get("order_target") == key[1])]
+        chosen = g.leases.free(chosen, "fight")
         if not chosen:
             return False
         for t in chosen:

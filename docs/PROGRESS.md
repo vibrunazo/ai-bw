@@ -143,7 +143,20 @@ quicker way to a playable Gary.
   reposition 7.1%, close in 5.0%, retreat 4.0%, pull back 2.4%; v0.9: fire 67%, stand 12%, close in
   5.5%, retreat 4.4%, reposition 3.3%, pull back 1.1%. Zerglings got onto a marine 154 times
   against the pros, 246 against v0.9 (same scenarios); pulled back within a second 25% vs 18%. Clips of single pro marines per role:
-  `data/interim/videos/role_check/`. Next: intents, and
+  `data/interim/videos/role_check/`.
+- **Roles instead of the fight model** (CONTROL.md step 4, `gary/agent/roles.py`, hand rules
+  `rules/v1`: fire, close in, pull back, retreat into a bunker with room or out of the threat's
+  reach; leases enforced). Manifests `v09lease` and `v09roles`, against v0.9:
+  | | v0.9 | + leases | + leases + roles |
+  |---|---|---|---|
+  | 114 home defenses | -77 | -75 | **-44** (-37 on the first run) |
+  | immediate 9-pool, held / lost | 13 / 1 | 12 / 1 | 8 / 2 |
+  | 7:00 rush, held / lost | 16 / 0 | 16 / 0 | 16 / 0 |
+  Leases alone change nothing measurable. The roles' hand rules beat the learned fight model in
+  pro home defenses by a wide margin, and do somewhat worse against the 9-pool. Their worst home
+  defense (1316133c: 15 SCVs lost vs 3) retreats the marines and leaves the SCVs to the lings.
+  The first version retreated away from the bunker too (9-pool held 6, lost 5): now a retreat
+  goes into a bunker with room first. Videos (pro | v0.9 | roles): `data/interim/videos/roles_vs/`. Next: intents, and
   the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs

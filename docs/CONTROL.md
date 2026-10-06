@@ -187,11 +187,17 @@ earlier speedups).
    traced (`lease_conflict`), not prevented yet. Same actions in all 110 parity games and
    scenarios. A first look (v0.9, immediate 9-pool, seed 1): the fight model and the bunker-load
    rule took marines from each other 9 times in 8 minutes.
-4. **The first skill: STUTTER** (scripted, timed to the cooldown), with a simple L4 for variant B
-   (the command model's move-then-attack on ranged units becomes STUTTER). Variant A vs B on the
-   three benchmarks. This is the first real experiment.
-5. **Intent labels and an intent model:** the `intent_label` script provider on pro fights,
-   imitation, then RL on the home defenses; variant B with a learned L4.
+4. **Roles and their skills; leases enforced.** Revised after watching pro fights: a label per
+   command didn't hold up (most moments mix techniques: the front marines step back while the
+   rest shoot), a role per unit did (`eval/micro_roles.py`: fire, close in, pull back, retreat,
+   reposition, stand; toward and away measured group against group). Stutter isn't an intent:
+   at the unit level it's a short pull back, then fire. So variant B is a role per unit every
+   half second (`gary/agent/roles.py`, hand rules first: `rules/v1`), each role's skill picking
+   where to go from the threats (weapon ranges, walkable ground), carried out by the command
+   skill; leases enforced by priority (rules, then the fight's decisions, then the army).
+   Manifests `v09lease` (leases alone) and `v09roles` against v0.9 on the three benchmarks.
+5. **A learned role model:** imitation on the pros' role labels (per unit, every half second),
+   then RL on the home defenses; variant B with a learned L4 instead of the hand rules.
 6. **The rest as needed:** KITE, SCREEN, LOAD as skills; §6.7's arbiter rules (fight priority
    with a minimum macro share); posture from more than rules.
 

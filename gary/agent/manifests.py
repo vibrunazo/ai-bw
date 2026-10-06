@@ -70,6 +70,13 @@ MANIFESTS: dict[str, dict] = {
     "v09": {"version": "v0.9", "posture": "early_pool/v1",
             "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
             "arbiter": "fixed_priority/v1"},
+    # step 4 (docs/CONTROL.md): v0.9 with leases enforced; and with roles instead of the fight model
+    "v09lease": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
+                 "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
+                 "arbiter": "fixed_priority/v1"},
+    "v09roles": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
+                 "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY,
+                 "fight": {**_V09_FIGHT, "provider": "roles", "model": None}, "arbiter": "fixed_priority/v1"},
     # the fight layer alone, for micro drills (gary/drills.py)
     "drill": {"version": "drill", "posture": "normal", "macro": None, "army": None,
               "fight": {"provider": "command", "model": "fight_cmd/latest_memory", "workers": False},
@@ -160,6 +167,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.flip = flip
     models: dict[str, str] = {}
     g.motor = DirectMotor(g)
+    g.leases.enforced = m.get("leases") == "enforced"
     if m["macro"] is not None or m["army"] is not None:
         g.executor = ScriptedExecutor(g)
     g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture}[m["posture"]](g)
@@ -178,8 +186,12 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None)
     if m["fight"] is not None:
         f = m["fight"]
-        fight = fight_model or load("fight", str(fight_path or model_path(f["model"])))
-        models["fight"] = getattr(fight, "path", "?")
+        if f["provider"] == "roles":
+            fight = None
+            models["fight"] = "roles/rules_v1"   # (the chat says so: as many lines as with a model)
+        else:
+            fight = fight_model or load("fight", str(fight_path or model_path(f["model"])))
+            models["fight"] = getattr(fight, "path", "?")
         g.fight = FightLayer(g, fight, f["provider"], [RULES[r](g) for r in f.get("before", [])],
                              [RULES[r](g) for r in f.get("in_fight", [])], f.get("guard_rail", False),
                              f.get("workers", True), seed, f.get("ctrl_click", False))
