@@ -13,6 +13,20 @@ an Academy; a Zerg with Evolution Chambers).
     python -m gary.walls --check                 # the arithmetic against the engine: buildings
                                                  # placed side by side in an OpenBW game, units
                                                  # sent through the opening
+    python -m gary.walls --frontier 0c50ac60     # a home defense's Terran frontier at the takeover
+
+The frontier (frontier()): what separates all of a player's bases (every Command Center is inside)
+from the enemy's side, whatever the map: where the natural is the only way into the main, the
+natural's choke; where the main has another way in, that too; where the natural is behind the
+main, the main's way out. A minimum cut over the 8-pixel minitiles within 24 tiles (by ground) of
+the bases: the fewest cells to close so that no ground way leads out to what still connects to the
+enemy's start locations (max-flow; obstacles are unwalkable minitiles and the collision boxes of
+buildings, resources and neutral map units). Its pieces are then looked at exactly (gaps(), from
+right inside to right outside): zergling-tight ones are closed parts of a wall, the rest are the
+openings. In the pros' 239 home defenses: bases with only the main, the ramp alone (61 of 123),
+another single way out (20) or closed to zerglings altogether (13); with the natural taken, one
+opening (57 of 116: the natural's choke, or the way out where the map analysis didn't find it),
+two (25), closed altogether in only 2.
 
 The gap finder (gaps(): a window around two points, e.g. inside the natural and past its choke)
 works at pixel resolution: obstacles are unwalkable minitiles and the collision boxes of
@@ -156,7 +170,7 @@ def obstacles(game, obs: dict, fp: Footprints, window: tuple[int, int, int, int]
     mini = walk[y0 // 8:(y1 + 7) // 8, x0 // 8:(x1 + 7) // 8]
     blocked = np.repeat(np.repeat(~mini, 8, axis=0), 8, axis=1)[y0 % 8:y0 % 8 + (y1 - y0), x0 % 8:x0 % 8 + (x1 - x0)]
     for u in obs["units"]:
-        if u["type"] in RESOURCES or is_building(u["type"]):
+        if u["type"] in RESOURCES or u["owner"] == 11 or is_building(u["type"]):
             bx0, by0, bx1, by1 = fp.box_at(u["type"], u["x"], u["y"])
             bx0, by0, bx1, by1 = max(bx0, x0), max(by0, y0), min(bx1, x1 - 1), min(by1, y1 - 1)
             if bx0 <= bx1 and by0 <= by1:
@@ -192,6 +206,53 @@ def _seed(free, p, snap: int = SNAP):
         return None
     k = int(np.argmin((ys + y0 - p[0]) ** 2 + (xs + x0 - p[1]) ** 2))
     return int(ys[k] + y0), int(xs[k] + x0)
+
+
+def _narrowest(ridge, side_a, side_b):
+    """The narrowest place of a way in: the shortest chain of ridge cells (exactly the bottleneck
+    clearance: across the gap, but also along every cliff and building edge at that distance)
+    linking a cell next to one side's ground to a cell next to the other's, by ground (through
+    ridge cells only: a cliff between them doesn't count as near). Across a short gap it's the gap,
+    along a corridor its middle line. None if no chain links them."""
+    import numpy as np
+    from collections import deque
+    from scipy import ndimage
+    pieces, _ = ndimage.label(ridge, structure=np.ones((3, 3)))
+    touch_a, touch_b = ridge & side_a, ridge & side_b
+    ids = (set(np.unique(pieces[touch_a])) & set(np.unique(pieces[touch_b]))) - {0}
+    best = None
+    h, w = ridge.shape
+    for k in ids:
+        starts = np.argwhere(touch_a & (pieces == k))
+        goal = touch_b & (pieces == k)
+        prev = {tuple(c): None for c in starts}
+        queue = deque(prev)
+        end = None
+        while queue:
+            c = queue.popleft()
+            if goal[c]:
+                end = c
+                break
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    n = (c[0] + dy, c[1] + dx)
+                    if 0 <= n[0] < h and 0 <= n[1] < w and n not in prev and pieces[n] == k:
+                        prev[n] = c
+                        queue.append(n)
+        if end is None:
+            continue
+        path = []
+        while end is not None:
+            path.append(end)
+            end = prev[end]
+        if best is None or len(path) < len(best):
+            best = path
+    if best is None:
+        return None
+    found = np.zeros_like(ridge)
+    for c in best:
+        found[c] = True
+    return found
 
 
 def connected(free, a, b) -> bool:
@@ -251,13 +312,7 @@ def gaps(game, obs: dict, inside: tuple[int, int], outside: tuple[int, int], mar
             ids = set(np.unique(rest[near])) - {0}
             return ndimage.binary_dilation(np.isin(rest, list(ids)) | (near & ridge), iterations=1)
         side_a, side_b = side(_seed(work >= t, a)), side(_seed(work >= t, b))
-        pieces, n = ndimage.label(ridge, structure=np.ones((3, 3)))
-        found = None
-        for k in range(1, n + 1):
-            piece = pieces == k
-            if (piece & side_a).any() and (piece & side_b).any():
-                found = piece
-                break
+        found = _narrowest(ridge, side_a, side_b)
         if found is None:
             break
         ys, xs = np.nonzero(found)
@@ -268,6 +323,165 @@ def gaps(game, obs: dict, inside: tuple[int, int], outside: tuple[int, int], mar
             break
         work[ndimage.binary_dilation(found, iterations=t + 3)] = 0     # closed: the next way in
     return {"walled": walled, "openings": openings, "window": (x0, y0, x1, y1)}
+
+
+# --- the frontier: what separates all of a player's bases from the enemy's side ------------------
+
+_source_side = None
+
+FRONTIER_REACH = 24 * 4              # minitiles: the ground this near a base (by ground) is the base's side
+FRONTIER_WIDEST = 12 * 4             # minitiles: a way in wider than this at its narrowest isn't a choke
+FRONTIER_MAX = 4                     # openings at most
+
+
+@dataclass
+class FrontierOpening:
+    """One way in through the frontier: its narrowest place (map pixels), its width there (coarse:
+    per 8-pixel minitile), and the exact look from right inside to right outside of it (gaps())."""
+    x: int
+    y: int
+    width: int
+    inside: tuple[int, int]
+    outside: tuple[int, int]
+    exact: dict
+
+    @property
+    def closed(self) -> bool:
+        """Zerglings don't get through (exact): a closed part of the wall, not a way in."""
+        return bool(self.exact.get("walled", {}).get(37))
+
+
+def frontier(game, obs: dict, bases: list[tuple[int, int]], enemy: list[tuple[int, int]],
+             units=GAP_UNITS, reach: int = FRONTIER_REACH) -> dict:
+    """The frontier of a player's bases (Command Center positions; all of them are inside) against
+    the enemy's side (e.g. the other start locations): the openings that, all closed, cut every
+    ground way in, narrowest place first, each with which units get through (exact). Map
+    independent: where the natural is the only way to the main, blocking the natural's choke is
+    the whole frontier; where the main has another way in, that is an opening too; where the
+    natural is behind the main, the main's way out is.
+
+    Coarse over the whole map (8-pixel minitiles: unwalkable, or under a building's or resource's
+    collision box): the ground within FRONTIER_REACH of the bases is theirs, the ground beyond it
+    that still connects to the enemy's points is outside. Then, as gaps(): the widest way in, its
+    narrowest place, closed, the next. "open": True if a way in is wider than FRONTIER_WIDEST at
+    its narrowest (no choke to hold)."""
+    import numpy as np
+    from scipy import ndimage
+    from gary.policy.army import is_building
+    fp = Footprints(game)
+    if getattr(game, "_walk_cache", None) is None:
+        game._walk_cache = game.terrain()[0]
+    free = game._walk_cache.copy()
+    H, W = free.shape
+    for u in obs["units"]:
+        if u["type"] in RESOURCES or u["owner"] == 11 or is_building(u["type"]):
+            x0, y0, x1, y1 = fp.box_at(u["type"], u["x"], u["y"])
+            free[max(0, (y0 + 4) // 8):max(0, (y1 - 3) // 8 + 1), max(0, (x0 + 4) // 8):max(0, (x1 - 3) // 8 + 1)] = False
+
+    def cell(p):
+        return _seed(free, (min(H - 1, p[1] // 8), min(W - 1, p[0] // 8)), 24)
+    clear = ndimage.distance_transform_cdt(free, metric="chessboard")
+    # inside: the roomy ground (2+ minitiles from anything) within 4 tiles of each base
+    yy, xx = np.mgrid[0:H, 0:W]
+    home = np.zeros_like(free)
+    for bx, by in bases:
+        home |= (yy - by // 8) ** 2 + (xx - bx // 8) ** 2 <= 16 ** 2
+    home &= clear >= 2
+    if not home.any():
+        return {"openings": [], "open": False}
+    inside = [tuple(c) for c in np.argwhere(home)]
+    near = home.copy()
+    eight = np.ones((3, 3), bool)
+    for _ in range(reach):                           # the ground within reach (by ground) of a base
+        near = ndimage.binary_dilation(near, structure=eight) & free
+    far, _ = ndimage.label(free & ~near)
+    ids = {far[c] for c in map(cell, enemy) if c and far[c]}
+    outside = np.isin(far, list(ids))
+    if not outside.any():
+        return {"openings": [], "open": False}
+    cut, flow = _min_cut(near | home, home, near & ndimage.binary_dilation(outside, structure=eight))
+    if cut is None:                                   # a base's own ground touches the outside
+        return {"openings": [], "open": True, "cut_width": None}
+    pieces, n = ndimage.label(cut, structure=eight)
+    side = _source_side & ~cut
+    openings = []
+    for k in range(1, n + 1):
+        piece = pieces == k
+        ys, xs = np.nonzero(piece)
+        cy, cx = int(ys.mean()), int(xs.mean())
+        # right inside and right outside of it: the nearest ground on each side, 2+ minitiles off
+        ring = np.zeros_like(free)
+        ring[max(0, cy - 24):cy + 25, max(0, cx - 24):cx + 25] = True
+        ring &= (near | home) & ~ndimage.binary_dilation(piece, structure=eight, iterations=2) & (clear >= 2)
+        pts_in, pts_out = np.argwhere(ring & side), np.argwhere(ring & ~side & ~cut)
+        if len(pts_in) and len(pts_out):
+            pi = pts_in[np.argmin(((pts_in - (cy, cx)) ** 2).sum(1))]
+            po = pts_out[np.argmin(((pts_out - (cy, cx)) ** 2).sum(1))]
+            pin, pout = (int(pi[1]) * 8 + 4, int(pi[0]) * 8 + 4), (int(po[1]) * 8 + 4, int(po[0]) * 8 + 4)
+            exact = gaps(game, obs, pin, pout, margin=4 * 32, units=units)
+        else:
+            pin = pout = (cx * 8 + 4, cy * 8 + 4)
+            exact = {}
+        openings.append(FrontierOpening(cx * 8 + 4, cy * 8 + 4, int(piece.sum()) * 8, pin, pout, exact))
+    openings.sort(key=lambda o: o.width)
+    return {"openings": openings, "open": flow > FRONTIER_WIDEST, "cut_width": flow * 8}
+
+
+def _min_cut(region, sources, sinks):
+    """The fewest cells of region to close so that no 8-connected way leads from a source cell to a
+    sink cell (sources can't be closed): a minimum vertex cut, by max-flow over the cells (each in-
+    to-out edge capacity 1). Returns (the cut cells, its size), or (None, None) if a source touches
+    a sink. Leaves the source side (cells reachable from the sources without crossing the cut) in
+    _source_side."""
+    global _source_side
+    import numpy as np
+    from scipy import sparse
+    from scipy.sparse.csgraph import breadth_first_order, maximum_flow
+    if (sources & sinks).any():
+        return None, None
+    h, w = region.shape
+    idx = -np.ones(region.shape, np.int64)
+    cells = np.argwhere(region)
+    n = len(cells)
+    idx[cells[:, 0], cells[:, 1]] = np.arange(n)
+    INF = 1 << 20
+    src, snk = 2 * n, 2 * n + 1
+    rows, cols, caps = [], [], []
+    inner = np.where(sources[cells[:, 0], cells[:, 1]], INF, 1)
+    rows.append(2 * np.arange(n)); cols.append(2 * np.arange(n) + 1); caps.append(inner)
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            if dy == dx == 0:
+                continue
+            ny, nx = cells[:, 0] + dy, cells[:, 1] + dx
+            ok = (ny >= 0) & (ny < h) & (nx >= 0) & (nx < w)
+            j = np.full(n, -1, np.int64)
+            j[ok] = idx[ny[ok], nx[ok]]
+            m = j >= 0
+            rows.append(2 * np.nonzero(m)[0] + 1); cols.append(2 * j[m]); caps.append(np.full(m.sum(), INF))
+    s_cells = np.nonzero(sources[cells[:, 0], cells[:, 1]])[0]
+    t_cells = np.nonzero(sinks[cells[:, 0], cells[:, 1]])[0]
+    rows += [np.full(len(s_cells), src), 2 * t_cells + 1]
+    cols += [2 * s_cells, np.full(len(t_cells), snk)]
+    caps += [np.full(len(s_cells), INF), np.full(len(t_cells), INF)]
+    r, c, v = np.concatenate(rows), np.concatenate(cols), np.concatenate(caps)
+    graph = sparse.csr_matrix((v.astype(np.int32), (r, c)), shape=(2 * n + 2, 2 * n + 2))
+    result = maximum_flow(graph, src, snk, method="dinic")
+    residual = (graph - result.flow).tocsr()
+    residual.data[residual.data < 0] = 0
+    residual.eliminate_zeros()
+    reach = np.zeros(2 * n + 2, bool)
+    reach[breadth_first_order(residual, src, directed=True, return_predecessors=False)] = True
+    cut_cells = reach[2 * np.arange(n)] & ~reach[2 * np.arange(n) + 1]
+    cut = np.zeros(region.shape, bool)
+    cut[cells[cut_cells, 0], cells[cut_cells, 1]] = True
+    _source_side = np.zeros(region.shape, bool)
+    on = reach[2 * np.arange(n) + 1]
+    _source_side[cells[on, 0], cells[on, 1]] = True
+    return cut, int(result.flow_value)
+
+
+
 
 
 # --- the check against the engine ----------------------------------------------------------------
@@ -387,7 +601,25 @@ def main() -> None:
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--buildings", nargs="+", type=int, default=[109, 111, 112, 122, 125])
     ap.add_argument("--walkers", nargs="+", type=int, default=[37, 0, 7])
+    ap.add_argument("--frontier", metavar="SHA1", help="a home defense (eval/scenarios.py): its Terran's frontier")
     args = ap.parse_args()
+    if args.frontier:
+        import json
+        from eval.scenarios import scenario_game, scenarios_path
+        sc = next(json.loads(line) for line in scenarios_path("test").read_text(encoding="utf-8").splitlines()
+                  if json.loads(line)["sha1"].startswith(args.frontier))
+        game = scenario_game(sc)
+        obs = game.observe()
+        ccs = [(u["x"], u["y"]) for u in obs["units"] if u["owner"] == sc["terran_slot"] and u["type"] == 106]
+        starts = [(s["x"], s["y"]) for s in game.start_locations()]
+        r = frontier(game, obs, ccs, [s for s in starts if min(math.dist(s, c) for c in ccs) > 20 * 32])
+        print(f"bases at tiles {[(x // 32, y // 32) for x, y in ccs]}; cut {r.get('cut_width')} px"
+              + (" (wide open)" if r["open"] else ""))
+        for o in r["openings"]:
+            e = o.exact.get("openings") or []
+            print(f"  tile ({o.x // 32}, {o.y // 32}): {'closed to zerglings' if o.closed else 'opening'}, "
+                  f"{o.width} px across (coarse)" + (f"; narrowest {e[0].width} px, gets through: "
+                  f"{', '.join(WALKERS.get(u, str(u)) for u in e[0].passes) or 'nobody'}" if e else ""))
     if args.table:
         from gary.env import Game
         game = Game.new(args.map, ["T", "Z"], seed=1)

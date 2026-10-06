@@ -83,6 +83,10 @@ def _load_dll() -> ctypes.CDLL:
     dll.gary_env_unit_type_info.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
     dll.gary_env_create_unit.restype = ctypes.c_uint
     dll.gary_env_create_unit.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+    dll.gary_env_regions.restype = ctypes.c_int
+    dll.gary_env_regions.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+                                     ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.POINTER(ctypes.c_int),
+                                     ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
     dll.gary_env_unit_type.restype = ctypes.c_int
     dll.gary_env_unit_type.argtypes = [ctypes.c_void_p, ctypes.c_uint]
     dll.gary_env_set_name.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p]
@@ -329,6 +333,24 @@ class Game:
             raise GameError(_dll.gary_env_error(self._h).decode(errors="replace"))
         grid = lambda b, h_, w_: np.frombuffer(b.raw, np.uint8).reshape(h_, w_).copy()
         return grid(walk, th * 4, tw * 4).astype(bool), grid(height, th * 4, tw * 4), grid(build, th, tw).astype(bool)
+
+    def regions(self) -> dict:
+        """The game's own ground pathing regions: "region" per minitile (numpy, -1 where none),
+        per region its walkable "group" (ground units get only within one) and whether it is
+        "walkable", and the "neighbors" (pairs of regions a ground unit walks between)."""
+        import numpy as np
+        obs = self.observe()
+        mw, mh = obs["map"]["w"] // 8, obs["map"]["h"] // 8
+        region = (ctypes.c_int * (mw * mh))()
+        cap, pcap = 5000, 40000
+        group, walk = (ctypes.c_int * cap)(), (ctypes.c_uint8 * cap)()
+        pairs, npairs = (ctypes.c_int * (2 * pcap))(), ctypes.c_int()
+        n = _dll.gary_env_regions(self._h, region, group, walk, cap, pairs, pcap, ctypes.byref(npairs))
+        if n < 0:
+            raise GameError(_dll.gary_env_error(self._h).decode(errors="replace"))
+        return {"region": np.frombuffer(region, np.int32).reshape(mh, mw).copy(),
+                "group": np.frombuffer(group, np.int32)[:n].copy(), "walkable": np.frombuffer(walk, np.uint8)[:n].astype(bool),
+                "neighbors": [(pairs[2 * i], pairs[2 * i + 1]) for i in range(npairs.value)]}
 
     def walkable(self, x: int, y: int) -> bool:
         """Whether ground units can stand at map pixel (x, y) (terrain only)."""

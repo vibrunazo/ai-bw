@@ -496,8 +496,12 @@ GARY_API unsigned gary_env_create_unit(void* h, int owner, int unit_type, int x,
 	auto* e = (env*)h;
 	auto& f = *e->funcs;
 	if (owner < 0 || owner >= 12 || unit_type < 0 || unit_type >= 228) return 0;
-	unit_t* u = f.create_initial_unit(f.get_unit_type((UnitTypes)unit_type), xy(x, y), owner);
-	return u ? (unsigned)f.get_unit_id(u).raw_value : 0u;
+	try {
+		unit_t* u = f.create_initial_unit(f.get_unit_type((UnitTypes)unit_type), xy(x, y), owner);
+		return u ? (unsigned)f.get_unit_id(u).raw_value : 0u;
+	} catch (const std::exception&) {          // no room there (the game's own placement failed)
+		return 0u;
+	}
 }
 
 // --- new games from a map --------------------------------------------------------------------
@@ -768,6 +772,42 @@ GARY_API int gary_env_terrain(void* h, uint8_t* walk, uint8_t* height, uint8_t* 
 		}
 		for (int i = 0; i != tw * th; ++i) build[i] = (st.tiles[i].flags & tile_t::flag_unbuildable) ? 0 : 1;
 		return mw * mh;
+	} catch (const std::exception& ex) {
+		e->last_error = ex.what();
+		return -1;
+	}
+}
+
+// The game's own ground pathing regions (what its pathfinder walks): per 8x8-pixel minitile, the
+// region there (region[], -1 where none), and per region its walkable group (units get only within
+// a group), whether it is walkable, and its walkable neighbors (as "a b" pairs, a < b, into
+// pairs[]). Returns the number of regions; *n_pairs gets the number of pairs written (at most
+// max_pairs).
+GARY_API int gary_env_regions(void* h, int* region, int* group, uint8_t* walkable, int max_regions,
+                              int* pairs, int max_pairs, int* n_pairs) {
+	auto* e = (env*)h;
+	try {
+		auto& f = *e->funcs;
+		const state& st = e->player.st();
+		int tw = (int)st.game->map_tile_width, th = (int)st.game->map_tile_height;
+		int mw = tw * 4, mh = th * 4;
+		for (int my = 0; my != mh; ++my) {
+			for (int mx = 0; mx != mw; ++mx) {
+				auto* r = f.get_region_at(xy(mx * 8 + 4, my * 8 + 4));
+				region[my * mw + mx] = r ? (int)r->index : -1;
+			}
+		}
+		auto& regs = f.game_st.regions.regions;
+		int n = (int)regs.size(), k = 0;
+		for (int i = 0; i != n && i != max_regions; ++i) {
+			group[i] = (int)regs[i].group_index;
+			walkable[i] = regs[i].walkable() ? 1 : 0;
+			for (auto* nb : regs[i].walkable_neighbors) {
+				if ((int)nb->index > i && k < max_pairs) { pairs[2 * k] = i; pairs[2 * k + 1] = (int)nb->index; ++k; }
+			}
+		}
+		*n_pairs = k;
+		return n;
 	} catch (const std::exception& ex) {
 		e->last_error = ex.what();
 		return -1;

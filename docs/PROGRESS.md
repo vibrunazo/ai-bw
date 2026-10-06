@@ -102,6 +102,12 @@ quicker way to a playable Gary.
   the ramp by units, and some have the natural behind the main. So the defended frontier is
   what separates all of Gary's bases from the enemy's side, found over the whole map (coarse per
   tile, then exact around the openings), not the ramp and the natural each on its own.
+  Done (`frontier()` in gary/walls.py, `python -m gary.walls --frontier <scenario>`): a minimum
+  cut over the minitiles near the bases (max-flow), its pieces looked at exactly. In the pros'
+  bases: with only the main, the ramp alone (61 of 123), another single way out (20), closed to
+  zerglings altogether (13); with the natural taken, one opening (57 of 116), two (25), closed
+  altogether in 2. (Neutral map units, like Othello's, collide too; the engine's pathing regions
+  are exported for checks, Game.regions.)
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 
