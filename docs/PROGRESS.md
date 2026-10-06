@@ -132,7 +132,16 @@ quicker way to a playable Gary.
   third of the marines, the ones under attack, while the rest shoot) 4%, other 10%. v0.9:
   retreat 40%, approach 28%, tap 8%, stutter 7%, kite 4%, pull back 1%. Gary moves rarely, and
   mostly away. Clips of pro examples per label, to check the labels by eye:
-  `data/interim/videos/label_check/` (made from the saved replays and events). Next: intents, and
+  `data/interim/videos/label_check/` (made from the saved replays and events).
+  Watched: per-command labels don't hold up (most moments mix techniques: the front marines
+  step back while the rest shoot); approach, retreat and pull back read clearly.
+- **Roles per unit** (`eval/micro_roles.py`): every fighting marine, every half second: fire,
+  engage, pull back (a short stretch away, started under threat), retreat (4+ tiles away),
+  reposition, stand. Pros: fire 58%, stand 21%, reposition 8.5%, engage 6.9%, pull back 2.8%,
+  retreat 0.4%; v0.9: fire 67%, stand 12%, engage 6.0%, reposition 5.5%, pull back 1.9%, retreat
+  0.9%. Zerglings got onto a marine 154 times against the pros, 246 against v0.9 (same
+  scenarios); pulled back within a second 23% vs 17%. Clips of single pro marines per role:
+  `data/interim/videos/role_check/`. Next: intents, and
   the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs
