@@ -74,6 +74,11 @@ MANIFESTS: dict[str, dict] = {
     "v010": {"version": "v0.10", "posture": "early_pool/v1", "leases": "enforced",
              "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY,
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None}, "arbiter": "fixed_priority/v1"},
+    # experiment: v0.10 bracing while the zerg come (no closing in at them): home defenses -32, a tie
+    "v010brace": {"version": "v0.10", "posture": "early_pool/v1", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY,
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "brace": True},
+             "arbiter": "fixed_priority/v1"},
     # step 4 (docs/CONTROL.md): v0.9 with leases enforced; and with roles instead of the fight model
     "v09lease": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
                  "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
@@ -214,7 +219,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             models["fight"] = getattr(fight, "path", "?")
         g.fight = FightLayer(g, fight, f["provider"], [RULES[r](g) for r in f.get("before", [])],
                              [RULES[r](g) for r in f.get("in_fight", [])], f.get("guard_rail", False),
-                             f.get("workers", True), seed, f.get("ctrl_click", False))
+                             f.get("workers", True), seed, f.get("ctrl_click", False),
+                             f.get("watch_tiles", 0) * 32, f.get("brace", False))
     if m["arbiter"] == "drill/v1":
         g.arbiter = DrillArbiter(g, seed, interruptions)
     else:

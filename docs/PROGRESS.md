@@ -201,7 +201,16 @@ quicker way to a playable Gary.
   -71 with rare roles weighted up). Then 60 rounds on the training home defenses (32 positions x
   8 draws, roles drawn per unit, per-unit PPO, KL to the start): validation -97 -> -74 at round
   30, then drifting back (-89 at 60), as the command model's runs did. Held out, round 30: **-28**,
-  the same as the hand rules. RL on roles is stable and reaches the rules, not beyond them yet. Next: intents, and
+  the same as the hand rules. RL on roles is stable and reaches the rules, not beyond them yet.
+- **Positioning before contact** (zerglings reach Gary's marines more often): while zerglings
+  approach (nearest 7-16 tiles, closing), pros' marines stand 37% of the time, attack-move 30%,
+  move across 17%, toward 8%; v0.10's attack-move 60% and stand 23%; contacts per marine-minute
+  1.32 vs 1.63. 72% of those attack-moves were v0.10's own close-in role sending marines at
+  zerglings that were coming anyway. A brace role (`roles.py`, option `brace`): no closing in
+  while the zerg come; units ahead of the pack step back, units charging stop. With the fight
+  starting at 16 tiles instead of 8 it was worse (home defenses -57, 9-pool 8 / 3: close in
+  chased from farther); at 8 tiles (`v010brace`): attack-move 53%, stand 28%, contacts 1.58,
+  home defenses -32, a tie with v0.10. Not adopted; the approach gap stays mostly open. Next: intents, and
   the first experiment (one model doing the fight's timing vs intents plus a stutter-step skill).
 - **Most urgently missing:** stutter-stepping (a timing problem, see above); spotting the pool in
   time when the scout checks the Zerg's start last; terrain in the fight model; the screen (SCVs

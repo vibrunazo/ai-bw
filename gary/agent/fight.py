@@ -90,7 +90,8 @@ def command_intent(key: tuple, tags: list[int], center) -> Intent:
 
 class FightLayer:
     def __init__(self, g: Gary, model, kind: str, before: list = (), in_fight: list = (),
-                 guard_rail: bool = False, workers: bool = True, seed: int = 0, ctrl_click: bool = False):
+                 guard_rail: bool = False, workers: bool = True, seed: int = 0, ctrl_click: bool = False,
+                 watch: int = 0, brace: bool = False):
         self.g = g
         self.model = model
         self.kind = kind                         # "per_unit", "command" or "roles"
@@ -101,10 +102,11 @@ class FightLayer:
         self.ctrl_click = ctrl_click             # select a group that is every unit of one type on
                                                  # screen with a ctrl+click, not a drag box
         self.own_radius, self.max_units = (FIGHT_AROUND, PER_UNIT_MAX) if kind == "per_unit" else (OWN_RADIUS, COMMAND_MAX)
+        self.watch = watch                       # enemy fighters this close make a fight (0: the model's 8 tiles)
         self.roles = None
         if kind == "roles":
             from gary.agent.roles import RoleLearned, RoleRules
-            self.roles = RoleLearned(g, model) if model is not None else RoleRules(g)
+            self.roles = RoleLearned(g, model) if model is not None else RoleRules(g, brace)
         self.next_fight = 0
         self.center: tuple[float, float] | None = None
         self.told: dict[int, tuple[tuple, int]] = {}    # unit tag -> (order key, frame given)
@@ -153,7 +155,7 @@ class FightLayer:
             if u["owner"] not in (g.slot, 11) and u.get("hp") is None:
                 u["hp"], u["shields"] = MAX_HP.get(u["type"], 100), 0
         snap = snapshot({**obs, "units": units}, g.slot, g.flip, supply_x2, is_worker, is_building,
-                        self.own_radius, self.max_units)
+                        self.own_radius, self.max_units, self.watch or None)
         if snap is None:
             self.center = None
             return None

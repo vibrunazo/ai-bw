@@ -17,6 +17,12 @@ urgent. The hand rules:
   fire       units with an enemy in range that aren't attacking: attack-move at the enemy group
   close_in   units with no enemy in range, when Gary's group isn't weaker there: attack-move toward
              the nearest enemy group
+  brace      (an option) the zerg coming at the group (closer than half a second before): nobody
+             closes in, let them come into the fire. What pros' marines do then: they stand and
+             shift into place (17% of the time sideways), attack-moving at them half as much as
+             v0.10, whose close in caused 72% of its marines' attack-moves while zerglings came.
+             While none is within 7 tiles yet, units ahead of the pack (2+ tiles closer to the
+             threat than its median) step back to it, and units attack-moving at it stop
 
 Units another source holds by lease (a rule loading them into a bunker...) are left out.
 
@@ -45,6 +51,9 @@ RANGE = {0: 160, 32: 48, 1: 224, 2: 192, 5: 224, 30: 224, 3: 192,             # 
 NEAR = 10 * 32                       # units this close to the group's middle count for its strength
 RETREAT_RATIO = 2.5
 CLOSE_RATIO = 1.0                    # close in only when not weaker than this
+BRACE_FROM = 7 * 32                  # brace while no enemy fighter is this close to the group
+AHEAD = 2 * 32                       # a unit this much closer to the threat than the pack's median is ahead
+ATTACK_MOVE = 14
 CONTACT = 48
 PULL_HP = 0.5
 PULL_TILES = 1.5
@@ -55,6 +64,7 @@ HOME = 14 * 32                       # a Command Center this close: the group is
 BUNKER, MARINE = 125, 0
 BUNKER_SLOTS = 4
 MAX_GROUP = 12
+SIDEWAYS_PX = 8                      # closer by less than this isn't coming
 
 
 def _mid(units) -> tuple[float, float]:
@@ -64,8 +74,9 @@ def _mid(units) -> tuple[float, float]:
 class RoleRules:
     """rules/v1: hand rules for roles (see the module's docstring)."""
 
-    def __init__(self, g):
+    def __init__(self, g, brace: bool = False):
         self.g = g
+        self.brace = brace
         self.told: dict[int, tuple[str, int]] = {}   # unit -> (role, frame)
         self._walk = None
         self.prev: dict[int, tuple[float, float]] = {}
@@ -113,7 +124,8 @@ class RoleRules:
     def decide(self, obs: dict, snap) -> Intent | None:
         g = self.g
         logging = g.fight.rl_log is not None
-        extra = self._motion(obs, snap) if logging else None
+        self.before = self.prev                # where everyone was last turn (brace: who's coming)
+        extra = self._motion(obs, snap) if logging or self.brace else None
         if snap is None:
             return None
         if not logging:                        # (as before the log existed)
@@ -161,6 +173,13 @@ class RoleRules:
             group = group[:MAX_GROUP]
             if group and not home:
                 return self._intent("RETREAT", group, self._retreat_point(group, enemy), "move")
+        # brace: the zerg coming
+        coming = False
+        if self.brace:
+            braced = self._brace(mine, enemy, fresh)
+            if braced is not False:
+                return braced
+            coming = self.coming
         # pull back: units under attack, hurt, with others firing near them
         targeted = {e.get("order_target") for e in enemy}
         firing = [u for u in mine if u.get("order") in ATTACK]
@@ -179,8 +198,8 @@ class RoleRules:
             group = sorted(idle, key=lambda u: min(math.dist((u["x"], u["y"]), (e["x"], e["y"])) for e in enemy))[:MAX_GROUP]
             target = min(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
             return self._intent("FIRE", group, (int(target["x"]), int(target["y"])), "attack_move")
-        # close in: nothing in range, not weaker
-        if ours >= CLOSE_RATIO * theirs:
+        # close in: nothing in range, not weaker, and they aren't coming at us
+        if ours >= CLOSE_RATIO * theirs and not coming:
             far = [u for u in mine if not in_range(u) and u.get("order") not in ATTACK and fresh(u, "CLOSE_IN")]
             if far:
                 group = far[:MAX_GROUP]
@@ -227,6 +246,32 @@ class RoleRules:
         if group:
             target = min(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
             return self._intent("CLOSE_IN", group, (int(target["x"]), int(target["y"])), "attack_move")
+        return None
+
+    def _brace(self, mine: list[dict], enemy: list[dict], fresh):
+        """While the zerg approach: the intent (step back to the pack, or stop charging), None (stand,
+        let them come), or False (not approaching: the other rules decide)."""
+        mid = _mid(mine)
+        before = getattr(self, "before", {})
+        coming = [e for e in enemy if e["tag"] in before
+                  and math.dist((e["x"], e["y"]), mid) < math.dist(before[e["tag"]], mid) - SIDEWAYS_PX]
+        self.coming = bool(coming)
+        if not coming or min(math.dist((u["x"], u["y"]), (e["x"], e["y"])) for u in mine for e in enemy) < BRACE_FROM:
+            return False
+        tc = _mid(coming)
+        dist = {u["tag"]: math.dist((u["x"], u["y"]), tc) for u in mine}
+        median = sorted(dist.values())[len(dist) // 2]
+        ahead = [u for u in mine if dist[u["tag"]] < median - AHEAD and fresh(u, "BRACE")]
+        if ahead:
+            back = self._step_away(mid, tc, 32) or mid
+            return self._intent("BRACE", ahead[:MAX_GROUP], back, "move")
+        charging = [u for u in mine if u.get("order") == ATTACK_MOVE and fresh(u, "BRACE")]
+        if charging:
+            now = self.g.hi.frame
+            for u in charging[:MAX_GROUP]:
+                self.told[u["tag"]] = ("BRACE", now)
+            tags = [u["tag"] for u in charging[:MAX_GROUP]]
+            return Intent("BRACE", tags, None, {"key": ("stop",), "tags": tags, "center": _mid(charging)}, "roles")
         return None
 
     def _shelter(self, by_tag: dict, at):
