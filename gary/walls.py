@@ -255,6 +255,25 @@ def _narrowest(ridge, side_a, side_b):
     return found
 
 
+def square(size: int) -> Footprint:
+    """A size x size unit box (for the widest unit that still gets through somewhere)."""
+    return Footprint(size, size, size // 2, size // 2, size - size // 2 - 1, size - size // 2 - 1)
+
+
+def widest_through(blocked, a, b, lo: int = 8, hi: int = 12 * 32) -> int:
+    """The widest square unit (pixels) that still gets from a to b (window cells [y, x]); lo - 1 if
+    none does."""
+    if not connected(fits(blocked, square(lo)), a, b):
+        return lo - 1
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if connected(fits(blocked, square(mid)), a, b):
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo
+
+
 def connected(free, a, b) -> bool:
     from scipy import ndimage
     labels, _ = ndimage.label(free)
@@ -344,6 +363,7 @@ class FrontierOpening:
     inside: tuple[int, int]
     outside: tuple[int, int]
     exact: dict
+    ends: tuple = ()                 # the cut's two ends (map pixels): where it meets what bounds the opening
 
     @property
     def closed(self) -> bool:
@@ -422,9 +442,13 @@ def frontier(game, obs: dict, bases: list[tuple[int, int]], enemy: list[tuple[in
         else:
             pin = pout = (cx * 8 + 4, cy * 8 + 4)
             exact = {}
-        openings.append(FrontierOpening(cx * 8 + 4, cy * 8 + 4, int(piece.sum()) * 8, pin, pout, exact))
+        far1 = (ys[np.argmax((ys - cy) ** 2 + (xs - cx) ** 2)], xs[np.argmax((ys - cy) ** 2 + (xs - cx) ** 2)])
+        k2 = np.argmax((ys - far1[0]) ** 2 + (xs - far1[1]) ** 2)
+        ends = ((int(far1[1]) * 8 + 4, int(far1[0]) * 8 + 4), (int(xs[k2]) * 8 + 4, int(ys[k2]) * 8 + 4))
+        openings.append(FrontierOpening(cx * 8 + 4, cy * 8 + 4, int(piece.sum()) * 8, pin, pout, exact, ends))
     openings.sort(key=lambda o: o.width)
-    return {"openings": openings, "open": flow > FRONTIER_WIDEST, "cut_width": flow * 8}
+    return {"openings": openings, "open": flow > FRONTIER_WIDEST, "cut_width": flow * 8,
+            "inside": side | cut}                   # (minitiles: the bases' side of the cut, and the cut)
 
 
 def _min_cut(region, sources, sinks):

@@ -108,6 +108,16 @@ quicker way to a playable Gary.
   zerglings altogether (13); with the natural taken, one opening (57 of 116), two (25), closed
   altogether in 2. (Neutral map units, like Othello's, collide too; the engine's pathing regions
   are exported for checks, Game.regions.)
+  The sim city planner (`gary/agent/simcity.py`, option `+simcity`): when the executor places a
+  Supply Depot, Barracks or Academy, a spot by a frontier opening that narrows it, growing the
+  wall from one of its sides (zergling-tight against a cliff or wall building), keeping a door a
+  32-pixel unit gets through, and not while zerg are near the opening. On Fighting Spirit it
+  builds what pros do at the natural: a building against each cliff, one gap in the middle. Full
+  games, 48 seeds each, on top of v0.11: 7:00 rush won 11, lost 0 (v0.11 8 / 0), the same
+  buildings and army at 12:00; immediate 9-pool lost 7 (v0.11 4). Within the noise of 48
+  games either way (which seeds are lost changes completely with any change): not adopted yet.
+  The post in the wall gaps doesn't fire there yet (it yields to closing in on zerg near Gary's
+  buildings, i.e. at the wall, and finds gaps the old way, not from the frontier).
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

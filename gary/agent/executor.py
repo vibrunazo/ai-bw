@@ -172,7 +172,10 @@ class ScriptedExecutor:
     # --- placement ------------------------------------------------------------------------------
 
     def spot(self, unit_type: int, base: Base, builder: int) -> tuple[int, int] | None:
-        """A spot at the base, or at another of Gary's bases when that one is full."""
+        """A spot at the base, or at another of Gary's bases when that one is full. With a sim city
+        (gary/agent/simcity.py), a spot in the wall first, where one narrows the frontier."""
+        if self.g.simcity is not None and (wall := self.g.simcity.spot(unit_type, builder)):
+            return wall
         spot = self._base_spot(unit_type, base, builder)
         if spot is None:
             for other in self.my_bases([u for u in self.g.hi.observe()["units"] if u["owner"] == self.g.slot]):

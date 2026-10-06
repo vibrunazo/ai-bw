@@ -72,6 +72,7 @@ class Gary:
         self.main: Base | None = None
         self.natural: Base | None = None
         self.enemy_starts: list[tuple[int, int]] = []
+        self.simcity = None                              # gary/agent/simcity.py (an option)
         self.flip = (False, False)                       # mirror so the main is top-left (fight models)
         if mapinfo is not None:
             obs = hi.observe()
