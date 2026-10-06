@@ -210,7 +210,9 @@ def gaps(game, obs: dict, inside: tuple[int, int], outside: tuple[int, int], mar
     import numpy as np
     from scipy import ndimage
     fp = Footprints(game)
-    W, H = obs["map"]["w"], obs["map"]["h"]
+    if getattr(game, "_walk_cache", None) is None:
+        game._walk_cache = game.terrain()[0]
+    H, W = game._walk_cache.shape[0] * 8, game._walk_cache.shape[1] * 8
     x0, y0 = max(0, min(inside[0], outside[0]) - margin), max(0, min(inside[1], outside[1]) - margin)
     x1, y1 = min(W, max(inside[0], outside[0]) + margin), min(H, max(inside[1], outside[1]) + margin)
     blocked = obstacles(game, obs, fp, (x0, y0, x1, y1))

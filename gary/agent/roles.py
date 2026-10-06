@@ -58,6 +58,11 @@ urgent. The hand rules:
              in. With zerg within 8 tiles the pros' vultures move 44% of the time, attack a unit
              33%, hold 8% (patrol 1%, mines rare this early), at 2.9 tiles/s; v0.10's attack 65%,
              move 7%, at 1.3 tiles/s, and lose twice as many (home defenses)
+  gap_post   (an option, with post) where Gary's ramp or natural has a wall gap (an opening under
+             4 tiles that zerglings get through, with one of Gary's buildings a side of it:
+             gary/walls.py) and the zerg are still outside it, the post is just inside the gap
+             nearest the zerg, and units there hold position (fire and close in leave them on
+             it). The pros' marines on hold stand at such an opening 23% of the hold time
   regroup    (an option) only the pack closes in: units with nothing in range that are away from
              the pack (the biggest bunch of Gary's fighters, linked within 4 tiles; a bunker and
              SCVs fighting count) rejoin it, attack-moving to its middle, instead of closing in
@@ -119,6 +124,9 @@ AWAY = 3.5 * 32
 EASE = 3 * 32                        # reloading, zerg within reach + this: step away
 POST_FROM_CC = 3 * 32               # post: this far from the Command Center toward the zerg
 POST_SLACK = 3 * 32                  # post: units farther than this from it go back
+GAP_WIDE = 4 * 32                    # gap_post: openings narrower than this are wall gaps
+GAP_INSIDE = 48                      # ...the post: this far inside the gap
+AT_GAP = 48                          # ...units this close to it hold position
 PACK_LINK = 4 * 32                   # regroup: units this close to each other are one bunch
 
 
@@ -137,10 +145,12 @@ class RoleRules:
 
     def __init__(self, g, brace: bool = False, leash: bool = False, volley: bool = False, regroup: bool = False,
                  holds: bool = False, kite: bool = False, fire: str = "enemy", post: float | str | None = None,
-                 vultures: bool = False):
+                 vultures: bool = False, gap_post: bool = False):
         self.g = g
         self.post = post                             # post: tiles from the CC toward the zerg, or "minerals"
         self.vultures = vultures
+        self.gap_post = gap_post
+        self._gaps_for, self._gap_posts = None, []   # gap_post: (Gary's buildings) -> posts
         self.kite, self.fire = kite, fire
         self.brace, self.leash, self.volley, self.regroup, self.holds = brace, leash or post is not None, volley, regroup, holds
         self.closing: dict[int, frozenset] = {}      # volley: unit -> its closing group
@@ -273,7 +283,7 @@ class RoleRules:
             if point:
                 return self._intent("PULL_BACK", group, point, "move")
         # fire: an enemy in range, not attacking
-        held = {HOLD} if self.holds else set()
+        held = {HOLD} if self.holds or self.gap_post else set()
         firing = held | ({HOLD} if self.fire == "hold" else set())
         idle = [u for u in mine if u.get("order") not in ATTACK | firing and in_range(u) and fresh(u, "FIRE")]
         if self.volley:
@@ -309,6 +319,23 @@ class RoleRules:
                 prey = [e for e in enemy if e.get("order_target") in mine_tags
                         or any(math.dist((e["x"], e["y"]), (b["x"], b["y"])) < LEASH for b in built)]
             far = [u for u in mine if not in_range(u) and u.get("order") not in ATTACK | held and fresh(u, "CLOSE_IN")]
+            if self.gap_post and home and not prey:
+                gap = self._gap(enemy)
+                if gap is not None:
+                    away = [u for u in mine if not in_range(u) and u.get("order") not in ATTACK | held
+                            and math.dist((u["x"], u["y"]), gap) > AT_GAP and fresh(u, "POST")]
+                    if away:
+                        group = sorted(away, key=lambda u: math.dist((u["x"], u["y"]), gap))[:MAX_GROUP]
+                        return self._intent("POST", group, (int(gap[0]), int(gap[1])), "attack_move")
+                    there = [u for u in mine if u.get("order") not in ATTACK | held
+                             and math.dist((u["x"], u["y"]), gap) <= AT_GAP and fresh(u, "POST")]
+                    if there:
+                        for u in there:
+                            self.told[u["tag"]] = ("POST", now)
+                        tags = [u["tag"] for u in there][:MAX_GROUP]
+                        return Intent("POST", tags, None, {"key": ("hold",), "tags": tags, "center": gap}, "roles")
+                    if mine and all(math.dist((u["x"], u["y"]), gap) <= AT_GAP or in_range(u) for u in mine):
+                        return None
             if self.post is not None and home and not prey:
                 post = self._post(by_tag, (mx, my), enemy)
                 away = [u for u in mine if not in_range(u) and fresh(u, "POST") and u.get("order") not in ATTACK
@@ -391,6 +418,46 @@ class RoleRules:
                     self.told[t] = ("SKIRMISH", now)
                 return Intent("SKIRMISH", tags, point, params(("move", int(point[0]), int(point[1]))), "roles")
         return None
+
+    def _gap(self, enemy: list[dict]):
+        """gap_post: the post inside the wall gap nearest the zerg (map pixels), or None."""
+        g = self.g
+        obs = g.hi.observe()
+        built = frozenset((u["tag"], u["completed"]) for u in obs["units"] if u["owner"] == g.slot and is_building(u["type"]))
+        if built != self._gaps_for:
+            self._gaps_for, self._gap_posts = built, self._find_gaps(obs)
+        them = _mid(enemy)
+        # only while the zerg are still outside it (farther from the inside than the gap is)
+        out = [p for p, inside in self._gap_posts if math.dist(them, inside) > math.dist(p, inside) + 2 * 32]
+        return min(out, key=lambda p: math.dist(p, them)) if out else None
+
+    def _find_gaps(self, obs: dict) -> list[tuple[float, float]]:
+        from gary.terrain import map_analysis
+        from gary.walls import gaps
+        g = self.g
+        game = g.hi.game
+        starts = map_analysis(game, g.map)["starts"]
+        mine = min(starts.values(), key=lambda a: math.dist(a["start"], g.main.center), default=None)
+        if mine is None:
+            return []
+        away = lambda p, q, d: (p[0] + (p[0] - q[0]) / (math.dist(p, q) or 1) * d, p[1] + (p[1] - q[1]) / (math.dist(p, q) or 1) * d)
+        checks = [(away(mine["ramp_top"], mine["ramp_bottom"], 128), tuple(mine["ramp_bottom"]))]
+        if any(u["owner"] == g.slot and u["type"] == T.CC and math.dist((u["x"], u["y"]), mine["natural"]) < 8 * 32
+               for u in obs["units"]):
+            checks.append((tuple(mine["natural"]), away(mine["natural_choke"], mine["natural"], 128)))
+        from gary.walls import Footprints
+        fp = Footprints(game)
+        built = [fp.box_at(u["type"], u["x"], u["y"]) for u in obs["units"]
+                 if u["owner"] == g.slot and is_building(u["type"]) and u["type"] != T.CC]
+        by = lambda o, b: max(b[0] - o.x, o.x - b[2], 0) ** 2 + max(b[1] - o.y, o.y - b[3], 0) ** 2 <= (o.width / 2 + 16) ** 2
+        posts = []
+        for inside, outside in checks:
+            inside, outside = tuple(map(int, inside)), tuple(map(int, outside))
+            for o in gaps(game, obs, inside, outside, margin=6 * 32)["openings"][:3]:
+                # a wall gap: narrow, zerglings get through, and one of Gary's buildings is a side of it
+                if o.width < GAP_WIDE and 37 in o.passes and any(by(o, b) for b in built):
+                    posts.append((away((o.x, o.y), inside, -GAP_INSIDE), inside))   # (toward the inside)
+        return posts
 
     def _post(self, by_tag: dict, at, enemy: list[dict]):
         """post: by the Command Center nearest the group, POST_FROM_CC toward the zerg (walkable)."""

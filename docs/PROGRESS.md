@@ -93,6 +93,15 @@ quicker way to a playable Gary.
   narrowed from a median 176 pixels to 74 by buildings (half or less in 95 of 114), closed to
   zerglings in only 5; the main ramp is never walled. Their marines on hold stand at an opening
   23% of the hold time (open ground 34%, by a building 16%, a bunker 13%, between buildings 11%).
+  A post inside the wall gaps, holding (`+gap_post`, while the zerg are outside): −7 ± 4 on top
+  of v0.11 (better in 26, worse in 42; the scenario that showed the pro's held gap, 0c50ac60,
+  +104). These scenarios start with the zerg already at the Terran's home, mostly past a wall's
+  job (keeping them out): walls are for full games, once Gary builds its own (a sim city
+  planner). Which openings matter depends on the map: blocking the natural blocks the main where
+  the only way in is through the natural, some maps need the natural blocked by buildings and
+  the ramp by units, and some have the natural behind the main. So the defended frontier is
+  what separates all of Gary's bases from the enemy's side, found over the whole map (coarse per
+  tile, then exact around the openings), not the ramp and the natural each on its own.
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

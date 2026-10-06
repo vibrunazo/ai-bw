@@ -198,6 +198,9 @@ OPTIONS = {
     # vultures skirmish (move away, shoot, ease off; roles.py): [239] −14 ± 4, worse in 36 of the
     # 47 with vultures: 18% fewer vultures lost, but fewer zerg killed and more SCVs lost
     "vultures": _roles(vultures=True),
+    # posts inside the wall gaps (gary/walls.py), holding: on v0.11 [239] -7 ± 4 (better in 26, worse
+    # in 42; 0c50ac60 +104): the home defenses start with the zerg at home, past the wall's job
+    "gap_post": _roles(gap_post=True),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     "pull_attacked": _pull(attacked_only=True),   # fight.py: pull workers only when zerg attack  +2 ± 3, [239] +3 ± 3
     "pull_ratio15": _pull(ratio=1.5),       # ...when the zerg outweigh the army 1.5 to 1      [239] -3 ± 4
