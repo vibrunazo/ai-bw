@@ -58,10 +58,10 @@ urgent. The hand rules:
              in. With zerg within 8 tiles the pros' vultures move 44% of the time, attack a unit
              33%, hold 8% (patrol 1%, mines rare this early), at 2.9 tiles/s; v0.10's attack 65%,
              move 7%, at 1.3 tiles/s, and lose twice as many (home defenses)
-  gap_post   (an option, with post) where Gary's ramp or natural has a wall gap (an opening under
-             4 tiles that zerglings get through, with one of Gary's buildings a side of it:
-             gary/walls.py) and the zerg are still outside it, the post is just inside the gap
-             nearest the zerg, and units there hold position (fire and close in leave them on
+  gap_post   (an option, with post) where Gary's frontier (gary/walls.py) has a wall gap (an
+             opening under 4 tiles that zerglings get through, with one of Gary's buildings a side
+             of it) and the zerg are still outside the frontier, the post is just inside the gap
+             nearest the zerg (ahead of closing in on zerg by Gary's buildings: they're at the wall), and units there hold position (fire and close in leave them on
              it). The pros' marines on hold stand at such an opening 23% of the hold time
   regroup    (an option) only the pack closes in: units with nothing in range that are away from
              the pack (the biggest bunch of Gary's fighters, linked within 4 tiles; a bunker and
@@ -124,8 +124,6 @@ AWAY = 3.5 * 32
 EASE = 3 * 32                        # reloading, zerg within reach + this: step away
 POST_FROM_CC = 3 * 32               # post: this far from the Command Center toward the zerg
 POST_SLACK = 3 * 32                  # post: units farther than this from it go back
-GAP_WIDE = 4 * 32                    # gap_post: openings narrower than this are wall gaps
-GAP_INSIDE = 48                      # ...the post: this far inside the gap
 AT_GAP = 48                          # ...units this close to it hold position
 PACK_LINK = 4 * 32                   # regroup: units this close to each other are one bunch
 
@@ -150,7 +148,7 @@ class RoleRules:
         self.post = post                             # post: tiles from the CC toward the zerg, or "minerals"
         self.vultures = vultures
         self.gap_post = gap_post
-        self._gaps_for, self._gap_posts = None, []   # gap_post: (Gary's buildings) -> posts
+        self._gaps_for, self._gap_posts, self._frontier = None, [], None   # gap_post: (Gary's buildings) -> posts
         self.kite, self.fire = kite, fire
         self.brace, self.leash, self.volley, self.regroup, self.holds = brace, leash or post is not None, volley, regroup, holds
         self.closing: dict[int, frozenset] = {}      # volley: unit -> its closing group
@@ -319,7 +317,7 @@ class RoleRules:
                 prey = [e for e in enemy if e.get("order_target") in mine_tags
                         or any(math.dist((e["x"], e["y"]), (b["x"], b["y"])) < LEASH for b in built)]
             far = [u for u in mine if not in_range(u) and u.get("order") not in ATTACK | held and fresh(u, "CLOSE_IN")]
-            if self.gap_post and home and not prey:
+            if self.gap_post and home:                    # (zerg at the wall, outside it: hold the door)
                 gap = self._gap(enemy)
                 if gap is not None:
                     away = [u for u in mine if not in_range(u) and u.get("order") not in ATTACK | held
@@ -420,44 +418,25 @@ class RoleRules:
         return None
 
     def _gap(self, enemy: list[dict]):
-        """gap_post: the post inside the wall gap nearest the zerg (map pixels), or None."""
+        """gap_post: the post inside the wall gap nearest the zerg (map pixels), or None (no wall gap,
+        or the zerg are already inside the frontier)."""
+        from gary.walls import frontier, outside, wall_gaps
         g = self.g
         obs = g.hi.observe()
         built = frozenset((u["tag"], u["completed"]) for u in obs["units"] if u["owner"] == g.slot and is_building(u["type"]))
         if built != self._gaps_for:
-            self._gaps_for, self._gap_posts = built, self._find_gaps(obs)
+            fr = g.simcity._frontier_now(obs) if g.simcity is not None else None
+            if fr is None:
+                ccs = [(u["x"], u["y"]) for u in obs["units"] if u["owner"] == g.slot and u["type"] == T.CC]
+                fr = frontier(g.hi.game, obs, ccs, list(g.enemy_starts)) if ccs and g.enemy_starts else None
+            self._gaps_for, self._frontier = built, fr
+            self._gap_posts = [w["post"] for w in wall_gaps(g.hi.game, obs, g.slot, fr)] if fr and "inside" in fr else []
+        if not self._gap_posts:
+            return None
         them = _mid(enemy)
-        # only while the zerg are still outside it (farther from the inside than the gap is)
-        out = [p for p, inside in self._gap_posts if math.dist(them, inside) > math.dist(p, inside) + 2 * 32]
-        return min(out, key=lambda p: math.dist(p, them)) if out else None
-
-    def _find_gaps(self, obs: dict) -> list[tuple[float, float]]:
-        from gary.terrain import map_analysis
-        from gary.walls import gaps
-        g = self.g
-        game = g.hi.game
-        starts = map_analysis(game, g.map)["starts"]
-        mine = min(starts.values(), key=lambda a: math.dist(a["start"], g.main.center), default=None)
-        if mine is None:
-            return []
-        away = lambda p, q, d: (p[0] + (p[0] - q[0]) / (math.dist(p, q) or 1) * d, p[1] + (p[1] - q[1]) / (math.dist(p, q) or 1) * d)
-        checks = [(away(mine["ramp_top"], mine["ramp_bottom"], 128), tuple(mine["ramp_bottom"]))]
-        if any(u["owner"] == g.slot and u["type"] == T.CC and math.dist((u["x"], u["y"]), mine["natural"]) < 8 * 32
-               for u in obs["units"]):
-            checks.append((tuple(mine["natural"]), away(mine["natural_choke"], mine["natural"], 128)))
-        from gary.walls import Footprints
-        fp = Footprints(game)
-        built = [fp.box_at(u["type"], u["x"], u["y"]) for u in obs["units"]
-                 if u["owner"] == g.slot and is_building(u["type"]) and u["type"] != T.CC]
-        by = lambda o, b: max(b[0] - o.x, o.x - b[2], 0) ** 2 + max(b[1] - o.y, o.y - b[3], 0) ** 2 <= (o.width / 2 + 16) ** 2
-        posts = []
-        for inside, outside in checks:
-            inside, outside = tuple(map(int, inside)), tuple(map(int, outside))
-            for o in gaps(game, obs, inside, outside, margin=6 * 32)["openings"][:3]:
-                # a wall gap: narrow, zerglings get through, and one of Gary's buildings is a side of it
-                if o.width < GAP_WIDE and 37 in o.passes and any(by(o, b) for b in built):
-                    posts.append((away((o.x, o.y), inside, -GAP_INSIDE), inside))   # (toward the inside)
-        return posts
+        if not outside(self._frontier, them):
+            return None                                   # inside already: past the wall's job
+        return min(self._gap_posts, key=lambda p: math.dist(p, them))
 
     def _post(self, by_tag: dict, at, enemy: list[dict]):
         """post: by the Command Center nearest the group, POST_FROM_CC toward the zerg (walkable)."""

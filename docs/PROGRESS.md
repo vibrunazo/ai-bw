@@ -116,8 +116,12 @@ quicker way to a playable Gary.
   games, 48 seeds each, on top of v0.11: 7:00 rush won 11, lost 0 (v0.11 8 / 0), the same
   buildings and army at 12:00; immediate 9-pool lost 7 (v0.11 4). Within the noise of 48
   games either way (which seeds are lost changes completely with any change): not adopted yet.
-  The post in the wall gaps doesn't fire there yet (it yields to closing in on zerg near Gary's
-  buildings, i.e. at the wall, and finds gaps the old way, not from the frontier).
+  The post in the wall gaps now takes its gaps from the frontier (`wall_gaps()`) and holds them
+  while the zerg are outside the frontier, ahead of closing in. To judge it where walls matter,
+  `eval/walls_bench.py` cuts wall fights out of Gary's own games (v0.11 + sim city against the
+  rush dummy: the first moment 4+ zerg fighters come within 12 tiles of a wall gap from outside;
+  78 in 96 games) and plays each from there by variants, 8 draws: the post −12 ± 12 (better in
+  32, worse in 31; Gary nets +162 there either way: the dummy is weak). Not adopted.
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

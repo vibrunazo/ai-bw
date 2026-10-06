@@ -199,7 +199,8 @@ OPTIONS = {
     # 47 with vultures: 18% fewer vultures lost, but fewer zerg killed and more SCVs lost
     "vultures": _roles(vultures=True),
     # posts inside the wall gaps (gary/walls.py), holding: on v0.11 [239] -7 ± 4 (better in 26, worse
-    # in 42; 0c50ac60 +104): the home defenses start with the zerg at home, past the wall's job
+    # in 42; 0c50ac60 +104): the home defenses start with the zerg at home, past the wall's job;
+    # on top of sim city, in 78 wall fights (eval/walls_bench.py) -12 ± 12
     "gap_post": _roles(gap_post=True),
     # depots, barracks, academies narrow the frontier (simcity.py). Full games, 48 seeds, on v0.11:
     # 7:00 rush won 11, lost 0 (v0.11 8 / 0), same economy; immediate 9-pool lost 7 (v0.11 4): noise

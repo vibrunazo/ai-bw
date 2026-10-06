@@ -451,6 +451,37 @@ def frontier(game, obs: dict, bases: list[tuple[int, int]], enemy: list[tuple[in
             "inside": side | cut}                   # (minitiles: the bases' side of the cut, and the cut)
 
 
+WALL_GAP = 4 * 32                     # an opening narrower than this, beside a building, is a wall gap
+GAP_INSIDE = 48                       # the post at a wall gap: this far inside it
+
+
+def wall_gaps(game, obs: dict, slot: int, fr: dict) -> list[dict]:
+    """The wall gaps of a frontier (frontier()): openings zerglings get through, narrower than
+    WALL_GAP, with one of the player's buildings a side of them. Each: "at" (its narrowest place),
+    "width", and "post" (GAP_INSIDE inside it: where units hold it)."""
+    from gary.policy.army import is_building
+    fp = Footprints(game)
+    built = [fp.box_at(u["type"], u["x"], u["y"]) for u in obs["units"]
+             if u["owner"] == slot and is_building(u["type"]) and u["type"] != 106]
+    by = lambda o, b: max(b[0] - o.x, o.x - b[2], 0) ** 2 + max(b[1] - o.y, o.y - b[3], 0) ** 2 <= (o.width / 2 + 16) ** 2
+    out = []
+    for f in (fr or {}).get("openings", []):
+        if f.closed or not f.exact.get("openings"):
+            continue
+        o = f.exact["openings"][0]
+        if o.width < WALL_GAP and 37 in o.passes and any(by(o, b) for b in built):
+            d = math.dist((o.x, o.y), f.inside) or 1
+            out.append({"at": (o.x, o.y), "width": o.width,
+                        "post": (o.x + (f.inside[0] - o.x) / d * GAP_INSIDE, o.y + (f.inside[1] - o.y) / d * GAP_INSIDE)})
+    return out
+
+
+def outside(fr: dict, p) -> bool:
+    """Whether a map point is on the enemy's side of a frontier (frontier()["inside"] is the other)."""
+    ins = fr["inside"]
+    return not ins[min(ins.shape[0] - 1, int(p[1]) // 8), min(ins.shape[1] - 1, int(p[0]) // 8)]
+
+
 def _min_cut(region, sources, sinks):
     """The fewest cells of region to close so that no 8-connected way leads from a source cell to a
     sink cell (sources can't be closed): a minimum vertex cut, by max-flow over the cells (each in-
