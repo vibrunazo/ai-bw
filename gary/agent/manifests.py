@@ -74,6 +74,12 @@ MANIFESTS: dict[str, dict] = {
     "v010": {"version": "v0.10", "posture": "early_pool/v1", "leases": "enforced",
              "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY,
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None}, "arbiter": "fixed_priority/v1"},
+    # v0.11: v0.10 pulling 3 workers per zerg (not 2), and holding a post by the Command Center
+    "v011": {"version": "v0.11", "posture": "early_pool/v1", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY,
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}}},
+             "arbiter": "fixed_priority/v1"},
     # step 4 (docs/CONTROL.md): v0.9 with leases enforced; and with roles instead of the fight model
     "v09lease": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
                  "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
@@ -168,13 +174,14 @@ def _roles(**options):
     return lambda m: m["fight"].setdefault("roles", {}).update(options)
 
 
-def _pull_when_attacked(m):
-    m["fight"]["before"] = ["pull_attacked" if r == "pull" else r for r in m["fight"]["before"]]
+def _pull(**options):
+    return lambda m: m["fight"].setdefault("rule_options", {}).setdefault("pull", {}).update(options)
 
 
 # options to try on top of a manifest, "v010+post+suspend" (docs/CONTROL.md: every layer swappable);
 # home defenses (114; [239]: the 239 of all held-out games), reactive Zerg, 8 draws, vs v0.10 (+ is
-# better, ± 1 s.e.), and immediate 9-pools lost of 16 (v0.10: 0); 2026-10-06
+# better, ± 1 s.e.), and immediate 9-pools lost of 16 (v0.10: 0 of these 16, but 4 of 48: a
+# loss or three in 16 is noise); 2026-10-06
 OPTIONS = {
     "brace": _roles(brace=True),            # roles.py: let the zerg come, nobody closes in     -8 ± 11
     "leash": _roles(leash=True),            # close in only on zerg attacking or by buildings   -9 ± 9
@@ -184,14 +191,26 @@ OPTIONS = {
     "kite": _roles(kite=True),              # vultures pull back from zerglings                  -5 ± 2
     "fire_here": _roles(fire="here"),       # fire: attack-move to the group's own middle       -8 ± 5
     "fire_hold": _roles(fire="hold"),       # fire: hold position                              -23 ± 10
-    "post": _roles(post=3),                 # hold a post by the Command Center (and leash)     +8 ± 9, [239] +7 ± 5; 9-pool lost 1
+    "post": _roles(post=3),                 # hold a post by the Command Center (and leash)     +8 ± 9, [239] +7 ± 5,
+                                            # and +7 ± 5 on top of pull_three: in v0.11
     "post0": _roles(post=0),                # ...at the Command Center                          +6 ± 10, [239] +4 ± 5
     "post6": _roles(post=6),                # ...6 tiles from it                                -4 ± 8
     # vultures skirmish (move away, shoot, ease off; roles.py): [239] −14 ± 4, worse in 36 of the
     # 47 with vultures: 18% fewer vultures lost, but fewer zerg killed and more SCVs lost
     "vultures": _roles(vultures=True),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
-    "pull_attacked": _pull_when_attacked,   # fight.py: pull workers only when zerg attack      +2 ± 3, [239] +3 ± 3
+    "pull_attacked": _pull(attacked_only=True),   # fight.py: pull workers only when zerg attack  +2 ± 3, [239] +3 ± 3
+    "pull_ratio15": _pull(ratio=1.5),       # ...when the zerg outweigh the army 1.5 to 1      [239] -3 ± 4
+    "pull_ratio2": _pull(ratio=2.0),        #                                                   [239] -6 ± 5
+    "pull_delay2": _pull(delay_s=2),        # ...after 2 s of threat without a break           [239] -4 ± 4
+    "pull_delay4": _pull(delay_s=4),        #                                                   [239] -19 ± 7
+    "pull_one": _pull(per_enemy=1),         # one worker per enemy unit (and one)               [239] -13 ± 4
+    "pull_three": _pull(per_enemy=3),       # [239] +8 ± 2 (4: +8 ± 3, 5: +9 ± 3); 9-pool 6 of 48 (v0.10 4): in v0.11
+    "pull_three_half": _pull(per_enemy=3, max_share=0.5),   # ...at most half the base's workers (9-pool: no change)
+    "pull_three_60": _pull(per_enemy=3, max_share=0.6),
+    "pull_four": _pull(per_enemy=4),
+    "pull_five": _pull(per_enemy=5),
+    "pull_ratio07": _pull(ratio=0.7),       # ...already when the zerg are 0.7 of the army      [239] +1 ± 4
     # a fight interrupts waiting builds: +3 ± 6, [239] +6 ± 4; but 9-pool lost 3 (the bunker comes late)
     "suspend": lambda m: m.update(arbiter="fixed_priority/v2"),
 }
@@ -260,8 +279,9 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         else:
             fight = fight_model or load("fight", str(fight_path or model_path(f["model"])))
             models["fight"] = getattr(fight, "path", "?")
-        g.fight = FightLayer(g, fight, f["provider"], [RULES[r](g) for r in f.get("before", [])],
-                             [RULES[r](g) for r in f.get("in_fight", [])], f.get("guard_rail", False),
+        rule = lambda r: RULES[r](g, **f.get("rule_options", {}).get(r, {}))
+        g.fight = FightLayer(g, fight, f["provider"], [rule(r) for r in f.get("before", [])],
+                             [rule(r) for r in f.get("in_fight", [])], f.get("guard_rail", False),
                              f.get("workers", True), seed, f.get("ctrl_click", False),
                              f.get("watch_tiles", 0) * 32, f.get("roles", {}))
     if m["arbiter"] == "drill/v1":

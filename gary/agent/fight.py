@@ -315,14 +315,27 @@ class FightLayer:
 class PullRule:
     """When enemy fighters at a base outnumber Gary's army there, pull a box of workers off the
     minerals to fight them (what players do against an early zergling attack); send them back to
-    mining once the base has been calm for 5 s."""
+    mining once the base has been calm for 5 s. Options (manifest "rule_options": {"pull": ...}):
+
+      ratio          pull when the zerg there outweigh the army more than this (supply)
+      delay_s        ...and have, without a break, for this long
+      per_enemy      workers pulled per enemy unit (and one more)
+      attacked_only  only zerg attacking something of Gary's count, not zerg hovering near
+      max_share      never more than this share of the base's workers pulled (None: no cap)
+
+    In the home defenses Gary pulled where the pros didn't (44 of 239: small threats, about 3
+    zerg against 3 of its own) and, where both did, sooner (3.0 s after the takeover, the pros'
+    7.6 s, median), more at once (7.5, the pros' 6.5) and longer (89 SCV-seconds, the pros' 62)."""
 
     name = "pull"
-    attacked_only = False
 
-    def __init__(self, g: Gary):
+    def __init__(self, g: Gary, ratio: float = 1.0, delay_s: float = 0, per_enemy: int = 2,
+                 attacked_only: bool = False, max_share: float | None = None):
         self.g = g
+        self.max_share = max_share
         self.next_pull = 0
+        self.ratio, self.delay, self.per_enemy, self.attacked_only = ratio, int(delay_s * 24), per_enemy, attacked_only
+        self.threat_since: int | None = None
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
         g = self.g
@@ -340,27 +353,30 @@ class PullRule:
             theirs = sum(supply_x2(u["type"]) for u in near)
             alive = {u["tag"] for u in mine}
             g.pulled &= alive
-            if theirs >= 2 and theirs > ours and len(g.pulled) < 2 * len(near) + 1 and hi.frame >= self.next_pull:
+            threat = theirs >= 2 and theirs > self.ratio * ours
+            if not threat:
+                self.threat_since = None
+            elif self.threat_since is None:
+                self.threat_since = hi.frame
+            n = self.per_enemy * len(near) + 1
+            if self.max_share is not None:
+                workers = sum(1 for u in mine if u["type"] == T.SCV and (u["tag"] in g.pulled
+                              or math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < 8 * 32))
+                n = min(n, max(1, int(self.max_share * workers)))
+            if threat and hi.frame - self.threat_since >= self.delay and len(g.pulled) < n and hi.frame >= self.next_pull:
                 self.next_pull = hi.frame + 24 * 3              # one pull at a time
                 tx = sum(u["x"] for u in near) // len(near)
                 ty = sum(u["y"] for u in near) // len(near)
-                g.motor.start(Intent("PULL", [], (tx, ty), {"cc": (cc["x"], cc["y"]), "to": (tx, ty),
-                                                            "n": 2 * len(near) + 1}, "rule:pull"))
+                g.motor.start(Intent("PULL", [], (tx, ty), {"cc": (cc["x"], cc["y"]), "to": (tx, ty), "n": n},
+                                     "rule:pull"))
                 g.say(f"pulls workers: {len(near)} enemy units at the base, outnumbering the army there")
                 return True
             return False
+        self.threat_since = None
         if g.pulled and hi.frame - g.calm_since > CALM_FRAMES:
             g.motor.start(Intent("UNPULL", sorted(g.pulled), None, {}, "rule:pull"))
             return True
         return False
-
-
-class PullWhenAttacked(PullRule):
-    """PullRule, but only zerg attacking something of Gary's (a worker, a building, a unit) make a
-    pull, not zerg hovering near the base: Gary's SCVs fought 40% more than the pros' (SCV-seconds
-    with an attack order, home defenses) and died 18% more."""
-
-    attacked_only = True
 
 
 class LoadRule:
@@ -470,4 +486,4 @@ class ReinforceRule:
         return True
 
 
-RULES = {"pull": PullRule, "pull_attacked": PullWhenAttacked, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule}
+RULES = {"pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule}
