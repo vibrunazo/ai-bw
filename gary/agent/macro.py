@@ -282,8 +282,9 @@ BUNKER_RETRY = 20 * 24               # a bunker order that didn't take: try agai
 
 
 class OneBaseDefense:
-    """Against a one-base all-in (v0.9): the bunker first (where the posture says), then depots
-    ahead of production, marines and SCVs nonstop, more Barracks on spare money."""
+    """Against a one-base all-in (v0.9): a Barracks if there's none, the bunker first (where the
+    posture says; 100 minerals kept for it until it's coming), then depots ahead of production,
+    marines and SCVs nonstop, more Barracks on spare money."""
     label = "rush defense"
 
     def __init__(self, g: Gary):
@@ -310,17 +311,26 @@ class OneBaseDefense:
         coming = lambda ut: any(u["type"] == ut and not u["completed"] for u in mine) or \
             any(r == ut for r, *_ in g.reserved)
         doable = lambda act, uid: g.macro.plan(act, uid, obs, mine, done, me) not in (None, WAIT)
+        # until the bunker is up or coming, 100 minerals stay for it (it can start only once a
+        # Barracks is done, and it's what holds the rush): no extra Barracks, marines and SCVs
+        # only out of what's left over
+        # no Barracks at all yet (the learned macro opened otherwise): that first, it's what the
+        # bunker needs
+        if not any(u["type"] == T.RAX for u in mine) and not coming(T.RAX):
+            return goal(BUILD, T.RAX, "Barracks") if doable(BUILD, T.RAX) else None
+        keep = T.COST[T.BUNKER][0] if not self._bunker_coming(mine) else 0
+        spare = lambda ut: me["minerals"] - sum(COST[r] for r, *_ in g.reserved) - keep >= T.COST[ut][0]
         # a depot takes longer than a marine or an SCV: start it while each producer has 2 left
         producers = sum(1 for u in done if u["type"] in (T.CC, T.RAX))
         if me["supply_max"] - me["supply_used"] < 2 * producers and me["supply_max"] < 200 and \
                 not coming(T.DEPOT) and doable(BUILD, T.DEPOT):
             return goal(BUILD, T.DEPOT, "Supply Depot")
-        if doable(TRAIN, T.MARINE):
+        if doable(TRAIN, T.MARINE) and spare(T.MARINE):
             return goal(TRAIN, T.MARINE, "Marine")
-        if sum(1 for u in mine if u["type"] == T.SCV) < RUSH_SCVS and doable(TRAIN, T.SCV):
+        if sum(1 for u in mine if u["type"] == T.SCV) < RUSH_SCVS and doable(TRAIN, T.SCV) and spare(T.SCV):
             return goal(TRAIN, T.SCV, "SCV")
         budget = me["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
-        if budget >= RAX_MONEY and sum(1 for u in mine if u["type"] == T.RAX) < RUSH_RAX and not coming(T.RAX) and \
+        if not keep and budget >= RAX_MONEY and sum(1 for u in mine if u["type"] == T.RAX) < RUSH_RAX and not coming(T.RAX) and \
                 doable(BUILD, T.RAX):
             return goal(BUILD, T.RAX, "Barracks")
         return None

@@ -146,6 +146,18 @@ quicker way to a playable Gary.
   and zerglings go as they hatch (the first 6 together): it arrives at 3:07-3:44 (median 3:22).
   Gary v0.11 against it, 48 seeds: **lost 27**, won 6 (against the late dummy: lost 5). Zerg v2
   is later still (hatchery 3:32 and pool 3:35, against the pros' 1:47 and 2:05).
+- **Holding a pro-timed 9-pool** (2026-10-07): in the lost games Gary noticed the early pool at
+  3:10 (the zerglings, at its base) and placed its bunker at 3:31, after they arrived at 3:21;
+  in the held ones at 2:44, the bunker at 2:53. Fixes, each measured: the rush build keeps 100
+  minerals for the bunker until it's coming and builds a Barracks first if there is none
+  (it used to start a second Barracks and a depot first: the bunker at 3:14 though the pool was
+  seen at 1:55); the scout circles the Zerg main once found (a pool can stand out of sight of
+  the hatchery: it used to turn home at the first building); and with no Zerg building seen by
+  2:20 Gary plays it as an early pool (on a 4-player map the scout reaches the second start at
+  2:43). Lost 27 → 9 of 48 (won 9); 7:00 rush lost 2 (won 18). The price, against the
+  hatch-first Zerg v2: won 7 instead of 16 (lost 2 either way), 6% fewer buildings and 8% less
+  army at 12:00: Gary turtles when it can't see. Home defenses unchanged (−53). Left: Barracks
+  late when the learned macro opens without one (4 of the 9), bunkers with no marines yet (3).
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

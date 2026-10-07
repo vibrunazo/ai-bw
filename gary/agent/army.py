@@ -5,7 +5,9 @@
             about one of up to 3 clusters of the army; when it puts most of its belief on the
             cluster going 2+ grid cells away, says so twice, and its fight estimate doesn't expect
             going to cost army share, Gary drag-boxes the cluster and orders it on the minimap.
-            Also the scout: one worker at 9 SCVs to the enemy start locations.
+            Also the scout: one worker at 9 SCVs to the enemy start locations; where it finds the
+            enemy, once around their main (7 tiles out: a Spawning Pool can stand out of sight
+            of the hatchery), then home.
 
 Units in a fight are the fight layer's; the arbiter leaves them out (and the posture can keep the
 army home altogether). Orders are intents (ARMY_MOVE, ARMY_ATTACK, SCOUT, ATTACK_WAVE) that the
@@ -32,6 +34,7 @@ FIGHT_MARGIN = 0.01                 # ...or if going looks worse than staying by
 REORDER_AFTER = 24 * 8              # don't repeat the same order to a group within 8 s
 SCOUT_AT = 24 * 45                  # send a scouting worker from 0:45, at 9 SCVs (like pros)
 SCOUT_WORKERS = 9
+CIRCLE = 7 * 32                     # the scout circles the enemy main this far from its start location
 
 
 def cell_dist(a: int, b: int) -> int:
@@ -72,6 +75,8 @@ class LearnedArmy:
         self.held: dict[int, int] = {}                # cluster cell -> destination Gary decided against
         self.scout_targets: list[tuple[int, int]] = []
         self.scout_done = False
+        self.circle: list | None = None                 # the scout's way around the enemy main, once found
+        self.next_circle_order = 0
 
     def remember(self, obs: dict) -> None:
         self.tracker.remember(obs)
@@ -169,9 +174,27 @@ class LearnedArmy:
         if scout is None:                                  # the scout died
             self.scout_done = True
             return False
-        if any(u["owner"] not in (g.slot, 11) and is_building(u["type"]) for u in obs["units"]):
-            g.motor.start(Intent("SCOUT", [g.scout], g.main.minerals[0], {"to": g.main.minerals[0], "home": True}, "scout"))
-            return True                                    # found them: home again
+        if self.circle is None and any(u["owner"] not in (g.slot, 11) and is_building(u["type"]) for u in obs["units"]):
+            # found them: around their main once (the pool can stand out of sight of the hatchery),
+            # then home
+            c = self.scout_targets[0] if self.scout_targets else (scout["x"], scout["y"])
+            ring = [(c[0] + math.cos(k * math.pi / 3) * CIRCLE, c[1] + math.sin(k * math.pi / 3) * CIRCLE) for k in range(6)]
+            k0 = min(range(6), key=lambda k: math.dist(ring[k], (scout["x"], scout["y"])))
+            w, h = g.map.size
+            self.circle = [(int(min(max(x, 32), w - 32)), int(min(max(y, 32), h - 32))) for x, y in ring[k0:] + ring[:k0]]
+        if self.circle is not None:
+            if self.circle and math.dist((scout["x"], scout["y"]), self.circle[0]) < 2 * 32:
+                self.circle.pop(0)
+            if self.circle and g.hi.frame >= self.next_circle_order:
+                self.next_circle_order = g.hi.frame + 3 * 24          # (re-ordered while walking: it may be blocked)
+                g.motor.start(Intent("SCOUT", [g.scout], self.circle[0], {"to": self.circle[0]}, "scout"))
+                return True
+            if not self.circle:
+                self.circle = []
+                g.motor.start(Intent("SCOUT", [g.scout], g.main.minerals[0], {"to": g.main.minerals[0], "home": True}, "scout"))
+                self.scout_done = True
+                return True
+            return False
         if self.scout_targets and math.dist((scout["x"], scout["y"]), self.scout_targets[0]) < 6 * 32:
             self.scout_targets.pop(0)                      # nobody here: try the next start
             if self.scout_targets:

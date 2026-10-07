@@ -11,7 +11,9 @@ Every provider exposes the same constraints, which the other layers read:
 
   normal         the usual plan: no constraints
   early_pool/v1  v0.9's answer to an early Spawning Pool (#2): noticed from a pool before 3:00
-                 with one hatchery known, zerglings before 4:00, or 6 at once before 5:00. Then
+                 with one hatchery known, zerglings before 4:00, or 6 at once before 5:00; or
+                 assumed when no zerg building has been seen by 2:20 (on a 4-player map the scout
+                 can still be on its way: against a pro-timed 9-pool, 8 of v0.11's 24 losses). Then
                  the one-base defense build, with a bunker on the main's level by the top of its
                  ramp (gary/terrain.py), marines rallied behind it, until the bunker stands with 4
                  marines and no zerglings are at home; then the learned macro again, but the army
@@ -26,7 +28,7 @@ import math
 from gary import terran as T
 from gary.agent.fight import enemy_fighters, near_home
 from gary.agent.gary import Gary
-from gary.policy.army import supply_x2
+from gary.policy.army import is_building, supply_x2
 from gary.terrain import map_analysis
 
 
@@ -49,6 +51,8 @@ HATCHERIES = {131, 132, 133}
 POOL_BY = 3 * 60 * 24                # a Spawning Pool seen before 3:00 with one hatchery is an early pool...
 LINGS_BY = 4 * 60 * 24               # ...and so are zerglings before 4:00
 MANY_LINGS, MANY_LINGS_BY = 6, 5 * 60 * 24   # ...or this many at once before 5:00
+UNKNOWN_BY = 140 * 24                # ...and with no Zerg building seen by 2:20, play it as one (the
+                                     # scout is still looking: a 9-pool's zerglings come at 3:00)
 RUSH_MARINES = 4                     # in or at the finished bunker: the rush build can end...
 CALM = 20 * 24                       # ...once no zerg fighter was at home for this long
 HOLD_ARMY, HOLD_RATIO = 6, 1.5       # Gary holds until its army supply is this, and this many times
@@ -64,6 +68,7 @@ class EarlyPoolPosture:
         self.rush_over = False
         self.hatcheries_seen: set[int] = set()
         self.most_enemy = 0.0            # the biggest zerg army (supply) seen at once
+        self.base_seen = False           # any zerg building seen
         analysis = map_analysis(g.hi.game, g.map)["starts"]
         mine = min(analysis.values(), key=lambda a: math.dist(a["start"], g.main.center), default=None)
         if mine and mine["reliable"] and math.dist(mine["start"], g.main.center) < 64:
@@ -104,13 +109,15 @@ class EarlyPoolPosture:
         obs = hi.observe()
         enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11)]
         self.hatcheries_seen |= {u["tag"] for u in enemy if u["type"] in HATCHERIES}
+        self.base_seen = self.base_seen or any(is_building(u["type"]) for u in enemy)
         lings = sum(1 for u in enemy if u["type"] == LING)
         fighters = enemy_fighters(obs, g.slot)
         self.most_enemy = max(self.most_enemy, sum(supply_x2(u["type"]) for u in fighters) / 2)
         if not self.rush and not self.hold and ((hi.frame <= POOL_BY and any(u["type"] == POOL for u in enemy)
                                                  and len(self.hatcheries_seen) <= 1) or
                                                 (hi.frame <= LINGS_BY and lings) or
-                                                (hi.frame <= MANY_LINGS_BY and lings >= MANY_LINGS)):
+                                                (hi.frame <= MANY_LINGS_BY and lings >= MANY_LINGS) or
+                                                (UNKNOWN_BY <= hi.frame <= POOL_BY and not self.base_seen)):
             self.rush = self.hold = True
             # marines gather a few tiles behind the bunker, toward the main (not on its spot,
             # where they'd keep the SCV from placing it)
