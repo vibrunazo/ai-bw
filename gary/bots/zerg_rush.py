@@ -249,8 +249,11 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
                 army = {r: sum(1 for u in o["units"] if u["owner"] == s and u["type"] in (0, 32, 34, LING, 38, 43))
                         for r, s in slot_of.items()}
                 t = his["T"].frame // 24
+                from eval.economy import terran_economy
+                eco = terran_economy(o["units"], slot_of["T"])
                 print(f"{t // 60}:{t % 60:02d}  buildings T {alive['T']} Z {alive['Z']}  "
-                      f"army T {army['T']} Z {army['Z']}  waves sent {zerg.waves}", flush=True)
+                      f"army T {army['T']} Z {army['Z']}  waves sent {zerg.waves}  "
+                      f"economy SCVs {eco['scvs']} CCs {eco['ccs']} army supply {eco['army']:g}", flush=True)
                 if not alive["T"] or not alive["Z"]:
                     result = "Gary lost" if not alive["T"] else "Gary won"
                     break

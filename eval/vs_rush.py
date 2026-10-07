@@ -17,12 +17,15 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
+import statistics
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+from eval.economy import AT, line, pro_reference  # noqa: E402
 DEFAULT_MAP = REPO_ROOT / "tests" / "fixtures" / "replays" / "stardata_tvz_standard_ozp3w.rep"
 
 
@@ -41,8 +44,12 @@ def play(version: str, seed: int, args: argparse.Namespace, out: Path) -> dict:
             break
     states = re.findall(r"^\s*(\d+:\d\d)\s+buildings T (\d+) Z (\d+)\s+army T (\d+) Z (\d+)", log, re.M)
     last = states[-1] if states else ("?", "?", "?", "?", "?")
+    economy = {}
+    for t, scvs, ccs, army in re.findall(r"^\s*(\d+):00\s.*economy SCVs (\d+) CCs (\d+) army supply ([\d.]+)", log, re.M):
+        if int(t) * 60 in AT:
+            economy[int(t) * 60] = {"scvs": int(scvs), "ccs": int(ccs), "army": float(army)}
     return {"version": version, "seed": seed, "result": result, "at": last[0],
-            "buildings": f"{last[1]}-{last[2]}", "army": f"{last[3]}-{last[4]}"}
+            "buildings": f"{last[1]}-{last[2]}", "army": f"{last[3]}-{last[4]}", "economy": economy}
 
 
 def main() -> None:
@@ -67,6 +74,16 @@ def main() -> None:
     print(f"{'version':8} {'seed':>4}  {'result':6} {'at':>6}  buildings T-Z  army T-Z")
     for r in rows:
         print(f"{r['version']:8} {r['seed']:>4}  {r['result']:6} {r['at']:>6}  {r['buildings']:>13}  {r['army']:>8}")
+    print("economy (median of the games Gary is still in at that time):")
+    try:
+        print("  " + line("pros", pro_reference()))
+    except Exception as e:                       # (no replay data here)
+        print(f"  pros: not available ({e})")
+    for v in args.versions:
+        mine = [r for r in rows if r["version"] == v]
+        at = {t: {k: statistics.median(r["economy"][t][k] for r in mine if t in r["economy"]) for k in ("scvs", "ccs", "army")}
+              for t in AT if any(t in r["economy"] for r in mine)}
+        print("  " + line(v, at))
     for v in args.versions:
         mine = [r for r in rows if r["version"] == v]
         print(f"{v}: won {sum(r['result'] == 'won' for r in mine)}, lost {sum(r['result'] == 'lost' for r in mine)}, "
