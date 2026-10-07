@@ -202,10 +202,9 @@ OPTIONS = {
     # in 42; 0c50ac60 +104): the home defenses start with the zerg at home, past the wall's job;
     # on top of sim city, in 78 wall fights (eval/walls_bench.py) -12 ± 12
     "gap_post": _roles(gap_post=True),
-    # depots, barracks, academies narrow the frontier (simcity.py). Full games, 48 seeds, on v0.11:
-    # 7:00 rush won 11, lost 0 (v0.11 8 / 0), same economy; immediate 9-pool lost 7 (v0.11 4): noise
+    # depots, barracks, academies wall the frontier, a door left (simcity.py)
     "simcity": lambda m: m.update(simcity=True),
-    "simcity_nat": lambda m: m.update(simcity=True, simcity_bases=2),   # ...once Gary has its natural
+    "simcity_closed": lambda m: m.update(simcity=True, simcity_door=0),   # ...closed
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     "pull_attacked": _pull(attacked_only=True),   # fight.py: pull workers only when zerg attack  +2 ± 3, [239] +3 ± 3
     "pull_ratio15": _pull(ratio=1.5),       # ...when the zerg outweigh the army 1.5 to 1      [239] -3 ± 4
@@ -263,7 +262,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.executor = ScriptedExecutor(g)
         if m.get("simcity"):
             from gary.agent.simcity import SimCity
-            g.simcity = SimCity(g, m.get("simcity_bases", 1))
+            g.simcity = SimCity(g, m.get("simcity_door", 32))
     g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture}[m["posture"]](g)
     if m["macro"] is not None:
         path = model_path(m["macro"]["model"])

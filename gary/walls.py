@@ -351,6 +351,7 @@ _source_side = None
 FRONTIER_REACH = 24 * 4              # minitiles: the ground this near a base (by ground) is the base's side
 FRONTIER_WIDEST = 12 * 4             # minitiles: a way in wider than this at its narrowest isn't a choke
 FRONTIER_MAX = 4                     # openings at most
+WALL_ELSEWHERE = 6                   # frontier(buildable=...): a cut minitile off buildable ground costs this many
 
 
 @dataclass
@@ -364,6 +365,7 @@ class FrontierOpening:
     outside: tuple[int, int]
     exact: dict
     ends: tuple = ()                 # the cut's two ends (map pixels): where it meets what bounds the opening
+    cells: tuple = ()                # the cut's minitiles ([y, x]): what a wall across it has to cover
 
     @property
     def closed(self) -> bool:
@@ -372,7 +374,7 @@ class FrontierOpening:
 
 
 def frontier(game, obs: dict, bases: list[tuple[int, int]], enemy: list[tuple[int, int]],
-             units=GAP_UNITS, reach: int = FRONTIER_REACH) -> dict:
+             units=GAP_UNITS, reach: int = FRONTIER_REACH, buildable=None) -> dict:
     """The frontier of a player's bases (Command Center positions; all of them are inside) against
     the enemy's side (e.g. the other start locations): the openings that, all closed, cut every
     ground way in, narrowest place first, each with which units get through (exact). Map
@@ -384,7 +386,12 @@ def frontier(game, obs: dict, bases: list[tuple[int, int]], enemy: list[tuple[in
     collision box): the ground within FRONTIER_REACH of the bases is theirs, the ground beyond it
     that still connects to the enemy's points is outside. Then, as gaps(): the widest way in, its
     narrowest place, closed, the next. "open": True if a way in is wider than FRONTIER_WIDEST at
-    its narrowest (no choke to hold)."""
+    its narrowest (no choke to hold).
+
+    buildable (minitiles, bool): where a wall can stand. Given, the cut keeps to that ground where it
+    can (crossing other ground costs WALL_ELSEWHERE cells): the line a wall can close, not the
+    narrowest one (Colosseum II's naturals narrow on a ramp, unbuildable; the pros wall a little
+    inside it)."""
     import numpy as np
     from scipy import ndimage
     from gary.policy.army import is_building
@@ -419,7 +426,8 @@ def frontier(game, obs: dict, bases: list[tuple[int, int]], enemy: list[tuple[in
     outside = np.isin(far, list(ids))
     if not outside.any():
         return {"openings": [], "open": False}
-    cut, flow = _min_cut(near | home, home, near & ndimage.binary_dilation(outside, structure=eight))
+    cost = None if buildable is None else np.where(buildable, 1, WALL_ELSEWHERE)
+    cut, flow = _min_cut(near | home, home, near & ndimage.binary_dilation(outside, structure=eight), cost)
     if cut is None:                                   # a base's own ground touches the outside
         return {"openings": [], "open": True, "cut_width": None}
     pieces, n = ndimage.label(cut, structure=eight)
@@ -445,9 +453,11 @@ def frontier(game, obs: dict, bases: list[tuple[int, int]], enemy: list[tuple[in
         far1 = (ys[np.argmax((ys - cy) ** 2 + (xs - cx) ** 2)], xs[np.argmax((ys - cy) ** 2 + (xs - cx) ** 2)])
         k2 = np.argmax((ys - far1[0]) ** 2 + (xs - far1[1]) ** 2)
         ends = ((int(far1[1]) * 8 + 4, int(far1[0]) * 8 + 4), (int(xs[k2]) * 8 + 4, int(ys[k2]) * 8 + 4))
-        openings.append(FrontierOpening(cx * 8 + 4, cy * 8 + 4, int(piece.sum()) * 8, pin, pout, exact, ends))
+        openings.append(FrontierOpening(cx * 8 + 4, cy * 8 + 4, int(piece.sum()) * 8, pin, pout, exact, ends,
+                                        tuple(map(tuple, np.argwhere(piece)))))
     openings.sort(key=lambda o: o.width)
-    return {"openings": openings, "open": flow > FRONTIER_WIDEST, "cut_width": flow * 8,
+    width = int(cut.sum())                           # (minitiles; the flow, with no costs)
+    return {"openings": openings, "open": width > FRONTIER_WIDEST, "cut_width": width * 8,
             "inside": side | cut}                   # (minitiles: the bases' side of the cut, and the cut)
 
 
@@ -482,12 +492,12 @@ def outside(fr: dict, p) -> bool:
     return not ins[min(ins.shape[0] - 1, int(p[1]) // 8), min(ins.shape[1] - 1, int(p[0]) // 8)]
 
 
-def _min_cut(region, sources, sinks):
+def _min_cut(region, sources, sinks, cost=None):
     """The fewest cells of region to close so that no 8-connected way leads from a source cell to a
     sink cell (sources can't be closed): a minimum vertex cut, by max-flow over the cells (each in-
-    to-out edge capacity 1). Returns (the cut cells, its size), or (None, None) if a source touches
-    a sink. Leaves the source side (cells reachable from the sources without crossing the cut) in
-    _source_side."""
+    to-out edge capacity 1, or cost[cell]). Returns (the cut cells, its cost), or (None, None) if a
+    source touches a sink. Leaves the source side (cells reachable from the sources without
+    crossing the cut) in _source_side."""
     global _source_side
     import numpy as np
     from scipy import sparse
@@ -502,7 +512,7 @@ def _min_cut(region, sources, sinks):
     INF = 1 << 20
     src, snk = 2 * n, 2 * n + 1
     rows, cols, caps = [], [], []
-    inner = np.where(sources[cells[:, 0], cells[:, 1]], INF, 1)
+    inner = np.where(sources[cells[:, 0], cells[:, 1]], INF, 1 if cost is None else cost[cells[:, 0], cells[:, 1]])
     rows.append(2 * np.arange(n)); cols.append(2 * np.arange(n) + 1); caps.append(inner)
     for dy in (-1, 0, 1):
         for dx in (-1, 0, 1):

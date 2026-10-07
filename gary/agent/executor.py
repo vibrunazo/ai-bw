@@ -30,6 +30,9 @@ IDLE = 3                              # order "PlayerGuard": standing around
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
 TASK_TIMEOUT = 24 * 40                # build, hotkey, mine and resume tasks give up after 40 s
 COMMAND_TIMEOUT = 24 * 20             # commands and gas after 20 s
+CREEP_BUILDINGS = {131, 132, 133, 143, 144, 146}   # Hatchery, Lair, Hive, Creep, Spore and Sunken Colony
+CREEP_RX, CREEP_RY = 320, 200         # creep spreads up to this far from one (pixels, an ellipse; OpenBW's
+                                      # spread_creep), a tile every few seconds
 
 
 class ScriptedExecutor:
@@ -38,6 +41,9 @@ class ScriptedExecutor:
         self.next_sweep = 0                           # next look for idle workers off screen
         self.stalled_since: dict[int, int] = {}       # unfinished building -> since when nobody builds it
         self._terrain_cache = None                    # see terrain()
+        # the map's own creep (map knowledge, read now: at the start of a game, before any zerg's)
+        creep = getattr(g.hi.game, "creep", None)
+        self._map_creep = creep() if creep else None
         for kind in ("build", "hotkey_building", "mine", "resume"):
             g.task_runners[kind] = self._run_basic
         g.task_runners["command"] = self._run_command
@@ -275,7 +281,21 @@ class ScriptedExecutor:
         if terrain is None:
             return True
         w, h = SIZE[unit_type]
-        return bool(terrain[0][ty:ty + h, tx:tx + w].all())
+        return bool(terrain[0][ty:ty + h, tx:tx + w].all()) and not self.creep_coming(unit_type, tx, ty)
+
+    def creep_coming(self, unit_type: int, tx: int, ty: int) -> bool:
+        """Creep under the building, now or soon: the game accepts a build on fogged creep it hasn't
+        seen, and it fails once the SCV gets there. The map's own creep (Colosseum II has a strip of
+        it across each natural's choke) is map knowledge, read at the start; the zerg's spreads
+        around its creep buildings, as seen (the ellipse it can reach)."""
+        w, h = SIZE[unit_type]
+        if self._map_creep is not None and self._map_creep[ty:ty + h, tx:tx + w].any():
+            return True
+        seen = [(u["x"], u["y"]) for u in self.g.hi.observe()["units"]
+                if u["owner"] not in (self.g.slot, 11) and u["type"] in CREEP_BUILDINGS]
+        corners = [(x * 32 + 16, y * 32 + 16) for x in (tx, tx + w - 1) for y in (ty, ty + h - 1)]
+        return any(((x - cx) / CREEP_RX) ** 2 + ((y - cy) / CREEP_RY) ** 2 <= 1
+                   for cx, cy in seen for x, y in corners)
 
     def terrain(self):
         """The map's buildable tiles (no 8x8 part unwalkable) and ground height per 8x8 minitile,

@@ -1,19 +1,22 @@
 """Sim city (part of the executor, docs/CONTROL.md): where the buildings Gary needs anyway go, so that
-they narrow its frontier.
+they wall its frontier.
 
-The frontier is what separates all of Gary's bases from the enemy's side (gary/walls.py: the
-natural's choke where the natural is the only way into the main, the main's way out while Gary has
-only the main...). When the executor is about to place a Supply Depot, a Barracks or an Academy,
-it asks here first: is there a spot by one of the frontier's openings that makes it narrower,
-while a door stays for Gary's own army (a 32 x 32 unit, a vulture or a tank, still gets through:
-pros leave their natural's choke about 2 tiles wide and hold it, they rarely close it), and it
-grows the wall from an edge (zergling-tight against a cliff or a building: a building in the
-middle of the gap would leave two openings)? The best such spot leaves the narrowest opening, checked exactly (the building's collision box added to
-the opening's pixel-exact obstacles), and not while zerg fighters are near the opening (the SCV
-would die there, and a depot that isn't finished is a supply block). Openings already narrower than TARGET px aren't walled
-further, nor are openings wider than WIDEST (no choke to wall). Otherwise the executor's usual spot.
-min_bases (option simcity_nat: 2): wall only once Gary has its natural (the pros never wall their
-main's ramp in TvZ, they wall their natural).
+The frontier is what separates Gary's bases, and the natural it will take, from the enemy's side
+(gary/walls.py: the natural's way out where the natural is the only way into the main, the main's
+own way out where it isn't...), found here along buildable ground without creep: the line a wall
+can close, not necessarily the narrowest one (Colosseum II's naturals narrow on an unbuildable
+ramp; the pros wall just inside it, two Supply Depots and a Barracks from cliff to cliff). When the
+executor is about to place a Supply Depot, a Barracks or an Academy, it asks here first: the spot
+that leaves the least of that line zerglings get across, checked exactly (collision boxes are
+smaller than their tiles, by a different margin on each side: a wall tight against a cliff one
+way leaves a gap the other), with a door a `door`-pixel unit still gets through (32: a vulture or
+a tank; Gary can't lift a Barracks to open a closed wall; door 0 closes it). Lines longer than WIDEST aren't walled (no
+choke: Fighting Spirit's naturals), and nothing is placed while zerg fighters are near (the SCV
+would die there, and a depot that isn't finished is a supply block). Otherwise the executor's
+usual spot.
+
+Which maps and starts pros wall (TvZ, 22 maps): Colosseum II at every start, Neo Medusa and
+Longinus at some starts; at most 13% of games elsewhere (docs/PROGRESS.md).
 """
 
 from __future__ import annotations
@@ -23,109 +26,122 @@ import math
 from gary import terran as T
 
 WALL_TYPES = {T.DEPOT, T.RAX, 112}       # Supply Depot, Barracks, Academy: built anyway, wall well
-DOOR = 32                                # a unit this wide (vulture, tank) still gets through
-TARGET = 48                              # an opening this narrow is walled enough
-WIDEST = 10 * 32                         # an opening wider than this (coarse) isn't walled
-REACH = 48                               # candidates: the building's box this near the cut (past its half-width)
-TOUCH = 15                               # ...and this near a cliff or a building (zergling-tight)
-UNSAFE = 10 * 32                         # no wall building while zerg fighters are this near the opening
+DOOR = 32                                # the open part a wall leaves (pixels; 0: closed)
+WIDEST = 10 * 32                         # a frontier line longer than this isn't walled
+UNSAFE = 10 * 32                         # no wall building while zerg fighters are this near the line
+AWAY = 3 * 32                            # whether zerglings get through: from this far inside the line to this far outside
 
 
 class SimCity:
-    def __init__(self, g, min_bases: int = 1):
+    def __init__(self, g, door: int = DOOR):
         self.g = g
-        self.min_bases = min_bases                   # wall only with this many Command Centers
+        self.door = door
         self._for, self._frontier = None, None
+        self._buildable = None
 
     def spot(self, unit_type: int, builder: int) -> tuple[int, int] | None:
-        """A spot (top-left tile) for this building that narrows the frontier, or None."""
+        """A spot (top-left tile) for this building in the wall, or None."""
         if unit_type not in WALL_TYPES:
             return None
-        if sum(1 for u in self.g.hi.observe()["units"] if u["owner"] == self.g.slot and u["type"] == T.CC) < self.min_bases:
-            return None
-        from gary.walls import Footprints, obstacles, square, widest_through, connected, fits
+        from gary.walls import Footprints, connected, fits, obstacles, square
+        from gary.agent.fight import enemy_fighters
+        import numpy as np
         g = self.g
-        game = g.hi.game
         obs = g.hi.observe()
         fr = self._frontier_now(obs)
         if not fr or not fr["openings"]:
             return None
+        game = g.hi.game
         fp = Footprints(game)
-        size = fp[unit_type]
-        best = None
-        from gary.agent.fight import enemy_fighters
+        size, ling = fp[unit_type], fp[37]
         zerg = enemy_fighters(obs, g.slot)
+        best = None
         for o in fr["openings"]:
-            if o.closed or o.width > WIDEST or not o.exact or o.inside == o.outside:
+            if o.closed or o.width > WIDEST:
                 continue
             if any(math.dist((e["x"], e["y"]), (o.x, o.y)) < UNSAFE for e in zerg):
-                continue                                      # not while the zerg are there: the builder would die
-            # the window: the whole cut and the points right inside and outside of it, 6 tiles around
-            pts = [*o.ends, o.inside, o.outside, (o.x, o.y)]
-            x0, y0 = max(0, min(p[0] for p in pts) - 192), max(0, min(p[1] for p in pts) - 192)
-            x1, y1 = max(p[0] for p in pts) + 192, max(p[1] for p in pts) + 192
+                continue
+            # the window around the line, with the buildings ordered but not started in it
+            # the ground well inside and well outside of it (right by the line, a wall building can
+            # cover the point, and it would snap to the wrong side)
+            d = math.dist(o.inside, o.outside) or 1
+            ux, uy = (o.inside[0] - o.outside[0]) / d, (o.inside[1] - o.outside[1]) / d
+            pin = (int(o.inside[0] + ux * AWAY), int(o.inside[1] + uy * AWAY))
+            pout = (int(o.outside[0] - ux * AWAY), int(o.outside[1] - uy * AWAY))
+            ys, xs = [c[0] for c in o.cells], [c[1] for c in o.cells]
+            x0 = max(0, min(min(xs) * 8, pin[0], pout[0]) - 128)
+            y0 = max(0, min(min(ys) * 8, pin[1], pout[1]) - 128)
+            x1, y1 = max(max(xs) * 8, pin[0], pout[0]) + 136, max(max(ys) * 8, pin[1], pout[1]) + 136
             blocked = obstacles(game, obs, fp, (x0, y0, x1, y1))
-            x1, y1 = x0 + blocked.shape[1], y0 + blocked.shape[0]
-            for rt, rx, ry in g.reserved:                    # buildings ordered but not started: there too
+            for rt, rx, ry in g.reserved:
                 bx0, by0, bx1, by1 = fp.box_at_tile(rt, rx, ry)
                 blocked[max(0, by0 - y0):max(0, by1 - y0 + 1), max(0, bx0 - x0):max(0, bx1 - x0 + 1)] = True
-            a, b = (o.inside[1] - y0, o.inside[0] - x0), (o.outside[1] - y0, o.outside[0] - x0)
-            now = widest_through(blocked, a, b)
-            if now <= TARGET:
-                continue
-            narrow = (o.x, o.y)                               # the cut's middle (the bases' side is known there)
-            reach = o.width / 2 + REACH
-            # the opening's sides: the obstacles that bound it (cliffs, and wall buildings tight
-            # against them), as groups of obstacles closer than TOUCH to each other
-            import numpy as np
-            from scipy import ndimage
-            groups, _ = ndimage.label(ndimage.binary_dilation(blocked, iterations=TOUCH // 2))
-            yy, xx = np.ogrid[0:blocked.shape[0], 0:blocked.shape[1]]
-            ids = set()
-            for ex, ey in o.ends:                             # the obstacles at the cut's two ends
-                disk = (yy - (ey - y0)) ** 2 + (xx - (ex - x0)) ** 2 <= 24 ** 2
-                ids |= set(np.unique(groups[disk & blocked])) - {0}
-            sides = np.isin(groups, list(ids))
-            ex_ = [p[0] for p in (*o.ends, narrow)]
-            ey_ = [p[1] for p in (*o.ends, narrow)]
-            for tx in range(min(ex_) // 32 - 5, max(ex_) // 32 + 5):
-                for ty in range(min(ey_) // 32 - 5, max(ey_) // 32 + 5):
+            a, b = (pin[1] - y0, pin[0] - x0), (pout[1] - y0, pout[0] - x0)
+            line = np.zeros(blocked.shape, bool)              # the line, a minitile thicker each side
+            for cy, cx in o.cells:
+                line[max(0, cy * 8 - 8 - y0):cy * 8 + 16 - y0, max(0, cx * 8 - 8 - x0):cx * 8 + 16 - x0] = True
+
+            def leak(grid) -> int:
+                """How much of the line zerglings still get across (pixels where one can stand on it)."""
+                free = fits(grid, ling)
+                return int((free & line).sum()) if connected(free, a, b) else 0
+
+            now = leak(blocked)
+            if now == 0 or (self.door and not connected(fits(blocked, square(self.door)), a, b)):
+                continue                                      # walled (as far as it goes)
+            end = min(o.ends, key=lambda p: (p[1], p[0]))     # (ties: the wall grows from here)
+            for tx in range(min(xs) // 4 - size.w // 32, max(xs) // 4 + 1):
+                for ty in range(min(ys) // 4 - size.h // 32, max(ys) // 4 + 1):
                     bx0, by0, bx1, by1 = fp.box_at_tile(unit_type, tx, ty)
-                    if min(max(bx0 - p[0], p[0] - bx1, 0) ** 2 + max(by0 - p[1], p[1] - by1, 0) ** 2
-                           for p in (*o.ends, narrow)) > REACH ** 2 and                             max(bx0 - narrow[0], narrow[0] - bx1, 0) ** 2 + max(by0 - narrow[1], narrow[1] - by1, 0) ** 2 > reach ** 2:
+                    if not line[max(0, by0 - y0):max(0, by1 - y0 + 1), max(0, bx0 - x0):max(0, bx1 - x0 + 1)].any():
                         continue
-                    cx, cy = tx * 32 + size.w // 2, ty * 32 + size.h // 2
-                    if not fr["inside"][min(cy // 8, fr["inside"].shape[0] - 1), min(cx // 8, fr["inside"].shape[1] - 1)]:
-                        continue                              # on the enemy's side of the frontier
                     if any(abs(tx - rx) < T.SIZE[rt][0] and abs(ty - ry) < T.SIZE[rt][1] for rt, rx, ry in g.reserved):
                         continue
                     if not g.executor.fits(unit_type, tx, ty, builder):
                         continue
-                    # it grows the wall from a side of the opening, zergling-tight against it (a
-                    # building in the middle of the gap would leave two openings to hold)
-                    ex0, ey0, ex1, ey1 = bx0 - x0 - TOUCH, by0 - y0 - TOUCH, bx1 - x0 + TOUCH, by1 - y0 + TOUCH
-                    if not (sides & blocked)[max(0, ey0):max(0, ey1 + 1), max(0, ex0):max(0, ex1 + 1)].any():
-                        continue
                     trial = blocked.copy()
                     trial[max(0, by0 - y0):max(0, by1 - y0 + 1), max(0, bx0 - x0):max(0, bx1 - x0 + 1)] = True
-                    if not connected(fits(trial, square(DOOR)), a, b):
-                        continue                              # no door left
-                    left = widest_through(trial, a, b, lo=DOOR)
-                    score = (left, math.dist((cx, cy), narrow))
-                    if left < now - 4 and (best is None or score < best[0]):
+                    if self.door and not connected(fits(trial, square(self.door)), a, b):
+                        continue                              # (the door stays)
+                    left = leak(trial)
+                    if left >= now:
+                        continue
+                    cx, cy = tx * 32 + size.w // 2, ty * 32 + size.h // 2
+                    score = (left, math.dist((cx, cy), end))
+                    if best is None or score < best[0]:
                         best = (score, (tx, ty))
-        if best is not None:
-            g.say(f"sim city: {T.NAMES.get(unit_type, unit_type)} in the wall, leaving {best[0][0]} px")
-        return best[1] if best else None
+        if best is None:
+            return None
+        g.say(f"sim city: {T.NAMES.get(unit_type, unit_type)} in the wall"
+              + (", closing it" if best[0][0] == 0 else ""))
+        return best[1]
 
     def _frontier_now(self, obs: dict):
-        """The frontier of Gary's bases now (kept until its buildings change)."""
+        """The frontier of Gary's bases and its natural (kept until its buildings change), along
+        ground a wall can stand on."""
         from gary.walls import frontier
         g = self.g
         mine = [u for u in obs["units"] if u["owner"] == g.slot]
         key = frozenset((u["tag"], u["type"]) for u in mine if u["type"] in T.SIZE) | frozenset(g.reserved)
         if key != self._for:
-            ccs = [(u["x"], u["y"]) for u in mine if u["type"] == T.CC]
+            bases = [(u["x"], u["y"]) for u in mine if u["type"] == T.CC]
+            if g.natural is not None and not any(math.dist(b, g.natural.center) < 4 * 32 for b in bases):
+                bases.append(g.natural.center)                         # (where it will expand)
             self._for = key
-            self._frontier = frontier(g.hi.game, obs, ccs, list(g.enemy_starts)) if ccs and g.enemy_starts else None
+            self._frontier = frontier(g.hi.game, obs, bases, list(g.enemy_starts), buildable=self.buildable()) \
+                if bases and g.enemy_starts else None
         return self._frontier
+
+    def buildable(self):
+        """Per minitile: buildable terrain without the map's creep (None where the env can't tell)."""
+        if self._buildable is None:
+            import numpy as np
+            ex = self.g.executor
+            terrain = ex.terrain()
+            if terrain is None:
+                self._buildable = False
+            else:
+                ok = terrain[0] if ex._map_creep is None else terrain[0] & ~ex._map_creep
+                self._buildable = np.repeat(np.repeat(ok, 4, 0), 4, 1)
+        return self._buildable if self._buildable is not False else None
+

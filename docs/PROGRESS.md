@@ -185,6 +185,23 @@ quicker way to a playable Gary.
   (4 of 18 pool first, 3 of 30 hatch first). The hatch-first losses: Gary expands with 1 Barracks
   and no bunker at the natural, and 15 zerglings at 5:00 run over 5 marines (pros' 1-rax expand
   puts a bunker there). Every unit the pro made attacks, so it's harsher than the pro was.
+- **Which maps pros wall** (TvZ, 22 maps, 40 games each, at 5:00; per start location, since a
+  natural's size can differ a lot between starts): the natural closed to zerglings or narrowed to
+  half on Colosseum II (64%, every start), Neo Medusa (53%; 7 o'clock 8 of 11 closed, 10 o'clock 2
+  of 10) and Longinus (33%; 7 o'clock 5 of 9, 10 o'clock with a wider natural 0 of 9); at most 13%
+  elsewhere; Fighting Spirit, the benchmark's map, 0 of 29 (its natural is ~10 tiles wide: pros
+  hold it with a bunker). Width alone doesn't decide it (Eye of the Storm's naturals are as narrow
+  as the walled ones, and never walled). Funnel walls (from the Command Center to the cliff, the
+  mineral line left open) aren't counted: they don't close the frontier. On Colosseum II
+  (`tests/fixtures/replays/stardata_tvz_colosseum_pqt42.rep`): each natural's choke has creep built
+  into the map, and a build ordered onto creep still in the fog fails when the SCV arrives (Gary's
+  wall depots did); the executor now knows the map's creep from the start. The frontier can keep to
+  buildable ground (`frontier(buildable=...)`): there it finds the pros' wall line (two Supply
+  Depots and a Barracks just inside the natural's ramp). The sim city planner (`+simcity`, a door
+  left; `+simcity_closed`) now builds on that line by 1:30-2:40, but one building at a time leaves
+  6-26 px gaps zerglings get through. Parked: Gary holds rushes without walls now. Next for walls
+  (copy the pros' walls per map and start, lifting the Barracks or leaving a gap as they do): a
+  GitHub issue.
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

@@ -806,6 +806,15 @@ GARY_API int gary_env_terrain(void* h, uint8_t* walk, uint8_t* height, uint8_t* 
 	}
 }
 
+// Creep per 32x32 tile (1 where there is creep now). Returns the number of tiles, or -1.
+GARY_API int gary_env_creep(void* h, uint8_t* out) {
+	auto* e = (env*)h;
+	const state& st = e->player.st();
+	int n = (int)(st.game->map_tile_width * st.game->map_tile_height);
+	for (int i = 0; i != n; ++i) out[i] = (st.tiles[i].flags & tile_t::flag_has_creep) ? 1 : 0;
+	return n;
+}
+
 // The game's own ground pathing regions (what its pathfinder walks): per 8x8-pixel minitile, the
 // region there (region[], -1 where none), and per region its walkable group (units get only within
 // a group), whether it is walkable, and its walkable neighbors (as "a b" pairs, a < b, into

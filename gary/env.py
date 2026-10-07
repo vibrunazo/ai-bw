@@ -83,6 +83,8 @@ def _load_dll() -> ctypes.CDLL:
     dll.gary_env_unit_type_info.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
     dll.gary_env_create_unit.restype = ctypes.c_uint
     dll.gary_env_create_unit.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+    dll.gary_env_creep.restype = ctypes.c_int
+    dll.gary_env_creep.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
     dll.gary_env_set_upgrade.restype = None
     dll.gary_env_set_upgrade.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
     dll.gary_env_regions.restype = ctypes.c_int
@@ -295,6 +297,15 @@ class Game:
     def create_unit(self, owner: int, unit_type: int, x: int, y: int) -> int:
         """Test scenarios only: a finished unit at a map pixel (a building exactly there). Its tag, or 0."""
         return _dll.gary_env_create_unit(self._h, owner, unit_type, x, y)
+
+    def creep(self):
+        """Creep now, per 32x32 tile (numpy bool array, map tiles high x wide)."""
+        import numpy as np
+        obs = self.observe()
+        tw, th = obs["map"]["w"] // 32, obs["map"]["h"] // 32
+        out = np.zeros(tw * th, dtype=np.uint8)
+        _dll.gary_env_creep(self._h, out.ctypes.data)
+        return out.reshape(th, tw).astype(bool)
 
     def set_upgrade(self, owner: int, upgrade: int, level: int = 1) -> None:
         """Test fixtures only: a player's upgrade level, on its units at once."""
