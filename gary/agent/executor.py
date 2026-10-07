@@ -22,6 +22,7 @@ SIZE = T.SIZE                                              # tiles
 HK_CC = [4, 5]                        # one hotkey per Command Center (buildings can't share one)
 HK_RAX = [6, 7, 8, 9]
 BUSY_ORDERS = {30, 31, 33}            # placing / constructing a building
+BAD_FOR = 60 * 24                     # a spot where a build failed (not for money) isn't tried again for this long
 LOST_ORDER = 6 * 24                   # a reserved spot with no SCV on its way after this: the order was lost
 RESUME_AFTER = 24                     # an unfinished building nobody has built for a second gets an SCV
 RESUME_RETRY = 24 * 4                 # ...and if that one doesn't arrive either, another after 4 s
@@ -51,6 +52,7 @@ class ScriptedExecutor:
         macro orders it again rather than wait 40 s for it."""
         g = self.g
         keep = []
+        me = g.hi.observe()["me"]
         for r in g.reserved:
             ut, tx, ty = r
             cx, cy = tx * 32 + SIZE[ut][0] * 16, ty * 32 + SIZE[ut][1] * 16
@@ -58,12 +60,32 @@ class ScriptedExecutor:
             age = g.hi.frame - g.reserved_at.get(r, 0)
             heading = any(u["type"] == SCV and u["order"] in BUSY_ORDERS and "tx" in u
                           and math.dist((u["tx"], u["ty"]), (cx, cy)) < 96 for u in mine)
-            if not built and age < 24 * 40 and (heading or age < LOST_ORDER):
+            # its builder stopped placing it and nothing was started: the build failed (the money
+            # was spent meanwhile, or the game wouldn't place it there: its pathfinder left the
+            # SCV short of the spot). Again now, and somewhere else if money wasn't short
+            builder = next((u for u in mine if u["tag"] == g.builder_of.get(r)), None)
+            failed = not built and builder is not None and age > 24 and builder["order"] not in BUSY_ORDERS \
+                and math.dist((builder["x"], builder["y"]), (cx, cy)) < 4 * 32
+            if not built and not failed and age < 24 * 40 and (heading or age < LOST_ORDER):
                 keep.append(r)
                 continue
-            if not built and age < 24 * 40:
+            if failed:
+                g.build_failed[ut] = g.hi.frame
+                if me is not None and me["minerals"] < T.COST[ut][0]:
+                    g.say(f"its {T.NAMES.get(ut, ut)} failed for money: again")
+                elif g.hi.frame - g.failed_at.get(r, -10 ** 9) < BAD_FOR:
+                    g.bad_spots[r] = g.hi.frame              # (twice: somewhere else)
+                    g.say(f"couldn't place its {T.NAMES.get(ut, ut)} there twice: elsewhere")
+                else:
+                    # the game's pathfinder can leave an SCV stuck short of the spot (the order then
+                    # fails): the same SCV again from where it stands, a new order clears that
+                    g.failed_at[r] = g.hi.frame
+                    g.retry_with[ut] = builder["tag"]
+                    g.say(f"its {T.NAMES.get(ut, ut)} didn't start: again, with the same SCV")
+            elif not built and age < 24 * 40:
                 g.say(f"its {T.NAMES.get(ut, ut)} order was lost: again")
             g.reserved_at.pop(r, None)
+            g.builder_of.pop(r, None)
         g.reserved = keep
 
     def resume_construction(self, mine: list[dict]) -> bool:
@@ -160,9 +182,12 @@ class ScriptedExecutor:
         return u["type"] == SCV and u["completed"] and u["order"] not in BUSY_ORDERS \
             and bool(screen_of(obs, u["x"], u["y"]))
 
-    def pick_worker(self, obs: dict, mine: list[dict]) -> dict | None:
+    def pick_worker(self, obs: dict, mine: list[dict], near=None) -> dict | None:
+        """A free SCV on screen: the one nearest where it will build, if known (a long walk across
+        the mineral line can leave it stuck short of the spot), else nearest the main."""
         cands = [u for u in mine if self.free_worker(obs, u)]
-        return min(cands, key=lambda u: math.dist((u["x"], u["y"]), self.g.main.center)) if cands else None
+        to = near or self.g.main.center
+        return min(cands, key=lambda u: math.dist((u["x"], u["y"]), to)) if cands else None
 
     def on_gas(self, obs: dict, refinery: int) -> int:
         """Workers on this refinery: the ones Gary sent that are still on gas (on a gas order, just
@@ -203,7 +228,8 @@ class ScriptedExecutor:
             for tx in range(int(ax // 32) - 16, int(ax // 32) + 16):
                 cands.append((math.dist((tx * 32 + w * 16, ty * 32 + h * 16), (ax, ay)), tx, ty))
         for _, tx, ty in sorted(cands):
-            if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.g.reserved):
+            if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.g.reserved) \
+                    or self._bad(unit_type, tx, ty):
                 continue
             # keep a walkable gap around buildings: the bigger footprint must fit too
             if self.fits(unit_type, tx, ty, builder) and self.fits(unit_type, tx - 1, ty - 1, builder) and \
@@ -224,13 +250,19 @@ class ScriptedExecutor:
                        for ty in range(cy - 8, cy + 8) for tx in range(cx - 8, cx + 8))
         for same_level in ((True, False) if level is not None else (False,)):
             for _, tx, ty in cands:
-                if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.g.reserved):
+                if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.g.reserved) \
+                        or self._bad(unit_type, tx, ty):
                     continue
                 if same_level and (terrain[1][ty * 4:(ty + h) * 4, tx * 4:(tx + w) * 4] != level).any():
                     continue
                 if self.fits(unit_type, tx, ty, builder):
                     return tx, ty
         return None
+
+    def _bad(self, unit_type: int, tx: int, ty: int) -> bool:
+        """A spot where a build of this type failed less than BAD_FOR ago (the game wouldn't place it)."""
+        f = self.g.bad_spots.get((unit_type, tx, ty))
+        return f is not None and self.g.hi.frame - f < BAD_FOR
 
     def fits(self, unit_type: int, tx: int, ty: int, builder: int) -> bool:
         """The game accepts the building there, and the terrain under it is buildable. The game's
@@ -297,6 +329,20 @@ class ScriptedExecutor:
     def _task_build(self, obs: dict, mine: list[dict], t: Task) -> None:
         g, hi = self.g, self.g.hi
         if t.stage == "start":                      # get a worker from the main
+            again = next((u for u in mine if u["tag"] == g.retry_with.get(t.unit_type)), None)
+            if again is not None and again["order"] not in BUSY_ORDERS:   # (a failed build's SCV, where it stands)
+                if obs["selection"] == [again["tag"]]:
+                    g.retry_with.pop(t.unit_type, None)
+                    t.data["worker"] = again["tag"]
+                    t.stage = "place" if t.where == "main" else "travel"
+                    return
+                p = screen_of(obs, again["x"], again["y"])
+                if p is None:
+                    hi.camera_minimap(again["x"], again["y"])
+                else:
+                    hi.click(*p)
+                return
+            g.retry_with.pop(t.unit_type, None)
             if not g.look_at(obs, "main"):
                 return
             w = t.data.get("worker")
@@ -311,7 +357,7 @@ class ScriptedExecutor:
                     t.data["worker"] = got["tag"]
                     t.stage = "place" if t.where == "main" else "travel"
                     return
-            w = self.pick_worker(obs, mine)
+            w = self.pick_worker(obs, mine, t.data.get("near"))
             if not w:
                 self.fail_build(t)
                 return
@@ -386,6 +432,7 @@ class ScriptedExecutor:
             if hi.build(t.unit_type, *p).accepted:
                 g.reserved.append((t.unit_type, *spot))
                 g.reserved_at[(t.unit_type, *spot)] = hi.frame
+                g.builder_of[(t.unit_type, *spot)] = t.data["worker"]
                 g.task = None
 
     def _task_hotkey(self, obs: dict, mine: list[dict], t: Task) -> None:

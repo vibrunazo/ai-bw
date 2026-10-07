@@ -52,7 +52,7 @@ quicker way to a playable Gary.
 | Learning beyond imitation | Outcome-weighted learning, reinforcement learning | Fight estimate learned from outcomes; reinforcement learning on pro scenarios runs, no gain yet | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — | — | — |
 | POV viewer | Watch any game from Gary's screen (`viewer/`) | Cursor, clicks, every action in words; Remastered replays; videos | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | — |
 | Trace | Gary's decisions and reasons, recorded (§6.5) | Decision log with model probabilities and fight estimates; POV action log | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
-| Evaluation | Matches against opponents, many seeds, a scoreboard (§9) | `eval/vs_rush.py`: several seeds against one scripted Zerg rush; `eval/scenarios.py`: 114 pro home defenses where Gary takes over the Terran, the Zerg reacting once the game leaves the pro's, several draws of Gary's hands | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ○ | ○ | — |
+| Evaluation | Matches against opponents, many seeds, a scoreboard (§9) | `eval/vs_rush.py`: several seeds against scripted Zergs, or pro Zergs' armies spawned on their timings; `eval/scenarios.py`: 114 pro home defenses where Gary takes over the Terran, the Zerg reacting once the game leaves the pro's, several draws of Gary's hands | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ○ | ○ | — |
 | Matchups and races | | Terran in TvZ only | T | T | T | T | T | T | T | T | T | T | T | T |
 
 ## Versions
@@ -165,6 +165,26 @@ quicker way to a playable Gary.
   had gone to the SCV still constructing the depot, and nothing came until 2:11). Against the
   pro-timed 9-pool: **lost 2, won 16** of 48 (27 lost this morning); 7:00 rush lost 0, won 15;
   Zerg v2 lost 1, won 10; home defenses −55.
+- **Builds that didn't start** (2026-10-07): in both remaining losses the bunker was ordered with
+  the money there, and its SCV stopped short of the spot: OpenBW's pathfinder marks a unit that
+  got stuck on the way as immovable, and the build order then fails on arrival (the game's own
+  checks, read through a debug call). The SCV nearest the spot now builds (not the one nearest the
+  main, across the mineral line), and a build whose SCV stopped without starting it is ordered
+  again at once with the same SCV, somewhere else after a second failure there. Both seeds held
+  (the bunker at 2:23, first try). 9-pool **lost 3, won 18** of 48 (the 3: the rush seen only by
+  the 2:20 rule, the bunker down at 2:27 with 1-2 marines when the zerglings came); 7:00 rush lost
+  0, won 11; Zerg v2 lost 0, won 10; home defenses −55. (Keeping the bunker's 100 minerals until
+  it was placed, on top of its reservation, had held 200: 4 lost.)
+- **Pro Zergs, replayed** (`gary/bots/zerg_replayed.py`, `--opponent replayed`): a test fixture,
+  not a player. Each seed picks a pro Zerg from a TvZ game and the env creates its zerglings,
+  hydralisks and mutalisks when that pro's were done, its buildings when ordered, and zergling
+  speed when researched; everything goes at Gary as it hatches (the dummy's waves). No economy
+  (killing its drones changes nothing): it tests holding pressure, never Gary's economy. 18 of
+  48 seeds drew a pool first (from a 4-pool at 0:45 to a pool at 1:40); pool-first armies reach
+  the Terran at 3:15-3:56, hatch-first at 4:35-6:16. Gary v0.11, 48 seeds: **lost 7**, won 0
+  (4 of 18 pool first, 3 of 30 hatch first). The hatch-first losses: Gary expands with 1 Barracks
+  and no bunker at the natural, and 15 zerglings at 5:00 run over 5 marines (pros' 1-rax expand
+  puts a bunker there). Every unit the pro made attacks, so it's harsher than the pro was.
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

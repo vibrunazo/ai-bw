@@ -489,6 +489,25 @@ GARY_API bool gary_env_unit_type_info(void* h, int unit_type, int* out) {
 	return true;
 }
 
+// Debugging a builder (an SCV on a PlaceBuilding order): which of the game's own checks at arrival
+// would fail now. Bits: 1 not at its move target yet, 2 more than 128 px from the spot, 4 not enough
+// resources, 8 can't place (units counted even undetected), 16 no building queued, 32 immovable.
+GARY_API int gary_env_debug_builder(void* h, unsigned tag) {
+	auto* e = (env*)h;
+	auto& f = *e->funcs;
+	unit_t* u = f.get_unit(unit_id((uint16_t)tag));
+	if (!u) return -1;
+	int bits = 0;
+	if (!f.unit_is_at_move_target(u)) bits |= 1;
+	{ int dx = u->order_target.pos.x - u->sprite->position.x, dy = u->order_target.pos.y - u->sprite->position.y; if (dx * dx + dy * dy > 128 * 128) bits |= 2; }
+	if (u->build_queue.empty()) return bits | 16;
+	const unit_type_t* ut = u->build_queue.front();
+	if (!f.player_has_supply_and_resources_for(u->owner, ut, false)) bits |= 4;
+	if (!f.can_place_building(u, u->owner, ut, u->order_target.pos, true, false)) bits |= 8;
+	if (f.u_immovable(u)) bits |= 32;
+	return bits;
+}
+
 // For test scenarios (the wall checks, gary/walls.py): a finished unit of a player at a map pixel,
 // as the game places start units (a building exactly there; a ground unit at the nearest free
 // spot). Returns its tag, or 0 if it can't be placed.
@@ -502,6 +521,15 @@ GARY_API unsigned gary_env_create_unit(void* h, int owner, int unit_type, int x,
 	} catch (const std::exception&) {          // no room there (the game's own placement failed)
 		return 0u;
 	}
+}
+
+// For test fixtures (gary/bots/zerg_replayed.py): a player's upgrade level, applied to its units at once.
+GARY_API void gary_env_set_upgrade(void* h, int owner, int upgrade, int level) {
+	auto* e = (env*)h;
+	auto& f = *e->funcs;
+	if (owner < 0 || owner >= 12 || upgrade < 0 || upgrade >= 61) return;
+	f.st.upgrade_levels[owner][(UpgradeTypes)upgrade] = level;
+	f.apply_upgrades_to_player_units(owner);
 }
 
 // --- new games from a map --------------------------------------------------------------------

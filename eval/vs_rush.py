@@ -6,6 +6,10 @@ the table shows wins, losses and games still running at the time limit.
 
     python -m eval.vs_rush --versions v02 v03 --seeds 1 2 3 4 --attack-after 420
     python -m eval.vs_rush --versions v03 --seeds 1 2 3 4 5 6 --attack-after 0 --minutes 10
+    python -m eval.vs_rush --versions v011 --opponent replayed --seeds 1 2 3 4 --attack-after 0
+
+--opponent replayed is a test fixture (gary/bots/zerg_replayed.py): each seed's Zerg army appears
+when a pro Zerg's did, in a real TvZ game.
 """
 
 from __future__ import annotations
@@ -51,7 +55,7 @@ def main() -> None:
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--style", type=int, help="steer Gary's macro toward this build style")
     ap.add_argument("--out", help="folder for replays and logs (default: a temporary folder)")
-    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2"], help="the Zerg (gary/bots/)")
+    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2", "replayed"], help="the Zerg (gary/bots/): replayed spawns a pro's army on time")
     args = ap.parse_args()
     out = Path(args.out or tempfile.mkdtemp(prefix="gary_eval_"))
     out.mkdir(parents=True, exist_ok=True)

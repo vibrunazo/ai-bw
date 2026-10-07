@@ -83,10 +83,14 @@ def _load_dll() -> ctypes.CDLL:
     dll.gary_env_unit_type_info.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
     dll.gary_env_create_unit.restype = ctypes.c_uint
     dll.gary_env_create_unit.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+    dll.gary_env_set_upgrade.restype = None
+    dll.gary_env_set_upgrade.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
     dll.gary_env_regions.restype = ctypes.c_int
     dll.gary_env_regions.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
                                      ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.POINTER(ctypes.c_int),
                                      ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
+    dll.gary_env_debug_builder.restype = ctypes.c_int
+    dll.gary_env_debug_builder.argtypes = [ctypes.c_void_p, ctypes.c_uint]
     dll.gary_env_unit_type.restype = ctypes.c_int
     dll.gary_env_unit_type.argtypes = [ctypes.c_void_p, ctypes.c_uint]
     dll.gary_env_set_name.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p]
@@ -291,6 +295,10 @@ class Game:
     def create_unit(self, owner: int, unit_type: int, x: int, y: int) -> int:
         """Test scenarios only: a finished unit at a map pixel (a building exactly there). Its tag, or 0."""
         return _dll.gary_env_create_unit(self._h, owner, unit_type, x, y)
+
+    def set_upgrade(self, owner: int, upgrade: int, level: int = 1) -> None:
+        """Test fixtures only: a player's upgrade level, on its units at once."""
+        _dll.gary_env_set_upgrade(self._h, owner, upgrade, level)
 
     def selection(self, slot: int) -> list[int]:
         """The units this player has selected right now (tags)."""

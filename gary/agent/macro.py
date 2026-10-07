@@ -306,6 +306,8 @@ class OneBaseDefense:
         if self._bunker_coming(mine) or not any(u["type"] == T.RAX and u["completed"] for u in mine):
             return False
         budget = me["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
+        if g.build_failed.get(T.BUNKER, -1) > self.next_bunker - BUNKER_RETRY:   # one just failed: again now
+            self.next_bunker = 0
         if budget >= T.COST[T.BUNKER][0] - 40 and g.hi.frame >= self.next_bunker:
             self.next_bunker = g.hi.frame + BUNKER_RETRY
             g.task = Task("build", T.BUNKER, "main", data={"near": g.posture.bunker_spot, "level_at": g.main.center},
@@ -327,7 +329,9 @@ class OneBaseDefense:
         # bunker needs
         if not any(u["type"] == T.RAX for u in mine) and not coming(T.RAX):
             return goal(BUILD, T.RAX, "Barracks") if doable(BUILD, T.RAX) else None
-        keep = T.COST[T.BUNKER][0] if not self._bunker_coming(mine) else 0
+        # (an ordered bunker's money is held by its reservation until it starts)
+        keep = T.COST[T.BUNKER][0] if not any(u["type"] == T.BUNKER for u in mine) and \
+            not any(r == T.BUNKER for r, *_ in g.reserved) else 0
         spare = lambda ut: me["minerals"] - sum(COST[r] for r, *_ in g.reserved) - keep >= T.COST[ut][0]
         # a depot takes longer than a marine or an SCV: start it while each producer has 2 left
         producers = sum(1 for u in done if u["type"] in (T.CC, T.RAX))
