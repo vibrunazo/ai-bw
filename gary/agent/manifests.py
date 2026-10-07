@@ -80,9 +80,11 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}}},
              "arbiter": "fixed_priority/v1"},
-    # v0.12: v0.11 with a bunker at the natural once it takes it (macro.py)
+    # v0.12: v0.11 with a bunker at the natural once it takes it, and its first Barracks ordered by
+    # 1:18 if the model hasn't (macro.py)
     "v012": {"version": "v0.12", "posture": "early_pool/v1", "leases": "enforced",
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True}, "army": _ARMY,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24},
+             "army": _ARMY,
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}}},
              "arbiter": "fixed_priority/v1"},
@@ -209,6 +211,9 @@ OPTIONS = {
     # on top of sim city, in 78 wall fights (eval/walls_bench.py) -12 ± 12
     "gap_post": _roles(gap_post=True),
     # depots, barracks, academies wall the frontier, a door left (simcity.py)
+    # the first Barracks ordered by 1:18 (not 1:30): on v0.12 without it, replayed pros on three maps
+    # lost 15 of 144 (19), the 9-pool 2 either way. Placed at ~1:38: Gary's money comes ~10 s late
+    "rax118": lambda m: m["macro"].update(rax_by=78 * 24),
     # a bunker at the natural once Gary takes it, where pros put theirs (macro.py): on v0.11, against
     # the replayed pros (48 seeds), lost 28 of 192 on three maps (v0.11 37); 9-pool lost 2 either way
     "natbunker": lambda m: m["macro"].update(natural_bunker=True),
@@ -278,7 +283,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         macro = load("macro", str(path))
         models["macro"] = getattr(macro, "path", "?")
         builds = {"one_base_defense": OneBaseDefense(g)} if "one_base_defense" in m["macro"].get("builds", []) else {}
-        g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False))
+        g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
+                               m["macro"].get("rax_by", 90 * 24))
     if m["army"] is not None:
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)

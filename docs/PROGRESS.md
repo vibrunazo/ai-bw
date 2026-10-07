@@ -60,15 +60,17 @@ quicker way to a playable Gary.
 ### v0.12 (October 2026): a bunker at the natural
 
 - **What it is:** v0.11 that builds a bunker at its natural once it takes it (a rule on the learned
-  macro: macro.py, manifest `v012`, the default), where pros put theirs. Pro TvZ Terrans that
+  macro: macro.py, manifest `v012`, the default), where pros put theirs, and orders its first
+  Barracks by 1:18 if the model hasn't (was 1:30: placed at 1:43, after the pros' ~1:30). Pro TvZ Terrans that
   expand by 5:00 build one within 2:30 of the Command Center in about half the games, on every
   open map (Fighting Spirit 52%, Python 59%, Heartbreak Ridge 50%...; Colosseum II, walled, 19%),
   a median 35-56 s after the CC, about 5 tiles from it: 45% of the way from the CC to the
   natural's way out (the frontier).
 - **Results:** benchmarks on three maps now (Fighting Spirit, Python, Heartbreak Ridge:
   `tests/fixtures/replays/`). Against the replayed pros (as replayed games, below), 48 seeds each:
-  lost 3 / 7 / 9 (v0.11 2 / 9 / 14), 19 of 144 against 25; the hatch-first losses 7 against 13,
-  the pool-first ones 12 either way. Pro-timed 9-pool on Fighting Spirit lost 2 (v0.11 2), won 12 (8).
+  lost 2 / 6 / 7 (v0.11 2 / 9 / 14), 15 of 144 against 25 (the natural bunker alone: 19); the
+  hatch-first losses 3 against 13, the pool-first ones 12 either way. Pro-timed 9-pool on Fighting
+  Spirit lost 2 (v0.11 2), won 14 (8).
 - **The replayed pros were too strong** until now: the fixture spawned what the build orders
   list, and those are orders, not units (one order morphs several larvae; spammed orders make
   none): a Zerg with 24 zerglings at 3:00 by its orders had 4 in the game. Now the fixture plays
@@ -82,7 +84,8 @@ quicker way to a playable Gary.
 - **Most urgently missing:** the fastest pool-first pros (6 of 19 on Heartbreak Ridge, its short
   rush distance): their 8-9 zerglings arrive at 2:55, when Gary's first marine is just out
   (2:51) and its bunker isn't finished. Pros order their Barracks at 1:30 there and their first
-  marine at 2:23; Gary's Barracks goes down at 1:43 (the 1:30 rule, then the walk).
+  marine at 2:23; Gary's Barracks goes down at 1:38 even when ordered at 1:18: its 150 minerals
+  come at 1:34 (7 SCVs at 0:50, the first depot at 1:06: about 10 s behind a pro's opening).
 
 ### v0.11 (October 2026): more workers pulled, a post at home (#2)
 
