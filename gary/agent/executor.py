@@ -120,7 +120,7 @@ class ScriptedExecutor:
         """Idle workers on screen go back to mining (game start, after building something)."""
         g = self.g
         idle = [u for u in done if u["type"] == SCV and u["order"] == IDLE and screen_of(obs, u["x"], u["y"])
-                and g.ignore_idle_until.get(u["tag"], 0) <= g.hi.frame]
+                and g.ignore_idle_until.get(u["tag"], 0) <= g.hi.frame and u["tag"] != g.scout]
         if idle:
             g.task = Task("mine", data={"tags": [u["tag"] for u in idle]}, started=g.hi.frame)
             return True
@@ -187,9 +187,10 @@ class ScriptedExecutor:
     def free_worker(self, obs: dict, u: dict) -> bool:
         """A finished SCV on screen that isn't busy placing or constructing a building (or walking
         to build one)."""
-        parked = self.g.parked
+        g = self.g
         return u["type"] == SCV and u["completed"] and u["order"] not in BUSY_ORDERS \
-            and bool(screen_of(obs, u["x"], u["y"])) and (parked is None or parked.data["worker"] != u["tag"])
+            and bool(screen_of(obs, u["x"], u["y"])) and u["tag"] != g.scout and u["tag"] not in g.pulled \
+            and (g.parked is None or g.parked.data["worker"] != u["tag"])
 
     def resume_parked(self, obs: dict, mine: list[dict]) -> bool:
         """The parked build (its SCV walking there) goes on once its money is there, or after

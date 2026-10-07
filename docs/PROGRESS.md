@@ -81,6 +81,21 @@ quicker way to a playable Gary.
   Zerg's base by 2:20 on a four-player map); pulling workers only for zerg in the mineral line
   (`+pull_line`: a few more SCVs kept, the bunker's spot mattered more).
 
+- **The scout was taken (shared code, every version):** the executor took Gary's scouting SCV
+  as a builder (and the mining chore sent it back to work) when it was on screen as it left: the
+  Zerg's base was found in about a third of the games on four-player maps, and with nothing seen
+  by 2:20 Gary played rush defense in nearly every game (and expanded at ~4:15). Now builders and
+  idle mining leave the scout alone, the scout passes the Zerg's natural after circling its main,
+  and a pool seen with one hatchery is an early pool if seen by 2:00 (hatch firsts order theirs
+  at 2:05), otherwise once the natural has been looked at (always waiting for it, the dummy's
+  9-pools were recognized at 3:04 instead of 1:55: 7 of 48 lost; a 2:45 blind alarm instead of
+  2:20 lost 2 more). Gary now expands at 2:26-2:46 (pros 2:54) when it sees a hatch first. The
+  price: replayed pros lost 11 of 144 (3 when Gary turtled every game), the dummy's 9-pool 1 (0),
+  7:00 rush 3 (3); by 12:00, in the games not lost, about the same buildings and army (Heartbreak
+  Ridge more: 36 and 35 against 30 and 29). Still false alarms: on four-player maps the scout has
+  checked one start by 2:20 (18 of 29 hatch firsts on Fighting Spirit went into rush defense), and
+  zerglings seen before 4:00 count as an early pool (a hatch first's arrive at 3:20-5:00).
+
 ### v0.12 (October 2026): a bunker at the natural
 
 - **What it is:** v0.11 that builds a bunker at its natural once it takes it (a rule on the learned

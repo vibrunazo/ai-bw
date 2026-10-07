@@ -51,7 +51,11 @@ POOL_BY = 3 * 60 * 24                # a Spawning Pool seen before 3:00 with one
 LINGS_BY = 4 * 60 * 24               # ...and so are zerglings before 4:00
 MANY_LINGS, MANY_LINGS_BY = 6, 5 * 60 * 24   # ...or this many at once before 5:00
 UNKNOWN_BY = 140 * 24                # ...and with no Zerg building seen by 2:20, play it as one (the
-                                     # scout is still looking: a 9-pool's zerglings come at 3:00)
+                                     # scout is still looking: a 9-pool's zerglings come at 3:00; at
+                                     # 2:45, 2 of 48 9-pools were seen too late)
+POOL_EARLY = 120 * 24                # a pool seen by 2:00 is an early pool (hatch firsts' pools are
+                                     # ordered at 2:05, median); one seen later only with one hatchery
+                                     # once the scout has passed the Zerg's natural
 RUSH_MARINES = 4                     # in or at the finished bunker: the rush build can end...
 CALM = 20 * 24                       # ...once no zerg fighter was at home for this long
 HOLD_ARMY, HOLD_RATIO = 6, 1.5       # Gary holds until its army supply is this, and this many times
@@ -135,8 +139,13 @@ class EarlyPoolPosture:
         lings = sum(1 for u in enemy if u["type"] == LING)
         fighters = enemy_fighters(obs, g.slot)
         self.most_enemy = max(self.most_enemy, sum(supply_x2(u["type"]) for u in fighters) / 2)
+        # a pool with one hatchery is an early pool if seen by 2:00, later once the scout has passed
+        # the Zerg's natural (a hatch first's pool is there by 2:05 too: judged at the main alone,
+        # 9 of 29 hatch firsts on Python looked like early pools; waiting for the natural always,
+        # 9-pools were seen at 3:04 instead of 1:55 and 7 of 48 lost)
+        looked = getattr(g.army, "scout_done", True) or hi.frame <= POOL_EARLY
         if not self.rush and not self.hold and ((hi.frame <= POOL_BY and any(u["type"] == POOL for u in enemy)
-                                                 and len(self.hatcheries_seen) <= 1) or
+                                                 and len(self.hatcheries_seen) <= 1 and looked) or
                                                 (hi.frame <= LINGS_BY and lings) or
                                                 (hi.frame <= MANY_LINGS_BY and lings >= MANY_LINGS) or
                                                 (UNKNOWN_BY <= hi.frame <= POOL_BY and not self.base_seen)):

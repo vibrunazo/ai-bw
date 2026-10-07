@@ -177,12 +177,14 @@ class LearnedArmy:
             return False
         if self.circle is None and any(u["owner"] not in (g.slot, 11) and is_building(u["type"]) for u in obs["units"]):
             # found them: around their main once (the pool can stand out of sight of the hatchery),
-            # then home
+            # past their natural (a hatchery there by 1:50 is a hatch first, whatever the pool
+            # says), then home
             c = self.scout_targets[0] if self.scout_targets else (scout["x"], scout["y"])
             ring = [(c[0] + math.cos(k * math.pi / 3) * CIRCLE, c[1] + math.sin(k * math.pi / 3) * CIRCLE) for k in range(6)]
             k0 = min(range(6), key=lambda k: math.dist(ring[k], (scout["x"], scout["y"])))
             w, h = g.map.size
             self.circle = [(int(min(max(x, 32), w - 32)), int(min(max(y, 32), h - 32))) for x, y in ring[k0:] + ring[:k0]]
+            self.circle.append(g.map.natural_of(g.map.base_near(c)).center)
         if self.circle is not None:
             reached = bool(self.circle) and math.dist((scout["x"], scout["y"]), self.circle[0]) < 2 * 32
             if reached:
