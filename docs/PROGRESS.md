@@ -122,6 +122,15 @@ quicker way to a playable Gary.
   rush dummy: the first moment 4+ zerg fighters come within 12 tiles of a wall gap from outside;
   78 in 96 games) and plays each from there by variants, 8 draws: the post −12 ± 12 (better in
   32, worse in 31; Gary nets +162 there either way: the dummy is weak). Not adopted.
+- **A better scripted Zerg** (`gary/bots/zerg_v1.py`, `eval/vs_rush.py --opponent v1`): the
+  dummy's 9-pool, with an army that forms control groups of 12, gathers outside Gary's natural,
+  judges Gary's defense (what it sees, and the most it saw at once in the last 3 min), surrounds,
+  retreats from losing fights and defends its hatchery (the dummy let Gary kill it with 36
+  zerglings alive). Gary v0.11 lost (48 seeds, immediate): to the dummy 5, to v1 2, to v1
+  always attacking 4, without the surround too 5; hunting SCVs made it 1 (zerglings chasing
+  pulled SCVs ignore the marines). With a 9-pool on 9 drones, smart play gives Gary time: it
+  isn't harder. A Zerg that tests walls needs a real economy (more drones, two hatcheries, speed)
+  behind the same army.
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

@@ -26,7 +26,7 @@ def play(version: str, seed: int, args: argparse.Namespace, out: Path) -> dict:
     rep = out / f"{version}_seed{seed}.rep"
     cmd = [sys.executable, "-m", "gary.bots.zerg_rush", "--vs", version, "--map", str(args.map),
            "--minutes", str(args.minutes), "--seed", str(seed), "--attack-after", str(args.attack_after),
-           "--save", str(rep)] + (["--style", str(args.style)] if args.style is not None else [])
+           "--save", str(rep), "--opponent", args.opponent] + (["--style", str(args.style)] if args.style is not None else [])
     proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
     log = proc.stdout + proc.stderr
     (out / f"{version}_seed{seed}.log").write_text(log, encoding="utf-8")
@@ -51,6 +51,7 @@ def main() -> None:
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--style", type=int, help="steer Gary's macro toward this build style")
     ap.add_argument("--out", help="folder for replays and logs (default: a temporary folder)")
+    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d"], help="the Zerg (gary/bots/)")
     args = ap.parse_args()
     out = Path(args.out or tempfile.mkdtemp(prefix="gary_eval_"))
     out.mkdir(parents=True, exist_ok=True)

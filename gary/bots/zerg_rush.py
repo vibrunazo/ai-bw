@@ -117,23 +117,8 @@ class ZergRush:
                     self.pool_ordered = hi.frame      # (the drone stays off the idle list: it becomes the pool)
             return
 
-        # waves of zerglings to the enemy start
-        lings = [u for u in mine if u["type"] == LING and u["completed"] and u["tag"] not in self.sent]
-        if len(lings) >= WAVE and hi.frame >= self.attack_after:
-            here = [u for u in lings if screen_of(obs, u["x"], u["y"])]
-            if self.stage == "attack":
-                hi.minimap_command(C.ORDER_ATTACK_MOVE, *self.target)
-                self.sent.update(obs["selection"])
-                self.waves += 1
-                self.stage = ""
-                return
-            if here:
-                pts = [screen_of(obs, u["x"], u["y"]) for u in here]
-                hi.box(max(0, min(p[0] for p in pts) - 8), max(0, min(p[1] for p in pts) - 8),
-                       min(hi.p.viewport[0] - 1, max(p[0] for p in pts) + 8),
-                       min(hi.p.viewport[1] - 1, max(p[1] for p in pts) + 8))
-                self.stage = "attack"
-                return
+        if self.army(obs, mine):
+            return
 
         # once the pool is down: the hatchery's rally away from the larvae (click the hatchery's top,
         # above the larvae, then right-click the rally spot)
@@ -174,6 +159,30 @@ class ZergRush:
         if hi.morph(want).accepted and want == OVERLORD:
             self.overlord_at = hi.frame
 
+    def army(self, obs: dict, mine: list[dict]) -> bool:
+        """Waves of zerglings to the enemy start (attack-moved there, 12 at a time). True if it acted."""
+        hi = self.hi
+        lings = [u for u in mine if u["type"] == LING and u["completed"] and u["tag"] not in self.sent]
+        if len(lings) >= WAVE and hi.frame >= self.attack_after:
+            here = [u for u in lings if screen_of(obs, u["x"], u["y"])]
+            if self.stage == "attack":
+                hi.minimap_command(C.ORDER_ATTACK_MOVE, *self.target)
+                self.sent.update(obs["selection"])
+                self.waves += 1
+                self.stage = ""
+                return True
+            if here:
+                self._box(obs, here)
+                self.stage = "attack"
+                return True
+        return False
+
+    def _box(self, obs: dict, units: list[dict]) -> None:
+        pts = [screen_of(obs, u["x"], u["y"]) for u in units]
+        self.hi.box(max(0, min(p[0] for p in pts) - 8), max(0, min(p[1] for p in pts) - 8),
+                    min(self.hi.p.viewport[0] - 1, max(p[0] for p in pts) + 8),
+                    min(self.hi.p.viewport[1] - 1, max(p[1] for p in pts) + 8))
+
     def _pool_spot(self, builder: int = 0) -> tuple[int, int] | None:
         hx, hy = self.home[0] // 32, self.home[1] // 32
         for r in range(3, 9):
@@ -187,7 +196,7 @@ class ZergRush:
 
 
 def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_terran, name: str,
-               attack_after_s: float = 0) -> None:
+               attack_after_s: float = 0, opponent: str = "dummy") -> None:
     """Gary (Terran, made by make_terran(hi, mapinfo)) against ZergRush on a headless game."""
     with Game.new(map_path, ["T", "Z"], [name, "Zerg rush"], seed=seed, command_delay=LIVE_COMMAND_DELAY) as game:
         mapinfo = MapInfo.from_game(game)
@@ -201,7 +210,11 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
         # Gary with its pro-speed hands; the dummy keeps b_rank hands (the benchmark stays the same)
         his = {r: HumanInterface(game, s, PROFILES["pro" if r == "T" else "b_rank"], seed=s) for r, s in slot_of.items()}
         gary = make_terran(his["T"], mapinfo)
-        zerg = ZergRush(his["Z"], mapinfo)
+        if opponent in ("v1", "v1a", "v1d"):
+            from gary.bots import zerg_v1 as Z
+            zerg = {"v1": Z.ZergV1, "v1a": Z.ZergV1Aggressive, "v1d": Z.ZergV1Direct}[opponent](his["Z"], mapinfo)
+        else:
+            zerg = ZergRush(his["Z"], mapinfo)
         # the dummy knows where Gary is (no scouting): its waves go straight to Gary's main
         zerg.attack_after = int(attack_after_s * 24)
         zerg.target = next((u["x"], u["y"]) for u in obs["units"] if u["type"] == C.COMMAND_CENTER)
@@ -245,10 +258,12 @@ def main() -> None:
     ap.add_argument("--save", default="gary_vs_rush.rep")
     ap.add_argument("--attack-after", type=float, default=0, help="no attack before this many seconds")
     ap.add_argument("--style", type=int, help="build style (taxonomy cluster) to steer Gary's macro toward")
+    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d"],
+                    help="the Zerg: this dummy, or gary/bots/zerg_v1.py (gathers, judges, surrounds, retreats)")
     args = ap.parse_args()
     from gary.agent.manifests import build_gary
     make = lambda hi, m: build_gary(hi, m, args.vs, args.style)
-    play_match(args.map, args.minutes, args.seed, args.save, make, f"Gary {args.vs}", args.attack_after)
+    play_match(args.map, args.minutes, args.seed, args.save, make, f"Gary {args.vs}", args.attack_after, args.opponent)
 
 
 if __name__ == "__main__":
