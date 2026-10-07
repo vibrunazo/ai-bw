@@ -138,6 +138,14 @@ quicker way to a playable Gary.
   it musters everyone, then all attack at once, no retreat, reinforcements in groups of 6): Gary
   lost 2 of 48 (immediate) and 0 (from 7:00). The dummy's 9-pool, hitting before any bunker,
   is still the hardest scripted test (5 of 48).
+- **The rush dummy was a minute late.** Pro TvZ (3,000 games): 3+ zerg fighters reach the
+  Terran's buildings at 2:57 in the fastest 10% of games (median 4:24); pro early pools order the
+  pool at 1:17 and the first zerglings at 2:02-2:10 (`data/interim/build_orders.jsonl`, 14,744
+  Zergs; 30% go pool first). The dummy placed its pool at 1:46 and waited for 12 zerglings: it
+  arrived at 4:03-4:31. Now its drone sets out at 150 minerals (pool at 1:27, zerglings at 2:37)
+  and zerglings go as they hatch (the first 6 together): it arrives at 3:07-3:44 (median 3:22).
+  Gary v0.11 against it, 48 seeds: **lost 27**, won 6 (against the late dummy: lost 5). Zerg v2
+  is later still (hatchery 3:32 and pool 3:35, against the pros' 1:47 and 2:05).
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

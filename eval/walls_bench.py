@@ -61,14 +61,23 @@ class Match:
         self.zerg = ZergRush(self.his["Z"], self.map)
         self.zerg.attack_after = int(attack_after_s * 24)
         self.zerg.target = next((u["x"], u["y"]) for u in obs["units"] if u["type"] == C.COMMAND_CENTER)
+        self.done = False
 
     def over(self) -> bool:
         players = {p["slot"] for p in self.game.observe()["players"]}
         return not set(self.slot.values()) <= players
 
     def step(self) -> None:
-        self.gary.act()
-        self.zerg.act()
+        if self.done or (self.game.frame % 24 < 2 and self.over()):
+            self.done = True                          # a side is gone: nothing more to play
+            self.game.step(2)
+            return
+        try:
+            self.gary.act()
+            self.zerg.act()
+        except StopIteration:                         # a player was just eliminated (its view has no "me")
+            self.done = True
+            return
         for i, hi in enumerate(self.his.values()):
             hi.step(2, advance_game=(i == 0))
 

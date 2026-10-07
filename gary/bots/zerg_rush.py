@@ -1,4 +1,9 @@
-"""A scripted Zerg sparring dummy: 9 pool, then zerglings, attacking in waves of 12.
+"""A scripted Zerg sparring dummy: 9 pool, then zerglings sent as they hatch (the first 6 together).
+
+Its timings follow pro early pools (data/interim/build_orders.jsonl, TvZ, pool before the
+hatchery: pool ordered at 1:17, zerglings at 2:02-2:10): the drone sets out at 150 minerals so the
+pool goes down at 200, and zerglings go as they hatch (it used to wait for 12 and arrive about a
+minute later than a real 9-pool's).
 
 It exists to test Gary (does it defend? does it hold its ramp, pull back, counter?). Like Gary it
 plays through the human interface (fog of war, mouse and camera, APM), so neither side cheats.
@@ -25,7 +30,9 @@ from gary.mapinfo import MapInfo
 POOL, LING, OVERLORD, DRONE, HATCH = 142, 37, 42, 41, 131
 MINING = 87                     # order: mining minerals (the drone stands at the field)
 DRONES = 9
-WAVE = 12
+WAVE = 12                       # (Zerg v1's groups)
+FIRST_WAVE, LATER_WAVES = 6, 2   # the dummy: the first 6 zerglings together, then each pair as it hatches
+POOL_WALK_AT = 150              # minerals when the pool's drone sets out (the pool goes down at 200)
 RALLY = 5 * 32                  # the hatchery's rally: this far from it, toward the map's middle
 
 
@@ -89,7 +96,7 @@ class ZergRush:
             return
 
         # the pool, with a drone, at 9 supply
-        if not pool and me["minerals"] >= 200 and count(DRONE) >= DRONES and hi.frame - self.pool_ordered > 24 * 15:
+        if not pool and me["minerals"] >= POOL_WALK_AT and count(DRONE) >= DRONES and hi.frame - self.pool_ordered > 24 * 15:
             drones = [u for u in mine if u["type"] == DRONE and u["completed"] and screen_of(obs, u["x"], u["y"])]
             sel = [u for u in mine if u["tag"] in obs["selection"]]
             one_drone = len(sel) == 1 and sel[0]["type"] == DRONE
@@ -111,6 +118,8 @@ class ZergRush:
                     # a drone busy mining ignores a build order: walk it toward the spot first
                     hi.right_click(*p)
                     self.stage = "pool_walk"
+                    return
+                if me["minerals"] < 200:                  # at the spot early, the pool as soon as there's money
                     return
                 self.stage = ""
                 if hi.build(POOL, *p, order=C.ORDER_DRONE_START_BUILD).accepted:
@@ -163,7 +172,7 @@ class ZergRush:
         """Waves of zerglings to the enemy start (attack-moved there, 12 at a time). True if it acted."""
         hi = self.hi
         lings = [u for u in mine if u["type"] == LING and u["completed"] and u["tag"] not in self.sent]
-        if len(lings) >= WAVE and hi.frame >= self.attack_after:
+        if len(lings) >= (FIRST_WAVE if self.waves == 0 else LATER_WAVES) and hi.frame >= self.attack_after:
             here = [u for u in lings if screen_of(obs, u["x"], u["y"])]
             if self.stage == "attack":
                 hi.minimap_command(C.ORDER_ATTACK_MOVE, *self.target)
