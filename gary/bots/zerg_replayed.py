@@ -2,12 +2,12 @@
 
 Scripting a Zerg that produces pro pressure (gary/bots/zerg_v2.py) costs more than it teaches: its
 drones, larvae and build orders through a human interface lag a pro's by minutes. This one skips
-production. Each seed picks a pro Zerg's build order from a TvZ game
-(data/interim/build_orders.jsonl), and the env creates (Game.create_unit, OpenBW) what that
-Zerg ordered, when it would have been done: zerglings in pairs, hydralisks and mutalisks after
-their egg time at the main hatchery, zergling speed when its research would end; the Spawning
-Pool, Extractor, Hydralisk Den and Spire near the main, hatcheries at the natural and then the
-nearest free bases, all when ordered (finished at once: what Gary's scout sees is close enough). Its army goes as the dummy's does
+production. Each seed picks a pro Zerg from a TvZ game (data/interim/build_orders.jsonl), replays
+that game in OpenBW to see what the Zerg had and when, and the env creates (Game.create_unit) the
+same: its zerglings, hydralisks and mutalisks when they hatched, at the main hatchery; its
+Spawning Pool, Extractor, Hydralisk Den and Spire near the main and its hatcheries at the natural,
+then the nearest free bases, when placed (finished at once: what Gary's scout sees is close
+enough); zergling speed when its research would end. Its army goes as the dummy's does
 (gary/bots/zerg_rush.py): attack-moving at Gary's start as it hatches, the first 6 together.
 
 So Gary meets the spread of pro openings in their real proportions (pool first 30%, the rest
@@ -28,10 +28,10 @@ from gary import commands as C
 from gary.bots.zerg_rush import HATCH, ZergRush
 from gary.interface import screen_of
 
-UNITS = {"Zergling": (37, 2), "Hydralisk": (38, 1), "Mutalisk": (43, 1)}
 BUILDINGS = {"Spawning Pool": 142, "Extractor": 149, "Hydralisk Den": 135, "Spire": 141, "Hatchery": HATCH}
 ARMY = {37, 38, 43}
 SPEED, SPEED_FRAMES = 27, 1500    # Metabolic Boost: its upgrade id and research time
+SAME_POOL = 20 * 24               # the replayed game's pool this near its order, or it desynced
 UNTIL = 12 * 60 * 24              # what the pro made after this isn't spawned
 
 
@@ -49,26 +49,59 @@ def pro_build_orders():
     return out
 
 
+def pro_timeline(rec: dict) -> list[tuple[int, int, int, str]]:
+    """What that pro Zerg had, when (frame, unit type, 1, "unit" or "building"): its game replayed
+    in OpenBW to UNTIL (a second or two). The build order counts orders, not units (one order
+    can morph several larvae, spam makes none: a 24-zergling 3:00 from orders was 4 in the game).
+    Army units when they hatched; buildings when placed (Gary's scout sees them going up)."""
+    from gary.env import Game
+    from inventory import data_root
+    game = Game.scenario(data_root() / "raw" / rec["rel_path"])
+    try:
+        obs = game.observe()
+        zerg = next(u["owner"] for u in obs["units"] if u["type"] == HATCH)
+        start = {u["tag"] for u in obs["units"] if u["type"] == HATCH}   # (drones keep their tag as buildings)
+        seen, out = set(), []
+        while obs["frame"] < UNTIL:
+            game.step(24)
+            obs = game.observe()
+            for u in obs["units"]:
+                if u["owner"] != zerg or u["tag"] in seen or u["tag"] in start:
+                    continue
+                if u["type"] in ARMY and u["completed"]:
+                    out.append((obs["frame"], u["type"], 1, "unit"))
+                    seen.add(u["tag"])
+                elif u["type"] in BUILDINGS.values():
+                    out.append((obs["frame"], u["type"], 1, "building"))
+                    seen.add(u["tag"])
+        # a replay that doesn't play the same in OpenBW (a desync) goes another way: its pool
+        # must go down when the pro ordered it
+        ordered = min((it["t"] * 24 for it in rec["items"] if it["name"] == "Spawning Pool"), default=None)
+        placed = min((f for f, t, *_ in out if t == 142), default=None)
+        if ordered is None or placed is None or abs(placed - ordered) > SAME_POOL:
+            raise ValueError(f"{rec['rel_path']}: the pool at {placed}, ordered at {ordered}: not the same game")
+        return out
+    finally:
+        game.close()
+
+
 class ZergReplayed(ZergRush):
     def __init__(self, hi, mapinfo, seed: int):
         super().__init__(hi, mapinfo)
+        rng = random.Random(seed)
         orders = pro_build_orders()
-        self.source = random.Random(seed).choice(orders)
-        game = hi.game
-        frames = lambda t: game.unit_type_info(t)["build_frames"]
-        self.schedule = []                                   # (frame, unit type, count, kind)
-        for it in self.source["items"]:
-            f = int(it["t"] * 24)
-            if f > UNTIL or it.get("conf") in ("cancelled?", "not built"):
+        while True:                                          # (a replay OpenBW can't play: another)
+            self.source = rng.choice(orders)
+            try:
+                self.schedule = pro_timeline(self.source)
+                break
+            except Exception:
                 continue
-            if it["name"] in UNITS:                          # (lurkers stay hydralisks: no burrow micro here)
-                t, n = UNITS[it["name"]]
-                self.schedule.append((f + frames(t), t, n, "unit"))
-            elif it["name"] in BUILDINGS:
-                self.schedule.append((f, BUILDINGS[it["name"]], 1, "building"))
-            elif it["name"].startswith("Metabolic Boost"):
-                self.schedule.append((f + SPEED_FRAMES, SPEED, 1, "upgrade"))
-        self.schedule.sort()
+        speed = min((int(it["t"] * 24) + SPEED_FRAMES for it in self.source["items"]
+                     if it["name"].startswith("Metabolic Boost") and it.get("conf") not in ("cancelled?", "not built")),
+                    default=None)
+        if speed is not None and speed <= UNTIL:
+            self.schedule = sorted(self.schedule + [(speed, SPEED, 1, "upgrade")])
         first = {}
         for f, t, n, b in self.schedule:
             first.setdefault(t, f)

@@ -40,9 +40,10 @@ def path() -> Path:
 
 
 class Match:
-    """Gary against the rush dummy, as eval/vs_rush.py plays it (gary/bots/zerg_rush.py)."""
+    """Gary against the rush dummy (or another of eval/vs_rush.py's Zergs), as eval/vs_rush.py plays it."""
 
-    def __init__(self, seed: int, attack_after_s: float, version: str = SOURCE):
+    def __init__(self, seed: int, attack_after_s: float, version: str = SOURCE, map_path=None,
+                 opponent: str = "dummy"):
         from gary import commands as C
         from gary.agent.manifests import build_gary
         from gary.bots.zerg_rush import HATCH, LIVE_COMMAND_DELAY, ZergRush
@@ -50,7 +51,7 @@ class Match:
         from gary.interface import PROFILES, HumanInterface
         from gary.mapinfo import MapInfo
         from eval.vs_rush import DEFAULT_MAP
-        self.game = Game.new(DEFAULT_MAP, ["T", "Z"], ["Gary", "Zerg rush"], seed=seed, command_delay=LIVE_COMMAND_DELAY)
+        self.game = Game.new(map_path or DEFAULT_MAP, ["T", "Z"], ["Gary", "Zerg rush"], seed=seed, command_delay=LIVE_COMMAND_DELAY)
         self.map = MapInfo.from_game(self.game)
         obs = self.game.observe()
         self.slot = {("T" if u["type"] == C.COMMAND_CENTER else "Z"): u["owner"] for u in obs["units"]
@@ -58,7 +59,11 @@ class Match:
         self.his = {r: HumanInterface(self.game, s, PROFILES["pro" if r == "T" else "b_rank"], seed=s)
                     for r, s in self.slot.items()}
         self.gary = build_gary(self.his["T"], self.map, version, 1, verbose=False)
-        self.zerg = ZergRush(self.his["Z"], self.map)
+        if opponent == "replayed":
+            from gary.bots.zerg_replayed import ZergReplayed
+            self.zerg = ZergReplayed(self.his["Z"], self.map, seed)
+        else:
+            self.zerg = ZergRush(self.his["Z"], self.map)
         self.zerg.attack_after = int(attack_after_s * 24)
         self.zerg.target = next((u["x"], u["y"]) for u in obs["units"] if u["type"] == C.COMMAND_CENTER)
         self.done = False

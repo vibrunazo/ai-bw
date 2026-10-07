@@ -66,18 +66,23 @@ quicker way to a playable Gary.
   a median 35-56 s after the CC, about 5 tiles from it: 45% of the way from the CC to the
   natural's way out (the frontier).
 - **Results:** benchmarks on three maps now (Fighting Spirit, Python, Heartbreak Ridge:
-  `tests/fixtures/replays/`). Against the replayed pros, 48 seeds each: lost 6 / 9 / 11 (v0.11
-  9 / 9 / 17), 26 of 144 against 35; an earlier run with the old rush bunker spot 6 / 7 / 11
-  against 7 / 6 / 16. Pro-timed 9-pool on Fighting Spirit lost 2 (v0.11 2), won 12 (8).
+  `tests/fixtures/replays/`). Against the replayed pros (as replayed games, below), 48 seeds each:
+  lost 3 / 7 / 9 (v0.11 2 / 9 / 14), 19 of 144 against 25; the hatch-first losses 7 against 13,
+  the pool-first ones 12 either way. Pro-timed 9-pool on Fighting Spirit lost 2 (v0.11 2), won 12 (8).
+- **The replayed pros were too strong** until now: the fixture spawned what the build orders
+  list, and those are orders, not units (one order morphs several larvae; spammed orders make
+  none): a Zerg with 24 zerglings at 3:00 by its orders had 4 in the game. Now the fixture plays
+  the pro's game in OpenBW first (1-2 s) and spawns what that Zerg had, when it had it (a replay
+  whose pool doesn't go down within 20 s of its order desynced: another is picked). Earlier
+  replayed-pro numbers in this file (v0.11's "lost 7", the first v0.12 runs) were against it.
 - **Shared code (every version):** the rush bunker goes 2 tiles inside the main's way out, found
   by the frontier on the main's plateau (`frontier(level=True)`), not by the ramp analysis, which
   misreads Heartbreak Ridge (one main's ramp 40 tiles off) and Colosseum II. Results about the
   same (v0.11's losses 32 -> 37 over the four tests, within the noise; Heartbreak Ridge 16 -> 17).
-- **Most urgently missing:** Heartbreak Ridge's pool-first pros (10 of v0.11's 17 losses there):
-  Gary sees the pool at 2:00 (one start to scout), but its bunker goes down at 2:30 with the
-  first Barracks and the zerglings are there by 2:50 on that short rush distance; marines go in
-  one by one. In every replayed game the real Terran was alive at 5:00 (the fixture keeps games
-  of 5+ minutes), though there every zergling the pro made attacks.
+- **Most urgently missing:** the fastest pool-first pros (6 of 19 on Heartbreak Ridge, its short
+  rush distance): their 8-9 zerglings arrive at 2:55, when Gary's first marine is just out
+  (2:51) and its bunker isn't finished. Pros order their Barracks at 1:30 there and their first
+  marine at 2:23; Gary's Barracks goes down at 1:43 (the 1:30 rule, then the walk).
 
 ### v0.11 (October 2026): more workers pulled, a post at home (#2)
 
