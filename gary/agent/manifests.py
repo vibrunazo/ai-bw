@@ -95,6 +95,15 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.14: v0.13 whose idle Barracks, Factories and Starports make the model's last unit for them
+    # again (macro.py keep_busy)
+    "v014": {"version": "v0.14", "posture": "early_pool/v2", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True},
+             "army": _ARMY,
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}}},
+             "arbiter": "fixed_priority/v1"},
     # step 4 (docs/CONTROL.md): v0.9 with leases enforced; and with roles instead of the fight model
     "v09lease": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
                  "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
@@ -230,6 +239,10 @@ OPTIONS = {
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)
     "bunker_cc": lambda m: m.update(posture="early_pool/v2"),
+    # macro.py: idle Barracks, Factories, Starports make the model's last unit for them again. On v0.13:
+    # army supply at 8:00 11-12 (7-9; pros 19), at 12:00 32-44 (25-34; pros 36); replayed pros lost 7 of
+    # 144 (10), the 9-pool 0 (0)
+    "busy": lambda m: m["macro"].update(keep_busy=True),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
     # fast pools that beat v0.12 on Heartbreak Ridge it kept a few more SCVs; the bunker's spot mattered
     "pull_line": _pull(mineral_line=True),
@@ -298,7 +311,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         models["macro"] = getattr(macro, "path", "?")
         builds = {"one_base_defense": OneBaseDefense(g)} if "one_base_defense" in m["macro"].get("builds", []) else {}
         g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
-                               m["macro"].get("rax_by", 90 * 24))
+                               m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False))
     if m["army"] is not None:
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)

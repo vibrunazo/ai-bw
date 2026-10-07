@@ -34,6 +34,7 @@ MIN_P = 0.05                    # never take a decision the model gives less tha
                                 # choices lead into states pros rarely reach, where it knows less
 BUSY = {T.ORDER_RESEARCH, T.ORDER_UPGRADE, T.ORDER_BUILD_ADDON}
 WAIT = {"kind": "wait"}         # plan(): possible, but not right now
+KEEP_BUSY = {T.RAX, T.FACTORY, T.STARPORT}   # producers that keep making their last unit (keep_busy)
 NAT_BUNKER_ALONG = 0.45         # the natural's bunker: this far from its Command Center toward its way out
 NAT_BUNKER_TILES = 5            # ...or this far toward the enemy where the natural has no choke
 NAT_BUNKER_RETRY = 20 * 24
@@ -53,10 +54,12 @@ def describe(act: int, uid: int) -> str:
 
 class LearnedMacro:
     def __init__(self, g: Gary, model: MacroModel, style: int | None = None, builds: dict | None = None,
-                 natural_bunker: bool = False, rax_by: int = 90 * 24):
+                 natural_bunker: bool = False, rax_by: int = 90 * 24, keep_busy: bool = False):
         self.g = g
         self.rax_by = rax_by
         self.queued: dict[tuple[int, int], int] = {}        # units decided whose producer is busy -> since
+        self.keep_busy = keep_busy
+        self.last_unit: dict[int, int] = {}                 # producer type -> the unit last decided for it
         self.natural_bunker = natural_bunker
         self.next_nat_bunker = 0
         self._nat_bunker_spot = None
@@ -140,7 +143,7 @@ class LearnedMacro:
         if self.goal and hi.frame - self.goal["since"] > GOAL_TIMEOUT:
             g.say(f"gives up on {self.goal['name']}")
             self.goal = None
-        if self._train_queued(obs, mine, done, me):
+        if self._train_queued(obs, mine, done, me) or self._keep_busy(obs, mine, done, me):
             return
         if self.goal is None:
             if hi.frame < self.next_query:
@@ -191,11 +194,14 @@ class LearnedMacro:
         walk_ahead = int(WALK_AHEAD * MINING * workers) if plan["kind"] == "build" else 0
         if budget < minerals - walk_ahead or me["gas"] < gas:
             return
+        if plan["kind"] == "build" and g.parked is not None:
+            return                          # one builder walking ahead at a time (the parked build)
         if plan["kind"] == "build":
             data = {**plan.get("data", {}), "decision": (goal["act"], goal["id"])}
             g.task = Task("build", goal["id"], plan["where"], data=data, started=hi.frame)
         else:
             g.task = Task("command", data=plan, started=hi.frame)
+            self._note_unit(goal["act"], goal["id"])
         self.tracker.note_decision(goal["act"], goal["id"], obs["frame"])
         self.decisions.append((hi.frame, goal["name"], goal["p"]))
         self.goal = None
@@ -216,6 +222,35 @@ class LearnedMacro:
                 continue
             g.task = Task("command", data=plan, started=g.hi.frame)
             del self.queued[key]
+            self._note_unit(*key)
+            return True
+        return False
+
+    def _note_unit(self, act: int, uid: int) -> None:
+        if act == TRAIN and T.PRODUCER.get(uid) in KEEP_BUSY:
+            self.last_unit[T.PRODUCER[uid]] = uid
+
+    def _keep_busy(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> bool:
+        """An idle Barracks, Factory or Starport trains the unit the model last chose for it again,
+        with the money left after what the pending decision needs (pros keep production going by
+        habit; one decision at a time left 2 of Gary's 3 Barracks idle with 300 minerals banked, and
+        half the pros' army at 8:00). True if this turn is spent."""
+        g = self.g
+        if not self.keep_busy or g.task is not None:
+            return False
+        reserve = 0
+        if self.goal is not None:
+            p = self.plan(self.goal["act"], self.goal["id"], obs, mine, done, me)
+            reserve = p["cost"][0] if isinstance(p, dict) and p is not WAIT else 0
+        for uid in self.last_unit.values():
+            plan = self.plan(TRAIN, uid, obs, mine, done, me)
+            if not isinstance(plan, dict) or plan.get("kind") != "command":
+                continue
+            minerals, gas = plan["cost"]
+            if me["minerals"] - g.committed() - reserve < minerals or me["gas"] < gas:
+                continue
+            g.task = Task("command", data=plan, started=g.hi.frame)
+            self.tracker.note_decision(TRAIN, uid, obs["frame"])
             return True
         return False
 
@@ -254,7 +289,10 @@ class LearnedMacro:
             b = self.free_building(obs, mine, done, T.PRODUCER[uid], addon)
             return self._command_or_wait(b, done, T.PRODUCER[uid], act, uid, T.COST[uid])
         if act == BUILD and uid in T.ADDON_PARENT:
-            bare = [b for b in done if b["type"] == T.ADDON_PARENT[uid] and self.addon_of(b, mine) is None]
+            ox, oy = T.ADDON_OFFSET                      # (only where the add-on fits)
+            fits = lambda b: g.hi.game.can_place(g.slot, uid, (b["x"] - T.SIZE[b["type"]][0] * 16) // 32 + ox,
+                                                 (b["y"] - T.SIZE[b["type"]][1] * 16) // 32 + oy, 0)
+            bare = [b for b in done if b["type"] == T.ADDON_PARENT[uid] and self.addon_of(b, mine) is None and fits(b)]
             if not bare:
                 return None
             free = [b for b in bare if b.get("queue", 0) == 0 and b["order"] not in BUSY]

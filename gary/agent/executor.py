@@ -303,7 +303,19 @@ class ScriptedExecutor:
         if terrain is None:
             return True
         w, h = SIZE[unit_type]
-        return bool(terrain[0][ty:ty + h, tx:tx + w].all()) and not self.creep_coming(unit_type, tx, ty)
+        return bool(terrain[0][ty:ty + h, tx:tx + w].all()) and not self.creep_coming(unit_type, tx, ty)             and not self.on_addon_spot(unit_type, tx, ty)
+
+    def on_addon_spot(self, unit_type: int, tx: int, ty: int) -> bool:
+        """The building would stand where one of Gary's buildings' add-on goes (a Comsat Station by
+        the natural's Command Center was asked for every second for minutes: its bunker stood there)."""
+        g = self.g
+        w, h = SIZE[unit_type]
+        parents = set(T.ADDON_PARENT.values())
+        spots = [((u["x"] - SIZE[u["type"]][0] * 16) // 32, (u["y"] - SIZE[u["type"]][1] * 16) // 32)
+                 for u in g.hi.observe()["units"] if u["owner"] == g.slot and u["type"] in parents]
+        spots += [(rx, ry) for rt, rx, ry in g.reserved if rt in parents]
+        ox, oy = T.ADDON_OFFSET
+        return any(tx < px + ox + 2 and px + ox < tx + w and ty < py + oy + 2 and py + oy < ty + h for px, py in spots)
 
     def creep_coming(self, unit_type: int, tx: int, ty: int) -> bool:
         """Creep under the building, now or soon: the game accepts a build on fogged creep it hasn't
