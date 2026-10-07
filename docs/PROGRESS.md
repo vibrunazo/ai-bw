@@ -66,7 +66,8 @@ quicker way to a playable Gary.
 - **Results:** 239 home defenses, reactive Zerg, 8 draws: **−54** (v0.10 −69, +15; pro −5,
   nothing −305); SCVs lost 1.90 a defense (v0.10 2.06). Immediate 9-pool, 48 seeds: lost 4
   (v0.10 4); 7:00 rush, 16 seeds: lost 0, 37 buildings and 46 army supply at 12:00 (v0.10 the
-  same).
+  same). With the rush dummy on pro timing and the early-pool fixes of 2026-10-07 (shared
+  code: every version has them): 9-pool lost 2 of 48, 7:00 rush 0, home defenses −55.
 - **How we got here:** Gary pulled workers sooner, more often and longer than the pros (where
   the pros didn't pull at all in 44 of the 239, and 3.0 s after the takeover where they pulled
   at 7.6 s). But pulling like them scored worse: fewer workers a zerg (−13 ± 4), only after 4 s
@@ -158,6 +159,12 @@ quicker way to a playable Gary.
   hatch-first Zerg v2: won 7 instead of 16 (lost 2 either way), 6% fewer buildings and 8% less
   army at 12:00: Gary turtles when it can't see. Home defenses unchanged (−53). Left: Barracks
   late when the learned macro opens without one (4 of the 9), bunkers with no marines yet (3).
+  Then: a Barracks by 1:30 whatever the learned macro says (pro TvZ Terrans order it at a median
+  1:28, 95% by 1:39; 2% build a CC first), and build orders that were lost are ordered again
+  after 6 s instead of 40 (a reserved spot with no SCV heading to it: the Barracks order of 1:26
+  had gone to the SCV still constructing the depot, and nothing came until 2:11). Against the
+  pro-timed 9-pool: **lost 2, won 16** of 48 (27 lost this morning); 7:00 rush lost 0, won 15;
+  Zerg v2 lost 1, won 10; home defenses −55.
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

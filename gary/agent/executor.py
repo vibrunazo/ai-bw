@@ -22,6 +22,7 @@ SIZE = T.SIZE                                              # tiles
 HK_CC = [4, 5]                        # one hotkey per Command Center (buildings can't share one)
 HK_RAX = [6, 7, 8, 9]
 BUSY_ORDERS = {30, 31, 33}            # placing / constructing a building
+LOST_ORDER = 6 * 24                   # a reserved spot with no SCV on its way after this: the order was lost
 RESUME_AFTER = 24                     # an unfinished building nobody has built for a second gets an SCV
 RESUME_RETRY = 24 * 4                 # ...and if that one doesn't arrive either, another after 4 s
 IDLE = 3                              # order "PlayerGuard": standing around
@@ -45,16 +46,23 @@ class ScriptedExecutor:
 
     def release_reservations(self, mine: list[dict]) -> None:
         """A reserved spot is free again once its building exists, or after 40 s if it never
-        appeared (the worker was interrupted, or the spot got blocked)."""
+        appeared (the worker was interrupted, or the spot got blocked), or after 6 s if no SCV is
+        on its way to place it (the order was lost: an SCV busy constructing keeps at it), so the
+        macro orders it again rather than wait 40 s for it."""
         g = self.g
         keep = []
         for r in g.reserved:
             ut, tx, ty = r
             cx, cy = tx * 32 + SIZE[ut][0] * 16, ty * 32 + SIZE[ut][1] * 16
             built = any(u["type"] == ut and math.dist((u["x"], u["y"]), (cx, cy)) < 48 for u in mine)
-            if not built and g.hi.frame - g.reserved_at.get(r, 0) < 24 * 40:
+            age = g.hi.frame - g.reserved_at.get(r, 0)
+            heading = any(u["type"] == SCV and u["order"] in BUSY_ORDERS and "tx" in u
+                          and math.dist((u["tx"], u["ty"]), (cx, cy)) < 96 for u in mine)
+            if not built and age < 24 * 40 and (heading or age < LOST_ORDER):
                 keep.append(r)
                 continue
+            if not built and age < 24 * 40:
+                g.say(f"its {T.NAMES.get(ut, ut)} order was lost: again")
             g.reserved_at.pop(r, None)
         g.reserved = keep
 

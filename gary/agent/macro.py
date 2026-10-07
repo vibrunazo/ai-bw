@@ -73,6 +73,14 @@ class LearnedMacro:
     def _learned(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> None:
         g = self.g
         hi = g.hi
+        # a Barracks by 1:30: pro TvZ Terrans order their first one at a median of 1:28, 95% by
+        # 1:39 (data/interim/build_orders.jsonl; 2% build a CC first). Without one nothing holds
+        # an early pool: the bunker needs it (4 of v0.11's 9 losses to a 9-pool)
+        building_rax = g.task is not None and g.task.kind == "build" and g.task.unit_type == T.RAX
+        if (hi.frame >= RAX_BY and (self.goal is None or self.goal["id"] != T.RAX) and not building_rax
+                and not any(u["type"] == T.RAX for u in mine) and not any(r == T.RAX for r, *_ in g.reserved)):
+            self.goal = {"act": BUILD, "id": T.RAX, "p": 1.0, "since": hi.frame, "name": "Barracks"}
+            g.say("next: Barracks (none by 1:30)")
         if self.goal and hi.frame - self.goal["since"] > GOAL_TIMEOUT:
             g.say(f"gives up on {self.goal['name']}")
             self.goal = None
@@ -277,6 +285,7 @@ class LearnedMacro:
 
 RUSH_SCVS = 20                       # SCVs to keep making while defending (one base)
 RUSH_RAX = 3
+RAX_BY = 90 * 24                     # the first Barracks is ordered by then, whatever the model says
 RAX_MONEY = 200                      # minerals left over: another Barracks
 BUNKER_RETRY = 20 * 24               # a bunker order that didn't take: try again this much later
 

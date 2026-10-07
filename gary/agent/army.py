@@ -77,6 +77,7 @@ class LearnedArmy:
         self.scout_done = False
         self.circle: list | None = None                 # the scout's way around the enemy main, once found
         self.next_circle_order = 0
+        self.ordered_to = None
 
     def remember(self, obs: dict) -> None:
         self.tracker.remember(obs)
@@ -183,10 +184,13 @@ class LearnedArmy:
             w, h = g.map.size
             self.circle = [(int(min(max(x, 32), w - 32)), int(min(max(y, 32), h - 32))) for x, y in ring[k0:] + ring[:k0]]
         if self.circle is not None:
-            if self.circle and math.dist((scout["x"], scout["y"]), self.circle[0]) < 2 * 32:
+            reached = bool(self.circle) and math.dist((scout["x"], scout["y"]), self.circle[0]) < 2 * 32
+            if reached:
                 self.circle.pop(0)
-            if self.circle and g.hi.frame >= self.next_circle_order:
-                self.next_circle_order = g.hi.frame + 3 * 24          # (re-ordered while walking: it may be blocked)
+            # an order per waypoint (each one takes Gary's hands), again only if the scout stopped
+            if self.circle and (reached or self.ordered_to != self.circle[0] or scout["order"] in (2, 3))                     and g.hi.frame >= self.next_circle_order:
+                self.next_circle_order = g.hi.frame + 2 * 24
+                self.ordered_to = self.circle[0]
                 g.motor.start(Intent("SCOUT", [g.scout], self.circle[0], {"to": self.circle[0]}, "scout"))
                 return True
             if not self.circle:
