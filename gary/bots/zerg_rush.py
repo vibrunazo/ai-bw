@@ -210,9 +210,10 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
         # Gary with its pro-speed hands; the dummy keeps b_rank hands (the benchmark stays the same)
         his = {r: HumanInterface(game, s, PROFILES["pro" if r == "T" else "b_rank"], seed=s) for r, s in slot_of.items()}
         gary = make_terran(his["T"], mapinfo)
-        if opponent in ("v1", "v1a", "v1d"):
+        if opponent in ("v1", "v1a", "v1d", "v2"):
             from gary.bots import zerg_v1 as Z
-            zerg = {"v1": Z.ZergV1, "v1a": Z.ZergV1Aggressive, "v1d": Z.ZergV1Direct}[opponent](his["Z"], mapinfo)
+            from gary.bots.zerg_v2 import ZergV2
+            zerg = {"v1": Z.ZergV1, "v1a": Z.ZergV1Aggressive, "v1d": Z.ZergV1Direct, "v2": ZergV2}[opponent](his["Z"], mapinfo)
         else:
             zerg = ZergRush(his["Z"], mapinfo)
         # the dummy knows where Gary is (no scouting): its waves go straight to Gary's main
@@ -258,7 +259,7 @@ def main() -> None:
     ap.add_argument("--save", default="gary_vs_rush.rep")
     ap.add_argument("--attack-after", type=float, default=0, help="no attack before this many seconds")
     ap.add_argument("--style", type=int, help="build style (taxonomy cluster) to steer Gary's macro toward")
-    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d"],
+    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2"],
                     help="the Zerg: this dummy, or gary/bots/zerg_v1.py (gathers, judges, surrounds, retreats)")
     args = ap.parse_args()
     from gary.agent.manifests import build_gary

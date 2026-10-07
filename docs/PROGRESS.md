@@ -129,8 +129,11 @@ quicker way to a playable Gary.
   zerglings alive). Gary v0.11 lost (48 seeds, immediate): to the dummy 5, to v1 2, to v1
   always attacking 4, without the surround too 5; hunting SCVs made it 1 (zerglings chasing
   pulled SCVs ignore the marines). With a 9-pool on 9 drones, smart play gives Gary time: it
-  isn't harder. A Zerg that tests walls needs a real economy (more drones, two hatcheries, speed)
-  behind the same army.
+  isn't harder. Zerg v2 (`gary/bots/zerg_v2.py`, `--opponent v2`) puts v1's army on a pro-like
+  zergling opening: 12 hatch at the natural, pool, extractor, speed, drones to 18, macro
+  hatcheries (4) when larvae run out, the gas drones back to minerals after speed: 35-50
+  zerglings by 8-10 min. Gary v0.11 still lost none of 48 games at either timing (and won 14-15):
+  zerglings alone don't break bio once it's up, and the cautious judge lets the early window go.
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

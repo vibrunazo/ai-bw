@@ -75,6 +75,10 @@ class ZergV1(ZergRush):
         self.staged_since: int | None = None
         self.form_after, self.form_tries = 0, 0
 
+    def gather_point(self):
+        """Where new zerglings wait to be grouped: the hatchery (its rally is 5 tiles off)."""
+        return self.home
+
     def _aim(self) -> None:
         """Where Gary is (self.target, set by whoever runs the match): its natural's choke, the
         staging point outside it, its main's mineral line."""
@@ -99,8 +103,16 @@ class ZergV1(ZergRush):
             if not self.groups[n]:
                 del self.groups[n], self.phase[n]
         grouped = set().union(*self.groups.values()) if self.groups else set()
-        # a new group: 12 zerglings at home, not in a group, once attacks are allowed
-        fresh = [u for t, u in lings.items() if t not in grouped and screen_of(obs, u["x"], u["y"])]
+        # a new group: 12 zerglings at the gathering point, not in a group, once attacks are allowed
+        gather = self.gather_point()
+        waiting = [u for t, u in lings.items() if t not in grouped and math.dist((u["x"], u["y"]), gather) < 10 * 32]
+        fresh = [u for u in waiting if screen_of(obs, u["x"], u["y"])]
+        if len(waiting) >= WAVE and len(fresh) < WAVE // 2 and hi.frame >= self.attack_after                 and hi.frame >= self.form_after:
+            hi.camera_minimap(*_mid(waiting))                  # look at them first
+            self.form_tries += 1
+            if self.form_tries >= 3:                           # (they keep walking off the screen)
+                self.form_after, self.form_tries = hi.frame + 3 * 24, 0
+            return True
         if len(fresh) >= WAVE and hi.frame >= self.attack_after and hi.frame >= self.form_after:
             n = next((k for k in GROUPS if k not in self.groups), None)
             if n is not None:
@@ -132,7 +144,8 @@ class ZergV1(ZergRush):
         if now_power:
             self.seen.append((hi.frame, now_power))
         self.seen = [(f, p) for f, p in self.seen if hi.frame - f <= MEMORY]
-        raid = [e for e in enemy if e["type"] not in (7, 125) and math.dist((e["x"], e["y"]), self.home) < HOME_NEAR]
+        homes = [(u["x"], u["y"]) for u in obs["units"] if u["owner"] == hi.slot and u["type"] in (131, 132, 133)] or [self.home]
+        raid = [e for e in enemy if e["type"] not in (7, 125) and min(math.dist((e["x"], e["y"]), h) for h in homes) < HOME_NEAR]
         if raid:
             at = _mid(raid)
             for n in sorted(self.groups):

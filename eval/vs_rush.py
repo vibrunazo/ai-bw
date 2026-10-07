@@ -51,7 +51,7 @@ def main() -> None:
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--style", type=int, help="steer Gary's macro toward this build style")
     ap.add_argument("--out", help="folder for replays and logs (default: a temporary folder)")
-    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d"], help="the Zerg (gary/bots/)")
+    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2"], help="the Zerg (gary/bots/)")
     args = ap.parse_args()
     out = Path(args.out or tempfile.mkdtemp(prefix="gary_eval_"))
     out.mkdir(parents=True, exist_ok=True)
