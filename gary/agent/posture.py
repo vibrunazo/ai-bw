@@ -29,7 +29,6 @@ from gary import terran as T
 from gary.agent.fight import enemy_fighters, near_home
 from gary.agent.gary import Gary
 from gary.policy.army import is_building, supply_x2
-from gary.terrain import map_analysis
 
 
 class NormalPosture:
@@ -58,6 +57,7 @@ CALM = 20 * 24                       # ...once no zerg fighter was at home for t
 HOLD_ARMY, HOLD_RATIO = 6, 1.5       # Gary holds until its army supply is this, and this many times
                                      # the biggest zerg army seen at once
 DEFENSE = {T.SCV, T.MARINE, T.DEPOT, T.RAX, T.BUNKER}
+BUNKER_INSIDE = 64                   # the rush bunker: this far inside the main's way out
 
 
 class EarlyPoolPosture:
@@ -69,16 +69,26 @@ class EarlyPoolPosture:
         self.hatcheries_seen: set[int] = set()
         self.most_enemy = 0.0            # the biggest zerg army (supply) seen at once
         self.base_seen = False           # any zerg building seen
-        analysis = map_analysis(g.hi.game, g.map)["starts"]
-        mine = min(analysis.values(), key=lambda a: math.dist(a["start"], g.main.center), default=None)
-        if mine and mine["reliable"] and math.dist(mine["start"], g.main.center) < 64:
-            # the bunker goes just inside the main, a little up from the ramp's top
-            top, bottom = mine["ramp_top"], mine["ramp_bottom"]
-            d = math.dist(top, bottom) or 1
-            self.bunker_spot = (int(top[0] + (top[0] - bottom[0]) / d * 48), int(top[1] + (top[1] - bottom[1]) / d * 48))
-        else:                            # no trusted ramp: between the main and its natural
-            self.bunker_spot = (int(g.main.center[0] * 0.6 + g.natural.center[0] * 0.4),
-                                int(g.main.center[1] * 0.6 + g.natural.center[1] * 0.4))
+        self.bunker_spot = self._main_way_out() or (    # (no choke: between the main and its natural)
+            int(g.main.center[0] * 0.6 + g.natural.center[0] * 0.4), int(g.main.center[1] * 0.6 + g.natural.center[1] * 0.4))
+
+    def _main_way_out(self):
+        """Where the rush bunker goes: BUNKER_INSIDE inside the main's way out (the frontier of the
+        main's plateau, from map knowledge: right on any map, where the ramp analysis can misread
+        one: Heartbreak Ridge), or None if the main has no choke."""
+        from gary.walls import frontier
+        g = self.g
+        if not g.enemy_starts or getattr(g.hi.game, "terrain", None) is None:
+            return None
+        full = g.hi.game.observe()
+        fr = frontier(g.hi.game, {**full, "units": [u for u in full["units"] if u["owner"] == 11]},
+                      [g.main.center], list(g.enemy_starts), level=True)
+        if not fr["openings"] or fr["open"]:
+            return None
+        o = min(fr["openings"], key=lambda o: math.dist((o.x, o.y), g.main.center))
+        d = math.dist(o.inside, o.outside) or 1
+        return (int(o.x + (o.inside[0] - o.outside[0]) / d * BUNKER_INSIDE),
+                int(o.y + (o.inside[1] - o.outside[1]) / d * BUNKER_INSIDE))
 
     @property
     def allowed(self):

@@ -32,6 +32,9 @@ MIN_P = 0.05                    # never take a decision the model gives less tha
                                 # choices lead into states pros rarely reach, where it knows less
 BUSY = {T.ORDER_RESEARCH, T.ORDER_UPGRADE, T.ORDER_BUILD_ADDON}
 WAIT = {"kind": "wait"}         # plan(): possible, but not right now
+NAT_BUNKER_ALONG = 0.45         # the natural's bunker: this far from its Command Center toward its way out
+NAT_BUNKER_TILES = 5            # ...or this far toward the enemy where the natural has no choke
+NAT_BUNKER_RETRY = 20 * 24
 
 
 def describe(act: int, uid: int) -> str:
@@ -47,8 +50,12 @@ def describe(act: int, uid: int) -> str:
 
 
 class LearnedMacro:
-    def __init__(self, g: Gary, model: MacroModel, style: int | None = None, builds: dict | None = None):
+    def __init__(self, g: Gary, model: MacroModel, style: int | None = None, builds: dict | None = None,
+                 natural_bunker: bool = False):
         self.g = g
+        self.natural_bunker = natural_bunker
+        self.next_nat_bunker = 0
+        self._nat_bunker_spot = None
         self.model = model
         self.tracker = MacroTracker(model.spec, g.slot, style)
         self.goal: dict | None = None
@@ -68,7 +75,52 @@ class LearnedMacro:
                 if self.goal is None:
                     return
                 g.say(f"next: {self.goal['name']} ({build.label})")
+        if self.natural_bunker and self._natural_bunker(mine, me):
+            return
         self._learned(obs, mine, done, me)
+
+    def _natural_bunker(self, mine: list[dict], me: dict) -> bool:
+        """A bunker at the natural once Gary takes it. Pro TvZ Terrans that expand by 5:00 build one
+        within 2:30 of the Command Center in about half the games (50-60% on every open map; 19% on
+        Colosseum II, where they wall), a median 35-56 s after it; about 5 tiles from the CC, 45% of
+        the way to the natural's way out (data/interim/build_orders.jsonl; replays at 5:30)."""
+        g = self.g
+        nat = g.natural.center
+        if g.hi.frame < self.next_nat_bunker or g.task is not None:
+            return False
+        if not any(u["type"] == T.CC and math.dist((u["x"], u["y"]), nat) < 4 * 32 for u in mine) or                 not any(u["type"] == T.RAX and u["completed"] for u in mine):
+            return False
+        if any(u["type"] == T.BUNKER and math.dist((u["x"], u["y"]), nat) < 8 * 32 for u in mine) or                 any(r == T.BUNKER for r, *_ in g.reserved):
+            return False
+        if me["minerals"] - sum(COST[ut] for ut, *_ in g.reserved) < T.COST[T.BUNKER][0]:
+            return False
+        self.next_nat_bunker = g.hi.frame + NAT_BUNKER_RETRY
+        g.task = Task("build", T.BUNKER, "natural", data={"near": self.nat_bunker_spot(), "level_at": nat},
+                      started=g.hi.frame, by="natural bunker")
+        g.say("builds a bunker at the natural")
+        return True
+
+    def nat_bunker_spot(self) -> tuple[int, int]:
+        """Where the natural's bunker goes: NAT_BUNKER_ALONG of the way from its Command Center to its
+        way out (the frontier of the main and the natural, from map knowledge), or NAT_BUNKER_TILES
+        toward the nearest enemy start where the natural is open ground."""
+        if self._nat_bunker_spot is None:
+            from gary.walls import frontier
+            g = self.g
+            nat, main = g.natural.center, g.main.center
+            full = g.hi.game.observe()
+            fr = frontier(g.hi.game, {**full, "units": [u for u in full["units"] if u["owner"] == 11]},
+                          [main, nat], list(g.enemy_starts))                 if g.enemy_starts and getattr(g.hi.game, "terrain", None) is not None else None
+            if fr and fr["openings"] and not fr["open"]:
+                op = min(fr["openings"], key=lambda o: math.dist((o.x, o.y), nat))
+                self._nat_bunker_spot = (int(nat[0] + (op.x - nat[0]) * NAT_BUNKER_ALONG),
+                                         int(nat[1] + (op.y - nat[1]) * NAT_BUNKER_ALONG))
+            else:
+                to = min(g.enemy_starts, key=lambda s: math.dist(s, nat)) if g.enemy_starts else main
+                d = math.dist(to, nat) or 1
+                self._nat_bunker_spot = (int(nat[0] + (to[0] - nat[0]) / d * NAT_BUNKER_TILES * 32),
+                                         int(nat[1] + (to[1] - nat[1]) / d * NAT_BUNKER_TILES * 32))
+        return self._nat_bunker_spot
 
     def _learned(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> None:
         g = self.g

@@ -21,6 +21,8 @@ datasets. Bulk data lives in `data/` and is never committed.
 | `stardata_tvz_short_2yus7.rep` | STARDATA `0/bwrep_2yus7.rep` | BSD (StarData) | 1.16.1 | TvZ, Fighting Spirit, 4 min | Short game (early aggression / all-in) |
 | `stardata_tvz_long_7i821.rep` | STARDATA `13/bwrep_7i821.rep` | BSD (StarData) | 1.16.1 | TvZ, Fighting Spirit, 30 min | Long late-game TvZ |
 | `stardata_tvz_colosseum_pqt42.rep` | STARDATA `12/bwrep_pqt42.rep` | BSD (StarData) | 1.16.1 | TvZ, Colosseum II, 12 min | A map where pros wall their natural (and with creep built into it) |
+| `stardata_tvz_python_gg13676.rep` | STARDATA `0/TL_TvZ_GG13676.rep` | BSD (StarData) | 1.16.1 | TvZ, Python, 25 min | A second open-natural map for the benchmarks |
+| `stardata_tvz_heartbreak_9rg84.rep` | STARDATA `0/bwrep_9rg84.rep` | BSD (StarData) | 1.16.1 | TvZ, Heartbreak Ridge, 13 min | A two-player map for the benchmarks |
 | `stardata_pvz_standard_56jkk.rep` | STARDATA `1/bwrep_56jkk.rep` | BSD (StarData) | 1.16.1 | PvZ, Fighting Spirit, 13 min | A non-TvZ matchup |
 | `vib_zvp_vs_computer_scr.rep` | Contributor's own game (`data/raw/vib/`) | CC0 | SC:R 1.21+ | ZvP vs. computer, Blood Bath, 13 min | Remastered replay format (OpenBW can't read it without conversion) |
 

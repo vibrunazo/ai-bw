@@ -18,7 +18,7 @@ just gave Gary time. This one builds what a pro Zerg opens with, through the hum
              zerglings follow in groups of 6 (its home still defended): a zergling opening's
              timing, before Gary's bio is up
 
-    python -m eval.vs_rush --versions v011 --opponent v2 --seeds 1 2 3 4
+    python -m eval.vs_rush --versions v012 --opponent v2 --seeds 1 2 3 4
 
 It makes what a zergling opening should (4 hatcheries, speed, 35-50 zerglings by 8-10 min on
 Fighting Spirit). Against Gary v0.11 (48 seeds, 12 min), before the all-in: Gary lost none at

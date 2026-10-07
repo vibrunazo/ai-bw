@@ -80,6 +80,12 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.12: v0.11 with a bunker at the natural once it takes it (macro.py)
+    "v012": {"version": "v0.12", "posture": "early_pool/v1", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True}, "army": _ARMY,
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}}},
+             "arbiter": "fixed_priority/v1"},
     # step 4 (docs/CONTROL.md): v0.9 with leases enforced; and with roles instead of the fight model
     "v09lease": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
                  "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
@@ -203,6 +209,9 @@ OPTIONS = {
     # on top of sim city, in 78 wall fights (eval/walls_bench.py) -12 ± 12
     "gap_post": _roles(gap_post=True),
     # depots, barracks, academies wall the frontier, a door left (simcity.py)
+    # a bunker at the natural once Gary takes it, where pros put theirs (macro.py): on v0.11, against
+    # the replayed pros (48 seeds), lost 28 of 192 on three maps (v0.11 37); 9-pool lost 2 either way
+    "natbunker": lambda m: m["macro"].update(natural_bunker=True),
     "simcity": lambda m: m.update(simcity=True),
     "simcity_closed": lambda m: m.update(simcity=True, simcity_door=0),   # ...closed
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
@@ -269,7 +278,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         macro = load("macro", str(path))
         models["macro"] = getattr(macro, "path", "?")
         builds = {"one_base_defense": OneBaseDefense(g)} if "one_base_defense" in m["macro"].get("builds", []) else {}
-        g.macro = LearnedMacro(g, macro, style, builds)
+        g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False))
     if m["army"] is not None:
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)

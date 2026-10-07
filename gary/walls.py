@@ -374,7 +374,7 @@ class FrontierOpening:
 
 
 def frontier(game, obs: dict, bases: list[tuple[int, int]], enemy: list[tuple[int, int]],
-             units=GAP_UNITS, reach: int = FRONTIER_REACH, buildable=None) -> dict:
+             units=GAP_UNITS, reach: int = FRONTIER_REACH, buildable=None, level: bool = False) -> dict:
     """The frontier of a player's bases (Command Center positions; all of them are inside) against
     the enemy's side (e.g. the other start locations): the openings that, all closed, cut every
     ground way in, narrowest place first, each with which units get through (exact). Map
@@ -391,7 +391,10 @@ def frontier(game, obs: dict, bases: list[tuple[int, int]], enemy: list[tuple[in
     buildable (minitiles, bool): where a wall can stand. Given, the cut keeps to that ground where it
     can (crossing other ground costs WALL_ELSEWHERE cells): the line a wall can close, not the
     narrowest one (Colosseum II's naturals narrow on a ramp, unbuildable; the pros wall a little
-    inside it)."""
+    inside it).
+
+    level: the bases' side keeps to their ground height (the main's plateau): the cut is where it
+    drops away, the top of the main's ramp, not a narrower choke further out."""
     import numpy as np
     from scipy import ndimage
     from gary.policy.army import is_building
@@ -419,8 +422,12 @@ def frontier(game, obs: dict, bases: list[tuple[int, int]], enemy: list[tuple[in
     inside = [tuple(c) for c in np.argwhere(home)]
     near = home.copy()
     eight = np.ones((3, 3), bool)
+    ground = free
+    if level:
+        height = game.terrain()[1]
+        ground = free & np.isin(height, [int(height[by // 8, bx // 8]) for bx, by in bases])
     for _ in range(reach):                           # the ground within reach (by ground) of a base
-        near = ndimage.binary_dilation(near, structure=eight) & free
+        near = ndimage.binary_dilation(near, structure=eight) & ground
     far, _ = ndimage.label(free & ~near)
     ids = {far[c] for c in map(cell, enemy) if c and far[c]}
     outside = np.isin(far, list(ids))
