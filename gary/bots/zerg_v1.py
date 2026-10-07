@@ -22,7 +22,7 @@ there and die. This one:
 It sees through the fog like Gary (what its units see), knows the map (where Gary's start and
 natural are, like the dummy) and plays through the human interface: hotkeys, minimap orders.
 
-    python -m eval.vs_rush --versions v012 --opponent v1 --seeds 1 2 3 4
+    python -m eval.vs_rush --versions v013 --opponent v1 --seeds 1 2 3 4
 
 Against Gary v0.11 (immediate attacks, 12-minute games, 48 seeds), Gary lost: to the dummy 5, to
 v1 2, to v1a (always attacks, never retreats) 4, to v1d (v1a without the surround) 5. Hunting SCVs

@@ -20,7 +20,7 @@ from gary.agent.fight import RULES, FightLayer, PullRule
 from gary.agent.gary import Gary
 from gary.agent.macro import LearnedMacro, OneBaseDefense
 from gary.agent.motor import DirectMotor
-from gary.agent.posture import EarlyPoolPosture, NormalPosture
+from gary.agent.posture import EarlyPoolPosture, EarlyPoolPostureV2, NormalPosture
 from gary.version import announcement
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -83,6 +83,13 @@ MANIFESTS: dict[str, dict] = {
     # v0.12: v0.11 with a bunker at the natural once it takes it, and its first Barracks ordered by
     # 1:18 if the model hasn't (macro.py)
     "v012": {"version": "v0.12", "posture": "early_pool/v1", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24},
+             "army": _ARMY,
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}}},
+             "arbiter": "fixed_priority/v1"},
+    # v0.13: v0.12 with the rush bunker by the main's Command Center, not its way out (posture.py v2)
+    "v013": {"version": "v0.13", "posture": "early_pool/v2", "leases": "enforced",
              "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24},
              "army": _ARMY,
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
@@ -220,6 +227,12 @@ OPTIONS = {
     "simcity": lambda m: m.update(simcity=True),
     "simcity_closed": lambda m: m.update(simcity=True, simcity_door=0),   # ...closed
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
+    # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
+    # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)
+    "bunker_cc": lambda m: m.update(posture="early_pool/v2"),
+    # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
+    # fast pools that beat v0.12 on Heartbreak Ridge it kept a few more SCVs; the bunker's spot mattered
+    "pull_line": _pull(mineral_line=True),
     "pull_attacked": _pull(attacked_only=True),   # fight.py: pull workers only when zerg attack  +2 ± 3, [239] +3 ± 3
     "pull_ratio15": _pull(ratio=1.5),       # ...when the zerg outweigh the army 1.5 to 1      [239] -3 ± 4
     "pull_ratio2": _pull(ratio=2.0),        #                                                   [239] -6 ± 5
@@ -277,7 +290,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if m.get("simcity"):
             from gary.agent.simcity import SimCity
             g.simcity = SimCity(g, m.get("simcity_door", 32))
-    g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture}[m["posture"]](g)
+    g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture,
+                 "early_pool/v2": EarlyPoolPostureV2}[m["posture"]](g)
     if m["macro"] is not None:
         path = model_path(m["macro"]["model"])
         macro = load("macro", str(path))

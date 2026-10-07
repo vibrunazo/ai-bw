@@ -63,6 +63,8 @@ PRIORITY = {"attack_unit": 0, "gather": 1, "own_unit": 1, "stim": 1, "hold": 2, 
 # so unseen enemies count as full HP.
 MAX_HP = {37: 35, 38: 80, 39: 400, 41: 40, 42: 200, 43: 120, 44: 150, 45: 120, 46: 80, 47: 25, 50: 60,
           62: 250, 103: 125, 35: 25, 36: 200, 40: 30}
+MINERALS = {176, 177, 178}
+MINERAL_LINE_PX = 4 * 32             # pull(mineral_line): zerg this close to a base's minerals are in its mineral line
 THREAT_PX = 10 * 32                  # enemy fighters this close to a Command Center threaten its workers
 CALM_FRAMES = 24 * 5                 # pulled workers go back to mining after 5 s without a threat
 REPAIR_ORDER = 34
@@ -322,6 +324,11 @@ class PullRule:
       per_enemy      workers pulled per enemy unit (and one more)
       attacked_only  only zerg attacking something of Gary's count, not zerg hovering near
       max_share      never more than this share of the base's workers pulled (None: no cap)
+      mineral_line   only zerg in the mineral line count (attacking an SCV, or by the base's
+                     minerals), not zerg at a bunker or a building further out: there pros keep
+                     mining (the fast pools on replayed pros: Gary walked 10 SCVs out to the
+                     bunker at the main's exit and lost them all; pros in the same games pulled
+                     0-4 and lost none)
 
     In the home defenses Gary pulled where the pros didn't (44 of 239: small threats, about 3
     zerg against 3 of its own) and, where both did, sooner (3.0 s after the takeover, the pros'
@@ -330,8 +337,9 @@ class PullRule:
     name = "pull"
 
     def __init__(self, g: Gary, ratio: float = 1.0, delay_s: float = 0, per_enemy: int = 2,
-                 attacked_only: bool = False, max_share: float | None = None):
+                 attacked_only: bool = False, max_share: float | None = None, mineral_line: bool = False):
         self.g = g
+        self.mineral_line = mineral_line
         self.max_share = max_share
         self.next_pull = 0
         self.ratio, self.delay, self.per_enemy, self.attacked_only = ratio, int(delay_s * 24), per_enemy, attacked_only
@@ -345,6 +353,12 @@ class PullRule:
             near = [u for u in enemy if math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < THREAT_PX]
             if self.attacked_only and not any(u.get("order_target") in {m["tag"] for m in mine} for u in near):
                 near = []
+            if self.mineral_line:
+                scvs = {m["tag"] for m in mine if m["type"] == T.SCV}
+                fields = [(r["x"], r["y"]) for r in obs["units"] if r["type"] in MINERALS
+                          and math.dist((r["x"], r["y"]), (cc["x"], cc["y"])) < THREAT_PX]
+                near = [u for u in near if u.get("order_target") in scvs
+                        or any(math.dist((u["x"], u["y"]), f) < MINERAL_LINE_PX for f in fields)]
             if not near:
                 continue
             ours = sum(supply_x2(u["type"]) for u in mine if u["type"] in g.army_types and u["completed"]

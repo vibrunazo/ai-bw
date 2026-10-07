@@ -57,10 +57,13 @@ CALM = 20 * 24                       # ...once no zerg fighter was at home for t
 HOLD_ARMY, HOLD_RATIO = 6, 1.5       # Gary holds until its army supply is this, and this many times
                                      # the biggest zerg army seen at once
 DEFENSE = {T.SCV, T.MARINE, T.DEPOT, T.RAX, T.BUNKER}
+BUNKER_FROM_CC = 3 * 32              # v2: the rush bunker this far from the main's CC, toward its way out
 BUNKER_INSIDE = 64                   # the rush bunker: this far inside the main's way out
 
 
 class EarlyPoolPosture:
+    bunker_by_cc = False                 # v2: the rush bunker by the main's Command Center, not its way out
+
     def __init__(self, g: Gary):
         self.g = g
         self.rush = False                # an early pool was seen: the rush build
@@ -69,8 +72,17 @@ class EarlyPoolPosture:
         self.hatcheries_seen: set[int] = set()
         self.most_enemy = 0.0            # the biggest zerg army (supply) seen at once
         self.base_seen = False           # any zerg building seen
-        self.bunker_spot = self._main_way_out() or (    # (no choke: between the main and its natural)
+        way_out = self._main_way_out() or (    # (no choke: between the main and its natural)
             int(g.main.center[0] * 0.6 + g.natural.center[0] * 0.4), int(g.main.center[1] * 0.6 + g.natural.center[1] * 0.4))
+        if self.bunker_by_cc:
+            # against a fast pool, pros' one-base bunker stands by the Command Center (60 of 88 by
+            # 3:30; 18 at the main's way out): marines in it cover the mineral line, SCVs repair it
+            # from where they mine (Gary's at the way out, 16-20 tiles off, fell to 10 zerglings)
+            d = math.dist(way_out, g.main.center) or 1
+            self.bunker_spot = (int(g.main.center[0] + (way_out[0] - g.main.center[0]) / d * BUNKER_FROM_CC),
+                                int(g.main.center[1] + (way_out[1] - g.main.center[1]) / d * BUNKER_FROM_CC))
+        else:
+            self.bunker_spot = way_out
 
     def _main_way_out(self):
         """Where the rush bunker goes: BUNKER_INSIDE inside the main's way out (the frontier of the
@@ -151,3 +163,11 @@ class EarlyPoolPosture:
             if not self.rush and army >= max(HOLD_ARMY, HOLD_RATIO * self.most_enemy):
                 self.hold, self.rush_over = False, True
                 g.say(f"the early pool is held: army {army:.0f} vs the zerg's {self.most_enemy:.0f} at most, back to the usual plan")
+
+
+class EarlyPoolPostureV2(EarlyPoolPosture):
+    """v1 with the rush bunker by the main's Command Center (where pros put theirs against a fast pool).
+    It doesn't hold the main's choke: the rush dummy's 7:00 wave of 26 zerglings went through in 3
+    of 48 games. A second bunker at the way out once the rush is held, while Gary stays home, saved
+    2 of those but cost more against the replayed pros (8 lost of 144, 3 without): not kept."""
+    bunker_by_cc = True
