@@ -134,6 +134,10 @@ quicker way to a playable Gary.
   hatcheries (4) when larvae run out, the gas drones back to minerals after speed: 35-50
   zerglings by 8-10 min. Gary v0.11 still lost none of 48 games at either timing (and won 14-15):
   zerglings alone don't break bio once it's up, and the cautious judge lets the early window go.
+  With a timing attack (groups wait at staging; once speed is done with 20 zerglings, or at 6:00,
+  it musters everyone, then all attack at once, no retreat, reinforcements in groups of 6): Gary
+  lost 2 of 48 (immediate) and 0 (from 7:00). The dummy's 9-pool, hitting before any bunker,
+  is still the hardest scripted test (5 of 48).
 
 ### v0.10 (October 2026): roles (#2, docs/CONTROL.md)
 

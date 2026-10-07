@@ -60,6 +60,7 @@ HOME_NEAR = 10 * 32             # Gary's fighters this near the hatchery: everyo
 class ZergV1(ZergRush):
     attack_ratio, patient_ratio, retreat_ratio = ATTACK_RATIO, PATIENT_RATIO, RETREAT_RATIO
     surround = True
+    wave = WAVE                     # zerglings in a new group
     hunt = False                    # (attacking: aim at the mineral line, and again every REISSUE at SCVs
                                     # near: zerglings chasing pulled SCVs ignore the marines shooting them;
                                     # Gary lost 1 game in 48 to that, 5 without it)
@@ -74,6 +75,7 @@ class ZergV1(ZergRush):
         self.sent_with: dict[int, int] = {}
         self.staged_since: int | None = None
         self.form_after, self.form_tries = 0, 0
+        self.recalled = None
 
     def gather_point(self):
         """Where new zerglings wait to be grouped: the hatchery (its rally is 5 tiles off)."""
@@ -107,21 +109,21 @@ class ZergV1(ZergRush):
         gather = self.gather_point()
         waiting = [u for t, u in lings.items() if t not in grouped and math.dist((u["x"], u["y"]), gather) < 10 * 32]
         fresh = [u for u in waiting if screen_of(obs, u["x"], u["y"])]
-        if len(waiting) >= WAVE and len(fresh) < WAVE // 2 and hi.frame >= self.attack_after                 and hi.frame >= self.form_after:
+        if len(waiting) >= self.wave and len(fresh) < self.wave // 2 and hi.frame >= self.attack_after                 and hi.frame >= self.form_after:
             hi.camera_minimap(*_mid(waiting))                  # look at them first
             self.form_tries += 1
             if self.form_tries >= 3:                           # (they keep walking off the screen)
                 self.form_after, self.form_tries = hi.frame + 3 * 24, 0
             return True
-        if len(fresh) >= WAVE and hi.frame >= self.attack_after and hi.frame >= self.form_after:
+        if len(fresh) >= self.wave and hi.frame >= self.attack_after and hi.frame >= self.form_after:
             n = next((k for k in GROUPS if k not in self.groups), None)
             if n is not None:
                 sel = set(obs["selection"])
                 if self.stage == "forming":
                     self.stage = ""
-                    if sel and sel <= set(lings) and len(sel - grouped) >= WAVE // 2:
+                    if sel and sel <= set(lings) and len(sel - grouped) >= self.wave // 2:
                         hi.hotkey_set(n)
-                        self.groups[n], self.phase[n], self.since[n] = sel - grouped, "to_staging", hi.frame
+                        self.groups[n], self.phase[n], self.since[n] = set(sel), "to_staging", hi.frame
                         for k in self.groups:              # (a zergling is in one group)
                             if k != n:
                                 self.groups[k] -= sel
@@ -227,9 +229,13 @@ class ZergV1(ZergRush):
         """Group n selected (its hotkey), then a minimap order; the group's phase becomes then."""
         hi = self.hi
         sel = set(obs["selection"])
-        if not sel or not sel <= self.groups[n]:
+        if self.recalled == n and sel:                     # what the hotkey brings up is the group
+            self.groups[n] = sel
+        elif not sel or not sel <= self.groups[n]:
             hi.hotkey_recall(n)
+            self.recalled = n
             return True
+        self.recalled = None
         x, y = int(point[0]), int(point[1])
         if kind == "move":
             hi.minimap_right_click(x, y)

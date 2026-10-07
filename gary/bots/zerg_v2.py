@@ -12,13 +12,20 @@ just gave Gary time. This one builds what a pro Zerg opens with, through the hum
              no larva to spend them on (4 hatcheries at most)
   rally      both hatcheries rally to a gathering point in front of its natural, where v1's army
              takes them in groups of 12 to its staging point outside Gary's natural
+  all in     until then its groups wait at the staging point; once speed is done and it has 20
+             zerglings (or at 6:00 at the latest), it musters every zergling there (groups of 6), then
+             (80% there, or 25 s on) every group attacks Gary's start at once, without judging and without retreating, and new
+             zerglings follow in groups of 6 (its home still defended): a zergling opening's
+             timing, before Gary's bio is up
 
     python -m eval.vs_rush --versions v011 --opponent v2 --seeds 1 2 3 4
 
 It makes what a zergling opening should (4 hatcheries, speed, 35-50 zerglings by 8-10 min on
-Fighting Spirit), but against Gary v0.11 (48 seeds, 12 min) it lost no game for Gary at either
-timing, and Gary won 14-15: zerglings alone don't break marines, medics and bunkers once they're
-up (a Zerg goes lurkers or mutalisks then), and its judge lets the early window go.
+Fighting Spirit). Against Gary v0.11 (48 seeds, 12 min), before the all-in: Gary lost none at
+either timing (won 14-15); with it (going at about 6:00 with 14-20 zerglings, reinforcements
+streaming): lost 2 (immediate) and 0 (from 7:00), won 15-16. The dummy's 9-pool, hitting at 3:00
+before any bunker, beats Gary 5 times in 48: zerglings alone don't break marines, medics and
+bunkers once they're up (a Zerg goes lurkers or mutalisks then).
 """
 
 from __future__ import annotations
@@ -31,6 +38,9 @@ from gary.bots.zerg_v1 import ZergV1
 from gary.interface import screen_of
 
 EXTRACTOR, METABOLIC_BOOST = 149, 27
+SPEED_FRAMES = 100 * 24         # Metabolic Boost's research time (about)
+ALL_IN_LINGS, ALL_IN_LATEST = 20, 6 * 60 * 24
+MUSTER = 25 * 24                # the all-in goes when 80% of the zerglings are at the staging point, or after this
 HATCHERIES = {131, 132, 133}
 HATCH_AT = 12                   # drones before the natural's hatchery
 DRONES = 18
@@ -41,6 +51,8 @@ MINING_ORDERS = set(range(79, 92))     # moving to, waiting at, mining, returnin
 
 
 class ZergV2(ZergV1):
+    attack_ratio = patient_ratio = float("inf")       # no attack before the timing: everyone waits for it
+
     def __init__(self, hi, mapinfo):
         super().__init__(hi, mapinfo)
         self.main_base = mapinfo.base_near(self.home)
@@ -55,6 +67,7 @@ class ZergV2(ZergV1):
         self.overlords_at: list[int] = []
         self.task = ""                           # a multi-action step under way
         self.drone_for = None
+        self.all_in = False
         self.walking: dict[int, int] = {}       # drone -> frame until which it is walking home
         self.builds_seen: dict[str, int] = {}   # build step -> tries
         self.builder: dict[str, int] = {}       # build step -> the drone ordered to
@@ -69,6 +82,21 @@ class ZergV2(ZergV1):
         obs = hi.observe()
         me = obs["me"]
         mine = [u for u in obs["units"] if u["owner"] == hi.slot]
+        lings_now = sum(1 for u in mine if u["type"] == LING)
+        if not self.all_in:
+            speed_done = "speed" in self.ordered and hi.frame - self.ordered["speed"] >= SPEED_FRAMES
+            if (speed_done and lings_now >= ALL_IN_LINGS) or hi.frame >= ALL_IN_LATEST:
+                self.all_in, self.muster_from = "muster", hi.frame     # everyone to the staging point first
+                self.wave = 6
+                self.log(f"all in: {lings_now} zerglings, mustering")
+        elif self.all_in == "muster":
+            staged = sum(len(self.groups[k]) for k, p in self.phase.items() if p == "staged")
+            if staged >= 0.8 * lings_now or hi.frame - self.muster_from >= MUSTER:
+                self.all_in = "go"
+                self.attack_ratio = self.patient_ratio = 0.0
+                self.retreat_ratio = float("inf")
+                self.surround = False
+                self.log(f"all in: go with {staged} of {lings_now}")
         if self.army(obs, mine):                              # (hotkeys and the minimap, mostly)
             return
         count = lambda t: sum(1 for u in mine if u["type"] == t)
