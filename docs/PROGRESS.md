@@ -81,6 +81,18 @@ quicker way to a playable Gary.
   by the frontier on the main's plateau (`frontier(level=True)`), not by the ramp analysis, which
   misreads Heartbreak Ridge (one main's ramp 40 tiles off) and Colosseum II. Results about the
   same (v0.11's losses 32 -> 37 over the four tests, within the noise; Heartbreak Ridge 16 -> 17).
+- **Builders walk ahead (shared code, every version):** the opening ran 5-7 s behind the pros'
+  (first depot 1:05 against 0:58, first Barracks 1:33 against 1:28, Fighting Spirit, placed). The
+  macro made one decision at a time, so a depot waited behind an SCV whose Command Center was
+  busy (the model's next pick follows the last one): a unit whose producer is busy is now decided
+  at once and trained when it frees up, and the next decision comes meanwhile (as pros queue the
+  SCV and send the depot's builder). A building's SCV is sent 6 s of income before the money is
+  there (it used to wait, selected, for the money, then walk), and the hands go back to
+  production while it walks (the build is parked; its money is spoken for). Now: depot 0:56,
+  Barracks 1:33 (the scout leaves at 1:16 from 9 SCVs), SCVs 10 / 12 / 14 / 16 at 1:30-3:00 as
+  the pros'. Against the replayed pros: lost 19 of 144 (15 before), within the noise; the 9-pool
+  lost 2. Also seen: against hatch-first Zergs Gary decides to expand at 4:15 (median), pros order
+  their Command Center at 2:54.
 - **Most urgently missing:** the fastest pool-first pros (6 of 19 on Heartbreak Ridge, its short
   rush distance): their 8-9 zerglings arrive at 2:55, when Gary's first marine is just out
   (2:51) and its bunker isn't finished. Pros order their Barracks at 1:30 there and their first

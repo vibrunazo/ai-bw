@@ -27,6 +27,8 @@ from gary.policy.macro import ACT_NAMES, MacroModel, MacroTracker
 TRAIN, BUILD, RESEARCH, UPGRADE, EXPAND = 0, 3, 4, 5, 6
 TOWN_HALLS = {106, 131, 132, 133, 154}
 MAX_SCVS = 60
+WALK_AHEAD = 6                  # seconds: a building's worker sets out this much income before the money is there
+MINING = 1.0                    # minerals a second an SCV mines (about)
 GOAL_TIMEOUT = 24 * 30          # a decision Gary can't afford or do within 30 s is dropped
 MIN_P = 0.05                    # never take a decision the model gives less than this: unlikely
                                 # choices lead into states pros rarely reach, where it knows less
@@ -54,6 +56,7 @@ class LearnedMacro:
                  natural_bunker: bool = False, rax_by: int = 90 * 24):
         self.g = g
         self.rax_by = rax_by
+        self.queued: dict[tuple[int, int], int] = {}        # units decided whose producer is busy -> since
         self.natural_bunker = natural_bunker
         self.next_nat_bunker = 0
         self._nat_bunker_spot = None
@@ -93,7 +96,7 @@ class LearnedMacro:
             return False
         if any(u["type"] == T.BUNKER and math.dist((u["x"], u["y"]), nat) < 8 * 32 for u in mine) or                 any(r == T.BUNKER for r, *_ in g.reserved):
             return False
-        if me["minerals"] - sum(COST[ut] for ut, *_ in g.reserved) < T.COST[T.BUNKER][0]:
+        if me["minerals"] - g.committed() < T.COST[T.BUNKER][0]:
             return False
         self.next_nat_bunker = g.hi.frame + NAT_BUNKER_RETRY
         g.task = Task("build", T.BUNKER, "natural", data={"near": self.nat_bunker_spot(), "level_at": nat},
@@ -129,7 +132,7 @@ class LearnedMacro:
         # a Barracks by 1:30: pro TvZ Terrans order their first one at a median of 1:28, 95% by
         # 1:39 (data/interim/build_orders.jsonl; 2% build a CC first). Without one nothing holds
         # an early pool: the bunker needs it (4 of v0.11's 9 losses to a 9-pool)
-        building_rax = g.task is not None and g.task.kind == "build" and g.task.unit_type == T.RAX
+        building_rax = g.building(T.RAX)
         if (hi.frame >= self.rax_by and (self.goal is None or self.goal["id"] != T.RAX) and not building_rax
                 and not any(u["type"] == T.RAX for u in mine) and not any(r == T.RAX for r, *_ in g.reserved)):
             self.goal = {"act": BUILD, "id": T.RAX, "p": 1.0, "since": hi.frame, "name": "Barracks"}
@@ -137,6 +140,8 @@ class LearnedMacro:
         if self.goal and hi.frame - self.goal["since"] > GOAL_TIMEOUT:
             g.say(f"gives up on {self.goal['name']}")
             self.goal = None
+        if self._train_queued(obs, mine, done, me):
+            return
         if self.goal is None:
             if hi.frame < self.next_query:
                 return
@@ -170,10 +175,20 @@ class LearnedMacro:
             self.goal = None
             return
         if plan is WAIT:                    # e.g. the building is still busy: wait for it
+            if goal["act"] == TRAIN and (TRAIN, goal["id"]) not in self.queued:
+                # a unit whose producer is busy is decided now and trained when it frees up, and
+                # the next decision comes meanwhile (as pros queue the SCV and send the depot's
+                # builder: one decision at a time held the 9th SCV's depot 12 s behind it)
+                self.queued[(TRAIN, goal["id"])] = hi.frame
+                self.tracker.note_decision(TRAIN, goal["id"], obs["frame"])
+                self.decisions.append((hi.frame, goal["name"], goal["p"]))
+                self.goal = None
             return
         minerals, gas = plan["cost"]
-        budget = me["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
-        walk_ahead = 40 if plan["kind"] == "build" else 0      # send the worker a little early
+        budget = me["minerals"] - g.committed()
+        # a building's worker sets out WALK_AHEAD seconds of income early: it walks while the money comes
+        workers = sum(1 for u in mine if u["type"] == T.SCV)
+        walk_ahead = int(WALK_AHEAD * MINING * workers) if plan["kind"] == "build" else 0
         if budget < minerals - walk_ahead or me["gas"] < gas:
             return
         if plan["kind"] == "build":
@@ -184,6 +199,25 @@ class LearnedMacro:
         self.tracker.note_decision(goal["act"], goal["id"], obs["frame"])
         self.decisions.append((hi.frame, goal["name"], goal["p"]))
         self.goal = None
+
+    def _train_queued(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> bool:
+        """A decided unit whose producer is free now: trained (first, as pros keep production going).
+        True if this turn is spent."""
+        g = self.g
+        for key, since in list(self.queued.items()):
+            plan = self.plan(*key, obs, mine, done, me)
+            if plan is None or g.hi.frame - since > GOAL_TIMEOUT:
+                del self.queued[key]
+                continue
+            if plan is WAIT or g.task is not None:
+                continue
+            minerals, gas = plan["cost"]
+            if me["minerals"] - g.committed() < minerals or me["gas"] < gas:
+                continue
+            g.task = Task("command", data=plan, started=g.hi.frame)
+            del self.queued[key]
+            return True
+        return False
 
     def plan(self, act: int, uid: int, obs: dict, mine: list[dict], done: list[dict], me: dict) -> dict | None:
         """How to carry out this decision now; WAIT if Gary will be able to soon (the building that
@@ -210,7 +244,7 @@ class LearnedMacro:
                 # supply blocked: wait if a depot is on its way, else let a depot come next
                 coming = any(u["type"] == T.DEPOT and not u["completed"] for u in mine) or \
                     any(ut == T.DEPOT for ut, *_ in g.reserved) or \
-                    (g.task is not None and g.task.kind == "build" and g.task.unit_type == T.DEPOT)
+                    g.building(T.DEPOT)
                 return WAIT if coming else None
             if uid == T.SCV and sum(1 for u in mine if u["type"] == T.SCV) >= MAX_SCVS:
                 return None
@@ -280,7 +314,7 @@ class LearnedMacro:
         g = self.g
         n = sum(1 for u in mine if u["type"] == unit_type) + self.in_production(mine)[unit_type]
         n += sum(1 for ut, *_ in g.reserved if ut == unit_type)
-        if g.task is not None and g.task.kind == "build" and g.task.unit_type == unit_type:
+        if g.building(unit_type):
             n += 1
         return n
 
@@ -357,7 +391,7 @@ class OneBaseDefense:
         g = self.g
         if self._bunker_coming(mine) or not any(u["type"] == T.RAX and u["completed"] for u in mine):
             return False
-        budget = me["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
+        budget = me["minerals"] - g.committed()
         if g.build_failed.get(T.BUNKER, -1) > self.next_bunker - BUNKER_RETRY:   # one just failed: again now
             self.next_bunker = 0
         if budget >= T.COST[T.BUNKER][0] - 40 and g.hi.frame >= self.next_bunker:
@@ -384,7 +418,7 @@ class OneBaseDefense:
         # (an ordered bunker's money is held by its reservation until it starts)
         keep = T.COST[T.BUNKER][0] if not any(u["type"] == T.BUNKER for u in mine) and \
             not any(r == T.BUNKER for r, *_ in g.reserved) else 0
-        spare = lambda ut: me["minerals"] - sum(COST[r] for r, *_ in g.reserved) - keep >= T.COST[ut][0]
+        spare = lambda ut: me["minerals"] - g.committed() - keep >= T.COST[ut][0]
         # a depot takes longer than a marine or an SCV: start it while each producer has 2 left
         producers = sum(1 for u in done if u["type"] in (T.CC, T.RAX))
         if me["supply_max"] - me["supply_used"] < 2 * producers and me["supply_max"] < 200 and \
@@ -394,7 +428,7 @@ class OneBaseDefense:
             return goal(TRAIN, T.MARINE, "Marine")
         if sum(1 for u in mine if u["type"] == T.SCV) < RUSH_SCVS and doable(TRAIN, T.SCV) and spare(T.SCV):
             return goal(TRAIN, T.SCV, "SCV")
-        budget = me["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
+        budget = me["minerals"] - g.committed()
         if not keep and budget >= RAX_MONEY and sum(1 for u in mine if u["type"] == T.RAX) < RUSH_RAX and not coming(T.RAX) and \
                 doable(BUILD, T.RAX):
             return goal(BUILD, T.RAX, "Barracks")
@@ -403,4 +437,4 @@ class OneBaseDefense:
     def _bunker_coming(self, mine: list[dict]) -> bool:
         g = self.g
         return any(u["type"] == T.BUNKER for u in mine) or any(ut == T.BUNKER for ut, *_ in g.reserved) or \
-            (g.task is not None and g.task.kind == "build" and g.task.unit_type == T.BUNKER)
+            g.building(T.BUNKER)

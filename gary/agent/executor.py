@@ -28,6 +28,7 @@ RESUME_AFTER = 24                     # an unfinished building nobody has built 
 RESUME_RETRY = 24 * 4                 # ...and if that one doesn't arrive either, another after 4 s
 IDLE = 3                              # order "PlayerGuard": standing around
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
+PARK_FOR = 24 * 20                    # a build's SCV walks to the spot ahead of the money: back to it after this at most
 TASK_TIMEOUT = 24 * 40                # build, hotkey, mine and resume tasks give up after 40 s
 COMMAND_TIMEOUT = 24 * 20             # commands and gas after 20 s
 CREEP_BUILDINGS = {131, 132, 133, 143, 144, 146}   # Hatchery, Lair, Hive, Creep, Spore and Sunken Colony
@@ -184,9 +185,29 @@ class ScriptedExecutor:
         return [b for b in self.g.map.bases if any(math.dist(b.center, (h["x"], h["y"])) < 6 * 32 for h in halls)]
 
     def free_worker(self, obs: dict, u: dict) -> bool:
-        """A finished SCV on screen that isn't busy placing or constructing a building."""
+        """A finished SCV on screen that isn't busy placing or constructing a building (or walking
+        to build one)."""
+        parked = self.g.parked
         return u["type"] == SCV and u["completed"] and u["order"] not in BUSY_ORDERS \
-            and bool(screen_of(obs, u["x"], u["y"]))
+            and bool(screen_of(obs, u["x"], u["y"])) and (parked is None or parked.data["worker"] != u["tag"])
+
+    def resume_parked(self, obs: dict, mine: list[dict]) -> bool:
+        """The parked build (its SCV walking there) goes on once its money is there, or after
+        PARK_FOR anyway (it then waits for the money at the spot). True if it took the hands."""
+        g = self.g
+        t = g.parked
+        if t is None or g.task is not None:
+            return False
+        if not any(u["tag"] == t.data["worker"] for u in mine):
+            g.parked = None
+            self.fail_build(t)
+            return False
+        budget = obs["me"]["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
+        if budget < COST[t.unit_type] and g.hi.frame - t.data["walking"] < PARK_FOR:
+            return False
+        g.task, g.parked = t, None
+        g.run_task(obs, mine)
+        return True
 
     def pick_worker(self, obs: dict, mine: list[dict], near=None) -> dict | None:
         """A free SCV on screen: the one nearest where it will build, if known (a long walk across
@@ -425,9 +446,6 @@ class ScriptedExecutor:
             t.stage = "place"
             return
         if t.stage == "place":
-            budget = obs["me"]["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
-            if budget < COST[t.unit_type]:
-                return                                  # wait for money with the worker selected
             base = g.base(t.where)
             if "spot" not in t.data:
                 if not g.look_at(obs, t.where):
@@ -448,6 +466,19 @@ class ScriptedExecutor:
                     return
                 t.data["looked"] = True
                 hi.camera_minimap(spot[0] * 32 + w * 16, spot[1] * 32 + h * 16)
+                return
+            budget = obs["me"]["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
+            if budget < COST[t.unit_type]:
+                # the worker walks there while the money comes (as pros send it: it arrives with
+                # the money, not after it)
+                if not t.data.get("walking"):
+                    t.data["walking"] = hi.frame
+                    hi.right_click(*p)
+                    # the hands are free meanwhile (production goes on); back to this SCV when the
+                    # money is there (resume_parked)
+                    g.ignore_idle_until[t.data["worker"]] = hi.frame + PARK_FOR
+                    t.data["resume"], t.stage = "place", "reselect"
+                    g.parked, g.task = t, None
                 return
             if hi.build(t.unit_type, *p).accepted:
                 g.reserved.append((t.unit_type, *spot))

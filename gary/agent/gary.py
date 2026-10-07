@@ -77,6 +77,7 @@ class Gary:
         self.main: Base | None = None
         self.natural: Base | None = None
         self.enemy_starts: list[tuple[int, int]] = []
+        self.parked = None                               # a build whose SCV walks to its spot while the money comes
         self.simcity = None                              # gary/agent/simcity.py (an option)
         self.flip = (False, False)                       # mirror so the main is top-left (fight models)
         if mapinfo is not None:
@@ -137,6 +138,15 @@ class Gary:
         cx, cy = self.map.size[0] / 2, self.map.size[1] / 2
         n = math.dist(p, (cx, cy)) or 1
         return (round(p[0] + (cx - p[0]) * d / n), round(p[1] + (cy - p[1]) * d / n))
+
+    def committed(self) -> int:
+        """Minerals spoken for: buildings ordered but not started, and the parked build."""
+        from gary.terran import COST
+        return sum(COST[ut][0] for ut, *_ in self.reserved) + (COST[self.parked.unit_type][0] if self.parked else 0)
+
+    def building(self, unit_type: int) -> bool:
+        """A build of this type under way: on the hands, or parked (its SCV walking to the spot)."""
+        return any(t is not None and t.kind == "build" and t.unit_type == unit_type for t in (self.task, self.parked))
 
     def base(self, where: str | Base) -> Base:
         return self.main if where == "main" else self.natural if where == "natural" else where

@@ -78,6 +78,8 @@ class FixedPriority:
                 g.executor.release_reservations(mine)
                 if g.executor.resume_construction(mine):
                     return "executor:resume"
+                if g.executor.resume_parked(obs, mine):
+                    return "executor:parked"
                 g.macro.step(obs, mine, [u for u in mine if u["completed"]], obs["me"])
                 return "macro"
             if not hi.pending and g.setup_done and hi.frame >= g.fight.next_fight and self._interruptible(g.task):
@@ -111,6 +113,8 @@ class FixedPriority:
             g.task, self.suspended = self.suspended, None
             g.run_task(obs, mine)
             return "macro:resumed"
+        if ex.resume_parked(obs, mine):
+            return "executor:parked"
         if g.task:
             g.run_task(obs, mine)
             return None
