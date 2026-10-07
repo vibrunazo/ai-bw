@@ -96,6 +96,12 @@ quicker way to a playable Gary.
   checked one start by 2:20 (18 of 29 hatch firsts on Fighting Spirit went into rush defense), and
   zerglings seen before 4:00 count as an early pool (a hatch first's arrive at 3:20-5:00).
 
+- **Economy next to the pros' (`eval/economy.py`, in every `eval/vs_rush.py` summary):** losses
+  alone reward turtling. Medians at 8:00 / 12:00, games still going: pros (300 TvZ games of
+  12:30+) 31 / 39 SCVs, 2 / 2 Command Centers, 19 / 36 army supply. v0.13 against the replayed pros:
+  SCVs 31-33 / 39-44 and 2 / 2 Command Centers, as the pros; army supply 6-9 / 20-36. Gary mines
+  like a pro but has half the pros' army at 8:00.
+
 ### v0.12 (October 2026): a bunker at the natural
 
 - **What it is:** v0.11 that builds a bunker at its natural once it takes it (a rule on the learned
