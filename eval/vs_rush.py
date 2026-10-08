@@ -25,6 +25,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
+from eval import priority  # noqa: E402
 from eval.economy import AT, KEYS, line, pro_reference  # noqa: E402
 DEFAULT_MAP = REPO_ROOT / "tests" / "fixtures" / "replays" / "stardata_tvz_standard_ozp3w.rep"
 
@@ -64,7 +65,9 @@ def main() -> None:
     ap.add_argument("--style", type=int, help="steer Gary's macro toward this build style")
     ap.add_argument("--out", help="folder for replays and logs (default: a temporary folder)")
     ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2", "replayed"], help="the Zerg (gary/bots/): replayed spawns a pro's army on time")
+    priority.add_argument(ap)
     args = ap.parse_args()
+    priority.apply(args.priority)
     out = Path(args.out or tempfile.mkdtemp(prefix="gary_eval_"))
     out.mkdir(parents=True, exist_ok=True)
     jobs = [(v, s) for v in args.versions for s in args.seeds]

@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
 
 from inventory import data_root  # noqa: E402
+from eval import priority  # noqa: E402
 
 SOURCE = "v011+simcity"
 NEAR = 12 * 32
@@ -181,7 +182,9 @@ def main() -> None:
     ap.add_argument("--run", nargs="+", help="variants (manifests, with options) to score")
     ap.add_argument("--draws", type=int, default=8)
     ap.add_argument("--parallel", type=int, default=max(1, (os.cpu_count() or 6) * 2 // 3))
+    priority.add_argument(ap)
     args = ap.parse_args()
+    priority.apply(args.priority)
     if args.find:
         jobs = [(s, a, args.minutes) for a in args.attack_after for s in range(1, args.find + 1)]
         with ProcessPoolExecutor(args.parallel) as pool:

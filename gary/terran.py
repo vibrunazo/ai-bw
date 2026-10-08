@@ -27,7 +27,7 @@ COST = {  # (minerals, gas)
 }
 SIZE = {  # footprint in tiles
     CC: (4, 3), DEPOT: (3, 2), REFINERY: (4, 2), RAX: (4, 3), ACADEMY: (3, 2), FACTORY: (4, 3),
-    STARPORT: (4, 3), SCIENCE_FACILITY: (4, 3), EBAY: (3, 2), ARMORY: (3, 2), TURRET: (2, 2),
+    STARPORT: (4, 3), SCIENCE_FACILITY: (4, 3), EBAY: (4, 3), ARMORY: (3, 2), TURRET: (2, 2),
     BUNKER: (3, 2), COMSAT: (2, 2), NUKE_SILO: (2, 2), MACHINE_SHOP: (2, 2), CONTROL_TOWER: (2, 2),
     PHYSICS_LAB: (2, 2), COVERT_OPS: (2, 2),
 }

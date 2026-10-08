@@ -309,6 +309,18 @@ class Game:
         _dll.gary_env_creep(self._h, out.ctypes.data)
         return out.reshape(th, tw).astype(bool)
 
+    def debug_builder(self, tag: int) -> int:
+        """Debugging: why an SCV's build order isn't starting (bits): 1 not at its move target, 2 more
+        than 128 px from the spot, 4 not enough resources, 8 can't place, 16 empty build queue,
+        32 immovable (stuck)."""
+        return _dll.gary_env_debug_builder(self._h, tag)
+
+    def debug_place(self, slot: int, unit_type: int, tile_x: int, tile_y: int) -> int:
+        """Debugging: why the engine would refuse this build order from the player's selected unit
+        (bits): 1 not one unit selected, 2 the order isn't valid for it, 4 can't place, 8 can't reach
+        the spot, 16 a tile isn't explored. 0: it would take it (unless the money is short)."""
+        return _dll.gary_env_debug_place(self._h, slot, unit_type, tile_x, tile_y)
+
     def set_upgrade(self, owner: int, upgrade: int, level: int = 1) -> None:
         """Test fixtures only: a player's upgrade level, on its units at once."""
         _dll.gary_env_set_upgrade(self._h, owner, upgrade, level)

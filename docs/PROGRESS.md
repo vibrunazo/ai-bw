@@ -117,6 +117,11 @@ quicker way to a playable Gary.
   and research ordered in the last 2 s now count as spent. Replayed pros lost 8 of 144 (15; on
   Heartbreak Ridge 4, its hatch firsts 2 of 29, were 6); the dummy's 9-pool 2. A second Barracks
   by 3:45 when the model hasn't (pros of the standard style: 3:31) lost 12: not kept.
+- **The Engineering Bay is 4x3 tiles, not 3x2 (shared code):** found by a new test of Gary's cost,
+  size and supply tables against the game's data (`tests/test_game_data.py`); its placement was
+  checked on the wrong footprint and failed at least once in 24 of 144 games. Benchmark runs
+  (`eval/vs_rush.py`, `eval/scenarios.py`, `eval/walls_bench.py`) now run below normal priority by
+  default (`--priority normal` for full), and so do their games: other programs keep the CPU.
 - **Most urgently missing:** the rest of the army at 8:00: pros have a Factory (1.0) and a
   Starport (0.6) by then, and more Medics (2.7 against Gary's 1.7); Gary's style-1 macro has
   none of the first two by 8:00.

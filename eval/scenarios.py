@@ -57,6 +57,7 @@ from pathlib import Path
 
 import numpy as np
 
+from eval import priority
 from gary.agent.manifests import manifest_name
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -416,7 +417,9 @@ def main() -> None:
                          "(fights at home often hang on a few frames: one draw is a coin flip)")
     ap.add_argument("--zerg", default="reactive", choices=["reactive", "replay"],
                     help="the Zerg reacts once the game diverges from the pro's (default), or only replays")
+    priority.add_argument(ap)
     args = ap.parse_args()
+    priority.apply(args.priority)
     if args.pick:
         found = pick(args.pick, args.split)
         if args.screen:
