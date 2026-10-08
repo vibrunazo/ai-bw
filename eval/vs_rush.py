@@ -25,7 +25,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-from eval.economy import AT, line, pro_reference  # noqa: E402
+from eval.economy import AT, KEYS, line, pro_reference  # noqa: E402
 DEFAULT_MAP = REPO_ROOT / "tests" / "fixtures" / "replays" / "stardata_tvz_standard_ozp3w.rep"
 
 
@@ -45,9 +45,10 @@ def play(version: str, seed: int, args: argparse.Namespace, out: Path) -> dict:
     states = re.findall(r"^\s*(\d+:\d\d)\s+buildings T (\d+) Z (\d+)\s+army T (\d+) Z (\d+)", log, re.M)
     last = states[-1] if states else ("?", "?", "?", "?", "?")
     economy = {}
-    for t, scvs, ccs, army in re.findall(r"^\s*(\d+):00\s.*economy SCVs (\d+) CCs (\d+) army supply ([\d.]+)", log, re.M):
+    for t, scvs, ccs, army, built in re.findall(r"^\s*(\d+):00\s.*economy SCVs (\d+) CCs (\d+) army supply ([\d.]+) built ([\d.]+)",
+                                                log, re.M):
         if int(t) * 60 in AT:
-            economy[int(t) * 60] = {"scvs": int(scvs), "ccs": int(ccs), "army": float(army)}
+            economy[int(t) * 60] = {"scvs": int(scvs), "ccs": int(ccs), "army": float(army), "built": float(built)}
     return {"version": version, "seed": seed, "result": result, "at": last[0],
             "buildings": f"{last[1]}-{last[2]}", "army": f"{last[3]}-{last[4]}", "economy": economy}
 
@@ -81,7 +82,7 @@ def main() -> None:
         print(f"  pros: not available ({e})")
     for v in args.versions:
         mine = [r for r in rows if r["version"] == v]
-        at = {t: {k: statistics.median(r["economy"][t][k] for r in mine if t in r["economy"]) for k in ("scvs", "ccs", "army")}
+        at = {t: {k: statistics.median(r["economy"][t][k] for r in mine if t in r["economy"]) for k in KEYS}
               for t in AT if any(t in r["economy"] for r in mine)}
         print("  " + line(v, at))
     for v in args.versions:

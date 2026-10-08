@@ -94,6 +94,12 @@ quicker way to a playable Gary.
   Barracks idles between 2:30 and 5:00 (the lost games had 0-3 army units at 5:00; pros have 3.4
   marines at 4:00, 7.2 at 6:00); and a 12-pool that also expands early (pool at 1:36-1:45) shows
   a second hatchery and calls rush defense off while its 11-17 zerglings come.
+- **Army built, not only alive (`eval/economy.py`, every summary):** the replayed pros send every
+  unit they made at Gary, so its army alive is about half the pros' at 8:00 (9-10 against 19), but
+  it has built 22-24 supply to their 27 (pros' games: 70 by 12:00, Gary 48-53). Gary builds more
+  SCVs than they do by 12:00 (42-51 against 39, on two bases both). Keeping Barracks busy while a
+  building is saved for (not holding its money back) changed nothing measurable (replayed pros
+  lost 19 of 144 against 17).
 - **Most urgently missing:** the rest of the army at 8:00: pros have a Factory (1.0) and a
   Starport (0.6) by then, and more Medics (2.7 against Gary's 1.7); Gary's style-1 macro has
   none of the first two by 8:00.

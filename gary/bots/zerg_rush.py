@@ -233,6 +233,8 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
         zerg.target = next((u["x"], u["y"]) for u in obs["units"] if u["type"] == C.COMMAND_CENTER)
         end = int(minutes * 60 * 24)
         result = "time"
+        from eval.economy import Built
+        built = Built(slot_of["T"])
         while his["T"].frame < end:
             players = {p["slot"] for p in game.observe()["players"]}
             if not set(slot_of.values()) <= players:          # someone was eliminated
@@ -242,6 +244,8 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
             zerg.act()
             for i, hi in enumerate(his.values()):
                 hi.step(2, advance_game=(i == 0))
+            if his["T"].frame % 24 < 2:
+                built.look(game.observe()["units"])
             if his["T"].frame % (24 * 30) < 2:
                 o = game.observe()
                 alive = {r: sum(1 for u in o["units"] if u["owner"] == s and 106 <= u["type"] <= 175)
@@ -251,9 +255,10 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
                 t = his["T"].frame // 24
                 from eval.economy import terran_economy
                 eco = terran_economy(o["units"], slot_of["T"])
+                eco["built"] = built.look(o["units"])
                 print(f"{t // 60}:{t % 60:02d}  buildings T {alive['T']} Z {alive['Z']}  "
                       f"army T {army['T']} Z {army['Z']}  waves sent {zerg.waves}  "
-                      f"economy SCVs {eco['scvs']} CCs {eco['ccs']} army supply {eco['army']:g}", flush=True)
+                      f"economy SCVs {eco['scvs']} CCs {eco['ccs']} army supply {eco['army']:g} built {eco['built']:g}", flush=True)
                 if not alive["T"] or not alive["Z"]:
                     result = "Gary lost" if not alive["T"] else "Gary won"
                     break

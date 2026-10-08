@@ -1,10 +1,12 @@
 """How far along a Terran's economy and army are, Gary's next to the pros'.
 
 Losses alone reward turtling (a Gary that never expands loses fewest rushes), so eval/vs_rush.py
-also reports, at 8:00 and 12:00, the Terran's SCVs, Command Centers and army supply (supply of
-its units other than SCVs), next to the same numbers in pro TvZ games (their replays played in
+also reports, at 8:00 and 12:00, the Terran's SCVs, Command Centers, army supply alive (supply of
+its units other than SCVs) and army supply built (every such unit that ever finished: against the
+replayed pros, whose every unit attacks, Gary's army alive is half the pros' at 8:00, but it has
+built 23 supply to their 28), next to the same numbers in pro TvZ games (their replays played in
 OpenBW: games of 12:30 or more, so both players are still there; cached in
-data/interim/pro_economy.json).
+data/interim/pro_economy2.json).
 
     python -m eval.economy            # the pros' numbers (built once, then read from the cache)
 """
@@ -19,6 +21,7 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 AT = (8 * 60, 12 * 60)
+KEYS = ("scvs", "ccs", "army", "built")
 GAMES = 300
 CC, SCV = 106, 7
 
@@ -33,15 +36,32 @@ def terran_economy(units: list[dict], slot: int) -> dict:
                         and u["completed"]) / 2}
 
 
+class Built:
+    """The army supply a player has built so far: every unit other than SCVs and buildings seen
+    finished (look often enough not to miss one that dies: once a second)."""
+
+    def __init__(self, slot: int):
+        self.slot, self.seen = slot, {}
+
+    def look(self, units: list[dict]) -> float:
+        from gary.policy.army import is_building, supply_x2
+        for u in units:
+            if u["owner"] == self.slot and u["type"] != SCV and not is_building(u["type"]) and u["completed"]:
+                self.seen.setdefault(u["tag"], supply_x2(u["type"]) / 2)
+        return sum(self.seen.values())
+
+
 def _pro_game(path: str) -> dict | None:
     try:
         from gary.env import Game
         game = Game.scenario(path)
         slot = next(u["owner"] for u in game.observe()["units"] if u["type"] == CC)
-        out = {}
+        built, out = Built(slot), {}
         for t in AT:
-            game.step(t * 24 - game.observe()["frame"])
-            out[t] = terran_economy(game.observe()["units"], slot)
+            while game.observe()["frame"] < t * 24:
+                game.step(24)
+                built.look(game.observe()["units"])
+            out[t] = {**terran_economy(game.observe()["units"], slot), "built": built.look(game.observe()["units"])}
         game.close()
         return out
     except Exception:
@@ -52,7 +72,7 @@ def pro_reference() -> dict:
     """{seconds: {"scvs", "ccs", "army": median}} over pro TvZ Terrans."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
     from inventory import data_root
-    cache = data_root() / "interim" / "pro_economy.json"
+    cache = data_root() / "interim" / "pro_economy2.json"
     if cache.exists():
         return {int(k): v for k, v in json.loads(cache.read_text()).items()}
     recs = [json.loads(line) for line in open(data_root() / "interim" / "build_orders.jsonl", encoding="utf-8")]
@@ -60,15 +80,15 @@ def pro_reference() -> dict:
     random.Random(0).shuffle(recs)
     with ProcessPoolExecutor(16) as pool:
         games = [g for g in pool.map(_pro_game, [str(data_root() / "raw" / r["rel_path"]) for r in recs[:GAMES]]) if g]
-    ref = {t: {k: st.median(g[t][k] for g in games) for k in ("scvs", "ccs", "army")} | {"games": len(games)} for t in AT}
+    ref = {t: {k: st.median(g[t][k] for g in games) for k in KEYS} | {"games": len(games)} for t in AT}
     cache.write_text(json.dumps(ref))
     return ref
 
 
 def line(name: str, at: dict) -> str:
     """One summary line: {seconds: {"scvs", "ccs", "army"}} medians."""
-    return f"{name}: " + "; ".join(f"{t // 60}:{t % 60:02d} SCVs {v['scvs']:.0f}, CCs {v['ccs']:.0f}, army {v['army']:.0f}"
-                                   for t, v in sorted(at.items()))
+    return f"{name}: " + "; ".join(f"{t // 60}:{t % 60:02d} SCVs {v['scvs']:.0f}, CCs {v['ccs']:.0f}, army {v['army']:.0f} "
+                                   f"(built {v.get('built', 0):.0f})" for t, v in sorted(at.items()))
 
 
 if __name__ == "__main__":

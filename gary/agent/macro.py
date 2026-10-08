@@ -239,7 +239,11 @@ class LearnedMacro:
         if not self.keep_busy or g.task is not None:
             return False
         reserve = 0
-        if self.goal is not None:
+        if self.goal is not None and self.goal["act"] not in (BUILD, EXPAND):
+            # (a building saved up for doesn't stop production: pros keep their Barracks going
+            # while the Command Center's 400 come in; held back for it, Gary's first Barracks idled
+            # from 2:30 to 5:00, 0-3 army units at 5:00 in the games it lost. Its money is spoken
+            # for once its builder walks there)
             p = self.plan(self.goal["act"], self.goal["id"], obs, mine, done, me)
             reserve = p["cost"][0] if isinstance(p, dict) and p is not WAIT else 0
         for uid in self.last_unit.values():
