@@ -10,6 +10,7 @@ Battle.net ladder (CONTRIBUTING.md ground rules).
 """
 from __future__ import annotations
 
+import os
 import argparse
 import json
 import subprocess
@@ -23,8 +24,8 @@ sys.path.insert(0, str(HERE))
 
 from profile_facts import read_profile, sha256_file  # noqa: E402
 
-KNOWN_EXES = [
-    r"D:\games\StarCraft\x86\StarCraft.exe",
+KNOWN_EXES = [                                   # (GARY_SC_INSTALL: your StarCraft folder)
+    *([str(Path(os.environ["GARY_SC_INSTALL"]) / "x86" / "StarCraft.exe")] if os.environ.get("GARY_SC_INSTALL") else []),
     r"C:\Program Files (x86)\StarCraft\x86\StarCraft.exe",
     r"C:\StarCraft\x86\StarCraft.exe",
 ]

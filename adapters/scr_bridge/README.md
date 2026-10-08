@@ -177,7 +177,7 @@ MinHook, no BWAPI.
 ```bat
 adapters\scr_bridge\build.bat              &rem builds build\gary_scr.dll + build\gary_scr_tests.exe (32-bit!)
 adapters\scr_bridge\build\gary_scr_tests.exe                          &rem offline unit tests
-python adapters\scr_bridge\tools\verify_profile.py "D:\games\StarCraft\x86\StarCraft.exe"
+python adapters\scr_bridge\tools\verify_profile.py "%GARY_SC_INSTALL%\x86\StarCraft.exe"
 python adapters\scr_bridge\launch.py --smoke                          &rem inject, ping/status/observe, exit
 ```
 
@@ -225,7 +225,7 @@ the same game against the same opponents (including x64 clients over Battle.net)
    inverse of `resim/gary_resim.cpp`'s tested translator), handle-table stale-generation
    behavior, record lengths. `tests/test_scr_bridge.py` — protocol framing, `ScrGame` method
    parity with `gary.env.Game`, SHA-256 check of the pin against the real
-   `D:\games\StarCraft\x86\StarCraft.exe`.
+   `%GARY_SC_INSTALL%\x86\StarCraft.exe` (`GARY_SC_INSTALL`: your StarCraft folder).
 2. **Binary-level (install only, no game run):** `verify_profile.py` — PE parse, hash pin,
    RVA→file-offset mapping, code-site sanity bytes.
 3. **Live probe (one custom game vs computer):** `tools/run_match.py` runs the whole loop

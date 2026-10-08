@@ -5,6 +5,7 @@ Nothing here needs the game running.
 """
 from __future__ import annotations
 
+import os
 import inspect
 import subprocess
 import sys
@@ -16,12 +17,13 @@ sys.path.insert(0, str(REPO / "adapters" / "scr_bridge"))
 
 from profile_facts import read_profile, sha256_file  # noqa: E402
 
-EXE = Path(r"D:\games\StarCraft\x86\StarCraft.exe")
+# GARY_SC_INSTALL: your StarCraft folder (the one with .build.info)
+EXE = Path(os.environ.get("GARY_SC_INSTALL", "")) / "x86" / "StarCraft.exe"
 
 
 def test_profile_pin_matches_the_installed_build():
     """The pinned SHA-256 must be the real one on this machine (skip if not installed)."""
-    if not EXE.exists():
+    if not os.environ.get("GARY_SC_INSTALL") or not EXE.exists():
         print(f"skip: {EXE} not installed")
         return
     profile = read_profile()

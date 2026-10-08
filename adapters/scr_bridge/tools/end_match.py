@@ -10,6 +10,7 @@ ESC (safe in-game; only the top-level main menu quits on ESC) cancels any sub-di
 """
 from __future__ import annotations
 
+import os
 import ctypes
 import sys
 import time
@@ -27,8 +28,8 @@ from gary.scr_env import ScrGame  # noqa: E402
 OUT = Path(__file__).resolve().parents[1] / "build" / "auto_game"
 REPLAY_DIRS = [
     Path.home() / "Documents" / "StarCraft" / "Maps" / "Replays",
-    Path(r"D:\games\StarCraft\Maps\Replays"),
-    Path(r"D:\games\StarCraft\Maps\Save"),
+    *([Path(os.environ["GARY_SC_INSTALL"]) / "Maps" / "Replays", Path(os.environ["GARY_SC_INSTALL"]) / "Maps" / "Save"]
+      if os.environ.get("GARY_SC_INSTALL") else []),     # (GARY_SC_INSTALL: your StarCraft folder)
 ]
 user32 = ctypes.windll.user32
 
