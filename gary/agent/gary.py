@@ -18,6 +18,7 @@ from gary.interface import HumanInterface, screen_of
 from gary.mapinfo import Base, MapInfo
 
 LOC_MAIN, LOC_NATURAL = 2, 3          # F2, F3: saved screens
+IN_FLIGHT = 48                        # frames an order's money counts as spent before the game shows it
 
 
 @dataclass
@@ -77,6 +78,7 @@ class Gary:
         self.main: Base | None = None
         self.natural: Base | None = None
         self.enemy_starts: list[tuple[int, int]] = []
+        self.in_flight: list[tuple[int, int]] = []          # (frame, minerals) ordered, not yet taken
         self.parked = None                               # a build whose SCV walks to its spot while the money comes
         self.simcity = None                              # gary/agent/simcity.py (an option)
         self.flip = (False, False)                       # mirror so the main is top-left (fight models)
@@ -140,9 +142,17 @@ class Gary:
         return (round(p[0] + (cx - p[0]) * d / n), round(p[1] + (cy - p[1]) * d / n))
 
     def committed(self) -> int:
-        """Minerals spoken for: buildings ordered but not started, and the parked build."""
+        """Minerals spoken for: buildings ordered but not started, the parked build, and units and
+        research ordered in the last 2 s (the game takes them a moment later: two marines each
+        checked against the same 472 minerals took a Command Center's 400 as its SCV arrived)."""
         from gary.terran import COST
-        return sum(COST[ut][0] for ut, *_ in self.reserved) + (COST[self.parked.unit_type][0] if self.parked else 0)
+        self.in_flight = [(f, c) for f, c in self.in_flight if self.hi.frame - f < IN_FLIGHT]
+        return sum(COST[ut][0] for ut, *_ in self.reserved) + (COST[self.parked.unit_type][0] if self.parked else 0) \
+            + sum(c for _, c in self.in_flight)
+
+    def spend(self, minerals: int) -> None:
+        """A unit or research just ordered: its money is spoken for until the game takes it."""
+        self.in_flight.append((self.hi.frame, minerals))
 
     def building(self, unit_type: int) -> bool:
         """A build of this type under way: on the hands, or parked (its SCV walking to the spot)."""

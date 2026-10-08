@@ -108,6 +108,15 @@ quicker way to a playable Gary.
   called off in 3 pool-first games of 57 (9). Replayed pros lost 15 of 144 (19): 3 of 57 pool
   first, 12 of 87 hatch first (6 of 29 on Heartbreak Ridge); the dummy's 9-pool 1, its 7:00 rush 1
   (won 12).
+- **Heartbreak Ridge's hatch-first losses (shared code):** zerglings at 4:00-4:30 against 0-3
+  army units; one Barracks to 5:00, and at 3:15 an idle Barracks with 464 minerals: the build of
+  the natural's Command Center held Gary's hands while its SCV walked there. Now a build at
+  another base is parked while its SCV walks (the hands go back to production) and taken up again
+  when it's there. Then that Command Center failed as its SCV arrived: an SCV and a marine had each
+  been checked against the same 472 minerals (the money is taken a moment after the order): units
+  and research ordered in the last 2 s now count as spent. Replayed pros lost 8 of 144 (15; on
+  Heartbreak Ridge 4, its hatch firsts 2 of 29, were 6); the dummy's 9-pool 2. A second Barracks
+  by 3:45 when the model hasn't (pros of the standard style: 3:31) lost 12: not kept.
 - **Most urgently missing:** the rest of the army at 8:00: pros have a Factory (1.0) and a
   Starport (0.6) by then, and more Medics (2.7 against Gary's 1.7); Gary's style-1 macro has
   none of the first two by 8:00.

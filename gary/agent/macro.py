@@ -136,9 +136,10 @@ class LearnedMacro:
         # a Barracks by 1:30: pro TvZ Terrans order their first one at a median of 1:28, 95% by
         # 1:39 (data/interim/build_orders.jsonl; 2% build a CC first). Without one nothing holds
         # an early pool: the bunker needs it (4 of v0.11's 9 losses to a 9-pool)
-        building_rax = g.building(T.RAX)
-        if (hi.frame >= self.rax_by and (self.goal is None or self.goal["id"] != T.RAX) and not building_rax
-                and not any(u["type"] == T.RAX for u in mine) and not any(r == T.RAX for r, *_ in g.reserved)):
+        # (a second by 3:45, as the pros of the standard style have it at 3:31, lost 12 of 144 to the
+        # replayed pros, 8 without)
+        rax = sum(1 for u in mine if u["type"] == T.RAX) + sum(1 for r, *_ in g.reserved if r == T.RAX) + g.building(T.RAX)
+        if hi.frame >= self.rax_by and not rax and (self.goal is None or self.goal["id"] != T.RAX):
             self.goal = {"act": BUILD, "id": T.RAX, "p": 1.0, "since": hi.frame, "name": "Barracks"}
             g.say(f"next: Barracks (none by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d})")
         if self.goal and hi.frame - self.goal["since"] > GOAL_TIMEOUT:
@@ -202,6 +203,7 @@ class LearnedMacro:
             g.task = Task("build", goal["id"], plan["where"], data=data, started=hi.frame)
         else:
             g.task = Task("command", data=plan, started=hi.frame)
+            g.spend(minerals)
             self._note_unit(goal["act"], goal["id"])
         self.tracker.note_decision(goal["act"], goal["id"], obs["frame"])
         self.decisions.append((hi.frame, goal["name"], goal["p"]))
@@ -230,6 +232,7 @@ class LearnedMacro:
             if me["minerals"] - g.committed() < minerals or me["gas"] < gas:
                 continue
             g.task = Task("command", data=plan, started=g.hi.frame)
+            g.spend(minerals)
             del self.queued[key]
             self._note_unit(*key)
             return True
@@ -263,6 +266,7 @@ class LearnedMacro:
             if me["minerals"] - g.committed() - reserve < minerals or me["gas"] < gas:
                 continue
             g.task = Task("command", data=plan, started=g.hi.frame)
+            g.spend(minerals)
             self.tracker.note_decision(TRAIN, uid, obs["frame"])
             return True
         return False

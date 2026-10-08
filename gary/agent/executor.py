@@ -28,6 +28,7 @@ RESUME_AFTER = 24                     # an unfinished building nobody has built 
 RESUME_RETRY = 24 * 4                 # ...and if that one doesn't arrive either, another after 4 s
 IDLE = 3                              # order "PlayerGuard": standing around
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
+TRAVEL_FOR = 24 * 40                  # ...and one walking to another base, after this at most
 PARK_FOR = 24 * 20                    # a build's SCV walks to the spot ahead of the money: back to it after this at most
 TASK_TIMEOUT = 24 * 40                # build, hotkey, mine and resume tasks give up after 40 s
 COMMAND_TIMEOUT = 24 * 20             # commands and gas after 20 s
@@ -203,9 +204,14 @@ class ScriptedExecutor:
             g.parked = None
             self.fail_build(t)
             return False
-        budget = obs["me"]["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
-        if budget < COST[t.unit_type] and g.hi.frame - t.data["walking"] < PARK_FOR:
-            return False
+        if t.data.get("resume") == "wait_arrival":           # walking to another base: until it's there
+            w = next(u for u in mine if u["tag"] == t.data["worker"])
+            if math.dist((w["x"], w["y"]), g.base(t.where).center) > 6 * 32 and g.hi.frame - t.data["walking"] < TRAVEL_FOR:
+                return False
+        else:
+            budget = obs["me"]["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
+            if budget < COST[t.unit_type] and g.hi.frame - t.data["walking"] < PARK_FOR:
+                return False
         g.task, g.parked = t, None
         g.run_task(obs, mine)
         return True
@@ -443,6 +449,13 @@ class ScriptedExecutor:
         if t.stage == "travel":                      # walk the worker to the base
             hi.minimap_right_click(*g.base(t.where).center)
             t.stage = "wait_arrival"
+            if g.parked is None:
+                # the hands go back to production while it walks (holding them for the walk to the
+                # natural, Gary's Barracks stood idle with 464 minerals at 3:15); back to it there
+                t.data["walking"] = hi.frame
+                g.ignore_idle_until[t.data["worker"]] = hi.frame + TRAVEL_FOR
+                t.data["resume"], t.stage = "wait_arrival", "reselect"
+                g.parked, g.task = t, None
             return
         if t.stage == "wait_arrival":
             w = next((u for u in mine if u["tag"] == t.data["worker"]), None)
@@ -484,7 +497,8 @@ class ScriptedExecutor:
             if budget < COST[t.unit_type]:
                 # the worker walks there while the money comes (as pros send it: it arrives with
                 # the money, not after it)
-                if not t.data.get("walking"):
+                if not t.data.get("money_wait"):
+                    t.data["money_wait"] = True
                     t.data["walking"] = hi.frame
                     if t.unit_type == T.REFINERY:
                         # beside the geyser, not on it: a right-click on a geyser is a gas order, and
