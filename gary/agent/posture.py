@@ -53,6 +53,7 @@ MANY_LINGS, MANY_LINGS_BY = 6, 5 * 60 * 24   # ...or this many at once before 5:
 UNKNOWN_BY = 140 * 24                # ...and with no Zerg building seen by 2:20, play it as one (the
                                      # scout is still looking: a 9-pool's zerglings come at 3:00; at
                                      # 2:45, 2 of 48 9-pools were seen too late)
+POOL_DONE_BY = 170 * 24              # a finished pool seen by 2:50, or zerglings by 3:00 (POOL_BY): an early pool
 POOL_EARLY = 120 * 24                # a pool seen by 2:00 is an early pool (hatch firsts' pools are
                                      # ordered at 2:05, median); one seen later only with one hatchery
                                      # once the scout has passed the Zerg's natural
@@ -76,6 +77,7 @@ class EarlyPoolPosture:
         self.hatcheries_seen: set[int] = set()
         self.most_enemy = 0.0            # the biggest zerg army (supply) seen at once
         self.base_seen = False           # any zerg building seen
+        self.early_pool_seen = False     # a finished pool by 2:50, or zerglings by 3:00: early, whatever else
         way_out = self._main_way_out() or (    # (no choke: between the main and its natural)
             int(g.main.center[0] * 0.6 + g.natural.center[0] * 0.4), int(g.main.center[1] * 0.6 + g.natural.center[1] * 0.4))
         if self.bunker_by_cc:
@@ -135,6 +137,11 @@ class EarlyPoolPosture:
         obs = hi.observe()
         enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11)]
         self.hatcheries_seen |= {u["tag"] for u in enemy if u["type"] in HATCHERIES}
+        # an early pool even if it expands too (a 12-pool and a hatchery: two hatcheries seen):
+        # a pool finished by 2:50 was started by 2:00 (50 s to build; hatch firsts' at 2:05), and
+        # zerglings by 3:00
+        if (hi.frame <= POOL_DONE_BY and any(u["type"] == POOL and u["completed"] for u in enemy)) or                 (hi.frame <= POOL_BY and any(u["type"] == LING for u in enemy)):
+            self.early_pool_seen = True
         self.base_seen = self.base_seen or any(is_building(u["type"]) for u in enemy)
         lings = sum(1 for u in enemy if u["type"] == LING)
         fighters = enemy_fighters(obs, g.slot)
@@ -164,7 +171,7 @@ class EarlyPoolPosture:
             mine = [u for u in obs["units"] if u["owner"] == g.slot]
             if near_home(mine, fighters):
                 g.calm_since = hi.frame
-            if self.rush and len(self.hatcheries_seen) >= 2 and hi.frame <= POOL_BY and not near_home(mine, fighters):
+            if self.rush and len(self.hatcheries_seen) >= 2 and hi.frame <= POOL_BY and not near_home(mine, fighters)                     and not self.early_pool_seen:
                 # a second hatchery by 3:00, no zerg at home: a hatch first (the alarm came from not
                 # having seen the base yet: the scout of a four-player map). Back to the usual plan
                 # (in 116 of 144 games against replayed pros Gary had played rush defense, its tech a

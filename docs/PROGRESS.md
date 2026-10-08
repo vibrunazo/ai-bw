@@ -100,6 +100,14 @@ quicker way to a playable Gary.
   SCVs than they do by 12:00 (42-51 against 39, on two bases both). Keeping Barracks busy while a
   building is saved for (not holding its money back) changed nothing measurable (replayed pros
   lost 19 of 144 against 17).
+- **SCVs to saturation; an early pool that expands too (shared code):** Gary makes SCVs up to 2
+  per mineral field and 3 per geyser of its bases (Command Centers finished or not) and 3
+  builders, not to 60: 35-41 at 12:00 (pros 39; it had 42-51), army built 52-58 by 12:00 (48-53;
+  pros 70). A second hatchery no longer calls rush defense off if a finished pool was seen by 2:50
+  (started by 2:00: 50 s to build; hatch firsts' at 2:05) or zerglings by 3:00: rush defense
+  called off in 3 pool-first games of 57 (9). Replayed pros lost 15 of 144 (19): 3 of 57 pool
+  first, 12 of 87 hatch first (6 of 29 on Heartbreak Ridge); the dummy's 9-pool 1, its 7:00 rush 1
+  (won 12).
 - **Most urgently missing:** the rest of the army at 8:00: pros have a Factory (1.0) and a
   Starport (0.6) by then, and more Medics (2.7 against Gary's 1.7); Gary's style-1 macro has
   none of the first two by 8:00.

@@ -27,6 +27,7 @@ from gary.policy.macro import ACT_NAMES, MacroModel, MacroTracker
 TRAIN, BUILD, RESEARCH, UPGRADE, EXPAND = 0, 3, 4, 5, 6
 TOWN_HALLS = {106, 131, 132, 133, 154}
 MAX_SCVS = 60
+BUILDERS = 3                    # SCVs past the bases' saturation, for building
 WALK_AHEAD = 6                  # seconds: a building's worker sets out this much income before the money is there
 MINING = 1.0                    # minerals a second an SCV mines (about)
 GOAL_TIMEOUT = 24 * 30          # a decision Gary can't afford or do within 30 s is dropped
@@ -206,6 +207,14 @@ class LearnedMacro:
         self.decisions.append((hi.frame, goal["name"], goal["p"]))
         self.goal = None
 
+    def saturation(self, mine: list[dict]) -> int:
+        """SCVs enough for Gary's bases (with a Command Center, finished or not): 2 per mineral field,
+        3 per geyser, and builders. Pros have 39 at 12:00 on two bases; Gary, making SCVs to 60, had
+        42-51 there, the minerals of the army it lacked."""
+        halls = [u for u in mine if u["type"] == T.CC]
+        bases = [b for b in self.g.map.bases if any(math.dist(b.center, (h["x"], h["y"])) < 6 * 32 for h in halls)]
+        return sum(2 * len(b.minerals) + 3 * len(b.geysers) for b in bases) + BUILDERS
+
     def _train_queued(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> bool:
         """A decided unit whose producer is free now: trained (first, as pros keep production going).
         True if this turn is spent."""
@@ -285,7 +294,7 @@ class LearnedMacro:
                     any(ut == T.DEPOT for ut, *_ in g.reserved) or \
                     g.building(T.DEPOT)
                 return WAIT if coming else None
-            if uid == T.SCV and sum(1 for u in mine if u["type"] == T.SCV) >= MAX_SCVS:
+            if uid == T.SCV and sum(1 for u in mine if u["type"] == T.SCV) >= min(MAX_SCVS, self.saturation(mine)):
                 return None
             addon = T.NEEDS_ADDON.get(uid)
             if addon is not None and not any(u["type"] == addon for u in done):
