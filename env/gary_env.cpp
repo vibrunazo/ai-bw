@@ -508,6 +508,27 @@ GARY_API int gary_env_debug_builder(void* h, unsigned tag) {
 	return bits;
 }
 
+// Debugging: why the engine would refuse a build order from this player's selected unit (bits):
+// 1 not one unit selected, 2 the build order isn't valid for it, 4 can't place (the order's own
+// check), 8 the unit can't reach the spot, 16 a tile isn't explored, 32 no geyser there (refinery).
+GARY_API int gary_env_debug_place(void* h, int slot, int unit_type, int tile_x, int tile_y) {
+	auto* e = (env*)h;
+	auto& f = *e->funcs;
+	const state& st = e->player.st();
+	unit_t* u = f.get_single_selected_unit(slot);
+	if (!u) return 1;
+	int bits = 0;
+	const unit_type_t* ut = f.get_unit_type((UnitTypes)unit_type);
+	if (!f.unit_build_order_valid(u, f.get_order_type(Orders::PlaceBuilding), ut, slot)) bits |= 2;
+	xy pos(32 * tile_x + ut->placement_size.x / 2, 32 * tile_y + ut->placement_size.y / 2);
+	if (!f.can_place_building(u, slot, ut, pos, false, false)) bits |= 4;
+	if (!f.is_reachable(u, xy(32 * tile_x, 32 * tile_y))) bits |= 8;
+	for (int y = tile_y; y < tile_y + ut->placement_size.y / 32; ++y)
+		for (int x = tile_x; x < tile_x + ut->placement_size.x / 32; ++x)
+			if (st.tiles[y * st.game->map_tile_width + x].explored & (1 << slot)) bits |= 16;
+	return bits;
+}
+
 // For test scenarios (the wall checks, gary/walls.py): a finished unit of a player at a map pixel,
 // as the game places start units (a building exactly there; a ground unit at the nearest free
 // spot). Returns its tag, or 0 if it can't be placed.

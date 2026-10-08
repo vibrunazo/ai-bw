@@ -92,6 +92,8 @@ def _load_dll() -> ctypes.CDLL:
                                      ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.POINTER(ctypes.c_int),
                                      ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
     dll.gary_env_debug_builder.restype = ctypes.c_int
+    dll.gary_env_debug_place.restype = ctypes.c_int
+    dll.gary_env_debug_place.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
     dll.gary_env_debug_builder.argtypes = [ctypes.c_void_p, ctypes.c_uint]
     dll.gary_env_unit_type.restype = ctypes.c_int
     dll.gary_env_unit_type.argtypes = [ctypes.c_void_p, ctypes.c_uint]

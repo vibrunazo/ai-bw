@@ -486,6 +486,13 @@ class ScriptedExecutor:
                 # the money, not after it)
                 if not t.data.get("walking"):
                     t.data["walking"] = hi.frame
+                    if t.unit_type == T.REFINERY:
+                        # beside the geyser, not on it: a right-click on a geyser is a gas order, and
+                        # the SCV then refused the refinery (it came a minute late, 3 games in 4)
+                        cx, cy = spot[0] * 32 + w * 16, spot[1] * 32 + h * 16
+                        mx, my = base.center
+                        d = math.dist((cx, cy), (mx, my)) or 1
+                        p = screen_of(obs, cx + (mx - cx) / d * 80, cy + (my - cy) / d * 80) or p
                     hi.right_click(*p)
                     # the hands are free meanwhile (production goes on); back to this SCV when the
                     # money is there (resume_parked)
