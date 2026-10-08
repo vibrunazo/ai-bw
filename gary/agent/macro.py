@@ -15,6 +15,7 @@ The executor (L2b) carries the decisions out: a build task or a command task.
 from __future__ import annotations
 
 import math
+import random
 from collections import Counter
 
 import numpy as np
@@ -31,6 +32,7 @@ BUILDERS = 3                    # SCVs past the bases' saturation, for building
 WALK_AHEAD = 6                  # seconds: a building's worker sets out this much income before the money is there
 MINING = 1.0                    # minerals a second an SCV mines (about)
 GOAL_TIMEOUT = 24 * 30          # a decision Gary can't afford or do within 30 s is dropped
+DICE_FLOOR = 0.01               # decoder "dice": decisions less likely than this are never rolled
 MIN_P = 0.05                    # never take a decision the model gives less than this: unlikely
                                 # choices lead into states pros rarely reach, where it knows less
 BUSY = {T.ORDER_RESEARCH, T.ORDER_UPGRADE, T.ORDER_BUILD_ADDON}
@@ -55,11 +57,14 @@ def describe(act: int, uid: int) -> str:
 
 class LearnedMacro:
     def __init__(self, g: Gary, model: MacroModel, style: int | None = None, builds: dict | None = None,
-                 natural_bunker: bool = False, rax_by: int = 90 * 24, keep_busy: bool = False):
+                 natural_bunker: bool = False, rax_by: int = 90 * 24, keep_busy: bool = False,
+                 decoder: str = "favorite", seed: int = 0):
         self.g = g
         self.rax_by = rax_by
         self.queued: dict[tuple[int, int], int] = {}        # units decided whose producer is busy -> since
         self.keep_busy = keep_busy
+        self.decoder = decoder                              # "favorite" (the most likely) or "dice"
+        self.rng = random.Random(seed)
         self.last_unit: dict[int, int] = {}                 # producer type -> the unit last decided for it
         self.natural_bunker = natural_bunker
         self.next_nat_bunker = 0
@@ -155,8 +160,19 @@ class LearnedMacro:
             # likely one that only needs a busy building to free up
             probs, _ = self.model.probs(self.tracker.features(obs, self.in_production(mine)))
             pick = waiting = None
-            for k in np.argsort(-probs[0]):
-                if probs[0, k] < MIN_P:
+            if self.decoder == "dice":
+                # roll the model's odds rather than always take the favorite: a weighted shuffle,
+                # then the first decision Gary can carry out (Factories, Starports, Engineering Bays
+                # are a few percent each ask: the favorite, almost always a unit, never let them
+                # come on time; on the pros' own states, a Factory by 8:00 in 4% of games against
+                # their 62%, rolled 63%)
+                order = [k for _, k in sorted(((self.rng.random() ** (1 / p), k) for k, p in enumerate(probs[0])
+                                               if p >= DICE_FLOOR), reverse=True)]
+                floor = DICE_FLOOR
+            else:
+                order, floor = np.argsort(-probs[0]), MIN_P
+            for k in order:
+                if probs[0, k] < floor:
                     break
                 plan = self.plan(*self.model.spec.decisions[k], obs, mine, done, me)
                 if plan is WAIT:

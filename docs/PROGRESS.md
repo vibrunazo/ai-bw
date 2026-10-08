@@ -122,6 +122,15 @@ quicker way to a playable Gary.
   checked on the wrong footprint and failed at least once in 24 of 144 games. Benchmark runs
   (`eval/vs_rush.py`, `eval/scenarios.py`, `eval/walls_bench.py`) now run below normal priority by
   default (`--priority normal` for full), and so do their games: other programs keep the CPU.
+- **Why the Factory comes late: the decoder.** The macro model, on held-out pro games of the
+  standard style, gives the Factory a median 4% at the moments the pro's next decision is one
+  (ranked first in 1%; the Starport 5%, ranked first 15%): a rare next event beside the next marine.
+  Gary takes the most likely decision (and never one under 5%), so on the pros' own states it would
+  decide a Factory by 8:00 in 4% of games (they did in 62%); an Engineering Bay 31% (90%). Offline,
+  rolling the odds matches the pros (Factory 63%, Starport 25%, Engineering Bay 78%); accumulating
+  each decision's odds until one is due (smooth weighted round-robin) nearly (47%, 11%, 72%). In
+  games, rolling cost SCVs (28 at 12:00 against 41: the SCV is the favorite more often than it's
+  rolled) and changed no Factory timing (option `+dice`, not adopted).
 - **Most urgently missing:** the rest of the army at 8:00: pros have a Factory (1.0) and a
   Starport (0.6) by then, and more Medics (2.7 against Gary's 1.7); Gary's style-1 macro has
   none of the first two by 8:00.

@@ -243,6 +243,12 @@ OPTIONS = {
     # army supply at 8:00 11-12 (7-9; pros 19), at 12:00 32-44 (25-34; pros 36); replayed pros lost 7 of
     # 144 (10), the 9-pool 0 (0)
     "busy": lambda m: m["macro"].update(keep_busy=True),
+    # macro.py: roll the model's odds (a weighted shuffle) instead of taking the most likely decision.
+    # Offline, on pros' states, it matched their Factory timing (63% by 8:00, theirs 62%; the
+    # favorite 4%). In games on v0.14 (Fighting Spirit, replayed pros, 32 seeds): fewer SCVs (28 at
+    # 12:00 against 41: the SCV is rolled less often than it's the favorite), army built 40 by 12:00
+    # (57), a Factory by 8:00 in 9% (19%), lost 3 (2). Not adopted
+    "dice": lambda m: m["macro"].update(decoder="dice"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
     # fast pools that beat v0.12 on Heartbreak Ridge it kept a few more SCVs; the bunker's spot mattered
     "pull_line": _pull(mineral_line=True),
@@ -311,7 +317,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         models["macro"] = getattr(macro, "path", "?")
         builds = {"one_base_defense": OneBaseDefense(g)} if "one_base_defense" in m["macro"].get("builds", []) else {}
         g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
-                               m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False))
+                               m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False),
+                               m["macro"].get("decoder", "favorite"), seed)
     if m["army"] is not None:
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)
