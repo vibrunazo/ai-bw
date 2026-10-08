@@ -73,6 +73,16 @@ quicker way to a playable Gary.
   builder walks ahead at a time now). Both shared code.
 - **Results:** army supply at 8:00 11-12 (v0.13 7-9; pros 19), at 12:00 32-44 (25-34; pros 36);
   SCVs as the pros'. Replayed pros lost 7 of 144 (10); the dummy's 9-pool 0 (0), won 10 (8).
+- **False alarms (shared code):** against hatch-first pros Gary had played rush defense in 116 of
+  144 games, its tech a minute late. Now a second hatchery seen by 3:00 with no zerg at home calls
+  it off at once, zerglings count toward an early pool only while one hatchery has been seen, and
+  the scout gives up on a waypoint it can't reach after 8 s (one of Python's circle points: it
+  never got to the natural). Rush defense held on in 22 of 87 hatch-first games. Replayed pros
+  lost 12 of 144 (7-10 before, the noise is about ±4); the dummy's 9-pool 1, its 7:00 rush 1
+  (won 14). In hatch-first games: expansion 2:42 (pros 2:50), Academy 4:40 (4:08), Stim 5:53
+  (5:09), Medics 6:23 (5:12), a Factory by 8:00 in 10% (70%), a Starport 2% (31%). Putting
+  buildings, research and upgrades ahead of the units kept-busy producers make anyway changed
+  none of it: the model decides them late.
 - **Most urgently missing:** the rest of the army at 8:00: pros have a Factory (1.0) and a
   Starport (0.6) by then, and more Medics (2.7 against Gary's 1.7); Gary's style-1 macro has
   none of the first two by 8:00.

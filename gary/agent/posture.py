@@ -144,10 +144,13 @@ class EarlyPoolPosture:
         # 9 of 29 hatch firsts on Python looked like early pools; waiting for the natural always,
         # 9-pools were seen at 3:04 instead of 1:55 and 7 of 48 lost)
         looked = getattr(g.army, "scout_done", True) or hi.frame <= POOL_EARLY
+        # (zerglings count only while Gary hasn't seen a second hatchery: a hatch first's first ones
+        # come at 3:20-5:00, and called an early pool they held back Gary's tech by a minute)
+        one_base = len(self.hatcheries_seen) <= 1
         if not self.rush and not self.hold and ((hi.frame <= POOL_BY and any(u["type"] == POOL for u in enemy)
-                                                 and len(self.hatcheries_seen) <= 1 and looked) or
-                                                (hi.frame <= LINGS_BY and lings) or
-                                                (hi.frame <= MANY_LINGS_BY and lings >= MANY_LINGS) or
+                                                 and one_base and looked) or
+                                                (hi.frame <= LINGS_BY and lings and one_base) or
+                                                (hi.frame <= MANY_LINGS_BY and lings >= MANY_LINGS and one_base) or
                                                 (UNKNOWN_BY <= hi.frame <= POOL_BY and not self.base_seen)):
             self.rush = self.hold = True
             # marines gather a few tiles behind the bunker, toward the main (not on its spot,
@@ -161,6 +164,13 @@ class EarlyPoolPosture:
             mine = [u for u in obs["units"] if u["owner"] == g.slot]
             if near_home(mine, fighters):
                 g.calm_since = hi.frame
+            if self.rush and len(self.hatcheries_seen) >= 2 and hi.frame <= POOL_BY and not near_home(mine, fighters):
+                # a second hatchery by 3:00, no zerg at home: a hatch first (the alarm came from not
+                # having seen the base yet: the scout of a four-player map). Back to the usual plan
+                # (in 116 of 144 games against replayed pros Gary had played rush defense, its tech a
+                # minute late; the rush build held until 6 army and 20 s of calm, often 4:15)
+                self.rush = self.hold = False
+                g.say("two hatcheries, no zerg at home: not an early pool, back to the usual plan")
             bunker = any(u["type"] == T.BUNKER and u["completed"] for u in mine)
             tags = {u["tag"] for u in mine}
             inside = set().union(set(), *(m for b, m in g.loaded.items() if b in tags)) - tags

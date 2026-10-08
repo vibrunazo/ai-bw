@@ -34,6 +34,7 @@ FIGHT_MARGIN = 0.01                 # ...or if going looks worse than staying by
 REORDER_AFTER = 24 * 8              # don't repeat the same order to a group within 8 s
 SCOUT_AT = 24 * 45                  # send a scouting worker from 0:45, at 9 SCVs (like pros)
 SCOUT_WORKERS = 9
+WAYPOINT_FOR = 8 * 24                # the scout gives up on a waypoint of its circle after this
 CIRCLE = 7 * 32                     # the scout circles the enemy main this far from its start location
 
 
@@ -77,6 +78,7 @@ class LearnedArmy:
         self.scout_done = False
         self.circle: list | None = None                 # the scout's way around the enemy main, once found
         self.next_circle_order = 0
+        self.waypoint, self.waypoint_since = None, 0
         self.ordered_to = None
 
     def remember(self, obs: dict) -> None:
@@ -187,8 +189,11 @@ class LearnedArmy:
             self.circle.append(g.map.natural_of(g.map.base_near(c)).center)
         if self.circle is not None:
             reached = bool(self.circle) and math.dist((scout["x"], scout["y"]), self.circle[0]) < 2 * 32
-            if reached:
-                self.circle.pop(0)
+            if self.circle and self.circle[0] != self.waypoint:
+                self.waypoint, self.waypoint_since = self.circle[0], g.hi.frame
+            if reached or (self.circle and g.hi.frame - self.waypoint_since > WAYPOINT_FOR):
+                self.circle.pop(0)              # (or it can't get there: one of Python's is off the ground)
+                reached = True
             # an order per waypoint (each one takes Gary's hands), again only if the scout stopped
             if self.circle and (reached or self.ordered_to != self.circle[0] or scout["order"] in (2, 3))                     and g.hi.frame >= self.next_circle_order:
                 self.next_circle_order = g.hi.frame + 2 * 24
