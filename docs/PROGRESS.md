@@ -87,6 +87,12 @@ quicker way to a playable Gary.
   to Gary's 1 marine. A pool finished by 2:40 is now an early pool whatever else (pro TvZ: 98% of
   pool firsts' pools, 0.7% of hatch firsts'; by 2:50 it would be 16% of hatch firsts): lost 13 of
   144 (15; Heartbreak Ridge 7), the same hatch firsts called early pools.
+- **A scout that never went (shared code):** the scout's box once took nothing, and an SCV still
+  selected from before became the scout; it went on mining, nothing was seen by 2:20, and a hatch
+  first was played as an early pool. A scout not on a move order every 3 s is sent again (3 times,
+  then another SCV takes over, keeping the starts ruled out). Same results otherwise (13 of 144;
+  the 9-pool 0 of 48); a first version that judged by distance replaced every scout on Python,
+  whose paths bend away from the target.
 - **False alarms on 4-player maps (open):** with buildings going up, Gary plays rush defense
   against 18 of 30 hatch firsts on Fighting Spirit and 23 of 29 on Python (2 of 23 on Heartbreak
   Ridge): its scout hasn't found the Zerg by 2:20, and nothing seen is called an early pool. At

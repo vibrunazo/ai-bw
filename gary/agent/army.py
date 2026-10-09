@@ -40,6 +40,9 @@ SCOUT_AT = 24 * 45                  # send a scouting worker from 0:45, at 9 SCV
 SCOUT_WORKERS = 9
 WAYPOINT_FOR = 8 * 24                # the scout gives up on a waypoint of its circle after this
 CIRCLE = 7 * 32                     # the scout circles the enemy main this far from its start location
+SCOUT_CHECK = 3 * 24                # the scout on its way: every 3 s it should be moving, or it's sent
+SCOUT_RESENDS = 3                   # again (this many times, then another SCV)
+MOVE_ORDER = 6
 HUNT_AFTER = 8 * 60 * 24            # hunt: from 8:00, with this many army units and no enemy army seen
 HUNT_ARMY = 20                      # for QUIET, the army goes where enemy buildings were, then to
 QUIET = 60 * 24                     # the bases it hasn't passed lately
@@ -99,6 +102,8 @@ class LearnedArmy:
         self.next_circle_order = 0
         self.waypoint, self.waypoint_since = None, 0
         self.ordered_to = None
+        self.scout_check = None     # (frame, (scout, target)) at the last check
+        self.scout_resends = 0
 
     def remember(self, obs: dict) -> None:
         self.tracker.remember(obs)
@@ -245,7 +250,8 @@ class LearnedArmy:
         if g.scout is None:
             workers = sum(1 for u in mine if u["type"] == T.SCV)
             if hi.frame >= SCOUT_AT and workers >= SCOUT_WORKERS:
-                self.scout_targets = sorted(g.enemy_starts, key=lambda p: math.dist(p, g.main.center))
+                if not self.scout_targets:                 # (a new scout keeps the starts ruled out)
+                    self.scout_targets = sorted(g.enemy_starts, key=lambda p: math.dist(p, g.main.center))
                 g.motor.start(Intent("SCOUT", [], self.scout_targets[0], {"to": self.scout_targets[0]}, "scout"))
                 return True
             return False
@@ -288,4 +294,27 @@ class LearnedArmy:
                 g.motor.start(Intent("SCOUT", [g.scout], self.scout_targets[0], {"to": self.scout_targets[0]}, "scout"))
                 return True
             self.scout_done = True
+        elif self.scout_targets and self._scout_stuck(scout):
+            # not moving (its box once took nothing and an SCV still selected became the scout: it
+            # went on mining, and nothing seen by 2:20 called a hatch first an early pool)
+            if self.scout_resends >= SCOUT_RESENDS:
+                g.say("scout isn't going: another SCV")
+                g.scout, self.scout_resends = None, 0
+                return False
+            self.scout_resends += 1
+            g.motor.start(Intent("SCOUT", [g.scout], self.scout_targets[0], {"to": self.scout_targets[0]}, "scout"))
+            return True
         return False
+
+    def _scout_stuck(self, scout: dict) -> bool:
+        """Every SCOUT_CHECK: True if the scout isn't on a move (it mines, builds, stands). (Not by
+        distance: on Python its path bends away from the target for seconds at a time.)"""
+        f = self.g.hi.frame
+        key = (scout["tag"], self.scout_targets[0])
+        if self.scout_check is None or self.scout_check[1] != key:
+            self.scout_check = (f, key)
+            return False
+        if f - self.scout_check[0] < SCOUT_CHECK:
+            return False
+        self.scout_check = (f, key)
+        return scout["order"] != MOVE_ORDER
