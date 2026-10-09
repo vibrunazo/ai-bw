@@ -27,6 +27,11 @@ LOST_ORDER = 6 * 24                   # a reserved spot with no SCV on its way a
 RESUME_AFTER = 24                     # an unfinished building nobody has built for a second gets an SCV
 RESUME_RETRY = 24 * 4                 # ...and if that one doesn't arrive either, another after 4 s
 IDLE = 3                              # order "PlayerGuard": standing around
+MINING_STILL = 87                     # order "MiningMinerals": an SCV standing at its mineral field
+PICK_TRIES = 2                        # a builder not selected after this many tries: another one
+RESELECT_TRIES = 6                    # a parked builder not selected again after this many: the build fails
+SCV_SPEED = 4.9                       # pixels per frame
+CLICK_FRAMES = 2                      # a click lands this long after it's decided
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
 TRAVEL_FOR = 24 * 40                  # ...and one walking to another base, after this at most
 PARK_FOR = 24 * 20                    # a build's SCV walks to the spot ahead of the money: back to it after this at most
@@ -219,12 +224,32 @@ class ScriptedExecutor:
         g.run_task(obs, mine)
         return True
 
-    def pick_worker(self, obs: dict, mine: list[dict], near=None) -> dict | None:
+    def pick_worker(self, obs: dict, mine: list[dict], near=None, skip=()) -> dict | None:
         """A free SCV on screen: the one nearest where it will build, if known (a long walk across
-        the mineral line can leave it stuck short of the spot), else nearest the main."""
-        cands = [u for u in mine if self.free_worker(obs, u)]
+        the mineral line can leave it stuck short of the spot), else nearest the main. (Not one
+        standing at its mineral field: mid-mining, it lets the build order go, and failed builds
+        doubled.)"""
+        cands = [u for u in mine if self.free_worker(obs, u) and u["tag"] not in skip]
         to = near or self.g.main.center
         return min(cands, key=lambda u: math.dist((u["x"], u["y"]), to)) if cands else None
+
+    def select_worker(self, obs: dict, w: dict) -> None:
+        """Select this SCV. Standing (at its mineral field, by a Command Center): a tiny drag box,
+        which takes units before buildings (a click there selected nothing, or the Command Center,
+        and Gary clicked again every 2 frames: 150-235 clicks a game). Walking: a click ahead of it
+        along its way, where it is by now (what Gary sees is a moment old)."""
+        hi = self.g.hi
+        x, y = screen_of(obs, w["x"], w["y"])
+        tx, ty = w.get("tx", 0), w.get("ty", 0)
+        d = math.dist((w["x"], w["y"]), (tx, ty)) if (tx or ty) and w["order"] != MINING_STILL else 0
+        if d <= 16:
+            hi.box(max(0, x - 4), max(0, y - 4), min(hi.p.viewport[0] - 1, x + 4), min(hi.p.viewport[1] - 1, y + 4))
+            return
+        lead = min(d, SCV_SPEED * (hi.frame - obs["frame"] + CLICK_FRAMES))
+        p = screen_of(obs, w["x"] + (tx - w["x"]) / d * lead, w["y"] + (ty - w["y"]) / d * lead)
+        if p:
+            x, y = p
+        hi.click(int(x), int(y))
 
     def on_gas(self, obs: dict, refinery: int) -> int:
         """Workers on this refinery: the ones Gary sent that are still on gas (on a gas order, just
@@ -393,7 +418,8 @@ class ScriptedExecutor:
         g, hi = self.g, self.g.hi
         if t.stage == "start":                      # get a worker from the main
             again = next((u for u in mine if u["tag"] == g.retry_with.get(t.unit_type)), None)
-            if again is not None and again["order"] not in BUSY_ORDERS:   # (a failed build's SCV, where it stands)
+            if again is not None and again["order"] not in BUSY_ORDERS and \
+                    t.data.get("again_tries", 0) < PICK_TRIES:   # (a failed build's SCV, where it stands)
                 if obs["selection"] == [again["tag"]]:
                     g.retry_with.pop(t.unit_type, None)
                     t.data["worker"] = again["tag"]
@@ -403,7 +429,8 @@ class ScriptedExecutor:
                 if p is None:
                     hi.camera_minimap(again["x"], again["y"])
                 else:
-                    hi.click(*p)
+                    t.data["again_tries"] = t.data.get("again_tries", 0) + 1
+                    self.select_worker(obs, again)
                 return
             g.retry_with.pop(t.unit_type, None)
             if not g.look_at(obs, t.data.get("from", "main")):
@@ -420,7 +447,15 @@ class ScriptedExecutor:
                     t.data["worker"] = got["tag"]
                     t.stage = "place" if t.where == "main" else "travel"
                     return
-            w = self.pick_worker(obs, mine, t.data.get("near"))
+            tries = t.data.setdefault("tries", {})
+            if w and tries.get(w, 0) < PICK_TRIES and any(u["tag"] == w and self.free_worker(obs, u) for u in mine):
+                w = next(u for u in mine if u["tag"] == w)                 # the same one again
+            else:
+                skip = {k for k, n in tries.items() if n >= PICK_TRIES}
+                w = self.pick_worker(obs, mine, t.data.get("near"), skip)
+                if w is None and skip:                                      # tried them all: again
+                    tries.clear()
+                    w = self.pick_worker(obs, mine, t.data.get("near"))
             if not w and t.data.get("from", "main") == "main" and                     any(u["type"] == CC and math.dist((u["x"], u["y"]), g.natural.center) < 4 * 32 for u in mine):
                 # no free SCV in the main (they mine at the natural, or died there): one from the
                 # natural (13 Barracks in a row failed for it in one game)
@@ -430,8 +465,8 @@ class ScriptedExecutor:
                 self.fail_build(t)
                 return
             t.data["worker"] = w["tag"]
-            p = screen_of(obs, w["x"], w["y"])
-            hi.click(*p)
+            tries[w["tag"]] = tries.get(w["tag"], 0) + 1
+            self.select_worker(obs, w)
             return
         if t.stage == "reselect":                    # a fight put the build aside: the same worker again
             w = next((u for u in mine if u["tag"] == t.data["worker"]), None)
@@ -452,7 +487,11 @@ class ScriptedExecutor:
                 hi.camera_minimap(w["x"], w["y"])
                 return
             t.data["clicked"] = True
-            hi.click(*p)
+            t.data["reselects"] = t.data.get("reselects", 0) + 1
+            if t.data["reselects"] > RESELECT_TRIES:
+                self.fail_build(t)                   # (the macro layer decides again)
+                return
+            self.select_worker(obs, w)
             return
         if t.stage == "travel":                      # walk the worker to the base
             hi.minimap_right_click(*g.base(t.where).center)

@@ -93,6 +93,15 @@ quicker way to a playable Gary.
   then another SCV takes over, keeping the starts ruled out). Same results otherwise (13 of 144;
   the 9-pool 0 of 48); a first version that judged by distance replaced every scout on Python,
   whose paths bend away from the target.
+- **Builder clicks that missed (shared code):** picking a builder, Gary clicked where the SCV
+  was: one standing at its mineral field or by a Command Center gave nothing (or the Command
+  Center), one walking had moved on (what Gary sees is a moment old), and it clicked again every
+  2 frames with no limit: bursts of up to 100 clicks, 150-235 a game. Now a standing SCV is taken
+  with a tiny drag box (units before buildings), a walking one with a click ahead of it on its
+  way, and after 2 misses another SCV is picked (a parked builder: after 6, the build fails and
+  is decided again). Clicks that selected nothing: 32 a game (153); failed builds and economy as
+  before (16 seeds). (Picking SCVs standing at their minerals doubled failed builds: mid-mining
+  they let the build order go.)
 - **False alarms on 4-player maps (open):** with buildings going up, Gary plays rush defense
   against 18 of 30 hatch firsts on Fighting Spirit and 23 of 29 on Python (2 of 23 on Heartbreak
   Ridge): its scout hasn't found the Zerg by 2:20, and nothing seen is called an early pool. At
