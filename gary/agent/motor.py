@@ -128,7 +128,7 @@ class DirectMotor:
                     t.stage = "order"
                     return
                 # a generous box: units move while Gary reacts (what it sees is 0.3 s old)
-                pts = [screen_of(obs, u["x"], u["y"]) for u in on_screen]
+                pts = [self.g.hi.aim(obs, u) for u in on_screen]
                 if self._box_takes_loading(obs, mine, pts, want):
                     g.task = None                        # (its order would call the load off)
                     return
@@ -194,7 +194,7 @@ class DirectMotor:
             return False
         cx, cy = sum(u["x"] for u in group) / len(group), sum(u["y"] for u in group) / len(group)
         u = min(group, key=lambda u: math.dist((u["x"], u["y"]), (cx, cy)))
-        g.hi.ctrl_click(*screen_of(obs, u["x"], u["y"]))
+        g.hi.ctrl_click(*g.hi.aim(obs, u))
         return True
 
     # --- the rules' skills ----------------------------------------------------------------------
@@ -232,7 +232,7 @@ class DirectMotor:
         # about two workers per attacker, the ones closest to the attackers
         tx, ty = d["to"]
         miners.sort(key=lambda u: math.dist((u["x"], u["y"]), (tx, ty)))
-        box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in miners[:min(10, d["n"] - len(g.pulled))]], 6)
+        box_around(hi, [self.g.hi.aim(obs, u) for u in miners[:min(10, d["n"] - len(g.pulled))]], 6)
         t.stage = "selected"
 
     def _unpull(self, obs: dict, mine: list[dict], t: Task) -> None:
@@ -267,7 +267,7 @@ class DirectMotor:
         if not here:
             hi.camera_minimap(cx, cy)
             return
-        box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in here], 6)
+        box_around(hi, [self.g.hi.aim(obs, u) for u in here], 6)
         t.stage = "selected"
 
     def _run_load(self, obs: dict, mine: list[dict], t: Task) -> None:
@@ -290,7 +290,7 @@ class DirectMotor:
                 d["camera_moved"] = True             # on the marines nearest the bunker
                 g.camera_to(int(units[0]["x"]), int(units[0]["y"]))
                 return
-            box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in on_screen], BOX_MARGIN)
+            box_around(hi, [self.g.hi.aim(obs, u) for u in on_screen], BOX_MARGIN)
             t.stage = "order"
             return
         chosen = set(obs["selection"]) & {u["tag"] for u in units}
@@ -370,7 +370,7 @@ class DirectMotor:
                     d["camera_moved"] = True
                     g.camera_to(int(d["x"]), int(d["y"]))
                     return
-            box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in units], 12)
+            box_around(hi, [self.g.hi.aim(obs, u) for u in units], 12)
             t.stage = "order"
             return
         p = screen_of(obs, d["x"], d["y"])
@@ -397,7 +397,7 @@ class DirectMotor:
                 d["camera_moved"] = True
                 g.camera_to(int(units[0]["x"]), int(units[0]["y"]))
                 return
-            box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in on_screen], 12)
+            box_around(hi, [self.g.hi.aim(obs, u) for u in on_screen], 12)
             t.stage = "order"
             return
         chosen = set(obs["selection"]) & set(d["tags"])
@@ -440,7 +440,7 @@ class DirectMotor:
         if not here:
             hi.camera_minimap(cx, cy)
             return
-        box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in here], 10)
+        box_around(hi, [self.g.hi.aim(obs, u) for u in here], 10)
         d["boxes"] += 1
         t.stage = "selected"
 
@@ -457,7 +457,7 @@ class DirectMotor:
                 if w is None:
                     g.task = None
                     return
-                x, y = screen_of(obs, w["x"], w["y"])
+                x, y = hi.aim(obs, w)
                 hi.box(max(0, x - 5), max(0, y - 5), min(hi.p.viewport[0] - 1, x + 5), min(hi.p.viewport[1] - 1, y + 5))
                 t.stage = "picked"
                 return
@@ -512,7 +512,7 @@ class DirectMotor:
                 army.attacks_sent += 1
                 g.task = None
                 return
-            xs = [screen_of(obs, u["x"], u["y"]) for u in here]
+            xs = [self.g.hi.aim(obs, u) for u in here]
             x0 = max(0, min(p[0] for p in xs) - 12)
             y0 = max(0, min(p[1] for p in xs) - 12)
             x1 = min(hi.p.viewport[0] - 1, max(p[0] for p in xs) + 12)

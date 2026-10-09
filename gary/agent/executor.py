@@ -27,11 +27,13 @@ LOST_ORDER = 6 * 24                   # a reserved spot with no SCV on its way a
 RESUME_AFTER = 24                     # an unfinished building nobody has built for a second gets an SCV
 RESUME_RETRY = 24 * 4                 # ...and if that one doesn't arrive either, another after 4 s
 IDLE = 3                              # order "PlayerGuard": standing around
-MINING_STILL = 87                     # order "MiningMinerals": an SCV standing at its mineral field
-PICK_TRIES = 2                        # a builder not selected after this many tries: another one
+MINING_STILL = 87                     # order "MiningMinerals": at its mineral field (lets a build order go)
+STANDING = {MINING_STILL, 86, IDLE}   # ...and waiting at the field, idle: where a box finds them
+MOVE = 6
+STANDING_DETOUR = 4 * 32              # a standing builder no farther than this beyond the nearest one
+ARRIVING = 4 * 32                     # a parked builder this close to its spot is waited for until it stops
+PICK_TRIES = 3                        # a builder not selected after this many tries: another one
 RESELECT_TRIES = 6                    # a parked builder not selected again after this many: the build fails
-SCV_SPEED = 4.9                       # pixels per frame
-CLICK_FRAMES = 2                      # a click lands this long after it's decided
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
 TRAVEL_FOR = 24 * 40                  # ...and one walking to another base, after this at most
 PARK_FOR = 24 * 20                    # a build's SCV walks to the spot ahead of the money: back to it after this at most
@@ -220,36 +222,45 @@ class ScriptedExecutor:
             budget = obs["me"]["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
             if budget < COST[t.unit_type] and g.hi.frame - t.data["walking"] < PARK_FOR:
                 return False
+            # just about there: until it stops (a box finds a standing SCV where Gary saw it; one
+            # slowing down at its spot was missed 7 times a game)
+            w = next(u for u in mine if u["tag"] == t.data["worker"])
+            if w["order"] == MOVE and (w.get("tx") or w.get("ty")) and                     math.dist((w["x"], w["y"]), (w["tx"], w["ty"])) < ARRIVING and g.hi.frame - t.data["walking"] < PARK_FOR:
+                return False
         g.task, g.parked = t, None
         g.run_task(obs, mine)
         return True
 
     def pick_worker(self, obs: dict, mine: list[dict], near=None, skip=()) -> dict | None:
         """A free SCV on screen: the one nearest where it will build, if known (a long walk across
-        the mineral line can leave it stuck short of the spot), else nearest the main. (Not one
-        standing at its mineral field: mid-mining, it lets the build order go, and failed builds
-        doubled.)"""
+        the mineral line can leave it stuck short of the spot), else nearest the main; one standing
+        if any (at its mineral field, or idle): a box finds it where Gary saw it, while one walking
+        to or from the minerals was missed by a box in 1 try in 4 (it speeds up, slows down and
+        turns faster than Gary can lead it)."""
         cands = [u for u in mine if self.free_worker(obs, u) and u["tag"] not in skip]
+        if not cands:
+            return None
         to = near or self.g.main.center
-        return min(cands, key=lambda u: math.dist((u["x"], u["y"]), to)) if cands else None
+        far = lambda u: math.dist((u["x"], u["y"]), to)
+        nearest = min(cands, key=far)
+        # (but not a longer walk: farther than this and the buildings came late, army built -5 by 12:00)
+        standing = [u for u in cands if u["order"] in STANDING and far(u) <= far(nearest) + STANDING_DETOUR]
+        return min(standing, key=far) if standing else nearest
 
     def select_worker(self, obs: dict, w: dict) -> None:
-        """Select this SCV. Standing (at its mineral field, by a Command Center): a tiny drag box,
-        which takes units before buildings (a click there selected nothing, or the Command Center,
-        and Gary clicked again every 2 frames: 150-235 clicks a game). Walking: a click ahead of it
-        along its way, where it is by now (what Gary sees is a moment old)."""
+        """Select this SCV: a tiny drag box where it will be (interface.aim), which takes units before
+        buildings; a click there if the last box took several SCVs (two share a mineral field, and a
+        build order to several is refused), which takes one: it or the neighbor on top. (Clicked
+        where it was seen, one at its mineral field or by a Command Center gave nothing or the
+        Command Center, a walking one had moved on, and Gary clicked again every 2 frames: 150-235
+        clicks a game.)"""
         hi = self.g.hi
-        x, y = screen_of(obs, w["x"], w["y"])
-        tx, ty = w.get("tx", 0), w.get("ty", 0)
-        d = math.dist((w["x"], w["y"]), (tx, ty)) if (tx or ty) and w["order"] != MINING_STILL else 0
-        if d <= 16:
-            hi.box(max(0, x - 4), max(0, y - 4), min(hi.p.viewport[0] - 1, x + 4), min(hi.p.viewport[1] - 1, y + 4))
+        x, y = hi.aim(obs, w)
+        sel = [u for u in obs["units"] if u["tag"] in set(obs["selection"])]
+        if len(sel) > 1 and all(u["type"] == SCV for u in sel):
+            hi.click(x, y)
             return
-        lead = min(d, SCV_SPEED * (hi.frame - obs["frame"] + CLICK_FRAMES))
-        p = screen_of(obs, w["x"] + (tx - w["x"]) / d * lead, w["y"] + (ty - w["y"]) / d * lead)
-        if p:
-            x, y = p
-        hi.click(int(x), int(y))
+        hi.box(max(0, x - 4), max(0, y - 4), min(hi.p.viewport[0] - 1, x + 4), min(hi.p.viewport[1] - 1, y + 4))
 
     def on_gas(self, obs: dict, refinery: int) -> int:
         """Workers on this refinery: the ones Gary sent that are still on gas (on a gas order, just
@@ -475,12 +486,16 @@ class ScriptedExecutor:
                 return
             if obs["selection"] == [w["tag"]]:
                 t.stage = t.data.pop("resume")
+                t.data.pop("looked", None)               # (the spot may be off screen again: look again)
+                t.data["reselects"] = 0
                 return
             if len(obs["selection"]) == 1 and t.data.get("clicked"):   # a neighbor in a stack: use it
                 got = next((u for u in mine if u["tag"] == obs["selection"][0]), None)
                 if got and self.free_worker(obs, got):
                     t.data["worker"] = got["tag"]
                     t.stage = t.data.pop("resume")
+                    t.data.pop("looked", None)
+                    t.data["reselects"] = 0
                     return
             p = screen_of(obs, w["x"], w["y"])
             if not p:
@@ -561,6 +576,12 @@ class ScriptedExecutor:
                     t.data["resume"], t.stage = "place", "reselect"
                     g.parked, g.task = t, None
                 return
+            builder = next((u for u in mine if u["tag"] == t.data["worker"]), None)
+            if builder and builder["order"] == MINING_STILL and not t.data.get("unhooked"):
+                # mid-mining, an SCV lets a build order go (3 tries in 7 in OpenBW): off the field first
+                t.data["unhooked"] = True
+                hi.right_click(*p)
+                return
             if hi.build(t.unit_type, *p).accepted:
                 g.reserved.append((t.unit_type, *spot))
                 g.reserved_at[(t.unit_type, *spot)] = hi.frame
@@ -609,7 +630,7 @@ class ScriptedExecutor:
             g.task = None
             return
         if t.stage == "start":
-            pts = [screen_of(obs, u["x"], u["y"]) for u in workers]
+            pts = [hi.aim(obs, u) for u in workers]
             # a drag box only picks up own units: a plain click on a worker standing on a
             # mineral field can select the field instead
             hi.box(max(0, min(p[0] for p in pts) - 10), max(0, min(p[1] for p in pts) - 10),
@@ -622,7 +643,7 @@ class ScriptedExecutor:
         if not obs["selection"] or not set(obs["selection"]) <= tags:
             if t.stage == "send":
                 t.stage = "click"
-                hi.click(*screen_of(obs, workers[0]["x"], workers[0]["y"]))
+                hi.click(*hi.aim(obs, workers[0]))
                 return
             for tag in tags:
                 g.ignore_idle_until[tag] = hi.frame + 24 * 20
@@ -749,8 +770,13 @@ class ScriptedExecutor:
             g.ignore_idle_until[d["tag"]] = hi.frame + 24 * 20
             g.task = None
             return
+        workers = [u for u in workers if u["order"] in STANDING] or workers    # (where a box finds them)
         w = min(workers, key=lambda u: math.dist((u["x"], u["y"]), (ref["x"], ref["y"])))
-        x, y = screen_of(obs, w["x"], w["y"])
-        # a small drag box: a click on a mining worker can select its mineral field instead
+        p = hi.aim(obs, w)
+        if p is None:
+            hi.camera_minimap(w["x"], w["y"])
+            return
+        x, y = p
+        # a small drag box where it will be: a click on a mining worker can select its mineral field
         hi.box(max(0, x - 6), max(0, y - 6), min(hi.p.viewport[0] - 1, x + 6), min(hi.p.viewport[1] - 1, y + 6))
         t.stage = "send"

@@ -93,15 +93,19 @@ quicker way to a playable Gary.
   then another SCV takes over, keeping the starts ruled out). Same results otherwise (13 of 144;
   the 9-pool 0 of 48); a first version that judged by distance replaced every scout on Python,
   whose paths bend away from the target.
-- **Builder clicks that missed (shared code):** picking a builder, Gary clicked where the SCV
-  was: one standing at its mineral field or by a Command Center gave nothing (or the Command
-  Center), one walking had moved on (what Gary sees is a moment old), and it clicked again every
-  2 frames with no limit: bursts of up to 100 clicks, 150-235 a game. Now a standing SCV is taken
-  with a tiny drag box (units before buildings), a walking one with a click ahead of it on its
-  way, and after 2 misses another SCV is picked (a parked builder: after 6, the build fails and
-  is decided again). Clicks that selected nothing: 32 a game (153); failed builds and economy as
-  before (16 seeds). (Picking SCVs standing at their minerals doubled failed builds: mid-mining
-  they let the build order go.)
+- **Clicks that missed (shared code):** Gary aimed at units where it saw them, 0.3 s late: a
+  click on an SCV at its mineral field or by a Command Center selected nothing (or the Command
+  Center), a box around a walking SCV or a moving group missed it, and the builder pick clicked
+  again every 2 frames with no limit (bursts of up to 100 clicks, 150-235 a game). Now the
+  interface aims where a unit will be when the action lands (`HumanInterface.aim`: its motion
+  just before what Gary saw, carried forward; never past where it's going); builders and gas
+  workers are picked standing if one is near (a box finds them), taken off their mineral field
+  with a move first (mid-mining, an SCV let the build order go in 3 tries of 7), selected with a
+  tiny box, or a click when the box took several SCVs (a build order to several is refused);
+  another SCV after 3 misses; a parked build resumed looks at its spot again (it had failed when
+  the spot was off screen). Missed selects 12 a game (239), failed builds 4.9-7.1 (8.1), actions
+  to 8:00 6% fewer; replayed pros lost 10 of 144 (13). Army built by 8:00 2 lower on Python
+  (2 more SCVs trained: the worker pulls' boxes now take the SCVs they ask for).
 - **False alarms on 4-player maps (open):** with buildings going up, Gary plays rush defense
   against 18 of 30 hatch firsts on Fighting Spirit and 23 of 29 on Python (2 of 23 on Heartbreak
   Ridge): its scout hasn't found the Zerg by 2:20, and nothing seen is called an early pool. At

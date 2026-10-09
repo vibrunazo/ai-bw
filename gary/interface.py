@@ -41,6 +41,8 @@ from gary.env import Game, decode_observation
 from gary.policy.fight_memory import command_kind
 
 FRAME_MS = 42  # one frame at Fastest speed
+LEAD_SPAN = 8  # aim: a unit's motion is judged over this many frames before what Gary saw...
+LEAD_MAX = 64  # ...and carried forward this far at most (pixels)
 NO_UNIT = 0
 
 
@@ -213,6 +215,30 @@ class HumanInterface:
             "hotkeys": {k: list(v) for k, v in self.hotkeys.items()},
             "apm_tokens": round(self.tokens, 2),
         }
+
+    def aim(self, obs: dict, u: dict) -> tuple[int, int] | None:
+        """Where on screen to click or box a unit seen in obs: where it will be when an action
+        decided now lands, its motion over the frames before what Gary saw carried forward, as a
+        player leads a moving unit (from what Gary saw only: what it sees is reaction_ms old, and a
+        click where an SCV was found nothing). None if off screen."""
+        seen = obs["frame"]
+        prev = None
+        for entry in self.history:
+            if entry[0] <= seen - LEAD_SPAN:
+                prev = entry
+        before = prev and next((v for v in self._snapshot(prev)["units"] if v["tag"] == u["tag"]), None)
+        if not before or seen <= prev[0]:
+            return screen_of(obs, u["x"], u["y"])
+        land = max(self.frame, self.hand_free_at) + max(1, round(self.p.fitts_a_ms / FRAME_MS))
+        k = (land - seen) / (seen - prev[0])
+        dx, dy = (u["x"] - before["x"]) * k, (u["y"] - before["y"]) * k
+        d = math.hypot(dx, dy)
+        # never past where it's going (an SCV turns at its mineral field and at the Command Center)
+        tx, ty = u.get("tx", 0), u.get("ty", 0)
+        most = min(LEAD_MAX, math.dist((u["x"], u["y"]), (tx, ty))) if (tx or ty) else LEAD_MAX
+        if d > most:
+            dx, dy = dx * most / d, dy * most / d
+        return screen_of(obs, round(u["x"] + dx), round(u["y"] + dy)) or screen_of(obs, u["x"], u["y"])
 
     @staticmethod
     def _snapshot(entry: list) -> dict:
