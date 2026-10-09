@@ -256,9 +256,11 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
                 from eval.economy import terran_economy
                 eco = terran_economy(o["units"], slot_of["T"])
                 eco["built"] = built.look(o["units"])
+                bank = next(p for p in o["players"] if p["slot"] == slot_of["T"])
                 print(f"{t // 60}:{t % 60:02d}  buildings T {alive['T']} Z {alive['Z']}  "
                       f"army T {army['T']} Z {army['Z']}  waves sent {zerg.waves}  "
-                      f"economy SCVs {eco['scvs']} CCs {eco['ccs']} army supply {eco['army']:g} built {eco['built']:g}", flush=True)
+                      f"economy SCVs {eco['scvs']} CCs {eco['ccs']} army supply {eco['army']:g} built {eco['built']:g} "
+                      f"bank {bank['minerals']}/{bank['gas']}", flush=True)
                 if not alive["T"] or not alive["Z"]:
                     result = "Gary lost" if not alive["T"] else "Gary won"
                     break
