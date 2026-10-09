@@ -22,6 +22,8 @@ Rules (scripted reflexes), run before the model ("before") or before it in the a
   repair     a damaged bunker with zerglings near: the 2 nearest SCVs repair it (v0.9)
   reinforce  fighters just out of a Barracks while zerg fighters are at the base attack-move to
              the fight: the rally is a plain move, and a moving marine doesn't shoot (v0.9)
+  unload     zerg fighters at the base, none near a loaded bunker (the main's, from an early-pool
+             scare, while the natural is attacked): let its marines out and send them to the fight
 """
 
 from __future__ import annotations
@@ -42,7 +44,7 @@ from gary.policy.fight_memory import history_inputs
 
 ASK_EVERY = 12                       # frames between fight decisions (half a second)
 INTERRUPTIBLE = {"mine", "gas", "hotkey_building"}   # chores a fight may interrupt
-FIGHT_TASKS = {"fight_cmd", "load", "pull", "unpull", "repair", "reinforce"}
+FIGHT_TASKS = {"fight_cmd", "load", "pull", "unpull", "repair", "reinforce", "unload"}
 RESOURCES = {176, 177, 178, 188, 110}
 ACT_IF_NONE_BELOW = 0.2              # act on a unit when the model gives "nothing" less than this
                                      # (with 0.2 Gary acts on about as many units as pros do: 22% vs 27%)
@@ -71,6 +73,8 @@ REPAIR_ORDER = 34
 REPAIRERS = 2
 REPAIR_THREAT = 9 * 32               # zerglings this close to the bunker: repair it
 HOME = 12 * 32                       # zerg fighters this close to a Command Center or bunker: at home
+UNLOAD_CLEAR = 12 * 32               # unload: no enemy fighter this close to the bunker
+UNLOAD_EVERY = 24 * 10
 
 
 def enemy_fighters(obs: dict, slot: int) -> list[dict]:
@@ -401,16 +405,17 @@ class LoadRule:
 
     name = "load"
 
-    def __init__(self, g: Gary):
+    def __init__(self, g: Gary, always: bool = False):
         self.g = g
-        self.next_load = 0
+        self.always = always                     # option: every finished bunker kept loaded (as pros
+        self.next_load = 0                       # man the natural's), not only once zerg are near
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
         g = self.g
         hi = g.hi
         if hi.frame < self.next_load:
             return False
-        early = g.posture.preload_bunkers
+        early = g.posture.preload_bunkers or self.always
         reach = LOAD_FROM if early else BUNKER_FROM
         seen = {u["tag"]: u for u in mine}
         enemy = enemy_fighters(obs, g.slot)
@@ -436,12 +441,13 @@ class LoadRule:
 
 
 class RepairRule:
-    """A damaged bunker with zerglings near: the 2 nearest free SCVs repair it."""
+    """A damaged bunker with zerglings near: the 2 (option: n) nearest free SCVs repair it."""
 
     name = "repair"
 
-    def __init__(self, g: Gary):
+    def __init__(self, g: Gary, n: int = REPAIRERS):
         self.g = g
+        self.n = n
         self.next_repair = 0
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
@@ -458,10 +464,10 @@ class RepairRule:
             return False
         repairing = [u for u in mine if u["type"] == T.SCV and u.get("order") == REPAIR_ORDER
                      and u.get("order_target") == bunker["tag"]]
-        if len(repairing) >= REPAIRERS:
+        if len(repairing) >= self.n:
             return False
         scvs = sorted((u for u in mine if u["type"] == T.SCV and u["completed"] and u["tag"] not in {r["tag"] for r in repairing}),
-                      key=lambda u: math.dist((u["x"], u["y"]), (bunker["x"], bunker["y"])))[:REPAIRERS - len(repairing)]
+                      key=lambda u: math.dist((u["x"], u["y"]), (bunker["x"], bunker["y"])))[:self.n - len(repairing)]
         if not scvs:
             return False
         self.next_repair = hi.frame + 24 * 3
@@ -500,4 +506,51 @@ class ReinforceRule:
         return True
 
 
-RULES = {"pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule}
+class UnloadRule:
+    """Zerg fighters at Gary's base, none near a loaded bunker: its marines sit out the fight (the
+    main's bunker from an early-pool scare, while the zerg hit the natural). Let them out (select
+    the bunker, U), then attack-move them to the fight. Not while the posture wants bunkers loaded."""
+
+    name = "unload"
+
+    def __init__(self, g: Gary):
+        self.g = g
+        self.next_unload = 0
+        self.out: tuple[set, int] | None = None     # marines just let out, until when to wait for them
+
+    def step(self, obs: dict, mine: list[dict]) -> bool:
+        g = self.g
+        hi = g.hi
+        fighters = enemy_fighters(obs, g.slot)
+        if self.out is not None:                    # out of the bunker: to the fight
+            inside, until = self.out
+            out = [u for u in mine if u["tag"] in inside]
+            at_home = near_home(mine, fighters)
+            if not out and hi.frame <= until:
+                return False
+            self.out = None
+            if not out or not at_home:
+                return False
+            cx, cy = sum(u["x"] for u in out) / len(out), sum(u["y"] for u in out) / len(out)
+            target = min(at_home, key=lambda e: math.dist((e["x"], e["y"]), (cx, cy)))
+            g.motor.start(Intent("REINFORCE", [u["tag"] for u in out], (target["x"], target["y"]),
+                                 {"tags": [u["tag"] for u in out], "x": target["x"], "y": target["y"]}, "rule:unload"))
+            return True
+        if hi.frame < self.next_unload or g.posture.preload_bunkers or not near_home(mine, fighters):
+            return False
+        seen = {u["tag"] for u in mine}
+        for b in mine:
+            if b["type"] != BUNKER or not b["completed"]:
+                continue
+            inside = {t for t in g.loaded.get(b["tag"], set()) if t not in seen}
+            if not inside or any(math.dist((e["x"], e["y"]), (b["x"], b["y"])) < UNLOAD_CLEAR for e in fighters):
+                continue
+            self.next_unload = hi.frame + UNLOAD_EVERY
+            g.loaded[b["tag"]] = set()
+            self.out = (inside, hi.frame + 24 * 3)
+            g.motor.start(Intent("UNLOAD", [], b["tag"], {"bunker": b["tag"], "x": b["x"], "y": b["y"]}, "rule:unload"))
+            return True
+        return False
+
+
+RULES = {"pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule, "unload": UnloadRule}

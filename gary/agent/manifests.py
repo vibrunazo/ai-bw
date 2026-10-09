@@ -104,6 +104,15 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.15: v0.14 that keeps its bunkers loaded, not only once zerg are near (fight.py, load rule):
+    # speedlings cross the 9 tiles in under 2 s, and marines walking in don't shoot
+    "v015": {"version": "v0.15", "posture": "early_pool/v2", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True},
+             "army": _ARMY,
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # step 4 (docs/CONTROL.md): v0.9 with leases enforced; and with roles instead of the fight model
     "v09lease": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
                  "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
@@ -239,6 +248,15 @@ OPTIONS = {
     "surround2": _roles(surround=2),        # units with 2+ melee zerg on them walk to the pack -17 ± 6
     "surround3": _roles(surround=3),        # ...3+                                              -6 ± 3
     "pull75": _roles(pull_hp=0.75),         # pull back below 75% HP (not 50%)                  -5 ± 2
+    # fight.py: a loaded bunker with no zerg near lets its marines out to the fight elsewhere (the
+    # main's rush bunker while the natural is attacked). On v0.14 against Zerg v2 (72 seeds, 12 min)
+    # lost 22 (15). Not adopted
+    "unload": lambda m: m["fight"].update(before=m["fight"]["before"] + ["unload"]),
+    # fight.py: 4 SCVs repair a bunker (not 2): against Zerg v2 (72 seeds) lost 15 (15)
+    "repair4": lambda m: m["fight"].setdefault("rule_options", {}).update(repair={"n": 4}),
+    # fight.py: bunkers kept loaded. On v0.14: Zerg v2 (72 seeds, 12 min) lost 8 (15); replayed pros on
+    # three maps lost 14 of 144 (15), the 9-pool 3 (3); home defenses [239] +2 ± 5. In v0.15
+    "preload": lambda m: m["fight"].setdefault("rule_options", {}).update(load={"always": True}),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)

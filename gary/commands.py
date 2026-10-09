@@ -71,6 +71,11 @@ def return_cargo() -> bytes:
     return struct.pack("<BB", 0x1E, 0)
 
 
+def unload_all() -> bytes:
+    """The selected bunker (or transport) lets everyone out."""
+    return struct.pack("<BB", 0x28, 0)
+
+
 def chat(sender_slot: int, text: str) -> bytes:
     """A chat message to everyone (as replays record it): up to 80 bytes of text."""
     return struct.pack("<BB", 0x5C, sender_slot) + text.encode("utf-8", "replace")[:79].ljust(80, b"\0")

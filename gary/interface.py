@@ -429,6 +429,9 @@ class HumanInterface:
     def stim(self) -> ActionResult:
         return self._schedule_key("stim")
 
+    def unload_all(self) -> ActionResult:
+        return self._schedule_key("unload_all")
+
     def return_cargo(self) -> ActionResult:
         return self._schedule_key("return_cargo")
 
@@ -628,10 +631,11 @@ class HumanInterface:
             act = f"A-click {unit_name(kind)} ({what})" if kind is not None else f"A-click ground ({what})"
             self._send(C.targeted_order(a.args["order"], x, y, tag, kind if kind is not None else C.NO_UNIT))
             self._remember("order", a.args["order"], x, y, tag)
-        elif a.kind in ("stop", "hold", "stim", "return_cargo"):
+        elif a.kind in ("stop", "hold", "stim", "return_cargo", "unload_all"):
             act = {"stop": "S (stop)", "hold": "H (hold position)", "stim": "T (stim packs)",
-                   "return_cargo": "C (return cargo)"}[a.kind]
-            self._send({"stop": C.stop, "hold": C.hold_position, "stim": C.stim, "return_cargo": C.return_cargo}[a.kind]())
+                   "return_cargo": "C (return cargo)", "unload_all": "U (unload all)"}[a.kind]
+            self._send({"stop": C.stop, "hold": C.hold_position, "stim": C.stim, "return_cargo": C.return_cargo,
+                        "unload_all": C.unload_all}[a.kind]())
             self._remember({"return_cargo": "return"}.get(a.kind, a.kind), -1, 0, 0, 0)
         elif a.kind == "chat":
             act = f"chat: {a.args['text']}"
@@ -658,7 +662,7 @@ OTHER_NAMES = {176: "Mineral Field", 177: "Mineral Field", 178: "Mineral Field",
                35: "Larva", 36: "Egg", 37: "Zergling", 41: "Drone", 42: "Overlord", 131: "Hatchery"}
 COMMAND_NAMES = {0x09: "select", 0x0A: "shift-select", 0x0C: "build", 0x14: "right-click", 0x15: "order",
                  0x1F: "train", 0x23: "morph", 0x30: "research", 0x32: "upgrade", 0x5C: "chat",
-                 0x1A: "stop", 0x2B: "hold", 0x36: "stim", 0x1E: "return cargo"}
+                 0x1A: "stop", 0x2B: "hold", 0x36: "stim", 0x1E: "return cargo", 0x28: "unload all"}
 
 
 def unit_name(unit_type: int) -> str:

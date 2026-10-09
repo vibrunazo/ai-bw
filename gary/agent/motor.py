@@ -35,7 +35,7 @@ SCOUT_KEY = 0
 HK_ARMY = [1, 2]
 COMMANDS = {"MOVE", "ATTACK_MOVE", "ATTACK_UNIT", "GATHER", "OWN_UNIT", "STOP", "HOLD", "STIM", "RETURN_CARGO"}
 ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT", "BRACE", "REGROUP", "POST", "SKIRMISH"}  # roles.py: carried out as commands
-TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL": "unpull", "LOAD": "load",
+TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL": "unpull", "LOAD": "load", "UNLOAD": "unload",
            "REPAIR": "repair", "REINFORCE": "reinforce", "ARMY_MOVE": "army_order", "ARMY_ATTACK": "army_order",
            "SCOUT": "scout", "ATTACK_WAVE": "attack"}
 
@@ -60,7 +60,7 @@ class DirectMotor:
         self.g = g
         g.leases = Leases(g)
         for kind, run in (("fight_cmd", self._run_command), ("pull", self._run_pull), ("unpull", self._run_pull),
-                          ("load", self._run_load), ("repair", self._run_repair), ("reinforce", self._run_reinforce),
+                          ("load", self._run_load), ("unload", self._run_unload), ("repair", self._run_repair), ("reinforce", self._run_reinforce),
                           ("army_order", self._run_army_order), ("scout", self._run_scout),
                           ("attack", self._run_attack_wave)):
             g.task_runners[kind] = run
@@ -306,6 +306,27 @@ class DirectMotor:
             g.leases.take(chosen, t.intent)
             g.say(f"loads {len(chosen)} marine{'s' * (len(chosen) != 1)} into the bunker")
         g.task = None
+
+    def _run_unload(self, obs: dict, mine: list[dict], t: Task) -> None:
+        """Camera on the bunker if needed, click it, U (unload all)."""
+        g, hi, d = self.g, self.g.hi, t.data
+        if hi.frame - t.started > 24 * 3 or not any(u["tag"] == d["bunker"] for u in mine):
+            g.task = None
+            return
+        if obs["selection"] == [d["bunker"]]:
+            hi.unload_all()                      # (OpenBW reports it as refused, and does it)
+            g.say("unloads the bunker: its marines go to the fight")
+            g.task = None
+            return
+        p = screen_of(obs, d["x"], d["y"])
+        if not p:
+            if d.get("camera_moved"):
+                g.task = None
+                return
+            d["camera_moved"] = True
+            g.camera_to(int(d["x"]), int(d["y"]))
+            return
+        hi.click(*p)
 
     def _run_repair(self, obs: dict, mine: list[dict], t: Task) -> None:
         g, hi, d = self.g, self.g.hi, t.data
