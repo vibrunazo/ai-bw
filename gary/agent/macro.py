@@ -233,19 +233,43 @@ class LearnedMacro:
         bases = [b for b in self.g.map.bases if any(math.dist(b.center, (h["x"], h["y"])) < 6 * 32 for h in halls)]
         return sum(2 * len(b.minerals) + 3 * len(b.geysers) for b in bases) + BUILDERS
 
+    def goal_needs(self) -> tuple[int | None, int, int]:
+        """What the pending decision waits for, if it's made in a building (a unit, an add-on, a
+        research, an upgrade): that building's type, and its minerals and gas. Production by habit
+        leaves both alone: the habits took the Command Center for SCVs whenever it came free and the
+        gas for Medics, and a Comsat Station and Stim Packs gave up after 30 s again and again
+        (37 and 43 times in 37 games)."""
+        goal = self.goal
+        if goal is None or goal["act"] not in (TRAIN, BUILD, RESEARCH, UPGRADE):
+            return None, 0, 0
+        act, uid = goal["act"], goal["id"]
+        if act == TRAIN:
+            return T.PRODUCER.get(uid), *T.COST.get(uid, (0, 0))
+        if act == BUILD:
+            return (T.ADDON_PARENT[uid], *T.COST[uid]) if uid in T.ADDON_PARENT else (None, 0, 0)
+        if act == RESEARCH and uid in T.RESEARCH:
+            return T.RESEARCH[uid][0], *T.RESEARCH[uid][1]
+        if act == UPGRADE and uid in T.UPGRADE:
+            where, cost, _ = T.UPGRADE[uid]
+            level = self.g.upgraded[uid]
+            return where, cost[0] + 75 * level, cost[1] + 75 * level
+        return None, 0, 0
+
     def _train_queued(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> bool:
         """A decided unit whose producer is free now: trained (first, as pros keep production going).
         True if this turn is spent."""
         g = self.g
+        where, keep_m, keep_g = self.goal_needs()
         for key, since in list(self.queued.items()):
             plan = self.plan(*key, obs, mine, done, me)
             if plan is None or g.hi.frame - since > GOAL_TIMEOUT:
                 del self.queued[key]
                 continue
-            if plan is WAIT or g.task is not None:
+            if plan is WAIT or g.task is not None or (where is not None and T.PRODUCER.get(key[1]) == where
+                                                      and (TRAIN, key[1]) != (self.goal["act"], self.goal["id"])):
                 continue
             minerals, gas = plan["cost"]
-            if me["minerals"] - g.committed() < minerals or me["gas"] < gas:
+            if me["minerals"] - g.committed() - keep_m < minerals or me["gas"] - keep_g < gas:
                 continue
             g.task = Task("command", data=plan, started=g.hi.frame)
             g.spend(minerals)
@@ -266,20 +290,19 @@ class LearnedMacro:
         g = self.g
         if not self.keep_busy or g.task is not None:
             return False
-        reserve = 0
-        if self.goal is not None and self.goal["act"] not in (BUILD, EXPAND):
-            # (a building saved up for doesn't stop production: pros keep their Barracks going
-            # while the Command Center's 400 come in; held back for it, Gary's first Barracks idled
-            # from 2:30 to 5:00, 0-3 army units at 5:00 in the games it lost. Its money is spoken
-            # for once its builder walks there)
-            p = self.plan(self.goal["act"], self.goal["id"], obs, mine, done, me)
-            reserve = p["cost"][0] if isinstance(p, dict) and p is not WAIT else 0
+        # (a building saved up for doesn't stop production: pros keep their Barracks going while the
+        # Command Center's 400 come in; held back for it, Gary's first Barracks idled from 2:30 to
+        # 5:00, 0-3 army units at 5:00 in the games it lost. Its money is spoken for once its
+        # builder walks there. A unit, add-on or research has its building and money kept)
+        where, keep_m, keep_g = self.goal_needs()
         for uid in self.last_unit.values():
+            if where is not None and T.PRODUCER.get(uid) == where:
+                continue
             plan = self.plan(TRAIN, uid, obs, mine, done, me)
             if not isinstance(plan, dict) or plan.get("kind") != "command":
                 continue
             minerals, gas = plan["cost"]
-            if me["minerals"] - g.committed() - reserve < minerals or me["gas"] < gas:
+            if me["minerals"] - g.committed() - keep_m < minerals or me["gas"] - keep_g < gas:
                 continue
             g.task = Task("command", data=plan, started=g.hi.frame)
             g.spend(minerals)

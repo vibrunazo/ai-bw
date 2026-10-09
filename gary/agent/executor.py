@@ -696,6 +696,7 @@ class ScriptedExecutor:
             # then select again
             if any(not self.free_worker(obs, u) for u in mine if u["tag"] in obs["selection"]):
                 picked = []
+            if picked:
                 hi.right_click(*rp)
                 g.gas_workers.setdefault(d["tag"], set()).update(picked)
             t.stage = "start"
