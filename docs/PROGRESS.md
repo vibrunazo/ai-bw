@@ -139,6 +139,13 @@ quicker way to a playable Gary.
   a building and sent them to gas, and the worker pull took builders. Now an SCV just given a build,
   one placing or constructing, the parked builder and the scout are never picked; the gas chore
   selects again if its box caught a busy worker. In one game the failures to 11:00 went from 14 to 2.
+- **After the bug hunt (shared code, 2026-10-09):** builds with no free SCV in the main take one
+  from the natural (one game failed 13 Barracks in a row for it); a gas-chore edit had sent no SCV
+  to gas (caught by a benchmark, fixed; `tests/test_smoke_game.py`, one game to 6:00, now checks
+  it); keeping a pending add-on's or research's building and money from the habits cost more than
+  it gave (the 9-pool lost 4 of 24 against 2, no natural taken) and was removed. Failed builds and
+  goals per game 8.3 (about 13 before). Replayed pros lost 10 of 144 (8 before: within the noise),
+  the 9-pool 3 (2); SCVs 31-35 at 8:00, army built 50-61 by 12:00, as before.
 - **Most urgently missing:** the rest of the army at 8:00: pros have a Factory (1.0) and a
   Starport (0.6) by then, and more Medics (2.7 against Gary's 1.7); Gary's style-1 macro has
   none of the first two by 8:00.
