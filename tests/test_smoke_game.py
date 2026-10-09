@@ -23,7 +23,7 @@ def test_default_gary_macro_basics():
     try:
         from eval.walls_bench import Match
         with contextlib.redirect_stdout(io.StringIO()):
-            m = Match(1, 420, "v015")
+            m = Match(1, 420, "v016")
     except Exception as e:                      # no game data or env DLL here
         print(f"skip: {e}")
         return

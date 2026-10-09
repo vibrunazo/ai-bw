@@ -113,6 +113,14 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.16: v0.15 whose army hunts once no enemy army has been seen for a minute (army.py hunt)
+    "v016": {"version": "v0.16", "posture": "early_pool/v2", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True},
+             "army": {**_ARMY, "hunt": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # step 4 (docs/CONTROL.md): v0.9 with leases enforced; and with roles instead of the fight model
     "v09lease": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
                  "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
@@ -257,6 +265,11 @@ OPTIONS = {
     # fight.py: bunkers kept loaded. On v0.14: Zerg v2 (72 seeds, 12 min) lost 8 (15); replayed pros on
     # three maps lost 14 of 144 (15), the 9-pool 3 (3); home defenses [239] +2 ± 5. In v0.15
     "preload": lambda m: m["fight"].setdefault("rule_options", {}).update(load={"always": True}),
+    # army.py: from 8:00, 20+ army units and no enemy army seen for a minute, the army goes where enemy
+    # buildings were, then to the bases. On v0.15: replayed pros on Fighting Spirit to 18:00 (16 seeds)
+    # won 8 (2), lost 2 (2); to 12:00 on three maps won 4 of 144 (0), lost 14 (14); Zerg v2 (72 seeds)
+    # won 2 (0), lost 8 (8). In v0.16
+    "hunt": lambda m: m["army"].update(hunt=True),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)
@@ -347,7 +360,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         else:
             army = load("army", str(model_path(m["army"]["model"])))
             models["army"] = getattr(army, "path", "?")
-            g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None)
+            g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None, hunt=m["army"].get("hunt", False))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:

@@ -8,6 +8,9 @@
             Also the scout: one worker at 9 SCVs to the enemy start locations; where it finds the
             enemy, once around their main (7 tiles out: a Spawning Pool can stand out of sight
             of the hatchery), then home.
+  hunt      (option) from 8:00, with 20+ army units and no enemy army seen for a minute, the army
+            goes where enemy buildings were seen, then to the bases it hasn't passed lately: the
+            model stays near what it knows, and a hatchery Gary never saw outlived the game.
 
 Units in a fight are the fight layer's; the arbiter leaves them out (and the posture can keep the
 army home altogether). Orders are intents (ARMY_MOVE, ARMY_ATTACK, SCOUT, ATTACK_WAVE) that the
@@ -36,6 +39,13 @@ SCOUT_AT = 24 * 45                  # send a scouting worker from 0:45, at 9 SCV
 SCOUT_WORKERS = 9
 WAYPOINT_FOR = 8 * 24                # the scout gives up on a waypoint of its circle after this
 CIRCLE = 7 * 32                     # the scout circles the enemy main this far from its start location
+HUNT_AFTER = 8 * 60 * 24            # hunt: from 8:00, with this many army units and no enemy army seen
+HUNT_ARMY = 20                      # for QUIET, the army goes where enemy buildings were, then to
+QUIET = 60 * 24                     # the bases it hasn't passed lately
+HUNT_FOR = 60 * 24                  # ...each for this long at most
+NOT_ARMY = {35, 36, 41, 42, 7, 64}  # larva, egg, drone, overlord, SCV, probe: not an enemy army
+GONE_PX = 7 * 32                    # an enemy building is gone when Gary's units are this close and don't see it
+VISITED_FOR = 120 * 24              # a base Gary's units passed this recently isn't visited again
 
 
 def cell_dist(a: int, b: int) -> int:
@@ -64,8 +74,14 @@ class WaveArmy:
 class LearnedArmy:
     remembers = True                # whatever Gary looks at, the tracker remembers
 
-    def __init__(self, g: Gary, model: ArmyModel, pull=None):
+    def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False):
         self.g = g
+        self.hunt = hunt            # option: with no enemy building known, the army visits the bases
+        self.enemy_buildings: dict[int, tuple[int, int]] = {}   # tag -> where it was seen
+        self.enemy_army_seen = 0                                 # frame an enemy fighter was last seen
+        self.hunted: dict[tuple[int, int], int] = {}             # hunt target -> frame first sent there
+        self.visited: dict[int, int] = {}                       # base index -> frame Gary's units were there
+        self.next_hunt = 0
         self.model = model
         self.tracker = ArmyTracker(model.spec, g.slot, g.map.size, g.main.center)
         self.pull = pull            # a worker-pull rule run first (v0.3; later versions: the fight layer's)
@@ -104,6 +120,9 @@ class LearnedArmy:
             return "rule:pull"
         if self._scouting(obs, mine):
             return "scout"
+        hunt = self._hunt(obs, mine, done) if self.hunt else None
+        if hunt is not None:                    # (the model isn't asked while the army hunts)
+            return "army" if hunt else None
         if hi.frame < self.next_ask:
             return None
         army = [u for u in done if u["type"] in g.army_types]
@@ -155,6 +174,51 @@ class LearnedArmy:
                              {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": p_away,
                               "fight": go, "done": [], "boxes": 0}, "army"))
         return "army"
+
+    def _hunt(self, obs: dict, mine: list[dict], done: list[dict]) -> bool | None:
+        """The army model can sit far ahead with nothing left to fight (a hatchery at a base Gary
+        never looked at outlives the game). Once no enemy army has been seen for a while, the army
+        goes where enemy buildings were seen, nearest first, then to the bases its units haven't
+        passed lately. True if Gary acted, False if the army is hunting but not ordered now, None if
+        it isn't hunting."""
+        g, f = self.g, self.g.hi.frame
+        here = {u["tag"] for u in obs["units"]}
+        for u in obs["units"]:
+            if u["owner"] not in (g.slot, 11) and is_building(u["type"]):
+                self.enemy_buildings[u["tag"]] = (u["x"], u["y"])
+            elif u["owner"] not in (g.slot, 11) and u["type"] not in NOT_ARMY:
+                self.enemy_army_seen = f
+        at = [(u["x"], u["y"]) for u in mine]
+        for t, p in list(self.enemy_buildings.items()):
+            if t not in here and any(math.dist(p, q) < GONE_PX for q in at):
+                del self.enemy_buildings[t]
+        for i, b in enumerate(g.map.bases):
+            if any(math.dist(b.center, q) < GONE_PX for q in at):
+                self.visited[i] = f
+                self.hunted.pop(b.center, None)
+        army = [u for u in done if u["type"] in g.army_types]
+        if f < HUNT_AFTER or f - self.enemy_army_seen < QUIET or len(army) < HUNT_ARMY:
+            return None
+        cx, cy = sum(u["x"] for u in army) / len(army), sum(u["y"] for u in army) / len(army)
+        # (a target the army hasn't reached in HUNT_FOR, out of its way or off its ground, is dropped)
+        given_up = {p for p, since in self.hunted.items() if f - since > HUNT_FOR}
+        self.enemy_buildings = {t: p for t, p in self.enemy_buildings.items() if p not in given_up}
+        todo = list(self.enemy_buildings.values()) or             [b.center for i, b in enumerate(g.map.bases)
+             if f - self.visited.get(i, -VISITED_FOR) >= VISITED_FOR and b.center not in given_up]
+        if not todo:
+            return None
+        if f < self.next_hunt:
+            return False
+        x, y = min(todo, key=lambda p: math.dist(p, (cx, cy)))
+        self.hunted.setdefault((x, y), f)
+        self.next_hunt = f + REORDER_AFTER
+        what = "where an enemy building was" if self.enemy_buildings else "to a base not seen lately"
+        g.say(f"army ({len(army)} units) hunts, no enemy army seen for {(f - self.enemy_army_seen) // 24} s: "
+              f"{what}, ({x}, {y})")
+        tags = [u["tag"] for u in army]
+        g.motor.start(Intent("ARMY_ATTACK", tags, (x, y), {"tags": tags, "x": x, "y": y, "attack": True, "p": 1.0,
+                                                          "fight": 0.0, "done": [], "boxes": 0}, "army"))
+        return True
 
     # --- scouting (scripted for now) -----------------------------------------------------------
 
