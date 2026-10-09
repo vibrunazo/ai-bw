@@ -75,6 +75,13 @@ quicker way to a playable Gary.
   past the natural, out of sight of it: an overpool (pool at 1:41) went unnoticed, Gary expanded
   at 2:48 and was dead by 6:00. Now the pool is remembered: replayed pros lost 12 of 144 (14), the
   dummy's 9-pool 0 of 48 (3) and won 29 (with the hunt; v0.15 won 5); economy as before.
+- **A pool first that takes its natural (open):** on Heartbreak Ridge, pools at 1:36 with a
+  hatchery at the natural too: the posture waits for one hatchery, and the zerglings came at 3:00
+  to Gary's 1 marine. Pro data says a pool finished by 2:40 is an early pool whatever else (98% of
+  pool firsts, 0.7% of hatch firsts; by 2:50, 16% of hatch firsts), but the replayed fixture can't
+  test it: the env creates its buildings finished, so every pool there looks finished when placed
+  (spawned when finished instead, the scout misses the natural hatchery going up and the false
+  alarms move elsewhere). The env needs to create unfinished buildings first.
 - **Most urgently missing:** three of those 16 games still ended with one building left at
   18:00; Comsat scans (pros' way to find the last buildings) aren't used.
 
