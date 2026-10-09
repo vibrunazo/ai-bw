@@ -406,7 +406,7 @@ class ScriptedExecutor:
                     hi.click(*p)
                 return
             g.retry_with.pop(t.unit_type, None)
-            if not g.look_at(obs, "main"):
+            if not g.look_at(obs, t.data.get("from", "main")):
                 return
             w = t.data.get("worker")
             if w and obs["selection"] == [w]:
@@ -421,6 +421,11 @@ class ScriptedExecutor:
                     t.stage = "place" if t.where == "main" else "travel"
                     return
             w = self.pick_worker(obs, mine, t.data.get("near"))
+            if not w and t.data.get("from", "main") == "main" and                     any(u["type"] == CC and math.dist((u["x"], u["y"]), g.natural.center) < 4 * 32 for u in mine):
+                # no free SCV in the main (they mine at the natural, or died there): one from the
+                # natural (13 Barracks in a row failed for it in one game)
+                t.data["from"] = "natural"
+                return
             if not w:
                 self.fail_build(t)
                 return
