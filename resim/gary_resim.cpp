@@ -188,6 +188,11 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 	//    cooldown,order,order_target,carrying,completed],...]}   own: 1 the player, 0 enemy, 2 neutral
 	//    (mineral fields and geysers, so "back to mining" can be learned)
 	// (tags are OpenBW's unit IDs in both, so commands and snapshots line up).
+	// For reaction times (eval/reaction.py), as they happen:
+	//   {"type":"sight","frame":F,"slot":P,"tag":T,"unit":ID,"x":X,"y":Y}  an enemy unit comes into
+	//    P's sight after REACT_GAP frames out of it (or for the first time)
+	//   {"type":"hit","frame":F,"slot":P,"tag":T,"unit":ID,"x":X,"y":Y}    P's unit loses hit points
+	//    or shields after REACT_GAP frames without
 	int fights_until = 0;          // frame; 0 = off
 	// a fight snapshot: everyone within FIGHT_AROUND of the fight, and the player's own units
 	// within FIGHT_OWN (the whole mineral line a player might pull or evacuate)
@@ -277,12 +282,47 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 		}
 	}
 
+	static constexpr int REACT_GAP = 48;
+	std::unordered_map<uint32_t, int> last_seen;      // (player << 16 | tag) -> frame it was last in sight
+	struct hp_state { int hp; int frame; };
+	std::unordered_map<uint16_t, hp_state> last_hit;  // tag -> hit points + shields, frame last hit
+
+	void print_reactions() {
+		if (!fights_until || st.current_frame > fights_until) return;
+		int now = st.current_frame;
+		for (int o = 0; o != 8; ++o) {
+			if (!is_player(st, o)) continue;
+			for (const unit_t* u : ptr(st.player_units[o])) {
+				if (!u->sprite || us_hidden(u)) continue;
+				uint16_t tag = (uint16_t)get_unit_id(u).raw_value;
+				for (int p = 0; p != 8; ++p) {
+					if (p == o || !is_player(st, p) || !(u->sprite->visibility_flags & (1 << p))) continue;
+					auto [it, fresh] = last_seen.try_emplace((uint32_t)p << 16 | tag, now);
+					if (fresh || now - it->second > REACT_GAP)
+						printf("{\"type\":\"sight\",\"frame\":%d,\"slot\":%d,\"tag\":%u,\"unit\":%d,\"x\":%d,\"y\":%d}\n",
+						       now, p, (unsigned)tag, (int)u->unit_type->id, u->sprite->position.x, u->sprite->position.y);
+					it->second = now;
+				}
+				int hp = u->hp.integer_part() + (u->unit_type->has_shield ? u->shield_points.integer_part() : 0);
+				auto [h, first] = last_hit.try_emplace(tag, hp_state{hp, -REACT_GAP - 1});
+				if (!first && hp < h->second.hp) {
+					if (now - h->second.frame > REACT_GAP && u_completed(u))
+						printf("{\"type\":\"hit\",\"frame\":%d,\"slot\":%d,\"tag\":%u,\"unit\":%d,\"x\":%d,\"y\":%d}\n",
+						       now, o, (unsigned)tag, (int)u->unit_type->id, u->sprite->position.x, u->sprite->position.y);
+					h->second.frame = now;
+				}
+				h->second.hp = hp;
+			}
+		}
+	}
+
 	void next_frame_counted() {
 		if (st.current_frame == replay_st.end_frame) error("replay: attempt to play past end");
 		execute_actions_counted();
 		state_functions::next_frame();
 		track_units();
 		print_fights();
+		print_reactions();
 		if (debug_rejects) track_object_usage();
 	}
 

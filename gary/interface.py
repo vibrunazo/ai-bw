@@ -70,7 +70,9 @@ PROFILES = {
     # Gary's default: as fast as the pros in early TvZ defenses. Fitted to the time from selecting
     # units to the next targeted command in pro replays (median 168 ms in the home-defense
     # scenarios; b_rank's mouse took 504 ms); reaction and key speed are estimates until the camera
-    # logger measures them (§7.4)
+    # logger measures them (§7.4). eval/reaction.py, Terran pros in 200 TvZ replays, from an event
+    # to their first command on it (hands included): a unit of theirs hit, 10% within 420 ms, half
+    # by 1.1 s; an enemy unit coming into sight, 10% by 340 ms: about 200 ms to see plus the hands
     "pro": Profile(name="pro", fitts_a_ms=20, fitts_b_ms=28, reaction_ms=200.0, key_ms=40.0,
                    apm_per_second=7.0, apm_capacity=20.0),
     "b_rank": Profile(),

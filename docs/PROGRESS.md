@@ -111,6 +111,16 @@ quicker way to a playable Gary.
   (the last 64): 210 ms, the frame nearest 200. Home defenses −27 (−35); replayed pros lost 8 of
   144 (8); the 9-pool 0 (0); to 18:00 on Fighting Spirit won 13 of 16 (11). The 200 ms is still an
   estimate: it should be fitted from replays (first sight of an event to the first command on it).
+- **Pros' reaction times, measured (`eval/reaction.py`):** replays don't say why a command was
+  given, so only events with one clear answer count: one of the player's units is hit (and they
+  hadn't commanded it for 2 s) -> their first command including it; an enemy unit comes into sight
+  -> their first command targeting it; only near the player's last click (where the camera was),
+  and over a control (the same search 3 s later: commands they'd have given anyway). Terran pros,
+  200 TvZ games: hit -> command 10% within 420 ms, 25% 590, half by 1.1 s; sight -> command 10% by
+  340 ms. That fits ~200 ms to see plus the hands. Gary (48 games against Zerg v2): hit -> command
+  half by 590 ms, faster than the pros, but partly not reactions at all (its fight roles re-decide
+  every half second); it never targets a unit it just saw (it attack-moves). Gary's own games are
+  measurable only against opponents that play by commands (the replayed fixture creates units).
 - **False alarms on 4-player maps (open):** with buildings going up, Gary plays rush defense
   against 18 of 30 hatch firsts on Fighting Spirit and 23 of 29 on Python (2 of 23 on Heartbreak
   Ridge): its scout hasn't found the Zerg by 2:20, and nothing seen is called an early pool. At
