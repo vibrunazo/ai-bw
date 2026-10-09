@@ -193,8 +193,13 @@ class DirectMotor:
         if not screen_of(obs, cx, cy):
             hi.camera_minimap(cx, cy)
             return
+        # (not the ones placing or constructing a building, nor the scout: a builder pulled is a
+        # build lost)
         miners = [u for u in mine if u["type"] == T.SCV and u["tag"] not in g.pulled
-                  and math.dist((u["x"], u["y"]), (cx, cy)) < 8 * 32 and screen_of(obs, u["x"], u["y"])]
+                  and math.dist((u["x"], u["y"]), (cx, cy)) < 8 * 32 and screen_of(obs, u["x"], u["y"])
+                  and u["order"] not in (30, 31, 33) and u["tag"] != g.scout
+                  and (g.parked is None or g.parked.data.get("worker") != u["tag"])
+                  and u["tag"] not in {g.builder_of.get(r) for r in g.reserved}]
         if not miners:
             g.task = None
             return

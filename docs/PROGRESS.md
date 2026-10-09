@@ -131,6 +131,14 @@ quicker way to a playable Gary.
   each decision's odds until one is due (smooth weighted round-robin) nearly (47%, 11%, 72%). In
   games, rolling cost SCVs (28 at 12:00 against 41: the SCV is the favorite more often than it's
   rolled) and changed no Factory timing (option `+dice`, not adopted).
+- **Builds lost to Gary's own hands (shared code):** in 176 games' logs, Missile Turrets failed in
+  125 games (lost orders, refused, re-ordered: ~1,000 times), Supply Depots in ~100, Barracks in
+  ~50. Most were one race: a build's order takes a few frames to show in its SCV's state, and the
+  next build's task picked that "idle" SCV and sent it walking to its own spot (the first build's
+  SCV then had a move order: lost). Also the gas chore's drag box caught SCVs walking past to place
+  a building and sent them to gas, and the worker pull took builders. Now an SCV just given a build,
+  one placing or constructing, the parked builder and the scout are never picked; the gas chore
+  selects again if its box caught a busy worker. In one game the failures to 11:00 went from 14 to 2.
 - **Most urgently missing:** the rest of the army at 8:00: pros have a Factory (1.0) and a
   Starport (0.6) by then, and more Medics (2.7 against Gary's 1.7); Gary's style-1 macro has
   none of the first two by 8:00.

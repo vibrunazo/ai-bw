@@ -189,9 +189,12 @@ class ScriptedExecutor:
         """A finished SCV on screen that isn't busy placing or constructing a building (or walking
         to build one)."""
         g = self.g
+        # (nor one just given a build: the order takes a few frames to show in its state, and the
+        # next build's task took it as free and sent it walking elsewhere: the first build lost)
+        builders = {g.builder_of.get(r) for r in g.reserved}
         return u["type"] == SCV and u["completed"] and u["order"] not in BUSY_ORDERS \
             and bool(screen_of(obs, u["x"], u["y"])) and u["tag"] != g.scout and u["tag"] not in g.pulled \
-            and (g.parked is None or g.parked.data["worker"] != u["tag"])
+            and (g.parked is None or g.parked.data["worker"] != u["tag"]) and u["tag"] not in builders
 
     def resume_parked(self, obs: dict, mine: list[dict]) -> bool:
         """The parked build (its SCV walking there) goes on once its money is there, or after
@@ -683,7 +686,11 @@ class ScriptedExecutor:
             return
         if t.stage == "send":
             picked = [u["tag"] for u in mine if u["tag"] in obs["selection"] and u["type"] == T.SCV]
-            if picked:
+            # the box may have caught a busy worker too (an SCV walking past to place a building:
+            # sent to gas, its build was lost; 120 of 176 games had a turret that didn't start):
+            # then select again
+            if any(not self.free_worker(obs, u) for u in mine if u["tag"] in obs["selection"]):
+                picked = []
                 hi.right_click(*rp)
                 g.gas_workers.setdefault(d["tag"], set()).update(picked)
             t.stage = "start"
