@@ -46,7 +46,9 @@ HATCH_AT = 12                   # drones before the natural's hatchery
 DRONES = 18
 GAS = 3
 GATHER = 5 * 32                 # the gathering point: this far in front of the natural
-IDLE_ORDERS = {2, 3}            # Guard, PlayerGuard: standing
+IDLE_ORDERS = {2, 3, 49}        # Guard, PlayerGuard: standing; Follow: a right-click that hit a unit
+BUILD_TRIES = 10                # a building that doesn't show up is ordered again this often (a unit on its spot)
+IDLE_TRIES = 6                  # boxes around an idle drone before it's left be for 20 s
 MINING_ORDERS = set(range(79, 92))     # moving to, waiting at, mining, returning minerals and gas
 
 
@@ -68,7 +70,9 @@ class ZergV2(ZergV1):
         self.task = ""                           # a multi-action step under way
         self.drone_for = None
         self.all_in = False
-        self.walking: dict[int, int] = {}       # drone -> frame until which it is walking home
+        self.walking: dict[int, int] = {}       # drone -> frame until which it is walking home (or left be)
+        self.idle_tries: dict[int, int] = {}    # idle drone -> boxes around it so far
+        self.select_tries = 0                   # boxes around the drone for a step so far
         self.builds_seen: dict[str, int] = {}   # build step -> tries
         self.builder: dict[str, int] = {}       # build step -> the drone ordered to
 
@@ -119,8 +123,9 @@ class ZergV2(ZergV1):
             if self._look(obs, (u["x"], u["y"])):
                 return
             sel = [s for s in mine if s["tag"] in obs["selection"]]
+            # (idle drones clump: all of them; the box can take larvae and the overlords above too)
             if sel and any(s["tag"] in {i["tag"] for i in idle} for s in sel) \
-                    and all(s["type"] in (DRONE, C.LARVA) for s in sel):   # (idle drones clump: all of them)
+                    and all(s["type"] in (DRONE, C.LARVA, OVERLORD) for s in sel):
                 base = min((self.main_base, self.nat_base), key=lambda b: math.dist(b.center, (u["x"], u["y"])))
                 if not any(h["completed"] and math.dist((h["x"], h["y"]), base.center) < 160 for h in hatches)                         or math.dist(base.center, (u["x"], u["y"])) > 10 * 32:
                     # away from a working base: walk home first (a minimap order), mine once there
@@ -128,7 +133,10 @@ class ZergV2(ZergV1):
                     for s in sel:
                         self.walking[s["tag"]] = hi.frame + 20 * 24
                     return
-                m = min(base.minerals, key=lambda m: math.dist(m, (u["x"], u["y"])))
+                # (a field with an overlord over it: the click would hit the overlord, the drones follow it)
+                lords = [(o["x"], o["y"]) for o in mine if o["type"] == OVERLORD]
+                clear = [m for m in base.minerals if not any(math.dist(m, lo) < 40 for lo in lords)] or base.minerals
+                m = min(clear, key=lambda m: math.dist(m, (u["x"], u["y"])))
                 p = screen_of(obs, *m)
                 if p is None:
                     hi.minimap_right_click(*m)
@@ -137,6 +145,10 @@ class ZergV2(ZergV1):
                     return
                 hi.right_click(*p)
                 return
+            self.idle_tries[u["tag"]] = self.idle_tries.get(u["tag"], 0) + 1
+            if self.idle_tries[u["tag"]] > IDLE_TRIES:          # can't get it alone: leave it be a while
+                self.idle_tries[u["tag"]] = 0
+                self.walking[u["tag"]] = hi.frame + 20 * 24
             x, y = screen_of(obs, u["x"], u["y"])
             hi.box(max(0, x - 12), max(0, y - 12), x + 12, y + 12)
             return
@@ -144,7 +156,7 @@ class ZergV2(ZergV1):
         have = {"hatch": len(hatches) >= 2, "pool": pool is not None, "extractor": extractor is not None}
         for step, ok in have.items():
             f = self.ordered.get(step)
-            if f is not None and f >= 0 and not ok and hi.frame - f > 30 * 24 and self.builds_seen.get(step, 0) < 3:
+            if f is not None and f >= 0 and not ok and hi.frame - f > 30 * 24 and self.builds_seen.get(step, 0) < BUILD_TRIES:
                 self.builds_seen[step] = self.builds_seen.get(step, 0) + 1
                 del self.ordered[step]
         # the build: natural hatchery at 12, pool, extractor
@@ -163,7 +175,7 @@ class ZergV2(ZergV1):
             miners = [u for u in drones if u["order"] == MINING and u["tag"] not in self.gas
                       and math.dist((u["x"], u["y"]), self.main_base.center) < 12 * 32]
             if miners:
-                self.task, self.drone_for = "gas", miners[0]["tag"]
+                self.task, self.drone_for = "gas", self._pick(miners, obs)["tag"]
                 return self._continue(obs, mine, me)
         # a macro hatchery in the main: money it can't spend, no larva to spend it on (4 at most)
         larvae_now = sum(1 for u in mine if u["type"] == C.LARVA)
@@ -247,8 +259,15 @@ class ZergV2(ZergV1):
             or drones
         if not miners:
             return
-        self.task, self.drone_for = f"build:{step}:{unit_type}:{tile[0]}:{tile[1]}", miners[0]["tag"]
+        self.task, self.drone_for = f"build:{step}:{unit_type}:{tile[0]}:{tile[1]}", self._pick(miners, obs)["tag"]
         self._continue(obs, [], obs["me"])
+
+    def _pick(self, drones: list[dict], obs) -> dict:
+        """A drone a tiny box takes alone: none of the Zerg's units (overlords above, larvae) on it,
+        else any (in turn)."""
+        others = [u for u in obs["units"] if u["owner"] == self.hi.slot and u["type"] != DRONE]
+        alone = [d for d in drones if not any(abs(o["x"] - d["x"]) < 24 and abs(o["y"] - d["y"]) < 24 for o in others)]
+        return (alone or drones)[(self.hi.frame // 48) % len(alone or drones)]
 
     def _continue(self, obs, mine, me) -> None:
         hi = self.hi
@@ -259,9 +278,14 @@ class ZergV2(ZergV1):
         if obs["selection"] != [drone["tag"]]:                 # select the drone (a tiny box)
             if self._look(obs, (drone["x"], drone["y"])):
                 return
+            self.select_tries += 1
+            if self.select_tries > IDLE_TRIES:                 # it won't come alone: another drone, later
+                self.select_tries, self.task = 0, ""
+                return
             x, y = screen_of(obs, drone["x"], drone["y"])
             hi.box(max(0, x - 2), max(0, y - 2), x + 2, y + 2)
             return
+        self.select_tries = 0
         if self.task == "gas":
             ext = next((u for u in obs["units"] if u["owner"] == hi.slot and u["type"] == EXTRACTOR), None)
             if ext is None:
