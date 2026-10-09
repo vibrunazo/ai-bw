@@ -41,6 +41,7 @@ from gary.env import Game, decode_observation
 from gary.policy.fight_memory import command_kind
 
 FRAME_MS = 42  # one frame at Fastest speed
+HISTORY = 64   # frames of snapshots kept: the reaction delay and aim's look back fit easily
 LEAD_SPAN = 8  # aim: a unit's motion is judged over this many frames before what Gary saw...
 LEAD_MAX = 64  # ...and carried forward this far at most (pixels)
 NO_UNIT = 0
@@ -121,9 +122,10 @@ class HumanInterface:
         self.last_macro_frame = -10 ** 6      # last train / morph / research / upgrade / build sent
         self.hotkeys: dict[int, list[int]] = {}
         self.pending: list[_Pending] = []
-        # snapshots every 4 frames, [frame, observation]; kept undecoded (bytes) until read, since
-        # Gary only ever looks at the one from its reaction time ago
-        self.history: deque[list] = deque([[self.frame, obs]], maxlen=256)
+        # a snapshot every frame, [frame, observation], for the last HISTORY frames; kept undecoded
+        # (bytes) until read, since Gary only ever looks at the one from its reaction time ago (and
+        # aim at the few before it). (Every 4 frames, a 200 ms delay was 210-340 ms, 270 on average)
+        self.history: deque[list] = deque([[self.frame, obs]], maxlen=HISTORY)
         self._observe_raw = getattr(game, "observe_raw", None)   # the live bridge has no raw form
         self.stats = {"actions": 0, "rejected_by_interface": 0, "rejected_by_game": 0}
         # act() latency: frames from emitting a command (game.act) to its effect in the game.
@@ -510,8 +512,7 @@ class HumanInterface:
             self._log_pov()
             self.frame += 1
             self.tokens = min(self.p.apm_capacity, self.tokens + self.p.apm_per_second * FRAME_MS / 1000)
-            if self.frame % 4 == 0:
-                self.history.append([self.frame, self._observe_raw() if self._observe_raw else self.game.observe()])
+            self.history.append([self.frame, self._observe_raw() if self._observe_raw else self.game.observe()])
 
     def _displayed_cursor(self) -> tuple[int, int]:
         """Where the mouse is drawn this frame: moving along its path while a click travels."""

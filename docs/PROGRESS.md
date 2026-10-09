@@ -106,6 +106,11 @@ quicker way to a playable Gary.
   the spot was off screen). Missed selects 12 a game (239), failed builds 4.9-7.1 (8.1), actions
   to 8:00 6% fewer; replayed pros lost 10 of 144 (13). Army built by 8:00 2 lower on Python
   (2 more SCVs trained: the worker pulls' boxes now take the SCVs they ask for).
+- **The reaction delay was longer than set (shared code):** the interface kept a snapshot every 4
+  frames, so the pro profile's 200 ms was 210-340 ms (270 on average). Now a snapshot every frame
+  (the last 64): 210 ms, the frame nearest 200. Home defenses −27 (−35); replayed pros lost 8 of
+  144 (8); the 9-pool 0 (0); to 18:00 on Fighting Spirit won 13 of 16 (11). The 200 ms is still an
+  estimate: it should be fitted from replays (first sight of an event to the first command on it).
 - **False alarms on 4-player maps (open):** with buildings going up, Gary plays rush defense
   against 18 of 30 hatch firsts on Fighting Spirit and 23 of 29 on Python (2 of 23 on Heartbreak
   Ridge): its scout hasn't found the Zerg by 2:20, and nothing seen is called an early pool. At
