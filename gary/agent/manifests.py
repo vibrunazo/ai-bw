@@ -20,7 +20,8 @@ from gary.agent.fight import RULES, FightLayer, PullRule
 from gary.agent.gary import Gary
 from gary.agent.macro import LearnedMacro, OneBaseDefense
 from gary.agent.motor import DirectMotor
-from gary.agent.posture import EarlyPoolPosture, EarlyPoolPostureV2, EarlyPoolPostureV3, NormalPosture
+from gary.agent.posture import (EarlyPoolPosture, EarlyPoolPostureV2, EarlyPoolPostureV3, EarlyPoolPostureV4,
+                                NormalPosture)
 from gary.version import announcement
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -116,6 +117,14 @@ MANIFESTS: dict[str, dict] = {
     # v0.16: v0.15 whose army hunts once no enemy army has been seen for a minute, scanning the bases
     # (army.py hunt, scan), and whose posture calls a pool finished by 2:40 an early pool (v3)
     "v016": {"version": "v0.16", "posture": "early_pool/v3", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
+    # v0.17: v0.16 that calls nothing seen an early pool only at 2:50 (posture v4)
+    "v017": {"version": "v0.17", "posture": "early_pool/v4", "leases": "enforced",
              "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
                        "keep_busy": True},
              "army": {**_ARMY, "hunt": True, "scan": True},
@@ -353,7 +362,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             from gary.agent.simcity import SimCity
             g.simcity = SimCity(g, m.get("simcity_door", 32))
     g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture,
-                 "early_pool/v2": EarlyPoolPostureV2, "early_pool/v3": EarlyPoolPostureV3}[m["posture"]](g)
+                 "early_pool/v2": EarlyPoolPostureV2, "early_pool/v3": EarlyPoolPostureV3,
+                 "early_pool/v4": EarlyPoolPostureV4}[m["posture"]](g)
     if m["macro"] is not None:
         path = model_path(m["macro"]["model"])
         macro = load("macro", str(path))

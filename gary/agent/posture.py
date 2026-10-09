@@ -70,6 +70,7 @@ BUNKER_INSIDE = 64                   # the rush bunker: this far inside the main
 class EarlyPoolPosture:
     bunker_by_cc = False                 # v2: the rush bunker by the main's Command Center, not its way out
     pool_sure = False                    # v3: a pool finished by 2:40 is an early pool, natural or not
+    unknown_by = UNKNOWN_BY              # v4: nothing seen by then is an early pool (v4: 2:50)
 
     def __init__(self, g: Gary):
         self.g = g
@@ -170,7 +171,7 @@ class EarlyPoolPosture:
                                                 (hi.frame <= POOL_BY and self.early_pool_sure) or
                                                 (hi.frame <= LINGS_BY and lings and one_base) or
                                                 (hi.frame <= MANY_LINGS_BY and lings >= MANY_LINGS and one_base) or
-                                                (UNKNOWN_BY <= hi.frame <= POOL_BY and not self.base_seen)):
+                                                (self.unknown_by <= hi.frame <= POOL_BY and not self.base_seen)):
             self.rush = self.hold = True
             # marines gather a few tiles behind the bunker, toward the main (not on its spot,
             # where they'd keep the SCV from placing it)
@@ -209,6 +210,15 @@ class EarlyPoolPostureV2(EarlyPoolPosture):
     of 48 games. A second bunker at the way out once the rush is held, while Gary stays home, saved
     2 of those but cost more against the replayed pros (8 lost of 144, 3 without): not kept."""
     bunker_by_cc = True
+
+
+class EarlyPoolPostureV4(EarlyPoolPostureV2):
+    """v3 that calls nothing seen an early pool only at 2:50, not 2:20: pros don't see the Zerg by
+    2:20 on 4-player maps either (Terran pros first see a Zerg building at 2:36 on Fighting Spirit,
+    median; 2:59 at the 75th percentile), and v3 played rush defense against 19 of 30 hatch firsts
+    there. Early pools are caught otherwise: the pool remembered, finished by 2:40, zerglings."""
+    pool_sure = True
+    unknown_by = 170 * 24
 
 
 class EarlyPoolPostureV3(EarlyPoolPostureV2):

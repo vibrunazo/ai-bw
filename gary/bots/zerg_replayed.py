@@ -16,7 +16,7 @@ hatch first) at their real timings. It has no economy: killing its drones doesn'
 never pays for anything. Use it to test whether Gary holds pressure, never to judge Gary's
 economic choices, and only in the headless env (it creates units).
 
-    python -m eval.vs_rush --versions v016 --opponent replayed --seeds 1 2 3 4
+    python -m eval.vs_rush --versions v017 --opponent replayed --seeds 1 2 3 4
 """
 
 from __future__ import annotations
