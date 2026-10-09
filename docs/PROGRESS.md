@@ -97,7 +97,9 @@ quicker way to a playable Gary.
   against 18 of 30 hatch firsts on Fighting Spirit and 23 of 29 on Python (2 of 23 on Heartbreak
   Ridge): its scout hasn't found the Zerg by 2:20, and nothing seen is called an early pool. At
   2:20 the scout is still crossing to the second start (about 40 s a leg on Fighting Spirit), so
-  waiting until 2:45 when the last start is known by elimination never applied (tried, no change).
+  waiting until 2:45 when the last start is known by elimination never applied (tried, no change);
+  a 2:30 deadline changed nothing either (the alarms just came at 2:30). The lever is the scout:
+  it leaves at about 1:15 (9 SCVs) and reaches the third start at about 2:45.
 - **Most urgently missing:** a hunting army of 70+ crosses the map slowly (scans find the last
   hatcheries at 14-17 min); the army model's fight estimate still sends 8 units out into 14
   zerglings (Python, hatch-first floods at 4:30-5:30: 4 of the 12 losses).
