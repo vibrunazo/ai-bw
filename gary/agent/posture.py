@@ -77,6 +77,7 @@ class EarlyPoolPosture:
         self.hatcheries_seen: set[int] = set()
         self.most_enemy = 0.0            # the biggest zerg army (supply) seen at once
         self.base_seen = False           # any zerg building seen
+        self.pool_seen = False           # a Spawning Pool seen (the scout saw it, then left)
         self.early_pool_seen = False     # a finished pool by 2:50, or zerglings by 3:00: early, whatever else
         way_out = self._main_way_out() or (    # (no choke: between the main and its natural)
             int(g.main.center[0] * 0.6 + g.natural.center[0] * 0.4), int(g.main.center[1] * 0.6 + g.natural.center[1] * 0.4))
@@ -143,6 +144,7 @@ class EarlyPoolPosture:
         if (hi.frame <= POOL_DONE_BY and any(u["type"] == POOL and u["completed"] for u in enemy)) or                 (hi.frame <= POOL_BY and any(u["type"] == LING for u in enemy)):
             self.early_pool_seen = True
         self.base_seen = self.base_seen or any(is_building(u["type"]) for u in enemy)
+        self.pool_seen = self.pool_seen or any(u["type"] == POOL for u in enemy)
         lings = sum(1 for u in enemy if u["type"] == LING)
         fighters = enemy_fighters(obs, g.slot)
         self.most_enemy = max(self.most_enemy, sum(supply_x2(u["type"]) for u in fighters) / 2)
@@ -154,8 +156,9 @@ class EarlyPoolPosture:
         # (zerglings count only while Gary hasn't seen a second hatchery: a hatch first's first ones
         # come at 3:20-5:00, and called an early pool they held back Gary's tech by a minute)
         one_base = len(self.hatcheries_seen) <= 1
-        if not self.rush and not self.hold and ((hi.frame <= POOL_BY and any(u["type"] == POOL for u in enemy)
-                                                 and one_base and looked) or
+        # (the pool remembered: the scout sees it while circling the main, and the scouting is done
+        # only once it has passed the natural, out of sight of the pool)
+        if not self.rush and not self.hold and ((hi.frame <= POOL_BY and self.pool_seen and one_base and looked) or
                                                 (hi.frame <= LINGS_BY and lings and one_base) or
                                                 (hi.frame <= MANY_LINGS_BY and lings >= MANY_LINGS and one_base) or
                                                 (UNKNOWN_BY <= hi.frame <= POOL_BY and not self.base_seen)):

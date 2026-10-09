@@ -70,6 +70,11 @@ quicker way to a playable Gary.
 - **Results:** the same 16 games to 18:00: won 8 (2), lost 2 (2). To 12:00, replayed pros on three
   maps won 4 of 144 (0) and lost 14 (14); Zerg v2 (72 seeds) won 2 (0), lost 8 (8): the same lost
   games, which end before the hunt can start.
+- **The pool forgotten (shared code, the early-pool posture):** a pool counted only if in view
+  once the scouting was done, but the scout sees it while circling the main and is done only
+  past the natural, out of sight of it: an overpool (pool at 1:41) went unnoticed, Gary expanded
+  at 2:48 and was dead by 6:00. Now the pool is remembered: replayed pros lost 12 of 144 (14), the
+  dummy's 9-pool 0 of 48 (3) and won 29 (with the hunt; v0.15 won 5); economy as before.
 - **Most urgently missing:** three of those 16 games still ended with one building left at
   18:00; Comsat scans (pros' way to find the last buildings) aren't used.
 
