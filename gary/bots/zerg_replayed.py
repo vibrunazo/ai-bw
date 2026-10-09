@@ -6,8 +6,9 @@ production. Each seed picks a pro Zerg from a TvZ game (data/interim/build_order
 that game in OpenBW to see what the Zerg had and when, and the env creates (Game.create_unit) the
 same: its zerglings, hydralisks and mutalisks when they hatched, at the main hatchery; its
 Spawning Pool, Extractor, Hydralisk Den and Spire near the main and its hatcheries at the natural,
-then the nearest free bases, when placed (finished at once: what Gary's scout sees is close
-enough); zergling speed when its research would end. Its army goes as the dummy's does
+then the nearest free bases, when placed: a drone appears there and starts the building, so it
+goes up for its real build time as Gary's scout sees it (created finished, a pool going up at
+2:05 looked finished at once); zergling speed when its research would end. Its army goes as the dummy's does
 (gary/bots/zerg_rush.py): attack-moving at Gary's start as it hatches, the first 6 together.
 
 So Gary meets the spread of pro openings in their real proportions (pool first 30%, the rest
@@ -25,7 +26,7 @@ import math
 import random
 
 from gary import commands as C
-from gary.bots.zerg_rush import HATCH, ZergRush
+from gary.bots.zerg_rush import DRONE, HATCH, ZergRush
 from gary.interface import screen_of
 
 BUILDINGS = {"Spawning Pool": 142, "Extractor": 149, "Hydralisk Den": 135, "Spire": 141, "Hatchery": HATCH}
@@ -120,6 +121,8 @@ class ZergReplayed(ZergRush):
     def act(self) -> None:
         hi = self.hi
         while self.schedule and self.schedule[0][0] <= hi.frame:
+            if self.schedule[0][3] == "building" and self.stage == "attack":
+                break                       # (its drone's selection would take the wave's attack order)
             _, t, n, kind = self.schedule.pop(0)
             if kind == "upgrade":
                 hi.game.set_upgrade(hi.slot, t)
@@ -163,7 +166,7 @@ class ZergReplayed(ZergRush):
             taken = {(u["x"], u["y"]) for u in game.observe()["units"] if u["type"] in (106, 131, 132, 133)}
             for b in self.bases:
                 if not any(math.dist(b.center, p) < 4 * 32 for p in taken):
-                    if game.create_unit(slot, HATCH, *b.center):
+                    if self._morph(HATCH, *b.tile, *b.center):
                         return
             return
         info = game.unit_type_info(unit_type)
@@ -173,5 +176,16 @@ class ZergReplayed(ZergRush):
                 for dx in range(-r, r + 1):
                     if max(abs(dx), abs(dy)) == r and game.can_place(slot, unit_type, hx + dx, hy + dy, 0):
                         x, y = (hx + dx) * 32 + info["w"] // 2, (hy + dy) * 32 + info["h"] // 2
-                        if game.create_unit(slot, unit_type, x, y):
+                        if self._morph(unit_type, hx + dx, hy + dy, x, y):
                             return
+
+    def _morph(self, unit_type: int, tx: int, ty: int, x: int, y: int) -> bool:
+        """A drone at (x, y) starts unit_type at tile (tx, ty), paid for (the fixture has no economy)."""
+        game, slot = self.hi.game, self.hi.slot
+        drone = game.create_unit(slot, DRONE, x, y)
+        if not drone:
+            return False
+        game.set_resources(slot, 10000, 10000)
+        game.act(slot, C.select([drone]))
+        game.act(slot, C.build(unit_type, tx, ty, order=C.ORDER_DRONE_START_BUILD))
+        return True

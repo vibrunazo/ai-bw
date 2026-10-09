@@ -87,6 +87,8 @@ def _load_dll() -> ctypes.CDLL:
     dll.gary_env_creep.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
     dll.gary_env_set_upgrade.restype = None
     dll.gary_env_set_upgrade.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+    dll.gary_env_set_resources.restype = None
+    dll.gary_env_set_resources.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
     dll.gary_env_regions.restype = ctypes.c_int
     dll.gary_env_regions.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
                                      ctypes.POINTER(ctypes.c_uint8), ctypes.c_int, ctypes.POINTER(ctypes.c_int),
@@ -324,6 +326,10 @@ class Game:
     def set_upgrade(self, owner: int, upgrade: int, level: int = 1) -> None:
         """Test fixtures only: a player's upgrade level, on its units at once."""
         _dll.gary_env_set_upgrade(self._h, owner, upgrade, level)
+
+    def set_resources(self, owner: int, minerals: int, gas: int) -> None:
+        """Test fixtures only: a player's minerals and gas, set outright."""
+        _dll.gary_env_set_resources(self._h, owner, minerals, gas)
 
     def selection(self, slot: int) -> list[int]:
         """The units this player has selected right now (tags)."""

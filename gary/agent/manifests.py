@@ -20,7 +20,7 @@ from gary.agent.fight import RULES, FightLayer, PullRule
 from gary.agent.gary import Gary
 from gary.agent.macro import LearnedMacro, OneBaseDefense
 from gary.agent.motor import DirectMotor
-from gary.agent.posture import EarlyPoolPosture, EarlyPoolPostureV2, NormalPosture
+from gary.agent.posture import EarlyPoolPosture, EarlyPoolPostureV2, EarlyPoolPostureV3, NormalPosture
 from gary.version import announcement
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -114,8 +114,8 @@ MANIFESTS: dict[str, dict] = {
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
     # v0.16: v0.15 whose army hunts once no enemy army has been seen for a minute, scanning the bases
-    # (army.py hunt, scan)
-    "v016": {"version": "v0.16", "posture": "early_pool/v2", "leases": "enforced",
+    # (army.py hunt, scan), and whose posture calls a pool finished by 2:40 an early pool (v3)
+    "v016": {"version": "v0.16", "posture": "early_pool/v3", "leases": "enforced",
              "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
                        "keep_busy": True},
              "army": {**_ARMY, "hunt": True, "scan": True},
@@ -274,6 +274,10 @@ OPTIONS = {
     # army.py: the hunt scans bases before walking there: on v0.16 without it, replayed pros on Fighting
     # Spirit to 18:00 (16 seeds) won 11 (8). In v0.16
     "scan": lambda m: m["army"].update(scan=True),
+    # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
+    # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
+    # firsts called early pools. In v0.16
+    "pool_sure": lambda m: m.update(posture="early_pool/v3"),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)
@@ -349,7 +353,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             from gary.agent.simcity import SimCity
             g.simcity = SimCity(g, m.get("simcity_door", 32))
     g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture,
-                 "early_pool/v2": EarlyPoolPostureV2}[m["posture"]](g)
+                 "early_pool/v2": EarlyPoolPostureV2, "early_pool/v3": EarlyPoolPostureV3}[m["posture"]](g)
     if m["macro"] is not None:
         path = model_path(m["macro"]["model"])
         macro = load("macro", str(path))

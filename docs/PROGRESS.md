@@ -77,13 +77,19 @@ quicker way to a playable Gary.
   past the natural, out of sight of it: an overpool (pool at 1:41) went unnoticed, Gary expanded
   at 2:48 and was dead by 6:00. Now the pool is remembered: replayed pros lost 12 of 144 (14), the
   dummy's 9-pool 0 of 48 (3) and won 29 (with the hunt; v0.15 won 5); economy as before.
-- **A pool first that takes its natural (open):** on Heartbreak Ridge, pools at 1:36 with a
-  hatchery at the natural too: the posture waits for one hatchery, and the zerglings came at 3:00
-  to Gary's 1 marine. Pro data says a pool finished by 2:40 is an early pool whatever else (98% of
-  pool firsts, 0.7% of hatch firsts; by 2:50, 16% of hatch firsts), but the replayed fixture can't
-  test it: the env creates its buildings finished, so every pool there looks finished when placed
-  (spawned when finished instead, the scout misses the natural hatchery going up and the false
-  alarms move elsewhere). The env needs to create unfinished buildings first.
+- **The replayed fixture's buildings go up (test fixture):** the env created them finished, so
+  every pool looked finished when placed. Now a drone appears at the spot and starts the
+  building (the env can set a player's money: `Game.set_resources`), and it goes up for its real
+  build time. Numbers on the fixture shift: v0.16 without the next item lost 15 of 144 (Heartbreak
+  Ridge 9).
+- **A pool first that takes its natural (posture v3):** on Heartbreak Ridge, pools at 1:36 with a
+  hatchery at the natural too: the posture waited for one hatchery, and the zerglings came at 3:00
+  to Gary's 1 marine. A pool finished by 2:40 is now an early pool whatever else (pro TvZ: 98% of
+  pool firsts' pools, 0.7% of hatch firsts'; by 2:50 it would be 16% of hatch firsts): lost 13 of
+  144 (15; Heartbreak Ridge 7), the same hatch firsts called early pools.
+- **False alarms on 4-player maps (open):** with buildings going up, Gary plays rush defense
+  against 18 of 30 hatch firsts on Fighting Spirit and 23 of 29 on Python (2 of 23 on Heartbreak
+  Ridge): its scout hasn't found the Zerg by 2:20, and nothing seen is called an early pool.
 - **Most urgently missing:** a hunting army of 70+ crosses the map slowly (scans find the last
   hatcheries at 14-17 min); the army model's fight estimate still sends 8 units out into 14
   zerglings (Python, hatch-first floods at 4:30-5:30: 4 of the 12 losses).

@@ -553,6 +553,15 @@ GARY_API void gary_env_set_upgrade(void* h, int owner, int upgrade, int level) {
 	f.apply_upgrades_to_player_units(owner);
 }
 
+// For test fixtures (gary/bots/zerg_replayed.py): a player's minerals and gas, set outright.
+GARY_API void gary_env_set_resources(void* h, int owner, int minerals, int gas) {
+	auto* e = (env*)h;
+	auto& f = *e->funcs;
+	if (owner < 0 || owner >= 12) return;
+	f.st.current_minerals[owner] = minerals;
+	f.st.current_gas[owner] = gas;
+}
+
 // --- new games from a map --------------------------------------------------------------------
 
 namespace {
