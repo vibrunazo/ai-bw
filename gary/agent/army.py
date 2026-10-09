@@ -11,6 +11,7 @@
   hunt      (option) from 8:00, with 20+ army units and no enemy army seen for a minute, the army
             goes where enemy buildings were seen, then to the bases it hasn't passed lately: the
             model stays near what it knows, and a hatchery Gary never saw outlived the game.
+            With scan, a Comsat Station with energy scans those bases first.
 
 Units in a fight are the fight layer's; the arbiter leaves them out (and the posture can keep the
 army home altogether). Orders are intents (ARMY_MOVE, ARMY_ATTACK, SCOUT, ATTACK_WAVE) that the
@@ -43,6 +44,7 @@ HUNT_AFTER = 8 * 60 * 24            # hunt: from 8:00, with this many army units
 HUNT_ARMY = 20                      # for QUIET, the army goes where enemy buildings were, then to
 QUIET = 60 * 24                     # the bases it hasn't passed lately
 HUNT_FOR = 60 * 24                  # ...each for this long at most
+SCAN_ENERGY = 50                    # hunt with scans: a Comsat Station with this much energy scans a base first
 NOT_ARMY = {35, 36, 41, 42, 7, 64}  # larva, egg, drone, overlord, SCV, probe: not an enemy army
 GONE_PX = 7 * 32                    # an enemy building is gone when Gary's units are this close and don't see it
 VISITED_FOR = 120 * 24              # a base Gary's units passed this recently isn't visited again
@@ -74,8 +76,9 @@ class WaveArmy:
 class LearnedArmy:
     remembers = True                # whatever Gary looks at, the tracker remembers
 
-    def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False):
+    def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False):
         self.g = g
+        self.scan = scan            # option (with hunt): bases are scanned before the army walks there
         self.hunt = hunt            # option: with no enemy building known, the army visits the bases
         self.enemy_buildings: dict[int, tuple[int, int]] = {}   # tag -> where it was seen
         self.enemy_army_seen = 0                                 # frame an enemy fighter was last seen
@@ -210,8 +213,17 @@ class LearnedArmy:
         if f < self.next_hunt:
             return False
         x, y = min(todo, key=lambda p: math.dist(p, (cx, cy)))
-        self.hunted.setdefault((x, y), f)
         self.next_hunt = f + REORDER_AFTER
+        comsat = next((u for u in mine if u["type"] == T.COMSAT and u["completed"] and u.get("energy", 0) >= SCAN_ENERGY), None)
+        if self.scan and comsat is not None and not self.enemy_buildings:
+            # a base not seen lately: a scan first (as pros look for the last buildings), and the army
+            # goes only where it finds something
+            for i, b in enumerate(g.map.bases):
+                if b.center == (x, y):
+                    self.visited[i] = f
+            g.motor.start(Intent("SCAN", [], (x, y), {"comsat": comsat["tag"], "x": x, "y": y}, "army"))
+            return True
+        self.hunted.setdefault((x, y), f)
         what = "where an enemy building was" if self.enemy_buildings else "to a base not seen lately"
         g.say(f"army ({len(army)} units) hunts, no enemy army seen for {(f - self.enemy_army_seen) // 24} s: "
               f"{what}, ({x}, {y})")

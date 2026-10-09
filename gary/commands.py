@@ -90,6 +90,7 @@ LARVA = 35
 
 
 ORDER_ATTACK_MOVE = 0x0E
+ORDER_SCANNER_SWEEP = 0x8B           # a Comsat Station's scan (50 energy)
 MARINE = 0
 REFINERY = 110
 

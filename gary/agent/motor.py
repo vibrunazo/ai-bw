@@ -37,7 +37,7 @@ COMMANDS = {"MOVE", "ATTACK_MOVE", "ATTACK_UNIT", "GATHER", "OWN_UNIT", "STOP", 
 ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT", "BRACE", "REGROUP", "POST", "SKIRMISH"}  # roles.py: carried out as commands
 TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL": "unpull", "LOAD": "load", "UNLOAD": "unload",
            "REPAIR": "repair", "REINFORCE": "reinforce", "ARMY_MOVE": "army_order", "ARMY_ATTACK": "army_order",
-           "SCOUT": "scout", "ATTACK_WAVE": "attack"}
+           "SCOUT": "scout", "ATTACK_WAVE": "attack", "SCAN": "scan"}
 
 
 ENTER_TRANSPORT = 92
@@ -60,7 +60,7 @@ class DirectMotor:
         self.g = g
         g.leases = Leases(g)
         for kind, run in (("fight_cmd", self._run_command), ("pull", self._run_pull), ("unpull", self._run_pull),
-                          ("load", self._run_load), ("unload", self._run_unload), ("repair", self._run_repair), ("reinforce", self._run_reinforce),
+                          ("load", self._run_load), ("unload", self._run_unload), ("scan", self._run_scan), ("repair", self._run_repair), ("reinforce", self._run_reinforce),
                           ("army_order", self._run_army_order), ("scout", self._run_scout),
                           ("attack", self._run_attack_wave)):
             g.task_runners[kind] = run
@@ -325,6 +325,28 @@ class DirectMotor:
                 return
             d["camera_moved"] = True
             g.camera_to(int(d["x"]), int(d["y"]))
+            return
+        hi.click(*p)
+
+    def _run_scan(self, obs: dict, mine: list[dict], t: Task) -> None:
+        """Camera on the Comsat Station if needed, click it, scan (on the minimap)."""
+        g, hi, d = self.g, self.g.hi, t.data
+        comsat = next((u for u in mine if u["tag"] == d["comsat"]), None)
+        if hi.frame - t.started > 24 * 3 or comsat is None:
+            g.task = None
+            return
+        if obs["selection"] == [d["comsat"]]:
+            hi.minimap_command(C.ORDER_SCANNER_SWEEP, d["x"], d["y"])
+            g.say(f"scans ({d['x']}, {d['y']})")
+            g.task = None
+            return
+        p = screen_of(obs, comsat["x"], comsat["y"])
+        if not p:
+            if d.get("camera_moved"):
+                g.task = None
+                return
+            d["camera_moved"] = True
+            g.camera_to(int(comsat["x"]), int(comsat["y"]))
             return
         hi.click(*p)
 

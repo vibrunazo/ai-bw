@@ -113,11 +113,12 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
-    # v0.16: v0.15 whose army hunts once no enemy army has been seen for a minute (army.py hunt)
+    # v0.16: v0.15 whose army hunts once no enemy army has been seen for a minute, scanning the bases
+    # (army.py hunt, scan)
     "v016": {"version": "v0.16", "posture": "early_pool/v2", "leases": "enforced",
              "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
                        "keep_busy": True},
-             "army": {**_ARMY, "hunt": True},
+             "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
@@ -270,6 +271,9 @@ OPTIONS = {
     # won 8 (2), lost 2 (2); to 12:00 on three maps won 4 of 144 (0), lost 14 (14); Zerg v2 (72 seeds)
     # won 2 (0), lost 8 (8). In v0.16
     "hunt": lambda m: m["army"].update(hunt=True),
+    # army.py: the hunt scans bases before walking there: on v0.16 without it, replayed pros on Fighting
+    # Spirit to 18:00 (16 seeds) won 11 (8). In v0.16
+    "scan": lambda m: m["army"].update(scan=True),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)
@@ -360,7 +364,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         else:
             army = load("army", str(model_path(m["army"]["model"])))
             models["army"] = getattr(army, "path", "?")
-            g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None, hunt=m["army"].get("hunt", False))
+            g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None, hunt=m["army"].get("hunt", False),
+                                    scan=m["army"].get("scan", False))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:

@@ -61,13 +61,15 @@ quicker way to a playable Gary.
 
 - **What it is:** v0.15 whose army, from 8:00, with 20+ army units and no enemy army seen for a
   minute, goes where enemy buildings were seen, nearest first, then to the bases its units
-  haven't passed in 2 minutes (`gary/agent/army.py`, hunt; a target not reached in a minute is
-  dropped). The army model is asked again as soon as an enemy army shows up.
+  haven't passed in 2 minutes, scanning them first when a Comsat Station has the energy
+  (`gary/agent/army.py`, hunt and scan; a target not reached in a minute is dropped). The army
+  model is asked again as soon as an enemy army shows up.
 - **Why:** far ahead, the army model stays near what it knows: it goes where enemy buildings
   were ever seen (as it learned), so a hatchery at a base Gary never looked at outlived the game.
   Replayed pros on Fighting Spirit to 18:00: in 12 of 16 games Gary had razed all but 1-4 Zerg
   buildings with a 60-77-unit army, and won 2.
-- **Results:** the same 16 games to 18:00: won 8 (2), lost 2 (2). To 12:00, replayed pros on three
+- **Results:** the same 16 games to 18:00: won 11 (2; 8 hunting without scans), lost 1 (2). To
+  12:00 (hunting without scans, which only change games once the hunt is on), replayed pros on three
   maps won 4 of 144 (0) and lost 14 (14); Zerg v2 (72 seeds) won 2 (0), lost 8 (8): the same lost
   games, which end before the hunt can start.
 - **The pool forgotten (shared code, the early-pool posture):** a pool counted only if in view
@@ -82,8 +84,9 @@ quicker way to a playable Gary.
   test it: the env creates its buildings finished, so every pool there looks finished when placed
   (spawned when finished instead, the scout misses the natural hatchery going up and the false
   alarms move elsewhere). The env needs to create unfinished buildings first.
-- **Most urgently missing:** three of those 16 games still ended with one building left at
-  18:00; Comsat scans (pros' way to find the last buildings) aren't used.
+- **Most urgently missing:** a hunting army of 70+ crosses the map slowly (scans find the last
+  hatcheries at 14-17 min); the army model's fight estimate still sends 8 units out into 14
+  zerglings (Python, hatch-first floods at 4:30-5:30: 4 of the 12 losses).
 
 ### v0.15 (October 2026): bunkers kept manned
 
