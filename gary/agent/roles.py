@@ -113,6 +113,8 @@ SIDEWAYS_PX = 8                      # closer by less than this isn't coming
 LEASH = 5 * 32                       # leash: zerg this close to Gary's buildings may be closed in on
 VOLLEY = 5                           # volley: this many of a closing group in range fire together
 HOLD = 107                           # the hold position order
+ENTER = 92                           # the enter transport (or bunker) order
+LOADING_BY = 3 * 32                  # units this close to one entering a bunker are left alone
 VULTURE = 2
 MELEE = {37, 39}                     # zergling, ultralisk
 KITE_PX = 80                         # kite: melee zerg this close to a vulture
@@ -143,8 +145,10 @@ class RoleRules:
 
     def __init__(self, g, brace: bool = False, leash: bool = False, volley: bool = False, regroup: bool = False,
                  holds: bool = False, kite: bool = False, fire: str = "enemy", post: float | str | None = None,
-                 vultures: bool = False, gap_post: bool = False):
+                 vultures: bool = False, gap_post: bool = False, pull_hp: float = PULL_HP, surround: int = 0):
         self.g = g
+        self.pull_hp = pull_hp                       # pull back: hurt below this share of max HP
+        self.surround = surround                     # ...or this many melee zerg on it (0: off): to the pack
         self.post = post                             # post: tiles from the CC toward the zerg, or "minerals"
         self.vultures = vultures
         self.gap_post = gap_post
@@ -220,6 +224,10 @@ class RoleRules:
 
     def _rules(self, by_tag: dict, mine: list[dict], enemy: list[dict]) -> Intent | None:
         g = self.g
+        # units entering a bunker, and those by them, are left alone (a box around a group by them
+        # would take them too, and its order would call the load off; motor.py checks its boxes too)
+        entering = [(u["x"], u["y"]) for u in by_tag.values() if u["owner"] == g.slot and u.get("order") == ENTER]
+        mine = [u for u in mine if not any(math.dist((u["x"], u["y"]), p) < LOADING_BY for p in entering)]
         if not mine or not enemy:
             return None
         vultures = []
@@ -266,9 +274,13 @@ class RoleRules:
         # pull back: units under attack, hurt, with others firing near them
         targeted = {e.get("order_target") for e in enemy}
         firing = [u for u in mine if u.get("order") in ATTACK]
-        pull = [u for u in mine if u["tag"] in targeted and u.get("hp_max") and u["hp"] < PULL_HP * u["hp_max"]
+        pull = [u for u in mine if u["tag"] in targeted and u.get("hp_max") and u["hp"] < self.pull_hp * u["hp_max"]
                 and any(math.dist((u["x"], u["y"]), (e["x"], e["y"])) < CONTACT for e in enemy)
                 and any(f["tag"] != u["tag"] and math.dist((u["x"], u["y"]), (f["x"], f["y"])) < 4 * 32 for f in firing)]
+        if self.surround:
+            swarmed = self._swarmed(mine, enemy, targeted, pull, now)
+            if swarmed is not None:
+                return swarmed
         if self.kite:
             pull += [u for u in mine if u["type"] == VULTURE and u not in pull and any(
                 e["type"] in MELEE and math.dist((u["x"], u["y"]), (e["x"], e["y"])) < KITE_PX for e in enemy)]
@@ -361,6 +373,28 @@ class RoleRules:
                         self.closing[t] = members
                 return intent
         return None
+
+    def _swarmed(self, mine: list[dict], enemy: list[dict], targeted: set, pull: list[dict], now: int):
+        """Units with self.surround or more melee zerg on them walk to the rest of the pack (the
+        zerg follow into its fire), else straight away from them."""
+        melee = [e for e in enemy if e["type"] in MELEE]
+        swarmed = [u for u in mine if u["tag"] in targeted and u not in pull and u["type"] != VULTURE
+                   and sum(1 for e in melee if math.dist((u["x"], u["y"]), (e["x"], e["y"])) < CONTACT) >= self.surround
+                   and not (self.told.get(u["tag"], ("", -10**9))[0] == "PULL_BACK" and now - self.told[u["tag"]][1] < REPEAT // 2)]
+        if not swarmed:
+            return None
+        group = swarmed[:MAX_GROUP]
+        tags = {u["tag"] for u in group}
+        pack = [u for u in mine if u["tag"] not in tags
+                and all(math.dist((u["x"], u["y"]), (e["x"], e["y"])) >= CONTACT for e in melee)]
+        mid = _mid(group)
+        if pack:
+            friend = min(pack, key=lambda u: math.dist((u["x"], u["y"]), mid))
+            if math.dist((friend["x"], friend["y"]), mid) > CONTACT:
+                return self._intent("PULL_BACK", group, (int(friend["x"]), int(friend["y"])), "move")
+        attackers = [e for e in melee if math.dist(mid, (e["x"], e["y"])) < 2 * CONTACT] or melee
+        point = self._step_away(mid, _mid(attackers), PULL_TILES * 32)
+        return self._intent("PULL_BACK", group, point, "move") if point else None
 
     def _escape(self, frm, threats: list[dict], dist: float, friends):
         """vultures: a walkable point dist away (12 directions) far from the threats and nearer

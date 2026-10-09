@@ -69,6 +69,7 @@ class Gary:
         self.pulled: set[int] = set()                    # workers taken off mining to fight
         self.scout: int | None = None                    # the scouting worker
         self.loaded: dict[int, set[int]] = {}            # bunker tag -> marines Gary sent into it
+        self.loading = (0, 0, 0)                         # a load just ordered: (until frame, bunker x, y)
         self.macro_turn = False                          # production's turn, after a fight command
         # When zerg fighters were last near a Command Center. One clock shared by the worker pull
         # (calm 5 s: pulled workers go back) and v0.9's posture (calm 20 s: the rush build ends),

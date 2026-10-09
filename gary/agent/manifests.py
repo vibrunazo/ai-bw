@@ -235,6 +235,10 @@ OPTIONS = {
     "natbunker": lambda m: m["macro"].update(natural_bunker=True),
     "simcity": lambda m: m.update(simcity=True),
     "simcity_closed": lambda m: m.update(simcity=True, simcity_door=0),   # ...closed
+    # roles.py, pros' marines move 20% of the time a zerg is in range, Gary's 6%: on v0.14 [239]
+    "surround2": _roles(surround=2),        # units with 2+ melee zerg on them walk to the pack -17 ± 6
+    "surround3": _roles(surround=3),        # ...3+                                              -6 ± 3
+    "pull75": _roles(pull_hp=0.75),         # pull back below 75% HP (not 50%)                  -5 ± 2
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)

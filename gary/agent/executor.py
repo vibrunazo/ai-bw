@@ -706,7 +706,8 @@ class ScriptedExecutor:
                 g.task = None
             return
         workers = [u for u in mine if self.free_worker(obs, u) and u["order"] not in T.GAS_ORDERS]
-        if not workers:
+        if not workers:                         # (asked again every turn, it took Gary's hands for good)
+            g.ignore_idle_until[d["tag"]] = hi.frame + 24 * 20
             g.task = None
             return
         w = min(workers, key=lambda u: math.dist((u["x"], u["y"]), (ref["x"], ref["y"])))

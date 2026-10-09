@@ -40,6 +40,11 @@ TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL
            "SCOUT": "scout", "ATTACK_WAVE": "attack"}
 
 
+ENTER_TRANSPORT = 92
+LOADING_FOR = 36                     # a load's marines are left alone this long...
+LOADING_NEAR = 5 * 32                # ...those this close to its bunker
+
+
 def box_around(hi, pts: list[tuple[int, int]], m: int) -> None:
     hi.box(max(0, min(p[0] for p in pts) - m), max(0, min(p[1] for p in pts) - m),
            min(hi.p.viewport[0] - 1, max(p[0] for p in pts) + m), min(hi.p.viewport[1] - 1, max(p[1] for p in pts) + m))
@@ -69,6 +74,23 @@ class DirectMotor:
         g.task = Task(TASK_OF[intent.kind], data=intent.params, started=g.hi.frame, intent=intent)
 
     # --- the fight model's commands -------------------------------------------------------------
+
+    def _box_takes_loading(self, obs: dict, mine: list[dict], pts: list, want: set) -> bool:
+        """Would a box around pts (screen) also take a unit of Gary's that is entering a bunker?"""
+        x0, y0 = min(p[0] for p in pts) - BOX_MARGIN - 8, min(p[1] for p in pts) - BOX_MARGIN - 8
+        x1, y1 = max(p[0] for p in pts) + BOX_MARGIN + 8, max(p[1] for p in pts) + BOX_MARGIN + 8
+        until, bx, by = self.g.loading
+        if self.g.hi.frame < until:                # (what Gary sees is a moment old: the load's own marines)
+            for u in mine:
+                p = screen_of(obs, u["x"], u["y"])
+                if u["type"] == T.MARINE and p and x0 <= p[0] <= x1 and y0 <= p[1] <= y1                         and math.dist((u["x"], u["y"]), (bx, by)) < LOADING_NEAR:
+                    return True
+        for u in mine:
+            if u.get("order") == ENTER_TRANSPORT and u["tag"] not in want:
+                p = screen_of(obs, u["x"], u["y"])
+                if p and x0 <= p[0] <= x1 and y0 <= p[1] <= y1:
+                    return True
+        return False
 
     def _run_command(self, obs: dict, mine: list[dict], t: Task) -> None:
         g = self.g
@@ -106,7 +128,11 @@ class DirectMotor:
                     t.stage = "order"
                     return
                 # a generous box: units move while Gary reacts (what it sees is 0.3 s old)
-                box_around(hi, [screen_of(obs, u["x"], u["y"]) for u in on_screen], BOX_MARGIN)
+                pts = [screen_of(obs, u["x"], u["y"]) for u in on_screen]
+                if self._box_takes_loading(obs, mine, pts, want):
+                    g.task = None                        # (its order would call the load off)
+                    return
+                box_around(hi, pts, BOX_MARGIN)
                 t.stage = "order"
                 return
         if not sel & want:
@@ -275,6 +301,7 @@ class DirectMotor:
             return
         if chosen and p:
             hi.right_click(*p)
+            g.loading = (hi.frame + LOADING_FOR, d["x"], d["y"])
             g.loaded.setdefault(d["bunker"], set()).update(chosen)
             g.leases.take(chosen, t.intent)
             g.say(f"loads {len(chosen)} marine{'s' * (len(chosen) != 1)} into the bunker")
