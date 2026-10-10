@@ -26,8 +26,8 @@ from gary.policy.roles import DECISIONS, EXTRA, MAX_UNITS
 
 def _job(args: tuple) -> dict:
     from eval.scenarios import run_one
-    sc, version, seconds = args
-    row = run_one(sc, "gary", seconds, version, 1, sample_seed=0)
+    sc, version, seconds, hands = args
+    row = run_one(sc, "gary", seconds, version, 1, sample_seed=0, hands_seed=1 + hands)
     return {"sha1": sc["sha1"], "error": row.get("error"), "log": row.get("log", [])}
 
 
@@ -37,13 +37,15 @@ def main() -> None:
     ap.add_argument("--split", default="train", choices=["train", "test"])
     ap.add_argument("--parallel", type=int, default=16)
     ap.add_argument("--seconds", type=float, default=45, help="how long each scenario plays")
+    ap.add_argument("--draws", type=int, default=1, help="plays of each, Gary's hands seeded apart (more varied data)")
     ap.add_argument("--out", help="default: data/interim/roles/distill_<split>.npz")
     args = ap.parse_args()
     from eval.scenarios import scenarios_path
     from ingest.inventory import data_root
     scs = [json.loads(line) for line in scenarios_path(args.split).read_text(encoding="utf-8").splitlines()]
     with ProcessPoolExecutor(args.parallel) as pool:
-        results = list(pool.map(_job, [(sc, args.version, args.seconds) for sc in scs], chunksize=1))
+        results = list(pool.map(_job, [(sc, args.version, args.seconds, h) for sc in scs for h in range(args.draws)],
+                                chunksize=args.draws))
     turns = [(gi, d) for gi, r in enumerate(results) for d in r["log"] if len(d["rows"]) and d["units"]]
     n = len(turns)
     rows = np.zeros((n, MAX_UNITS, 11), np.int16)

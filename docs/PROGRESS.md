@@ -89,6 +89,19 @@ quicker way to a playable Gary.
   back to the pack, `regroup`: Zerg v2 lost 12-14 of 72, v0.17 9). This is the fight and army
   decisions' job, and the measure (share of deaths alone, pros 12%) is the yardstick for a learned
   one.
+- **The learned fight decision, steps 1-2 (2026-10-10 night):** defense episodes
+  (`eval/episodes.py`: the home defenses for 120 s, new units joining; v0.17 −49, deaths alone
+  39%, pro 20%; the hand-rule variants paired with v0.17 as in games: regroup −12.6 ± 8.8,
+  reinforce_pack −0.4 ± 3.4, deaths alone unchanged). The role model got post/join/hold and per-unit
+  age, distance to Gary's biggest bunch, its size. v0.17's rules distilled into it (one draw of the
+  552 training episodes): 88% of decisions, but in play −72 on the held-out episodes (−49) and −177
+  on RL's validation episodes (rules −120); RL from there flat after 10 rounds (−174, stopped).
+  A learned override of the rules instead (per unit join, hold, or the rules; RoleOverride,
+  `v017override`, `train/roles_rl.py --override`): it starts as the rules (−127), and 60 rounds of
+  RL ended where it started (−124); the drawn override probabilities went down (join 3.6% → 3.0%,
+  hold 3.6% → 2.6%, also for new units far from the bunch): RL too found holding new units back
+  doesn't pay, the third sign after the two rule variants. Next: a closer copy of the rules (four
+  draws per episode, a bigger network) to start RL on the whole decision from the rules' level.
 
 ### v0.17 (October 2026): no early pool from nothing seen at 2:20
 
