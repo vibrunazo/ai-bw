@@ -64,9 +64,9 @@ class Deaths:
 
 
 def job(args: tuple) -> dict:
-    sc, controller, seconds, version, hands = args
+    sc, controller, seconds, version, hands, fight = args
     hook = Deaths()
-    r = run_one(sc, controller, seconds, version, 1, on_step=hook, hands_seed=hands)
+    r = run_one(sc, controller, seconds, version, 1, on_step=hook, hands_seed=hands, fight_path=fight)
     return {"sha1": sc["sha1"][:8], "who": controller if controller != "gary" else version, "hands": hands,
             "net": r.get("net"), "scvs": r.get("T_workers_lost"), "error": r.get("error"), "deaths": hook.rows}
 
@@ -104,17 +104,20 @@ def main() -> None:
     ap.add_argument("--seconds", type=float, default=120)
     ap.add_argument("--draws", type=int, default=4, help="Gary's hands, seeded differently")
     ap.add_argument("--no-pro", action="store_true", help="skip the pro and nothing controllers")
+    ap.add_argument("--fight-model", nargs="+", default=[],
+                    help="per version, its fight (role) model, \"-\" for the manifest's (e.g. - runs/roles_rl/<run>/model.pt)")
     ap.add_argument("--parallel", type=int, default=8)
     ap.add_argument("--out", help="write every row (with its deaths) to this JSON file")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
     scs = [json.loads(line) for line in scenarios_path(args.split).read_text(encoding="utf-8").splitlines()][:args.run]
+    fights = dict(zip(args.versions, [None if f == "-" else f for f in args.fight_model]))
     jobs = []
     for sc in scs:
         if not args.no_pro:
-            jobs += [(sc, "pro", args.seconds, args.versions[0], 1), (sc, "nothing", args.seconds, args.versions[0], 1)]
-        jobs += [(sc, "gary", args.seconds, v, 1 + h) for v in args.versions for h in range(args.draws)]
+            jobs += [(sc, "pro", args.seconds, args.versions[0], 1, None), (sc, "nothing", args.seconds, args.versions[0], 1, None)]
+        jobs += [(sc, "gary", args.seconds, v, 1 + h, fights.get(v)) for v in args.versions for h in range(args.draws)]
     with ProcessPoolExecutor(args.parallel) as pool:
         per = max(1, len(jobs) // max(1, len(scs)))           # a scenario's plays on one worker (its game reused)
         rows = list(pool.map(job, jobs, chunksize=per))
