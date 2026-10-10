@@ -27,7 +27,8 @@ import numpy as np
 from gary import terran as T
 from gary.agent.gary import Gary
 from gary.agent.intents import Intent
-from gary.policy.army import GRID, ArmyModel, ArmyTracker, is_building
+from gary.policy.army import GRID, ArmyModel, ArmyTracker, is_building, supply_x2
+from gary.policy.belief import ARMY_SUPPLY
 
 WAVE = 16
 ASK_EVERY = 24 * 2                  # how often Gary asks the model about its army
@@ -47,6 +48,7 @@ HUNT_AFTER = 8 * 60 * 24            # hunt: from 8:00, with this many army units
 HUNT_ARMY = 20                      # for QUIET, the army goes where enemy buildings were, then to
 QUIET = 60 * 24                     # the bases it hasn't passed lately
 HUNT_FOR = 60 * 24                  # ...each for this long at most
+HOME_PX = 12 * 32                   # belief: destinations this close to a Command Center are home
 SCAN_ENERGY = 50                    # hunt with scans: a Comsat Station with this much energy scans a base first
 NOT_ARMY = {35, 36, 41, 42, 7, 64}  # larva, egg, drone, overlord, SCV, probe: not an enemy army
 GONE_PX = 7 * 32                    # an enemy building is gone when Gary's units are this close and don't see it
@@ -79,8 +81,12 @@ class WaveArmy:
 class LearnedArmy:
     remembers = True                # whatever Gary looks at, the tracker remembers
 
-    def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False):
+    def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False, belief=None,
+                 belief_total: bool = False):
         self.g = g
+        self.belief_total = belief_total   # belief: compare with all the enemy army it likely has, seen or not
+        self.belief = belief        # option: the belief model (gary/policy/belief.py): hold groups the
+        self.belief_mem = belief.memory() if belief is not None else None   # hidden enemy army outweighs
         self.scan = scan            # option (with hunt): bases are scanned before the army walks there
         self.hunt = hunt            # option: with no enemy building known, the army visits the bases
         self.enemy_buildings: dict[int, tuple[int, int]] = {}   # tag -> where it was seen
@@ -107,6 +113,12 @@ class LearnedArmy:
 
     def remember(self, obs: dict) -> None:
         self.tracker.remember(obs)
+        if self.belief_mem is not None:
+            seen = np.zeros(228, np.float32)
+            for u in obs["units"]:
+                if u["owner"] not in (self.g.slot, 11) and 0 <= u["type"] < 228:
+                    seen[u["type"]] += 1
+            self.belief_mem.look(obs["frame"], seen)
 
     def _clusters(self, army: list[dict]) -> list[list[dict]]:
         """The army split by where it stands: up to 3 clusters (the main army, reinforcements on
@@ -175,6 +187,15 @@ class LearnedArmy:
                       f"looks like {go:+.0%} army share, staying {stay:+.0%}")
             self.held[here] = best
             return None
+        hidden = self._hidden_army(obs, mine, best)
+        if hidden is not None and hidden > sum(supply_x2(u["type"]) for u in group):
+            # the fight estimate knows only the enemy army seen lately; the belief model, what the
+            # enemy likely has (its 80th percentile): out there unseen, more than this group
+            if self.held.get(here, -1) != best:
+                g.say(f"army ({len(group)} units) holds: going to {self.tracker.center(best)}, the zerg likely "
+                      f"has {hidden / 2:.0f} supply more army than seen")
+            self.held[here] = best
+            return None
         self.held.pop(here, None)
         x, y = self.tracker.center(best)
         self.ordered[here] = (best, attack, hi.frame)
@@ -182,6 +203,23 @@ class LearnedArmy:
                              {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": p_away,
                               "fight": go, "done": [], "boxes": 0}, "army"))
         return "army"
+
+    def _hidden_army(self, obs: dict, mine: list[dict], dest: int) -> float | None:
+        """With the belief model, for a destination away from Gary's bases: the enemy army supply x2
+        Gary likely hasn't seen (the belief's 80th percentile less the most seen at once in the
+        last 3 minutes); None otherwise."""
+        if self.belief is None:
+            return None
+        x, y = self.tracker.center(dest)
+        if any(u["type"] == T.CC and math.dist((u["x"], u["y"]), (x, y)) < HOME_PX for u in mine):
+            return None
+        workers = sum(1 for u in mine if u["type"] == T.SCV)
+        b = self.belief.predict(self.belief_mem.vector(obs["frame"], obs["me"]["supply_used"] * 2, workers))
+        known = 0.0
+        if self.tracker.seen_hist and not self.belief_total:
+            most = np.max([a for _, a in self.tracker.seen_hist], axis=0)
+            known = sum(most[t] * s for t, s in ARMY_SUPPLY[self.belief.enemy].items())
+        return max(0.0, b["q80"] - known)
 
     def _hunt(self, obs: dict, mine: list[dict], done: list[dict]) -> bool | None:
         """The army model can sit far ahead with nothing left to fight (a hatchery at a base Gary

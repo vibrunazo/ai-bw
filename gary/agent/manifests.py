@@ -202,7 +202,8 @@ def latest_role_model() -> Path:
 
 MODEL_PATHS = {"roles/latest": latest_role_model, "macro/latest": latest_macro_model, "army/latest": latest_army_model,
                "fight/latest": latest_fight_model, "fight_cmd/latest": lambda: latest_command_model(False),
-               "fight_cmd/latest_memory": lambda: latest_command_model(True), "fight_cmd_rl/v08": latest_rl_fight_model}
+               "fight_cmd/latest_memory": lambda: latest_command_model(True), "fight_cmd_rl/v08": latest_rl_fight_model,
+               "belief/latest": lambda: _newest("belief")}
 
 
 def model_path(ref: str) -> Path:
@@ -280,6 +281,13 @@ OPTIONS = {
     # won 8 (2), lost 2 (2); to 12:00 on three maps won 4 of 144 (0), lost 14 (14); Zerg v2 (72 seeds)
     # won 2 (0), lost 8 (8). In v0.16
     "hunt": lambda m: m["army"].update(hunt=True),
+    # army.py: groups going away from home hold when the belief model's likely unseen enemy army
+    # (gary/policy/belief.py, 80th percentile less what was seen in 3 min) outweighs them. On v0.17,
+    # replayed pros on three maps lost 12 of 144 (11); it held 637 times. Not adopted
+    "belief": lambda m: m["army"].update(belief="belief/latest"),
+    # ...against all the enemy army it likely has, not only what wasn't seen (what was seen may be
+    # dead): lost 13 of 144 (11), held 854 times. Not adopted
+    "belief_total": lambda m: m["army"].update(belief="belief/latest", belief_total=True),
     # army.py: the hunt scans bases before walking there: on v0.16 without it, replayed pros on Fighting
     # Spirit to 18:00 (16 seeds) won 11 (8). In v0.16
     "scan": lambda m: m["army"].update(scan=True),
@@ -378,8 +386,14 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         else:
             army = load("army", str(model_path(m["army"]["model"])))
             models["army"] = getattr(army, "path", "?")
+            belief = None
+            if m["army"].get("belief"):
+                from gary.policy.belief import BeliefModel
+                belief = BeliefModel.load(model_path(m["army"]["belief"]))
+                models["belief"] = belief.path
             g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None, hunt=m["army"].get("hunt", False),
-                                    scan=m["army"].get("scan", False))
+                                 scan=m["army"].get("scan", False), belief=belief,
+                                 belief_total=m["army"].get("belief_total", False))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:

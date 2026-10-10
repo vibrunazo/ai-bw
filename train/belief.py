@@ -43,28 +43,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
 sys.path.insert(0, str(REPO_ROOT))
 from inventory import data_root  # noqa: E402
+from gary.policy.belief import (ARMY_SUPPLY, ENEMY_TYPES, TOWN_HALLS, WINDOWS, WORKERS,  # noqa: E402
+                                BeliefNet, features_series)
 
 SAMPLE_EVERY = 10                       # seconds between samples
 START, END = 60, 20 * 60                # seconds of game time sampled
-WINDOWS = (30, 90, 180)                 # "most in sight at once" over these many seconds
-RACE_ID = {"T": "T", "Z": "Z", "P": "P"}
-# the enemy's types the inputs cover (by race), and the army types the targets count, with
-# supply x2 (BW counts half supply)
-ENEMY_TYPES = {
-    "Z": [37, 38, 39, 41, 42, 43, 44, 45, 46, 47, 62, 103, 131, 132, 133, 135, 136, 137, 138, 139, 140,
-          141, 142, 143, 144, 146, 149],
-    "T": [0, 1, 2, 3, 5, 7, 8, 9, 11, 12, 30, 32, 34, 58, 106, 107, 109, 110, 111, 112, 113, 114, 115,
-          116, 117, 120, 122, 123, 124, 125],
-    "P": [61, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 83, 84, 154, 155, 156, 157, 159, 160, 162, 163, 164,
-          165, 166, 167, 169, 170, 171, 172],
-}
-ARMY_SUPPLY = {  # supply x2
-    "Z": {37: 1, 38: 2, 39: 8, 43: 4, 44: 4, 45: 4, 46: 4, 47: 1, 62: 4, 103: 4},
-    "T": {0: 2, 1: 2, 2: 4, 3: 4, 5: 4, 30: 4, 8: 4, 9: 4, 11: 4, 12: 12, 32: 2, 34: 2, 58: 4},
-    "P": {65: 4, 66: 4, 61: 4, 67: 8, 68: 8, 63: 4, 70: 6, 71: 4, 72: 12, 83: 8, 60: 4},
-}
-WORKERS = {"Z": 41, "T": 7, "P": 64}
-TOWN_HALLS = {"Z": (131, 132, 133), "T": (106,), "P": (154,)}
 DANGER = 16                             # supply x2: the enemy has this much more army than believed
 QUANTILES = (0.5, 0.8)                  # army supply quantiles the model also predicts
 SUP_SCALE = 100.0                       # army supply x2 is predicted divided by this
@@ -81,34 +64,6 @@ def targets_of(units: np.ndarray, enemy: str) -> np.ndarray:
     return np.stack(cols, 1).astype(np.float32)
 
 
-def features(seen: np.ndarray, own_units: np.ndarray, eco: np.ndarray, frames: np.ndarray,
-             enemy: str, own: str) -> np.ndarray:
-    """(T, F) inputs for every second of one player's game: seen (T, 228) the enemy in sight each
-    second; own_units (T, 228); eco (T, 4)."""
-    types = ENEMY_TYPES[enemy]
-    s = seen[:, types].astype(np.float32)                    # (T, k)
-    T = len(s)
-    cols = [frames[:, None] / (24 * 600.0), np.log1p(s)]
-    for w in WINDOWS:
-        m = np.zeros_like(s)
-        for t in range(T):
-            m[t] = s[max(0, t - w + 1):t + 1].max(0)
-        cols.append(np.log1p(m))
-    cols.append(np.log1p(np.maximum.accumulate(s, axis=0)))
-    army = np.array([t in ARMY_SUPPLY[enemy] for t in types])
-    any_army = s[:, army].sum(1) > 0
-    since = np.zeros(T, np.float32)
-    last = -10 ** 6
-    for t in range(T):
-        if any_army[t]:
-            last = t
-        since[t] = min(t - last, 600)
-    cols.append(since[:, None] / 600.0)
-    cols.append(eco[:, 2:3] / 400.0)                         # own supply used x2
-    cols.append(own_units[:, WORKERS[own]:WORKERS[own] + 1].astype(np.float32) / 80.0)
-    return np.concatenate(cols, 1).astype(np.float32)
-
-
 def load_game(args: tuple) -> tuple | None:
     path, i, enemy, own, out = args
     try:
@@ -118,7 +73,7 @@ def load_game(args: tuple) -> tuple | None:
     frames = d["frames"]
     if len(frames) < START + SAMPLE_EVERY:
         return None
-    X = features(d["seen"][:, i], d["units"][:, i, :, 0], d["eco"][:, i], frames, enemy, own)
+    X = features_series(d["seen"][:, i], d["units"][:, i, :, 0], d["eco"][:, i], frames, enemy, own)
     Y = targets_of(d["units"][:, 1 - i, :, 0], enemy)
     # baseline: most in sight at once over the last 3 minutes, as army supply
     sup = np.array([ARMY_SUPPLY[enemy][t] for t in ARMY_SUPPLY[enemy]], np.float32)
@@ -141,16 +96,6 @@ def jobs_for(race: str) -> list[tuple]:
                 if p["race"] == race and r["players"][1 - i]["race"] == enemy:
                     jobs.append((str(root / r["sha1"][:2] / f"{r['sha1']}.npz"), i, enemy, race, held_out(r["sha1"])))
     return jobs
-
-
-class BeliefNet(nn.Module):
-    def __init__(self, n_in: int, n_out: int, hidden: int = 256):
-        super().__init__()
-        self.net = nn.Sequential(nn.Linear(n_in, hidden), nn.ReLU(), nn.Linear(hidden, hidden), nn.ReLU(),
-                                 nn.Linear(hidden, n_out))
-
-    def forward(self, x):
-        return self.net(x)
 
 
 def army_supply(counts: np.ndarray, enemy: str) -> np.ndarray:

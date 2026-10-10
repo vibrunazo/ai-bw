@@ -72,7 +72,14 @@ quicker way to a playable Gary.
   "what was in sight over the last 3 minutes" (about what the fight estimate uses) and 7.1 for
   "the average for the game time"; the Zerg has 8+ supply more than believed in 11.9% of samples
   (15.9%), at 6-10 min 8.0% (15.2%); with the 80th percentile, 4.0% (6-10 min 1.9%), believing 5
-  supply more than there is on average. Not used in play yet.
+  supply more than there is on average.
+- **First use, not adopted:** groups the army model sends away from home hold when the belief's
+  likely enemy army (80th percentile; less what was seen in 3 minutes, or all of it) outweighs
+  them (`gary/policy/belief.py` keeps the same inputs during play; options `belief`,
+  `belief_total`). Replayed pros on three maps lost 12 and 13 of 144 (v0.17 11), holding 637 and
+  854 times; on Python Gary's army at 8:00 stays 2-5 alive of ~20 built either way: the excursions
+  into unseen zerglings explained the games looked at, not the losses. Where the army dies on
+  Python is the next question.
 
 ### v0.17 (October 2026): no early pool from nothing seen at 2:20
 
