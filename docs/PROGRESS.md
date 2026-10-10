@@ -57,6 +57,23 @@ quicker way to a playable Gary.
 
 ## Versions
 
+### Next: the belief model (started)
+
+- **What it is:** a learned estimate of the enemy's army from what the player has seen of it
+  (`train/belief.py`; the first piece of the opponent model, ARCHITECTURE.md §6.9). Inputs: game
+  time, each enemy type in sight now and the most at once over the last 30 s, 90 s, 3 min and
+  ever, seconds since an enemy army unit was in sight, own supply and workers. Outputs: the enemy's
+  counts of each army type, workers and town halls (unbiased expectations) and its army supply's
+  median and 80th percentile. Trained on the macro training set (every second of 14,130 pro TvZ
+  games: both players' real units and what each could see), Terran's point of view.
+- **Why:** the army model's fight estimate knows only the enemy army seen lately, so it takes
+  the fog for empty (on Python, 8 units walked out into 14 zerglings nobody had seen: +1%).
+- **Results (held-out games, the Zerg's army supply):** off by 5.3 on average against 6.5 for
+  "what was in sight over the last 3 minutes" (about what the fight estimate uses) and 7.1 for
+  "the average for the game time"; the Zerg has 8+ supply more than believed in 11.9% of samples
+  (15.9%), at 6-10 min 8.0% (15.2%); with the 80th percentile, 4.0% (6-10 min 1.9%), believing 5
+  supply more than there is on average. Not used in play yet.
+
 ### v0.17 (October 2026): no early pool from nothing seen at 2:20
 
 - **What it is:** v0.16 whose posture (v4) calls nothing seen an early pool only at 2:50, not
