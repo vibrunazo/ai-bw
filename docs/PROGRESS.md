@@ -78,8 +78,17 @@ quicker way to a playable Gary.
   them (`gary/policy/belief.py` keeps the same inputs during play; options `belief`,
   `belief_total`). Replayed pros on three maps lost 12 and 13 of 144 (v0.17 11), holding 637 and
   854 times; on Python Gary's army at 8:00 stays 2-5 alive of ~20 built either way: the excursions
-  into unseen zerglings explained the games looked at, not the losses. Where the army dies on
-  Python is the next question.
+  into unseen zerglings explained the games looked at, not the losses.
+- **Where Gary's army dies (Python, 48 games, to 10:00):** 51% by a Command Center, 27% within 25
+  tiles of one, 12% out on the map; 70% attacking. Against pro Terrans' deaths in fights there
+  (451): alone (no other own fighter within 6 tiles) 48% (pros 12%), outnumbered 2:1 or worse 53%
+  (29%), the fight around it 2 against 3 (6 against 7). Those dying alone are new: 13 s old
+  (median), 62% under 20 s; last ordered by the fight roles (fire 39%, close in 23%) or the
+  reinforce rule (18%): during a fight at home, each marine out of a Barracks goes in alone. Hand
+  rules against it did worse (new fighters to the nearest bunch, `reinforce_pack`; loose units
+  back to the pack, `regroup`: Zerg v2 lost 12-14 of 72, v0.17 9). This is the fight and army
+  decisions' job, and the measure (share of deaths alone, pros 12%) is the yardstick for a learned
+  one.
 
 ### v0.17 (October 2026): no early pool from nothing seen at 2:20
 

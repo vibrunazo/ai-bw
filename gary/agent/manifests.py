@@ -295,6 +295,10 @@ OPTIONS = {
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
     # firsts called early pools. In v0.16
     "pool_sure": lambda m: m.update(posture="early_pool/v3"),
+    # fight.py: new fighters join Gary's nearest bunch of fighters, not the zerg directly. On v0.17:
+    # Python (48 seeds) lost 5 (5); Zerg v2 (72) lost 13 (9); with regroup too 5 and 14 (regroup
+    # alone 5 and 12). Not adopted
+    "reinforce_pack": lambda m: m["fight"].setdefault("rule_options", {}).update(reinforce={"to_pack": True}),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)

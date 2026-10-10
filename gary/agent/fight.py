@@ -73,6 +73,7 @@ REPAIR_ORDER = 34
 REPAIRERS = 2
 REPAIR_THREAT = 9 * 32               # zerglings this close to the bunker: repair it
 HOME = 12 * 32                       # zerg fighters this close to a Command Center or bunker: at home
+PACK_PX, PACK_MIN = 4 * 32, 3        # reinforce to_pack: fighters with this many (itself too) this close
 UNLOAD_CLEAR = 12 * 32               # unload: no enemy fighter this close to the bunker
 UNLOAD_EVERY = 24 * 10
 
@@ -479,12 +480,16 @@ class RepairRule:
 
 class ReinforceRule:
     """Fighters just out of a Barracks while zerg fighters are at the base: attack-move them to
-    the fight (on the minimap). The rally is a plain move, and a moving marine doesn't shoot."""
+    the fight (on the minimap). The rally is a plain move, and a moving marine doesn't shoot.
+    Option to_pack: to Gary's nearest bunch of fighters instead, when there is one (one by one into
+    the zerg, they died alone: in 48 games on Python, 48% of Gary's army deaths had no other of its
+    fighters within 6 tiles, pros' 12%; those were 13 s old, median)."""
 
     name = "reinforce"
 
-    def __init__(self, g: Gary):
+    def __init__(self, g: Gary, to_pack: bool = False):
         self.g = g
+        self.to_pack = to_pack
         self.known: set[int] | None = None       # fighters Gary has seen
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
@@ -501,6 +506,11 @@ class ReinforceRule:
             return False
         cx, cy = sum(u["x"] for u in new) / len(new), sum(u["y"] for u in new) / len(new)
         target = min(at_home, key=lambda e: math.dist((e["x"], e["y"]), (cx, cy)))
+        if self.to_pack:
+            old = [u for u in army if u["tag"] not in {n["tag"] for n in new}]
+            packed = [u for u in old if sum(1 for v in old if math.dist((u["x"], u["y"]), (v["x"], v["y"])) < PACK_PX) >= PACK_MIN]
+            if packed:
+                target = min(packed, key=lambda u: math.dist((u["x"], u["y"]), (target["x"], target["y"])))
         g.motor.start(Intent("REINFORCE", [u["tag"] for u in new], (target["x"], target["y"]),
                              {"tags": [u["tag"] for u in new], "x": target["x"], "y": target["y"]}, "rule:reinforce"))
         return True
