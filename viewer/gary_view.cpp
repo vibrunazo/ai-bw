@@ -98,13 +98,35 @@ struct data_loader {
 };
 
 // One line of a POV log: {"frame": F, "camera": [x, y], "cursor": [x, y], "click": "left"|"right"|null,
-// "at": [x, y] (a minimap click: where on the screen)}
+// "at": [x, y] (a minimap click: where on the screen), "sel": [tags] (the selection, when it changed),
+// "cmd": {"kind": "move"|"attack"|"amove"|"gather"|"hold"|"stop"|..., "x": X, "y": Y, "target": tag}}
 struct pov_entry {
 	int frame;
 	int cam_x, cam_y, cur_x, cur_y;
 	int click;  // 0 none, 1 left, 2 right
 	int at_x = -1, at_y = -1;
+	bool has_sel = false;
+	std::vector<int> sel;
+	std::string cmd;  // the command's kind ("" none)
+	int cmd_x = -1, cmd_y = -1, cmd_target = 0;
 };
+
+// The integers of the JSON array after "key" ([1, 2, 3]).
+std::vector<int> json_ints_after(const std::string& line, const char* key) {
+	std::vector<int> out;
+	size_t p = line.find(key);
+	if (p == std::string::npos) return out;
+	p = line.find('[', p);
+	size_t e = line.find(']', p);
+	if (p == std::string::npos || e == std::string::npos) return out;
+	for (size_t i = p + 1; i < e;) {
+		while (i < e && (line[i] == ' ' || line[i] == ',')) ++i;
+		if (i >= e) break;
+		out.push_back(atoi(line.c_str() + i));
+		while (i < e && line[i] != ',') ++i;
+	}
+	return out;
+}
 
 int json_int_after(const std::string& line, const char* key, int index = 0) {
 	size_t p = line.find(key);
@@ -160,12 +182,25 @@ pov_log load_pov(const std::string& path) {
 			e.at_x = json_int_after(line, "\"at\"", 0);
 			e.at_y = json_int_after(line, "\"at\"", 1);
 		}
+		if (line.find("\"sel\"") != std::string::npos) {
+			e.has_sel = true;
+			e.sel = json_ints_after(line, "\"sel\"");
+		}
+		size_t c = line.find("\"cmd\"");
+		if (c != std::string::npos) {
+			std::string rest = line.substr(c);
+			e.cmd = json_str_after(rest, "\"kind\"");
+			e.cmd_x = json_int_after(rest, "\"x\"");
+			e.cmd_y = json_int_after(rest, "\"y\"");
+			e.cmd_target = json_int_after(rest, "\"target\"");
+		}
 		out.entries.push_back(e);
 	}
 	return out;
 }
 
 constexpr int click_mark_frames = 24;  // a click stays marked for a second of game time
+constexpr int command_frames = 36;     // a command's line to its target stays a second and a half
 constexpr int console_h = 80;          // the console strip below a 640x400 view (a 640x480 screen)
 
 // A 3x5 pixel font for the resource counts: digits and '/', one row per byte (3 low bits).
@@ -188,6 +223,9 @@ struct pov_ui : scr_replay<ui_functions> {
 	std::vector<mark> marks;
 	int view_h = 0;                         // the game view's height; below it, the console strip
 	int minimap_x = -1, minimap_y = -1;
+	std::vector<int> selection;             // the player's selected units (tags), as the POV log says
+	struct order_mark { std::string kind; int x, y, target, age; std::vector<int> units; };
+	std::vector<order_mark> orders;         // recent commands to the selection
 
 	using scr_replay<ui_functions>::scr_replay;
 
@@ -204,6 +242,27 @@ struct pov_ui : scr_replay<ui_functions> {
 		cursor_y = e.cur_y;
 		cursor_click = 0;
 		marks.clear();
+		selection.clear();
+		for (size_t j = i + 1; j-- > 0;) {
+			if (pov[j].has_sel) {
+				selection = pov[j].sel;
+				break;
+			}
+		}
+		orders.clear();
+		{
+			std::vector<int> sel_then = selection;  // the selection as it was at each command
+			for (size_t j = i + 1; j-- > 0 && pov[j].frame > now - command_frames;) {
+				if (!pov[j].cmd.empty()) orders.push_back({pov[j].cmd, pov[j].cmd_x, pov[j].cmd_y, pov[j].cmd_target,
+				                                            now - pov[j].frame, sel_then});
+				if (pov[j].has_sel) {
+					for (size_t k = j; k-- > 0;) {
+						if (pov[k].has_sel) { sel_then = pov[k].sel; break; }
+						if (k == 0) sel_then.clear();
+					}
+				}
+			}
+		}
 		for (size_t j = i + 1; j-- > 0 && pov[j].frame > now - click_mark_frames;) {
 			const auto& c = pov[j];
 			if (!c.click) continue;
@@ -293,6 +352,60 @@ struct pov_ui : scr_replay<ui_functions> {
 		};
 		const uint8_t white = nearest_color(255, 255, 255), black = nearest_color(0, 0, 0);
 		const uint8_t green = nearest_color(40, 255, 40), red = nearest_color(255, 40, 40);
+		const uint8_t orange = nearest_color(255, 150, 30), yellow = nearest_color(255, 230, 60);
+		auto ellipse = [&](int cx, int cy, int rx, int ry, uint8_t c) {
+			for (int a = 0; a != 120; ++a) {
+				double t = a * 3.14159265 / 60;
+				put(cx + (int)lround(rx * cos(t)), cy + (int)lround(ry * sin(t)), c);
+			}
+		};
+		auto unit_screen = [&](int tag, int& sx, int& sy, int& r) {
+			unit_t* u = get_unit(unit_id((uint16_t)tag));
+			if (!u || !u->sprite || us_hidden(u)) return false;
+			sx = u->sprite->position.x - screen_pos.x;
+			sy = u->sprite->position.y - screen_pos.y;
+			auto& d = u->unit_type->dimensions;
+			r = std::max(6, (d.from.x + d.to.x) / 2 + 3);
+			return true;
+		};
+		// The selection: a green ring under each selected unit, as in the game.
+		for (int tag : selection) {
+			int sx, sy, r;
+			if (unit_screen(tag, sx, sy, r)) ellipse(sx, sy + r / 3, r, r * 2 / 3, green);
+		}
+		// Recent commands: a line from the units commanded to where they were sent (green move, red
+		// attack a unit, orange attack-move, yellow gather), a ring on a target unit; hold/stop: a mark.
+		for (auto& o : orders) {
+			uint8_t c = o.kind == "move" ? green : o.kind == "attack" ? red : o.kind == "amove" ? orange :
+			            o.kind == "gather" ? yellow : white;
+			long ux = 0, uy = 0;
+			int n = 0;
+			for (int tag : o.units) {
+				int sx, sy, r;
+				if (unit_screen(tag, sx, sy, r)) ux += sx, uy += sy, ++n;
+			}
+			if (o.kind == "hold" || o.kind == "stop") {
+				if (n) {
+					int x = (int)(ux / n), y = (int)(uy / n) - 14;
+					for (int d = -4; d <= 4; ++d) put(x + d, y - 4, c), put(x + d, y + 4, c), put(x - 4, y + d, c), put(x + 4, y + d, c);
+				}
+				continue;
+			}
+			int tx = o.x - screen_pos.x, ty = o.y - screen_pos.y, tr = 0;
+			if (o.target) {
+				int sx, sy;
+				if (unit_screen(o.target, sx, sy, tr)) tx = sx, ty = sy;
+				ellipse(tx, ty, tr + 2, tr + 2, c);
+			} else {
+				for (int d = -3; d <= 3; ++d) put(tx + d, ty + d, c), put(tx + d, ty - d, c);
+			}
+			if (n) {
+				int x0 = (int)(ux / n), y0 = (int)(uy / n);
+				int steps = std::max(std::abs(tx - x0), std::abs(ty - y0));
+				for (int k = 0; k <= steps; k += 1)
+					if ((k / 4) % 2 == 0) put(x0 + (tx - x0) * k / std::max(1, steps), y0 + (ty - y0) * k / std::max(1, steps), c);
+			}
+		}
 		// Clicks: a ring that opens from 4 to 20 pixels over the mark's life, 2 pixels thick.
 		for (auto& m : marks) {
 			int sx = m.on_screen ? m.x : m.x - screen_pos.x, sy = m.on_screen ? m.y : m.y - screen_pos.y;

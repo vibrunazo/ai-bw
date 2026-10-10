@@ -145,6 +145,7 @@ class HumanInterface:
         self.pov: list[dict] = []
         self._mouse_moves: list[tuple[int, int, tuple[int, int], tuple[int, int]]] = []
         self._last_pov: tuple | None = None
+        self._last_pov_sel: list[int] = []
 
     # --- act() latency calibration ---------------------------------------------------------
 
@@ -528,12 +529,16 @@ class HumanInterface:
         self._mouse_moves = [m for m in self._mouse_moves if m[1] >= self.frame - 1] or self._mouse_moves[-1:]
         return pos if pos is not None else self.cursor
 
-    def _log_pov(self, click: str | None = None, act: str | None = None, at: tuple[int, int] | None = None) -> None:
+    def _log_pov(self, click: str | None = None, act: str | None = None, at: tuple[int, int] | None = None,
+                 cmd: dict | None = None) -> None:
         """One POV entry: camera, cursor, the click if any, and what Gary did, in words ("act");
-        at: where on the screen a minimap click landed (the cursor model doesn't move for those)."""
+        at: where on the screen a minimap click landed (the cursor model doesn't move for those);
+        sel: the selection, when it changed; cmd: a command to the selection ({"kind": move, attack,
+        amove, gather, hold, stop..., "x", "y": map point, "target": unit tag}), for the viewer."""
         cur = self._displayed_cursor()
         key = (self.camera, cur)
-        if click is None and act is None and key == self._last_pov and self.frame % 24:
+        sel_changed = self.selection != self._last_pov_sel
+        if click is None and act is None and not sel_changed and key == self._last_pov and self.frame % 24:
             return
         self._last_pov = key
         entry = {"frame": self.frame, "camera": list(self.camera), "cursor": list(cur), "click": click}
@@ -541,6 +546,11 @@ class HumanInterface:
             entry["act"] = act
         if at:
             entry["at"] = [round(at[0]), round(at[1])]
+        if sel_changed:
+            entry["sel"] = list(self.selection)
+            self._last_pov_sel = list(self.selection)
+        if cmd:
+            entry["cmd"] = cmd
         self.pov.append(entry)
 
     def save_pov(self, path) -> None:
@@ -557,6 +567,7 @@ class HumanInterface:
         click = {"click": "left", "ctrl_click": "left", "box": "left", "build": "left", "right_click": "right",
                  "minimap_right_click": "right", "minimap_order": "left"}.get(a.kind)
         act = None                       # what happened, in words, for the POV log
+        cmd = None                       # a command to the selection: kind, map point, target (POV log)
         if a.kind == "camera":
             self._center_camera(a.args["x"], a.args["y"])
             act = "minimap click (camera)"
@@ -621,14 +632,20 @@ class HumanInterface:
                 act = f"right-click {unit_name(kind)} (gather)"
             else:
                 act = f"right-click {unit_name(kind)}"
+            enemy = bool(tag) and kind not in RESOURCES and tag not in self._own_tags()
+            cmd = {"kind": "gather" if kind in RESOURCES else "attack" if enemy else "move", "x": x, "y": y,
+                   "target": tag or 0}
             self._send(C.right_click(x, y, tag, C.NO_UNIT if not tag else kind, a.args["queued"]))
             self._remember("rclick", -1, x, y, tag)
         elif a.kind == "minimap_right_click":
             act = "minimap right-click (move)"
+            cmd = {"kind": "move", "x": a.args["x"], "y": a.args["y"], "target": 0}
             self._send(C.right_click(a.args["x"], a.args["y"]))
             self._remember("rclick", -1, a.args["x"], a.args["y"], 0)
         elif a.kind == "minimap_order":
             act = "minimap attack-move" if a.args["order"] == C.ORDER_ATTACK_MOVE else f"minimap order {a.args['order']}"
+            cmd = {"kind": "amove" if a.args["order"] == C.ORDER_ATTACK_MOVE else "order", "x": a.args["x"],
+                   "y": a.args["y"], "target": 0}
             self._send(C.targeted_order(a.args["order"], a.args["x"], a.args["y"]))
             self._remember("order", a.args["order"], a.args["x"], a.args["y"], 0)
         elif a.kind == "train":
@@ -658,11 +675,15 @@ class HumanInterface:
             kind = g.unit_type_of(tag) if tag else None
             what = "attack-move" if a.args["order"] == C.ORDER_ATTACK_MOVE else f"order {a.args['order']}"
             act = f"A-click {unit_name(kind)} ({what})" if kind is not None else f"A-click ground ({what})"
+            cmd = {"kind": ("attack" if tag else "amove") if a.args["order"] == C.ORDER_ATTACK_MOVE else "order",
+                   "x": x, "y": y, "target": tag or 0}
             self._send(C.targeted_order(a.args["order"], x, y, tag, kind if kind is not None else C.NO_UNIT))
             self._remember("order", a.args["order"], x, y, tag)
         elif a.kind in ("stop", "hold", "stim", "return_cargo", "unload_all"):
             act = {"stop": "S (stop)", "hold": "H (hold position)", "stim": "T (stim packs)",
                    "return_cargo": "C (return cargo)", "unload_all": "U (unload all)"}[a.kind]
+            if a.kind in ("stop", "hold"):
+                cmd = {"kind": a.kind, "x": -1, "y": -1, "target": 0}
             self._send({"stop": C.stop, "hold": C.hold_position, "stim": C.stim, "return_cargo": C.return_cargo,
                         "unload_all": C.unload_all}[a.kind]())
             self._remember({"return_cargo": "return"}.get(a.kind, a.kind), -1, 0, 0, 0)
@@ -684,7 +705,11 @@ class HumanInterface:
         if a.kind in ("minimap_right_click", "minimap_order"):
             mx, my, mw, mh = self.p.minimap_rect
             at = (mx + a.args["x"] * mw / self.map_size[0], my + a.args["y"] * mh / self.map_size[1])
-        self._log_pov(click, act, at)
+        self._log_pov(click, act, at, cmd)
+
+    def _own_tags(self) -> set[int]:
+        last = self._snapshot(self.history[-1])
+        return {u["tag"] for u in last["units"] if u["owner"] == self.slot}
 
 RESOURCES = {176, 177, 178, 188, 110, 157, 149}      # mineral fields, geyser, refineries / extractor
 OTHER_NAMES = {176: "Mineral Field", 177: "Mineral Field", 178: "Mineral Field", 188: "Vespene Geyser",
