@@ -21,7 +21,7 @@ from gary.agent.gary import Gary
 from gary.agent.macro import LearnedMacro, OneBaseDefense
 from gary.agent.motor import DirectMotor
 from gary.agent.posture import (EarlyPoolPosture, EarlyPoolPostureV2, EarlyPoolPostureV3, EarlyPoolPostureV4,
-                                NormalPosture)
+                                EarlyPoolPostureV5, NormalPosture)
 from gary.version import announcement
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -317,6 +317,8 @@ OPTIONS = {
     # Python (48 seeds) lost 5 (5); Zerg v2 (72) lost 13 (9); with regroup too 5 and 14 (regroup
     # alone 5 and 12). Not adopted
     "reinforce_pack": lambda m: m["fight"].setdefault("rule_options", {}).update(reinforce={"to_pack": True}),
+    # posture.py v5: an alarm from nothing seen called off until 4:00; the main's bunker let out after
+    "posture5": lambda m: m.update(posture="early_pool/v5"),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)
@@ -393,7 +395,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.simcity = SimCity(g, m.get("simcity_door", 32))
     g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture,
                  "early_pool/v2": EarlyPoolPostureV2, "early_pool/v3": EarlyPoolPostureV3,
-                 "early_pool/v4": EarlyPoolPostureV4}[m["posture"]](g)
+                 "early_pool/v4": EarlyPoolPostureV4, "early_pool/v5": EarlyPoolPostureV5}[m["posture"]](g)
     if m["macro"] is not None:
         path = model_path(m["macro"]["model"])
         macro = load("macro", str(path))

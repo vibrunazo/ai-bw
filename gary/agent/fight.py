@@ -418,14 +418,26 @@ class LoadRule:
         if hi.frame < self.next_load:
             return False
         early = g.posture.preload_bunkers or self.always
-        reach = LOAD_FROM if early else BUNKER_FROM
         seen = {u["tag"]: u for u in mine}
         enemy = enemy_fighters(obs, g.slot)
         for b in mine:
             if b["type"] != BUNKER or not b["completed"]:
                 continue
-            if not (early or any(math.dist((e["x"], e["y"]), (b["x"], b["y"])) < BUNKER_THREAT for e in enemy)):
+            threat = any(math.dist((e["x"], e["y"]), (b["x"], b["y"])) < BUNKER_THREAT for e in enemy)
+            released = b["tag"] in g.release_bunkers       # (posture v5: let out once the rush is over)
+            if released and not threat:
+                # (marines still walking in stay counted: once inside, they're let out too)
+                inside = {t for t in g.loaded.get(b["tag"], set()) if t not in seen}
+                if inside:
+                    g.loaded[b["tag"]] -= inside
+                    self.next_load = hi.frame + 24 * 2
+                    g.motor.start(Intent("UNLOAD", [], b["tag"], {"bunker": b["tag"], "x": b["x"], "y": b["y"]},
+                                         "rule:load"))
+                    return True
+            pre = early and not released
+            if not (pre or threat):
                 continue
+            reach = LOAD_FROM if pre else BUNKER_FROM
             sent = g.loaded.setdefault(b["tag"], set())
             sent &= {t for t in sent if t not in seen or seen[t].get("order_target") == b["tag"]}
             free = BUNKER_SLOTS - len(sent)

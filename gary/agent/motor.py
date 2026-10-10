@@ -339,7 +339,7 @@ class DirectMotor:
             return
         if obs["selection"] == [d["bunker"]]:
             hi.unload_all()                      # (OpenBW reports it as refused, and does it)
-            g.say("unloads the bunker: its marines go to the fight")
+            g.say("unloads the bunker")
             g.task = None
             return
         p = screen_of(obs, d["x"], d["y"])
