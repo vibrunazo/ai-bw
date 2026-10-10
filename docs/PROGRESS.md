@@ -100,8 +100,14 @@ quicker way to a playable Gary.
   `v017override`, `train/roles_rl.py --override`): it starts as the rules (−127), and 60 rounds of
   RL ended where it started (−124); the drawn override probabilities went down (join 3.6% → 3.0%,
   hold 3.6% → 2.6%, also for new units far from the bunch): RL too found holding new units back
-  doesn't pay, the third sign after the two rule variants. Next: a closer copy of the rules (four
-  draws per episode, a bigger network) to start RL on the whole decision from the rules' level.
+  doesn't pay, the third sign after the two rule variants. A closer copy of the rules (four draws
+  per episode, 417k decisions, a bigger network: 88.9%; validation −148, rules −120), then 60
+  rounds of RL on the whole role decision: −131 at rounds 10-20 (best), drifting to −166 and back
+  to −138. Held out, the best against v0.17's rules: 239 episodes −54.5 (−48.7; −5.8 ± 14.8), deaths
+  alone 38% (39%); replayed pros on three maps lost 12 of 144 (11), Zerg v2 10 of 72 (9), won 7
+  (4). **The first learned fight decision on par with the hand rules over whole defenses, not
+  beyond them**: the same ceiling as RL on the 45 s scenarios. Not adopted (v0.17 keeps its rules;
+  the model: `v017roleml` with `runs/roles_rl/20261010_055912/model.pt`, not in git).
 
 ### v0.17 (October 2026): no early pool from nothing seen at 2:20
 
