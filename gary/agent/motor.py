@@ -41,6 +41,9 @@ TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL
 
 
 ENTER_TRANSPORT = 92
+UNDER_CURSOR = 24                    # a unit this close to a click point (pixels, each axis) is clicked on
+GROUND_SEARCH = 160                  # attack-moves and moves look this far for open ground
+OTHER_SIZE = {176: (2, 1), 177: (2, 1), 178: (2, 1), 188: (4, 2), 131: (4, 3), 132: (4, 3), 133: (4, 3)}   # tiles
 LOADING_FOR = 36                     # a load's marines are left alone this long...
 LOADING_NEAR = 5 * 32                # ...those this close to its bunker
 
@@ -158,7 +161,10 @@ class DirectMotor:
             else:
                 ordered = False
         elif a in ("move", "attack_move"):
-            p = screen_of(obs, key[1], key[2])
+            # on the ground next to the point: a click on a unit there would be an attack on that one
+            # unit (A-click) or a follow or attack (right-click): Gary's fighters chased single zerglings
+            gx, gy = self._ground_near(obs, key[1], key[2])
+            p = screen_of(obs, gx, gy)
             if p and a == "move":
                 hi.right_click(*p)
             elif p:
@@ -178,6 +184,24 @@ class DirectMotor:
             if "bunker" in d:                    # a retreat into a bunker: they're its marines now
                 g.loaded.setdefault(d["bunker"], set()).update(want)
         g.task = None
+
+    def _ground_near(self, obs: dict, x: int, y: int) -> tuple[int, int]:
+        """The nearest point to (x, y), within GROUND_SEARCH, with no unit Gary sees under the cursor
+        (as a player clicks the ground beside the zerglings, not on one); (x, y) if none is."""
+        def half(u):                          # (a building by its footprint, as the game clicks it)
+            w, h = T.SIZE.get(u["type"]) or OTHER_SIZE.get(u["type"], (0, 0))
+            return (max(UNDER_CURSOR, w * 16 + 4), max(UNDER_CURSOR, h * 16 + 4))
+        units = [(u["x"], u["y"], *half(u)) for u in obs["units"]]
+        free = lambda px, py: all(abs(px - ux) > hx or abs(py - uy) > hy for ux, uy, hx, hy in units)
+        if free(x, y):
+            return x, y
+        for r in range(16, GROUND_SEARCH + 1, 16):
+            for k in range(16):
+                t = k * math.pi / 8
+                px, py = int(x + r * math.cos(t)), int(y + r * math.sin(t))
+                if free(px, py):
+                    return px, py
+        return x, y
 
     def _ctrl_click(self, obs: dict, group: list[dict]) -> bool:
         """When the group is every unit of one type on screen (12 at most), select it with a
