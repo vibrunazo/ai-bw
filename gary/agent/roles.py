@@ -158,6 +158,7 @@ class RoleRules:
         self.closing: dict[int, frozenset] = {}      # volley: unit -> its closing group
         self.told: dict[int, tuple[str, int]] = {}   # unit -> (role, frame)
         self._walk = None
+        self.first_seen: dict[int, int] = {}        # unit -> frame the roles first saw it (its age)
         self.prev: dict[int, tuple[float, float]] = {}
         self.prev_frame = None
 
@@ -176,7 +177,30 @@ class RoleRules:
             prev = {t: (positions[t][0] - (positions[t][0] - p[0]) * 12 / elapsed,
                         positions[t][1] - (positions[t][1] - p[1]) * 12 / elapsed)
                     for t, p in prev.items() if t in positions}
-        return extra_features(rows, tags, positions, prev if elapsed else {}, self.g.flip)
+        extra = extra_features(rows, tags, positions, prev if elapsed else {}, self.g.flip)
+        return self._own_extra(extra, tags, snap[3], now)
+
+    def _own_extra(self, extra, tags: list[int], by_tag: dict, now: int):
+        """The role model's per-unit extras 3-5 for Gary's fighters: age, distance to its biggest
+        bunch of fighters, that bunch's size (fresh units walking into a fight alone died alone)."""
+        from gary.policy.roles import AGE_SCALE, PACK_DIST_SCALE, PACK_SIZE_SCALE
+        g = self.g
+        mine = [by_tag[t] for t in tags if t in by_tag and by_tag[t]["owner"] == g.slot and supply_x2(by_tag[t]["type"]) > 0
+                and not is_worker(by_tag[t]["type"]) and not is_building(by_tag[t]["type"]) and by_tag[t]["completed"]]
+        for u in mine:
+            self.first_seen.setdefault(u["tag"], now)
+        if not mine:
+            return extra
+        pack = self._pack(mine, [], by_tag)
+        size = sum(1 for u in mine if u["tag"] in pack["tags"])
+        index = {t: i for i, t in enumerate(tags)}
+        for u in mine:
+            i = index[u["tag"]]
+            if i < len(extra):
+                extra[i, 3] = (now - self.first_seen[u["tag"]]) / 24 / AGE_SCALE
+                extra[i, 4] = math.dist((u["x"], u["y"]), pack["mid"]) / PACK_DIST_SCALE
+                extra[i, 5] = size / PACK_SIZE_SCALE
+        return extra
 
     def _units(self, snap):
         """Gary's units the roles may command (in the snapshot, not held by a rule), and the enemy's."""
@@ -582,6 +606,27 @@ class RoleRules:
         if group:
             target = min(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
             return self._intent("CLOSE_IN", group, (int(target["x"]), int(target["y"])), "attack_move")
+        # join: to Gary's biggest bunch of fighters (attack-moving: shooting on the way), from farther
+        # than PACK_LINK; overrides an attack-move (the reinforce rule's, straight at the zerg)
+        group = [u for u in roles.get("JOIN", []) if fresh(u, "REGROUP")]
+        if group:
+            pack = self._pack(mine, [], by_tag)
+            group = [u for u in group if math.dist((u["x"], u["y"]), pack["mid"]) > PACK_LINK][:MAX_GROUP]
+            if group:
+                return self._intent("REGROUP", group, (int(pack["mid"][0]), int(pack["mid"][1])), "attack_move")
+        group = [u for u in roles.get("HOLD", []) if u.get("order") != HOLD and fresh(u, "HOLD")][:MAX_GROUP]
+        if group:
+            now = self.g.hi.frame
+            for u in group:
+                self.told[u["tag"]] = ("HOLD", now)
+            tags = [u["tag"] for u in group]
+            return Intent("HOLD", tags, None, {"key": ("hold",), "tags": tags, "center": _mid(group)}, "roles")
+        group = [u for u in roles.get("POST", []) if u.get("order") not in ATTACK and fresh(u, "POST")]
+        if group and home and self.post is not None:
+            post = self._post(by_tag, _mid(mine), enemy)
+            group = [u for u in group if post and math.dist((u["x"], u["y"]), post) > POST_SLACK][:MAX_GROUP]
+            if group:
+                return self._intent("POST", group, (int(post[0]), int(post[1])), "attack_move")
         return None
 
     def _brace(self, mine: list[dict], enemy: list[dict], fresh):
@@ -670,8 +715,8 @@ class RoleLearned(RoleRules):
     the same skills as the hand rules carry the groups out. Reposition, stand and other: no command;
     nor "keep", for a model of decisions (train/roles.py --decisions)."""
 
-    def __init__(self, g, model):
-        super().__init__(g)
+    def __init__(self, g, model, **options):
+        super().__init__(g, **options)
         self.model = model
 
     def decide(self, obs: dict, snap) -> Intent | None:

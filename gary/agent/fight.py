@@ -113,7 +113,7 @@ class FightLayer:
         self.roles = None
         if kind == "roles":
             from gary.agent.roles import RoleLearned, RoleRules
-            self.roles = RoleLearned(g, model) if model is not None else RoleRules(g, **(role_options or {}))
+            self.roles = RoleLearned(g, model, **(role_options or {})) if model is not None else RoleRules(g, **(role_options or {}))
         self.next_fight = 0
         self.center: tuple[float, float] | None = None
         self.told: dict[int, tuple[tuple, int]] = {}    # unit tag -> (order key, frame given)

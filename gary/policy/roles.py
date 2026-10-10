@@ -20,9 +20,17 @@ from torch import nn
 from gary.policy.fight import N_ORDERS, N_TYPES, ORDER, OTARGET, SIDE, TYPE, numeric
 
 ROLES = ["fire", "close_in", "pull_back", "retreat", "reposition", "stand", "other"]
-DECISIONS = ROLES + ["keep"]         # the decision model: a new role when the unit's changes, else keep
+# the decision model: a new role when the unit's changes, else keep; and roles the hand rules use or
+# the pros' units have no label for: post (the hand rules' post by the Command Center), join (to
+# Gary's biggest bunch of fighters), hold (hold position)
+DECISIONS = ROLES + ["keep", "post", "join", "hold"]
 MAX_UNITS = 64
-EXTRA = 3                            # motion x, y over the last half second (tiles), enemies targeting it
+EXTRA = 6                            # motion x, y over the last half second (tiles), enemies targeting it;
+                                     # the unit's age, its distance to Gary's biggest bunch of fighters,
+                                     # that bunch's size (gary/agent/roles.py; models before have 3)
+AGE_SCALE = 60.0                     # seconds
+PACK_DIST_SCALE = 320.0              # pixels
+PACK_SIZE_SCALE = 12.0
 MOTION_SCALE = 32.0
 
 
@@ -44,12 +52,13 @@ def extra_features(rows: np.ndarray, tags: list[int], positions: dict[int, tuple
 
 
 class RoleNet(nn.Module):
-    def __init__(self, d: int = 128, layers: int = 3, heads: int = 4, n_roles: int = len(ROLES)):
+    def __init__(self, d: int = 128, layers: int = 3, heads: int = 4, n_roles: int = len(ROLES), n_extra: int = 3):
         super().__init__()
+        self.n_extra = n_extra
         self.type_emb = nn.Embedding(N_TYPES, 48)
         self.side_emb = nn.Embedding(3, 8)
         self.order_emb = nn.Embedding(N_ORDERS, 16)
-        self.inp = nn.Linear(48 + 8 + 16 + 9 + EXTRA, d)
+        self.inp = nn.Linear(48 + 8 + 16 + 9 + n_extra, d)
         layer = nn.TransformerEncoderLayer(d, heads, 4 * d, dropout=0.1, batch_first=True, norm_first=True)
         self.body = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False)
         self.role = nn.Linear(d, n_roles)
@@ -57,7 +66,8 @@ class RoleNet(nn.Module):
     def forward(self, kind, side, order, num, extra, pad):
         """kind, side, order (B, N) long; num (B, N, 9); extra (B, N, EXTRA); pad (B, N) True where
         there is no unit. Returns role logits (B, N, R)."""
-        h = self.inp(torch.cat([self.type_emb(kind), self.side_emb(side), self.order_emb(order), num, extra], -1))
+        h = self.inp(torch.cat([self.type_emb(kind), self.side_emb(side), self.order_emb(order), num,
+                                extra[..., :self.n_extra]], -1))
         h = self.body(h, src_key_padding_mask=pad)
         return self.role(h)
 

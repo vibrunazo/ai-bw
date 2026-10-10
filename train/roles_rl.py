@@ -3,7 +3,8 @@
 Starts from a role model of decisions, by default the hand rules distilled into it
 (ingest/role_distill.py, train/roles.py --no-weights: as good as the rules in play), and improves
 it on real pro positions: the home defenses from training games (eval/scenarios.py --split train),
-Gary playing as v0.9 with learned roles (manifest v09roleml). Each round Gary plays a batch of them
+Gary playing with learned roles (--manifest, default v017roleml; --seconds each, 120 by default:
+eval/episodes.py). Each round Gary plays a batch of them
 several times, drawing each unit's role from the model. Every turn is judged by what happened in
 the HORIZON_S seconds after it (eval/score.py's events: value killed and lost, damage...; each
 command Gary carried out costs a little), against the other plays of the same position over the
@@ -37,21 +38,20 @@ from train.fight_cmd_rl import decisions, real_splits
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HORIZON_S = 10
-MANIFEST = "v09roleml"
 
 
 def play_real(args: tuple) -> dict:
     from eval import scenarios as S
-    sc, path, draw = args
-    r = S.run_one(sc, "gary", 45, MANIFEST, 1, fight_path=path, sample_seed=draw)
+    sc, path, draw, manifest, seconds = args
+    r = S.run_one(sc, "gary", seconds, manifest, 1, fight_path=path, sample_seed=draw)
     r["drill"] = "real_" + sc["sha1"][:12]
     return r
 
 
 def play_greedy(args: tuple) -> dict:
     from eval import scenarios as S
-    sc, path, hands = args
-    return S.run_one(sc, "gary", 45, MANIFEST, 1, fight_path=path, hands_seed=1 + hands)
+    sc, path, hands, manifest, seconds = args
+    return S.run_one(sc, "gary", seconds, manifest, 1, fight_path=path, hands_seed=1 + hands)
 
 
 def batch(decs: list, device: str):
@@ -107,11 +107,11 @@ def update(net, ref, opt, decs: list, args, device: str) -> dict:
     return {k: round(v / max(1, stats["n"]), 4) for k, v in stats.items() if k != "n"}
 
 
-def validate(pool, val: list[dict], path: str, draws: int) -> float:
+def validate(pool, val: list[dict], path: str, draws: int, manifest: str, seconds: float) -> float:
     """The validation home defenses' mean net, each played draws times (Gary's hands seeded apart:
     one play of a fight is a coin flip)."""
-    rows = [r for r in pool.map(play_greedy, [(sc, path, h) for sc in val for h in range(draws)], chunksize=draws)
-            if "error" not in r]
+    rows = [r for r in pool.map(play_greedy, [(sc, path, h, manifest, seconds) for sc in val for h in range(draws)],
+                                chunksize=draws) if "error" not in r]
     return float(np.mean([r["net"] for r in rows]))
 
 
@@ -119,6 +119,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--init", help="role model of decisions to start from (default: the newest in runs/roles)")
     ap.add_argument("--rounds", type=int, default=60)
+    ap.add_argument("--manifest", default="v017roleml", help="the Gary that plays (its roles: the model trained)")
+    ap.add_argument("--seconds", type=float, default=120,
+                    help="how long each home defense plays (eval/episodes.py: long enough for new units to join)")
     ap.add_argument("--real", type=int, default=32, help="training home defenses per round")
     ap.add_argument("--draws", type=int, default=8, help="plays of each per round")
     ap.add_argument("--test-every", type=int, default=10)
@@ -156,7 +159,7 @@ def main() -> None:
             path = str(out / f"round{rnd}.pt")
             model.save(path)
             if rnd % args.test_every == 0 or rnd == args.rounds:
-                score = validate(pool, val_real, path, args.val_draws)
+                score = validate(pool, val_real, path, args.val_draws, args.manifest, args.seconds)
                 print(f"round {rnd}: validation home defenses net {score:.0f}", flush=True)
                 history.append({"round": rnd, "validation": round(score, 1)})
                 if best is None or score > best[0]:
@@ -166,7 +169,8 @@ def main() -> None:
                 break
             t0 = time.time()
             scs = rng.sample(train_real, min(args.real, len(train_real)))
-            rows = list(pool.map(play_real, [(sc, path, k) for sc in scs for k in range(args.draws)], chunksize=args.draws))
+            rows = list(pool.map(play_real, [(sc, path, k, args.manifest, args.seconds) for sc in scs
+                                             for k in range(args.draws)], chunksize=args.draws))
             decs = [(d, a) for d, a in decisions(rows, args.horizon, args.command_cost) if d.get("units")]
             nets = [r["net"] for r in rows if "error" not in r]
             stats = update(net, ref, opt, decs, args, device) if decs else {}
