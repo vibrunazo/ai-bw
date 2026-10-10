@@ -73,9 +73,18 @@ def batch(decs: list, device: str):
     return tensors(rows, extra, pad, times, device), t(role), t(adv)
 
 
-def unit_log_probs(net, inputs, role):
-    """Per unit: the log-probability of its role (where one was drawn), and its role distribution."""
+def unit_log_probs(net, inputs, role, three=None):
+    """Per unit: the log-probability of its role (where one was drawn), and its role distribution.
+    three (override mode, gary/agent/roles.py RoleOverride): (keep, join, hold) indices: the
+    distribution is then the rules (every decision but join and hold), join, hold."""
     lp_all = F.log_softmax(net(*inputs), -1)
+    if three is not None:
+        keep, join, hold = three
+        others = [k for k in range(lp_all.shape[-1]) if k not in (join, hold)]
+        lp_all = torch.stack([torch.logsumexp(lp_all[..., others], -1), lp_all[..., join], lp_all[..., hold]], -1)
+        lookup = torch.full((max(three) + 1,), -1, dtype=torch.long, device=role.device)
+        lookup[keep], lookup[join], lookup[hold] = 0, 1, 2
+        role = torch.where(role >= 0, lookup[role.clamp(min=0, max=max(three))], role)
     mask = role >= 0
     lp = lp_all.gather(-1, role.clamp(min=0)[..., None])[..., 0]
     return lp, lp_all, mask
@@ -86,13 +95,13 @@ def update(net, ref, opt, decs: list, args, device: str) -> dict:
     random.shuffle(decs)
     parts = [batch(decs[i:i + args.minibatch], device) for i in range(0, len(decs), args.minibatch)]
     with torch.no_grad():
-        old = [unit_log_probs(net, p[0], p[1])[0] for p in parts]
-        ref_lp = [unit_log_probs(ref, p[0], p[1])[1] for p in parts]
+        old = [unit_log_probs(net, p[0], p[1], args.three)[0] for p in parts]
+        ref_lp = [unit_log_probs(ref, p[0], p[1], args.three)[1] for p in parts]
     stats = {"pg": 0.0, "kl": 0.0, "clipped": 0.0, "n": 0}
     for _ in range(args.epochs):
         for k in random.sample(range(len(parts)), len(parts)):
             inputs, role, adv = parts[k]
-            lp, lp_all, mask = unit_log_probs(net, inputs, role)
+            lp, lp_all, mask = unit_log_probs(net, inputs, role, args.three)
             ratio = torch.exp((lp - old[k]).clamp(-20, 20))[mask]
             a = adv[:, None].expand_as(lp)[mask]
             pg = -torch.min(ratio * a, ratio.clamp(1 - args.clip, 1 + args.clip) * a).mean()
@@ -120,6 +129,8 @@ def main() -> None:
     ap.add_argument("--init", help="role model of decisions to start from (default: the newest in runs/roles)")
     ap.add_argument("--rounds", type=int, default=60)
     ap.add_argument("--manifest", default="v017roleml", help="the Gary that plays (its roles: the model trained)")
+    ap.add_argument("--override", action="store_true",
+                    help="the model only overrides the rules (join, hold, else the rules): manifest v017override")
     ap.add_argument("--seconds", type=float, default=120,
                     help="how long each home defense plays (eval/episodes.py: long enough for new units to join)")
     ap.add_argument("--real", type=int, default=32, help="training home defenses per round")
@@ -135,12 +146,16 @@ def main() -> None:
     ap.add_argument("--minibatch", type=int, default=256)
     ap.add_argument("--parallel", type=int, default=max(1, (os.cpu_count() or 6) * 2 // 3))
     args = ap.parse_args()
+    if args.override and args.manifest == "v017roleml":
+        args.manifest = "v017override"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     init = Path(args.init or latest_role_model())
     model = RoleModel.load(init, device)
     if "keep" not in model.config.get("roles", []):
         raise SystemExit(f"{init} isn't a model of decisions (no 'keep'): train one with --decisions or distill the rules")
+    names = model.config["roles"]
+    args.three = tuple(names.index(r) for r in ("keep", "join", "hold")) if args.override else None
     ref = RoleModel.load(init, device).net.eval()
     for p in ref.parameters():
         p.requires_grad_(False)

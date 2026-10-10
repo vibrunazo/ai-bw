@@ -606,8 +606,21 @@ class RoleRules:
         if group:
             target = min(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
             return self._intent("CLOSE_IN", group, (int(target["x"]), int(target["y"])), "attack_move")
-        # join: to Gary's biggest bunch of fighters (attack-moving: shooting on the way), from farther
-        # than PACK_LINK; overrides an attack-move (the reinforce rule's, straight at the zerg)
+        intent = self._join_or_hold(roles, mine, by_tag, fresh)
+        if intent is not None:
+            return intent
+        group = [u for u in roles.get("POST", []) if u.get("order") not in ATTACK and fresh(u, "POST")]
+        if group and home and self.post is not None:
+            post = self._post(by_tag, _mid(mine), enemy)
+            group = [u for u in group if post and math.dist((u["x"], u["y"]), post) > POST_SLACK][:MAX_GROUP]
+            if group:
+                return self._intent("POST", group, (int(post[0]), int(post[1])), "attack_move")
+        return None
+
+    def _join_or_hold(self, roles: dict, mine: list[dict], by_tag: dict, fresh) -> Intent | None:
+        """join: to Gary's biggest bunch of fighters (attack-moving: shooting on the way), from farther
+        than PACK_LINK; overrides an attack-move (the reinforce rule's, straight at the zerg). hold:
+        hold position."""
         group = [u for u in roles.get("JOIN", []) if fresh(u, "REGROUP")]
         if group:
             pack = self._pack(mine, [], by_tag)
@@ -621,12 +634,6 @@ class RoleRules:
                 self.told[u["tag"]] = ("HOLD", now)
             tags = [u["tag"] for u in group]
             return Intent("HOLD", tags, None, {"key": ("hold",), "tags": tags, "center": _mid(group)}, "roles")
-        group = [u for u in roles.get("POST", []) if u.get("order") not in ATTACK and fresh(u, "POST")]
-        if group and home and self.post is not None:
-            post = self._post(by_tag, _mid(mine), enemy)
-            group = [u for u in group if post and math.dist((u["x"], u["y"]), post) > POST_SLACK][:MAX_GROUP]
-            if group:
-                return self._intent("POST", group, (int(post[0]), int(post[1])), "attack_move")
         return None
 
     def _brace(self, mine: list[dict], enemy: list[dict], fresh):
@@ -749,3 +756,61 @@ class RoleLearned(RoleRules):
         if logging:
             self._log(obs, snap, extra, mine, decided, intent)
         return intent
+
+
+OVERRIDES = ("join", "hold")
+
+
+class RoleOverride(RoleRules):
+    """override/v1: the hand rules, with a learned override per unit (the role model's decisions
+    join and hold, gary/policy/roles.py): every turn the model says, for each of Gary's units in the
+    fight, join, hold, or anything else, which leaves the unit to the rules (its probability is
+    the rest). Units it takes go first (their group's command), the rules decide for the others.
+    Started from a model that almost never overrides, reinforcement learning (train/roles_rl.py
+    --override) learns when to: fresh units walking into a fight alone died alone."""
+
+    def __init__(self, g, model, **options):
+        super().__init__(g, **options)
+        self.model = model
+        names = model.config.get("roles")
+        self.over = [names.index(r) for r in OVERRIDES]
+
+    def decide(self, obs: dict, snap) -> Intent | None:
+        g = self.g
+        logging = g.fight.rl_log is not None
+        self.before = self.prev
+        extra = self._motion(obs, snap)
+        if snap is None:
+            return None
+        rows, tags, center, by_tag = snap
+        mine, enemy = self._units(snap)
+        if not mine or not enemy:
+            return None
+        probs = self.model.predict(rows, extra, obs["frame"] * 42 / 1000)
+        index = {t: i for i, t in enumerate(tags)}
+        decided, roles = {}, {}
+        for u in mine:
+            p = probs[index[u["tag"]]].astype(np.float64)
+            three = np.array([max(0.0, 1 - p[self.over].sum()), *p[self.over]])
+            k = int(g.fight.rng.choice(3, p=three / three.sum())) if logging else int(three.argmax())
+            decided[u["tag"]] = "keep" if k == 0 else OVERRIDES[k - 1]
+            if k:
+                roles.setdefault(OVERRIDES[k - 1].upper(), []).append(u)
+        now = g.hi.frame
+        fresh = lambda u, role: not (self.told.get(u["tag"], ("", -10**9))[0] == role
+                                     and now - self.told[u["tag"]][1] < REPEAT)
+        intent = self._join_or_hold(roles, mine, by_tag, fresh)
+        if intent is None:
+            # the rules, on the units they take when deciding alone (all of Gary's free fighters in the
+            # snapshot), less those overridden
+            taken = {u["tag"] for us in roles.values() for u in us}
+            own = [u for u in by_tag.values() if u["owner"] == g.slot and u["completed"] and supply_x2(u["type"]) > 0
+                   and not is_worker(u["type"]) and not is_building(u["type"]) and u["tag"] not in taken]
+            own = [u for u in own if u["tag"] in set(g.leases.free([u["tag"] for u in own], "roles"))]
+            enemy_all = [u for u in by_tag.values() if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0
+                         and not is_worker(u["type"]) and not is_building(u["type"])]
+            intent = self._rules(by_tag, own, enemy_all)
+        if logging:
+            self._log(obs, snap, extra, mine, decided, intent)
+        return intent
+

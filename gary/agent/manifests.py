@@ -140,6 +140,15 @@ MANIFESTS: dict[str, dict] = {
                    "fight": {**_V09_FIGHT, "provider": "roles", "model": "roles/latest", "roles": {"post": 3},
                              "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
                    "arbiter": "fixed_priority/v1"},
+    # v0.17 with a learned override of its roles' rules (gary/agent/roles.py RoleOverride: per unit
+    # join, hold, or the rules; the model: --fight-model / fight_path, default the latest in runs/roles)
+    "v017override": {"version": "v0.17", "posture": "early_pool/v4", "leases": "enforced",
+                     "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True,
+                               "rax_by": 78 * 24, "keep_busy": True},
+                     "army": {**_ARMY, "hunt": True, "scan": True},
+                     "fight": {**_V09_FIGHT, "provider": "role_override", "model": "roles/latest",
+                               "roles": {"post": 3}, "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+                     "arbiter": "fixed_priority/v1"},
     # step 4 (docs/CONTROL.md): v0.9 with leases enforced; and with roles instead of the fight model
     "v09lease": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
                  "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY, "fight": _V09_FIGHT,
@@ -412,7 +421,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if f["provider"] == "roles" and f.get("model") is None:
             fight = None
             models["fight"] = "roles/rules_v1"   # (the chat says so: as many lines as with a model)
-        elif f["provider"] == "roles":
+        elif f["provider"] in ("roles", "role_override"):
             from gary.policy.roles import RoleModel
             fight = fight_model or RoleModel.load(fight_path or model_path(f["model"]))
             models["fight"] = fight.path

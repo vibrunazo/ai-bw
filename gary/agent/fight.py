@@ -111,9 +111,10 @@ class FightLayer:
         self.own_radius, self.max_units = (FIGHT_AROUND, PER_UNIT_MAX) if kind == "per_unit" else (OWN_RADIUS, COMMAND_MAX)
         self.watch = watch                       # enemy fighters this close make a fight (0: the model's 8 tiles)
         self.roles = None
-        if kind == "roles":
-            from gary.agent.roles import RoleLearned, RoleRules
-            self.roles = RoleLearned(g, model, **(role_options or {})) if model is not None else RoleRules(g, **(role_options or {}))
+        if kind in ("roles", "role_override"):
+            from gary.agent.roles import RoleLearned, RoleOverride, RoleRules
+            cls = RoleOverride if kind == "role_override" else RoleLearned
+            self.roles = cls(g, model, **(role_options or {})) if model is not None else RoleRules(g, **(role_options or {}))
         self.next_fight = 0
         self.center: tuple[float, float] | None = None
         self.told: dict[int, tuple[tuple, int]] = {}    # unit tag -> (order key, frame given)
@@ -138,7 +139,7 @@ class FightLayer:
         for rule in self.in_fight:
             if rule.step(obs, mine):
                 return f"rule:{rule.name}"
-        if self.kind == "roles":
+        if self.kind in ("roles", "role_override"):
             snap = self._snapshot(obs)
             intent = self.roles.decide(obs, snap)
             if intent is None:
