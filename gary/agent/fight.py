@@ -24,6 +24,7 @@ Rules (scripted reflexes), run before the model ("before") or before it in the a
              the fight: the rally is a plain move, and a moving marine doesn't shoot (v0.9)
   unload     zerg fighters at the base, none near a loaded bunker (the main's, from an early-pool
              scare, while the natural is attacked): let its marines out and send them to the fight
+  ramp       asked to (g.hold_ramp), the army in the main holds the main's ramp from its top
 """
 
 from __future__ import annotations
@@ -73,12 +74,25 @@ REPAIR_ORDER = 34
 REPAIRERS = 2
 REPAIR_THREAT = 9 * 32               # zerglings this close to the bunker: repair it
 SAFE_AROUND = 8 * 32                 # safe rally: the zerg and Gary's fighters this close to the fight compared
-MINERALS = {176, 177, 178}
 REPAIR_PAST = 64                     # surround: the move point past the bunker's center (pixels; it's 96x64)
 HOME = 12 * 32                       # zerg fighters this close to a Command Center or bunker: at home
 PACK_PX, PACK_MIN = 4 * 32, 3        # reinforce to_pack: fighters with this many (itself too) this close
 UNLOAD_CLEAR = 12 * 32               # unload: no enemy fighter this close to the bunker
 UNLOAD_EVERY = 24 * 10
+HOLD_ORDER = 107
+MOVE_ORDER = 6
+RAMP_SLACK = 40                      # ramp hold: a unit this close to its spot is there
+RAMP_IN = 2 * 32                     # ...zerg fighters this much nearer the main's center than the top are in the main
+RAMP_NEAR = 9 * 32                   # ...auto: zerg fighters this close to the ramp's top or bottom ask for it
+RAMP_FRONT_TYPES = {34, 32}          # ...medics and firebats on the top, the others just behind
+RAMP_BLOCKERS = 4                    # ...units wanted on the top (SCVs fill up the medics and firebats)
+RAMP_GAP = 20                        # ...the top's line: a place per this much of its width (pixels)
+RAMP_GATHER = 4 * 32                 # ...front units farther from the top go there together first
+RAMP_MAX_SPAN = 8 * 32               # ...looked for walls this far each way
+RAMP_ON_SPOT = 12                    # ...a front unit this close to its place is there
+RAMP_SCVS_FROM = 12 * 32             # ...SCVs this close to the main's center (its mineral line) can go
+RAMP_HOLD_TTL = 24 * 2               # ...the units holding it are the rule's this long, renewed every turn
+RAMP_RANGE = {0: 160, 32: 48}        # ...a zergling this close (+32) to a unit reaches it (marine, firebat; else 32)
 
 
 def enemy_fighters(obs: dict, slot: int) -> list[dict]:
@@ -533,7 +547,7 @@ class ReinforceRule:
             return False
         cx, cy = sum(u["x"] for u in new) / len(new), sum(u["y"] for u in new) / len(new)
         target = min(at_home, key=lambda e: math.dist((e["x"], e["y"]), (cx, cy)))
-        if getattr(g, "ramp_point", None) is not None:      # (the roles hold the ramp: to its back spot)
+        if g.ramp_point is not None:                        # (holding the ramp: to its back spot)
             target = {"x": g.ramp_point[0], "y": g.ramp_point[1]}
         elif self.safe and self._outweighed(army, new, at_home, target):
             spot = self._mineral_line(obs, mine)
@@ -619,4 +633,183 @@ class UnloadRule:
         return False
 
 
-RULES = {"pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule, "unload": UnloadRule}
+class RampRule:
+    """Hold the main's ramp from its top, when asked (g.hold_ramp: a higher decision, or option auto:
+    on one base, zerg fighters seen at the ramp): the army in the main goes up, medics and firebats
+    on the top (they take the hits; zerglings come up a few at a time), the others just behind
+    (gary/terrain.py: ramp_top, ramp_inside), in a line from wall to wall; with fewer medics and
+    firebats than places in it (one per RAMP_GAP of its width; `blockers` at least, 0: none), SCVs
+    from the main's mineral line fill the top (as pros do: the zerglings can't get past them, and
+    come up one or two at a time). Each holds position once there, or where it is once a zergling
+    reaches it (a moving unit doesn't shoot). Those units are the rule's while it holds
+    (g.ramp_units; the roles, the army and the chores leave them alone); new fighters rally to its
+    back spot (g.ramp_point). With zerg fighters in the main the ramp is lost: the rule lets go (its
+    SCVs are pulled workers then: they fight, and mine again once it's calm)."""
+
+    name = "ramp"
+
+    def __init__(self, g: Gary, auto: bool = False, blockers: int = RAMP_BLOCKERS):
+        self.g = g
+        self.auto = auto
+        self.blockers = blockers
+        self.scvs: set[int] = set()              # the SCVs on the top
+        self.points = None                       # (top, inside, distance from the main's center to the top) or False
+        g.hold_ramp = False
+        g.ramp_units = set()
+
+    def _points(self):
+        if self.points is None:
+            self.points = False
+            g = self.g
+            try:
+                from gary.terrain import map_analysis
+                a = map_analysis(g.hi.game, g.map)
+                r = a["starts"][min(range(len(g.map.starts)), key=lambda k: math.dist(g.map.starts[k], g.main.center))]
+                if r["reliable"]:
+                    top = tuple(r["ramp_top"])
+                    self.points = (top, tuple(r["ramp_inside"]), tuple(r["ramp_bottom"]), math.dist(top, g.main.center))
+            except Exception:                    # (no terrain in this game: no ramp hold)
+                pass
+        return self.points or None
+
+    def _let_go(self, mine: list[dict]) -> bool:
+        g = self.g
+        g.leases.release(g.ramp_units)
+        if self.scvs:                            # to the pull rule: they fight, then mine once it's calm
+            g.pulled |= self.scvs & {u["tag"] for u in mine}
+            g.calm_since = g.hi.frame
+        g.ramp_units, g.ramp_point, self.scvs = set(), None, set()
+        return False
+
+    def _places(self, top, inside) -> list[tuple[int, int]]:
+        """The top's line: across the ramp where the route narrows to it, from wall to wall
+        (walkable ground), places RAMP_GAP apart. Computed once."""
+        if getattr(self, "places", None) is None:
+            d = math.dist(top, inside) or 1
+            across = (-(top[1] - inside[1]) / d, (top[0] - inside[0]) / d)
+            game = self.g.hi.game
+            reach = []
+            for side in (1, -1):             # walkable ground from the top to the wall, each way
+                k = 0
+                while k < RAMP_MAX_SPAN and game.walkable(int(top[0] + across[0] * (k + 4) * side),
+                                                          int(top[1] + across[1] * (k + 4) * side)):
+                    k += 4
+                reach.append(k)
+            span = reach[0] + reach[1]
+            n = max(1, round(span / RAMP_GAP))
+            start = -reach[1] + span / n / 2
+            self.places = [(int(top[0] + across[0] * (start + span / n * k)), int(top[1] + across[1] * (start + span / n * k)))
+                           for k in range(n)]
+        return self.places
+
+    def _line(self, front: list[dict], top, inside) -> dict:
+        """Each front unit's place in the top's line, the places nearest the middle first, each to
+        the nearest unit still without one; extra units on the top itself."""
+        if not front:
+            return {}
+        places = sorted(self._places(top, inside), key=lambda q: math.dist(q, top))
+        out, left = {}, list(front)
+        for q in places:
+            if not left:
+                break
+            u = min(left, key=lambda u: math.dist((u["x"], u["y"]), q))
+            out[u["tag"]] = q
+            left.remove(u)
+        for u in left:
+            out[u["tag"]] = top
+        return out
+
+    def _blockers(self, mine: list[dict], front: list[dict], top, wanted: int) -> list[dict]:
+        """SCVs for the top, up to `wanted` front units: those already there, then the nearest mining
+        in the main."""
+        g = self.g
+        want = wanted - len(front) if self.blockers else 0
+        if want <= 0:
+            self.scvs = set()
+            return []
+        scvs = [u for u in mine if u["type"] == T.SCV and u["completed"]]
+        kept = [u for u in scvs if u["tag"] in self.scvs][:want]
+        main = g.main.center
+        free = sorted((u for u in scvs if u["tag"] not in self.scvs and u["tag"] != g.scout and u["tag"] not in g.pulled
+                       and u["order"] in HARVEST_ORDERS | {3} and math.dist((u["x"], u["y"]), main) < RAMP_SCVS_FROM),
+                      key=lambda u: math.dist((u["x"], u["y"]), top))
+        chosen = kept + free[:want - len(kept)]
+        self.scvs = {u["tag"] for u in chosen}
+        return chosen
+
+    def step(self, obs: dict, mine: list[dict]) -> bool:
+        g = self.g
+        p = self._points()
+        if p is None:
+            return self._let_go(mine)
+        top, inside, bottom, d_top = p
+        main = g.main.center
+        fighters = enemy_fighters(obs, g.slot)
+        if self.auto:
+            one_base = not any(u["type"] == T.CC and math.dist((u["x"], u["y"]), main) > d_top for u in mine)
+            g.hold_ramp = one_base and any(math.dist((e["x"], e["y"]), top) < RAMP_NEAR or
+                                           math.dist((e["x"], e["y"]), bottom) < RAMP_NEAR for e in fighters)
+        if not g.hold_ramp or any(math.dist((e["x"], e["y"]), main) < d_top - RAMP_IN for e in fighters):
+            return self._let_go(mine)
+        army = [u for u in mine if u["type"] in g.army_types and u["completed"]
+                and math.dist((u["x"], u["y"]), main) <= d_top + RAMP_SLACK]
+        if not army:
+            return self._let_go(mine)
+        front = [u for u in army if u["type"] in RAMP_FRONT_TYPES]
+        front += self._blockers(mine, front, top, max(self.blockers, len(self._places(top, inside))))
+        back = [u for u in army if u["type"] not in RAMP_FRONT_TYPES]
+        g.ramp_units, g.ramp_point = {u["tag"] for u in front + back}, inside
+        now = g.hi.frame
+        g.leases.take(g.ramp_units, Intent("HOLD", list(g.ramp_units), None, {}, "rule:ramp", ttl=RAMP_HOLD_TTL))
+        reached = lambda u: any(math.dist((u["x"], u["y"]), (e["x"], e["y"])) <= RAMP_RANGE.get(u["type"], 32) + 32
+                                for e in fighters)
+        told = getattr(self, "told", {})
+        self.told = told
+        fresh = lambda u, kind: now - told.get(u["tag"], ("", -10 ** 9))[1] >= 24 or told[u["tag"]][0] != kind
+        spots = {**self._line(front, top, inside), **{u["tag"]: inside for u in back}}
+        on_top = {u["tag"] for u in front}
+
+        def at(u) -> bool:
+            """On its place: a front unit on it, or near it and done walking (others in the way); one
+            behind near its spot."""
+            d = math.dist((u["x"], u["y"]), spots[u["tag"]])
+            if u["tag"] in on_top:
+                return d <= RAMP_ON_SPOT or (d <= RAMP_SLACK and u.get("order") != MOVE_ORDER)
+            return d <= RAMP_SLACK
+
+        def hold(units: list[dict]) -> bool:
+            units = [u for u in units if u.get("order") != HOLD_ORDER and fresh(u, "hold")][:12]
+            if not units:
+                return False
+            for u in units:
+                told[u["tag"]] = ("hold", now)
+            tags = [u["tag"] for u in units]
+            g.motor.start(Intent("HOLD", tags, None, {"key": ("hold",), "tags": tags,
+                                                      "center": (units[0]["x"], units[0]["y"])}, "rule:ramp"))
+            return True
+
+        def move(units: list[dict]) -> bool:
+            # not there, not reached, not already walking there (told less than a second ago, or moving)
+            units = [u for u in units if not at(u) and not reached(u) and fresh(u, "move")
+                     and not (told.get(u["tag"], ("",))[0] == "move" and u.get("order") == MOVE_ORDER)]
+            if not units:
+                return False
+            far = [u for u in units if u["tag"] in on_top and math.dist((u["x"], u["y"]), top) > RAMP_GATHER]
+            if len(far) > 1:                     # the front far away: all to the top at once, the line once there
+                units, spot = far[:12], top
+            else:                                # (near it: one by one, each to its place in the line)
+                spot = spots[units[0]["tag"]]
+                units = [u for u in units if spots[u["tag"]] == spot][:12]
+            for u in units:
+                told[u["tag"]] = ("move", now)
+            tags = [u["tag"] for u in units]
+            key = ("move", int(spot[0]), int(spot[1]))
+            g.motor.start(Intent("MOVE", tags, spot, {"key": key, "tags": tags, "center": spot}, "rule:ramp"))
+            return True
+
+        # a zergling on it: hold (shoot) now; then the ones behind (one command), the top's line, arrivals
+        return hold([u for u in front + back if reached(u)]) or move(back) or move(front) or \
+            hold([u for u in front + back if at(u)])
+
+
+RULES = {"ramp": RampRule, "pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule, "unload": UnloadRule}

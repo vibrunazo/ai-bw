@@ -127,11 +127,6 @@ EASE = 3 * 32                        # reloading, zerg within reach + this: step
 POST_FROM_CC = 3 * 32               # post: this far from the Command Center toward the zerg
 POST_SLACK = 3 * 32                  # post: units farther than this from it go back
 AT_GAP = 48                          # ...units this close to it hold position
-RAMP_NEAR = 9 * 32                   # ramp hold: zerg fighters this close to the ramp's top or bottom
-RAMP_INSIDE = 3 * 32                 # ...and none this much nearer the main's center than the top is
-RAMP_OURS = 16 * 32                  # Gary's units this close to the top (on its side) hold it
-RAMP_SLACK = 40                      # a unit this close to its spot is there
-RAMP_FRONT_TYPES = {34, 32}          # medic, firebat: in front (marines behind)
 PACK_LINK = 4 * 32                   # regroup: units this close to each other are one bunch
 
 
@@ -150,11 +145,8 @@ class RoleRules:
 
     def __init__(self, g, brace: bool = False, leash: bool = False, volley: bool = False, regroup: bool = False,
                  holds: bool = False, kite: bool = False, fire: str = "enemy", post: float | str | None = None,
-                 vultures: bool = False, gap_post: bool = False, pull_hp: float = PULL_HP, surround: int = 0,
-                 ramp: bool = False):
+                 vultures: bool = False, gap_post: bool = False, pull_hp: float = PULL_HP, surround: int = 0):
         self.g = g
-        self.ramp = ramp                             # hold the main's ramp from its top (see _ramp_hold)
-        self._ramp = None                            # (top, bottom, front spot, back spot), or False
         self.pull_hp = pull_hp                       # pull back: hurt below this share of max HP
         self.surround = surround                     # ...or this many melee zerg on it (0: off): to the pack
         self.post = post                             # post: tiles from the CC toward the zerg, or "minerals"
@@ -283,14 +275,6 @@ class RoleRules:
         in_range = lambda u: any(math.dist((u["x"], u["y"]), (e["x"], e["y"])) <= RANGE.get(u["type"], 160) + 32
                                  for e in enemy)
 
-        # the main's ramp, zerg below it and none in the main yet: hold it from the top
-        if self.ramp:
-            intent, handled = self._ramp_hold(mine, enemy, by_tag, fresh)
-            if intent is not None:
-                return intent
-            mine = [u for u in mine if u["tag"] not in handled]
-            if not mine:
-                return None
         # retreat: the group is outweighed; into a bunker if one is near with room, else away
         if theirs > RETREAT_RATIO * max(ours, 1):
             group = [u for u in mine if fresh(u, "RETREAT")]
@@ -632,73 +616,6 @@ class RoleRules:
             if group:
                 return self._intent("POST", group, (int(post[0]), int(post[1])), "attack_move")
         return None
-
-    def _ramp_points(self):
-        """The main's ramp (gary/terrain.py): its top, its bottom, the front spot (on the top) and the
-        back spot (just inside); None where the analysis isn't reliable."""
-        if self._ramp is None:
-            self._ramp = False
-            try:
-                from gary.terrain import map_analysis
-                g = self.g
-                a = map_analysis(g.hi.game, g.map)
-                i = min(range(len(g.map.starts)), key=lambda k: math.dist(g.map.starts[k], g.main.center))
-                r = a["starts"][i]
-                if r["reliable"]:
-                    top = tuple(r["ramp_top"])
-                    self._ramp = (top, tuple(r["ramp_bottom"]), top, tuple(r["ramp_inside"]))
-            except Exception:                             # (no terrain in this game: no ramp hold)
-                pass
-        return self._ramp or None
-
-    def _ramp_hold(self, mine: list[dict], enemy: list[dict], by_tag: dict, fresh) -> tuple[Intent | None, set[int]]:
-        """Gary on one base (no Command Center outside the main: with a natural, it's held there), zerg
-        fighters at the main's ramp, none in the main: the units by the ramp's top hold it, as pros
-        do: medics and firebats on its top (they take the hits; the zerglings come up two at a
-        time), marines just behind; each moves there, then holds position (and shoots what comes;
-        one a zergling already reaches holds where it is: a moving unit doesn't shoot).
-        The intent for one group, and the units it holds (the other roles leave them alone)."""
-        g = self.g
-        r = self._ramp_points()
-        if r is None:
-            return None, set()
-        top, bottom, front, back = r
-        main = g.main.center
-        d_top = math.dist(top, main)
-        if any(u["owner"] == g.slot and u["type"] == T.CC and math.dist((u["x"], u["y"]), main) > d_top
-               for u in by_tag.values()):
-            g.ramp_point = None
-            return None, set()
-        near = [e for e in enemy if math.dist((e["x"], e["y"]), bottom) < RAMP_NEAR or math.dist((e["x"], e["y"]), top) < RAMP_NEAR]
-        inside = [e for e in enemy if math.dist((e["x"], e["y"]), main) < d_top - RAMP_INSIDE]
-        if not near or inside:
-            g.ramp_point = None
-            return None, set()
-        ours = [u for u in mine if math.dist((u["x"], u["y"]), top) < RAMP_OURS
-                and math.dist((u["x"], u["y"]), main) <= d_top + RAMP_SLACK]
-        if not ours:
-            g.ramp_point = None
-            return None, set()
-        g.ramp_point = back
-        front_units = [u for u in ours if u["type"] in RAMP_FRONT_TYPES]
-        back_units = [u for u in ours if u["type"] not in RAMP_FRONT_TYPES]
-        now = g.hi.frame
-        engaged = lambda u: any(math.dist((u["x"], u["y"]), (e["x"], e["y"])) <= RANGE.get(u["type"], 160) + 32
-                                for e in enemy)
-        for group, spot in ((front_units, front), (back_units, back)):
-            # walking to the spot, unless a zergling is already in reach (a moving unit doesn't shoot)
-            away = [u for u in group if math.dist((u["x"], u["y"]), spot) > RAMP_SLACK and not engaged(u)
-                    and fresh(u, "POST")]
-            if away:
-                return self._intent("POST", away[:MAX_GROUP], spot, "move"), {u["tag"] for u in ours}
-            there = [u for u in group if (math.dist((u["x"], u["y"]), spot) <= RAMP_SLACK or engaged(u))
-                     and u.get("order") != HOLD and fresh(u, "HOLD")][:MAX_GROUP]
-            if there:
-                for u in there:
-                    self.told[u["tag"]] = ("HOLD", now)
-                tags = [u["tag"] for u in there]
-                return Intent("HOLD", tags, None, {"key": ("hold",), "tags": tags, "center": _mid(there)}, "roles"),                     {u["tag"] for u in ours}
-        return None, {u["tag"] for u in ours}
 
     def _join_or_hold(self, roles: dict, mine: list[dict], by_tag: dict, fresh) -> Intent | None:
         """join: to Gary's biggest bunch of fighters (attack-moving: shooting on the way), from farther

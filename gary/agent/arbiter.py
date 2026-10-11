@@ -139,6 +139,8 @@ class FixedPriority:
         g = self.g
         if g.posture.army_home:          # the army model's moves leave the bunker empty: none now
             done = [u for u in done if u["type"] not in g.army_types]
+        if g.ramp_units:                 # holding the ramp (fight.py RampRule)
+            done = [u for u in done if u["tag"] not in g.ramp_units]
         if g.fight is not None:
             who = g.fight.decide(obs, mine)
             if who:

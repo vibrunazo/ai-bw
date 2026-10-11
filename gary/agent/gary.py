@@ -70,7 +70,9 @@ class Gary:
         self.scout: int | None = None                    # the scouting worker
         self.loaded: dict[int, set[int]] = {}            # bunker tag -> marines Gary sent into it
         self.release_bunkers: set[int] = set()           # bunkers to let out, not kept manned (posture v5)
-        self.ramp_point = None                           # the roles hold the main's ramp: where new units go
+        self.hold_ramp = False                           # asked: hold the main's ramp (fight.py RampRule)
+        self.ramp_units: set[int] = set()                # ...the units holding it
+        self.ramp_point = None                           # ...where new fighters go
         self.loading = (0, 0, 0)                         # a load just ordered: (until frame, bunker x, y)
         self.macro_turn = False                          # production's turn, after a fight command
         # When zerg fighters were last near a Command Center. One clock shared by the worker pull

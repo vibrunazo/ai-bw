@@ -128,6 +128,15 @@ quicker way to a playable Gary.
   the 9-pool (29, 36); results by opponent in `gary/agent/manifests.py`. The main ramp is now found
   by walkable ground (`gary/terrain.py`: the narrowest stretch of the route out of the main), not by
   the tiles' height flags, which on tile-edited maps (Python) put its "top" partway down the slope.
+- **The ramp hold as a skill (`fight.py` RampRule, option `ramp`):** whether to hold the ramp is a
+  higher decision (nothing in play asks yet); asked (`g.hold_ramp`), the army in the main holds it:
+  medics and firebats in a line across its top from wall to wall, SCVs filling the line's other
+  places, marines just behind, hold position (a unit a zergling reaches holds where it is); those
+  units are the skill's while it holds. Ramp drill (`eval/ramp_drill.py`: a small army in the main,
+  8-16 zerglings from the natural's choke 6 s after the ask; 3 maps, 16 seeds, 3 armies): held (at
+  most 2 zerglings ever in the main) 73% (v0.18, not asked: 0%), zerglings killed 10.2 (6.7), army
+  lost 2.2 (4.9), SCVs lost 0.9 (2.7). It fails mostly for time: 6 marines against 12 zerglings held
+  50%, and 83% with 12 s to get ready.
 
 ### v0.17 (October 2026): no early pool from nothing seen at 2:20
 
