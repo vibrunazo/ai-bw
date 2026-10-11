@@ -38,15 +38,18 @@ LING = 37
 START = 4 * 24                               # the drill starts (the game settled)
 LEAD = 6 * 24                                # the zerglings wait this long before they attack: Gary's time to get ready
 SECONDS = 60
+CONTACT = 3 * 32                             # the first zergling this close to the ramp's top: is the way closed?
 INSIDE = 2 * 32                              # a zergling this much nearer the main's center than the top is in
+PLOT_ZOOM = 6                                # ...picture pixels per minitile
 PLOT_EVERY = 4 * 24                          # --save: a picture of the ramp this often (frames)
-PLOT_HALF = 14 * 32                          # ...this far around the ramp's top (pixels)
+PLOT_HALF = 7 * 32                          # ...this far around the ramp's top (pixels)
 COLORS = {0: (60, 120, 255), 32: (255, 150, 30), 34: (255, 255, 255), 7: (0, 220, 220), 37: (230, 30, 30)}
 
 
 def _picture(game, walk, height, center, units: list[dict], spots) -> "Image":
     """The ground around the ramp (darker: lower; black: unwalkable), the units as dots (marines
-    blue, firebats orange, medics white, SCVs cyan, zerglings red), the hold spots as rings."""
+    blue, firebats orange, medics white, SCVs cyan, zerglings red: their collision boxes, outlined
+    yellow on hold position), the block's planned spots as small rings."""
     from PIL import Image, ImageDraw
     x0, y0 = int(center[0] - PLOT_HALF), int(center[1] - PLOT_HALF)
     size = 2 * PLOT_HALF // 8
@@ -57,18 +60,19 @@ def _picture(game, walk, height, center, units: list[dict], spots) -> "Image":
             cy, cx = y0 // 8 + j, x0 // 8 + i
             inside = 0 <= cy < walk.shape[0] and 0 <= cx < walk.shape[1]
             px[i, j] = (60 + 50 * int(height[cy, cx]),) * 3 if inside and walk[cy, cx] else (0, 0, 0)
-    im = im.resize((size * 3, size * 3), Image.NEAREST)
+    im = im.resize((size * PLOT_ZOOM, size * PLOT_ZOOM), Image.NEAREST)
     d = ImageDraw.Draw(im)
-    at = lambda x, y: ((x - x0) * 3 / 8, (y - y0) * 3 / 8)
+    at = lambda x, y: ((x - x0) * PLOT_ZOOM / 8, (y - y0) * PLOT_ZOOM / 8)
     for sx, sy in spots:
         x, y = at(sx, sy)
-        d.ellipse((x - 9, y - 9, x + 9, y + 9), outline=(255, 255, 0))
+        d.ellipse((x - 4, y - 4, x + 4, y + 4), outline=(255, 255, 0))
     for u in units:
         if u["type"] in COLORS:
-            x, y = at(u["x"], u["y"])
-            r = 4 if u["type"] == 37 else 5
-            d.ellipse((x - r, y - r, x + r, y + r), fill=COLORS[u["type"]],
-                      outline=(0, 0, 0) if u.get("order") != 107 else (255, 255, 0))
+            i = game.unit_type_info(u["type"])
+            ax, ay = at(u["x"] - i["left"], u["y"] - i["up"])
+            bx, by = at(u["x"] + i["right"] + 1, u["y"] + i["down"] + 1)
+            d.rectangle((ax, ay, bx, by), fill=COLORS[u["type"]],
+                        outline=(255, 255, 0) if u.get("order") == 107 else (0, 0, 0))
     d.text((4, 4), f"{game.frame / 24:.0f} s", fill=(255, 255, 0))
     return im
 
@@ -80,6 +84,14 @@ def _walkable_near(game, x: float, y: float) -> tuple[int, int]:
             if 0 <= px < 8192 and 0 <= py < 8192 and game.walkable(px, py):
                 return px, py
     return int(x), int(y)
+
+
+def sealed(game, obs: dict, slot: int, outside, inside) -> bool:
+    """Whether Gary's units (their collision boxes) and buildings close the way from outside to inside
+    to a zergling right now (gary/walls.py, exact)."""
+    from gary import walls as W
+    units = [(u["type"], u["x"], u["y"]) for u in obs["units"] if u["owner"] == slot and u["type"] in W.WALKERS]
+    return W.closed(game, obs, units, tuple(outside), tuple(inside))
 
 
 def drill(args: tuple) -> dict:
@@ -114,7 +126,7 @@ def drill(args: tuple) -> dict:
     army_types = set(ARMIES[army])
     first = {u["tag"] for u in game.observe()["units"] if u["owner"] == ts and u["type"] in army_types}
     scvs0 = sum(1 for u in game.observe()["units"] if u["owner"] == ts and u["type"] == C.SCV)
-    most_in, ling_frames = 0, 0
+    most_in, ling_frames, contact = 0, 0, None
     pictures = []
     if save:
         walk, height, _ = game.terrain()
@@ -134,9 +146,21 @@ def drill(args: tuple) -> dict:
         for i, hi in enumerate(m.his.values()):
             hi.step(2, advance_game=(i == 0))
         if save and (f - START) % PLOT_EVERY < 2 and len(pictures) < 8:
-            pictures.append(_picture(game, walk, height, top, game.observe()["units"], [top, r["ramp_inside"]]))
+            rule = next((x for x in m.gary.fight.before if x.name == "ramp"), None)
+            spots = [(x, y) for _, x, y in rule.plan["units"]] if rule is not None and rule.plan else [top, r["ramp_inside"]]
+            pictures.append(_picture(game, walk, height, top, game.observe()["units"], spots))
         if f % 8 < 2:
             o = game.observe()
+            if contact is None and any(u["owner"] == zs and u["type"] == LING and math.dist((u["x"], u["y"]), top) < CONTACT
+                                       for u in o["units"]):
+                contact = sealed(game, o, ts, bottom, r["ramp_inside"])
+                rule = next((x for x in m.gary.fight.before if x.name == "ramp"), None)
+                if rule is not None and rule.plan:       # the block then: its spots, and who stood on them holding
+                    by = {u["tag"]: u for u in o["units"]}
+                    spots = rule.plan["units"]
+                    on = [t for t, i in rule.slot_of.items() if t in by and by[t]["order"] == 107
+                          and math.dist((by[t]["x"], by[t]["y"]), spots[i][1:]) <= 4]
+                    out["block"] = (len(on), len(spots), len(rule.slot_of))
             inside = sum(1 for u in o["units"] if u["owner"] == zs and u["type"] == LING
                          and math.dist((u["x"], u["y"]), main) < d_top - INSIDE)
             most_in = max(most_in, inside)
@@ -159,7 +183,7 @@ def drill(args: tuple) -> dict:
     lost = sum(1 for t in first if t not in alive and game.unit_type_of(t) == -1)
     scvs = sum(1 for u in o["units"] if u["owner"] == ts and u["type"] == C.SCV)
     game.close()
-    return {**out, "killed": lings - lings_left, "army_lost": lost, "scvs_lost": max(0, scvs0 - scvs),
+    return {**out, "sealed": bool(contact), "killed": lings - lings_left, "army_lost": lost, "scvs_lost": max(0, scvs0 - scvs),
             "most_in": most_in, "ling_s_in": round(ling_frames / 24, 1)}
 
 
@@ -193,7 +217,7 @@ def main() -> None:
     print(f"{len(base)} drills: {len(args.maps)} maps, seeds {args.seeds[0]}-{args.seeds[-1]}, armies {args.armies}, zerglings {args.lings}")
     for v in args.versions:
         mine = [r for r in rows if r["version"] == v]
-        line = (f"  {v:24s} held {sum(r['most_in'] <= 2 for r in mine) / len(mine):.0%}  zerglings in (most) "
+        line = (f"  {v:24s} sealed {sum(r['sealed'] for r in mine) / len(mine):.0%}  held {sum(r['most_in'] <= 2 for r in mine) / len(mine):.0%}  zerglings in (most) "
                 f"{st.mean(r['most_in'] for r in mine):.1f}  zergling-s in {st.mean(r['ling_s_in'] for r in mine):.0f}  "
                 f"killed {st.mean(r['killed'] for r in mine):.1f}  army lost {st.mean(r['army_lost'] for r in mine):.1f}  "
                 f"SCVs lost {st.mean(r['scvs_lost'] for r in mine):.1f}")
@@ -205,7 +229,7 @@ def main() -> None:
     for a in args.armies:
         for n in args.lings:
             print(f"    {a:8s} {n:2d} zerglings  " + "  ".join(
-                f"{v}: held {sum(r['most_in'] <= 2 for r in mine) / len(mine):.0%} lost {st.mean(r['army_lost'] for r in mine):.1f}"
+                f"{v}: sealed {sum(r['sealed'] for r in mine) / len(mine):.0%} held {sum(r['most_in'] <= 2 for r in mine) / len(mine):.0%} lost {st.mean(r['army_lost'] for r in mine):.1f}"
                 for v in args.versions if (mine := [r for r in rows if r["version"] == v and r["army"] == a and r["lings"] == n])))
     for mp in args.maps:
         for v in args.versions:

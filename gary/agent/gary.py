@@ -70,6 +70,7 @@ class Gary:
         self.scout: int | None = None                    # the scouting worker
         self.loaded: dict[int, set[int]] = {}            # bunker tag -> marines Gary sent into it
         self.release_bunkers: set[int] = set()           # bunkers to let out, not kept manned (posture v5)
+        self.task_aside = None                           # the task a fight turn put aside (arbiter.py)
         self.hold_ramp = False                           # asked: hold the main's ramp (fight.py RampRule)
         self.ramp_units: set[int] = set()                # ...the units holding it
         self.ramp_point = None                           # ...where new fighters go

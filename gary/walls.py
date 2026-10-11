@@ -344,6 +344,172 @@ def gaps(game, obs: dict, inside: tuple[int, int], outside: tuple[int, int], mar
     return {"walled": walled, "openings": openings, "window": (x0, y0, x1, y1)}
 
 
+# --- body-blocking: units on hold position that close a choke ------------------------------------
+
+BLOCK_ORDER = (32, 34, 7, 0, 7)        # who goes in a block first: firebats, medics, SCVs (BLOCK_SCVS), marines, more SCVs
+BLOCK_SCVS = 2                        # ...SCVs before marines (pros hold with an SCV, a marine and an SCV)
+BLOCK_ANGLES = 36                     # cross-sections tried at each point (every 5 degrees)
+BLOCK_STEP = 4                        # pixels between the points tried along the way through
+BLOCK_TRIES = 8                       # the narrowest cross-sections tried with units
+BLOCK_SLOP = 4                        # a block stays closed with any one of its units this far off its spot (pixels)
+BLOCK_BEHIND = 6                      # pixels between the block's boxes and the ones behind it
+
+
+def _cross(blocked, c, angle: float, limit: int = 160):
+    """The cross-section through c ([y, x] in the window) at this angle: its two ends (the last
+    free pixels before an obstacle, or the window's edge), and its length."""
+    h, w = blocked.shape
+    d = (math.sin(angle), math.cos(angle))
+    ends = []
+    for side in (1, -1):
+        k = 0
+        while k < limit:
+            y, x = int(round(c[0] + d[0] * (k + 1) * side)), int(round(c[1] + d[1] * (k + 1) * side))
+            if not (0 <= y < h and 0 <= x < w) or blocked[y, x]:
+                break
+            k += 1
+        ends.append((c[0] + d[0] * k * side, c[1] + d[1] * k * side))
+    return ends[0], ends[1], math.dist(ends[0], ends[1])
+
+
+def _place_along(fp: Footprints, kinds: list[int], a, b) -> list[tuple[int, int, int]]:
+    """The units spread evenly from end a to end b of a cross-section ([y, x]): along it each box
+    takes its projection, the room left is shared by the gaps (walls included). As (type, x, y),
+    window pixels; [] if they don't fit."""
+    L = math.dist(a, b) or 1
+    d = ((b[0] - a[0]) / L, (b[1] - a[1]) / L)
+    extent = [fp[t].box_w * abs(d[1]) + fp[t].box_h * abs(d[0]) for t in kinds]
+    slack = L - sum(extent)
+    if slack < 0:
+        return []
+    gap, s, out = slack / (len(kinds) + 1), 0.0, []
+    for t, e in zip(kinds, extent):
+        s += gap + e / 2
+        cy, cx = a[0] + d[0] * s, a[1] + d[1] * s           # the box's center; the unit's position from it
+        f = fp[t]
+        out.append((t, int(round(cx - (f.right - f.left) / 2)), int(round(cy - (f.down - f.up) / 2))))
+        s += e / 2
+    return out
+
+
+def _with_boxes(blocked, fp: Footprints, units):
+    b = blocked.copy()
+    h, w = b.shape
+    for t, x, y in units:
+        f = fp[t]
+        x0, y0, x1, y1 = max(0, x - f.left), max(0, y - f.up), min(w - 1, x + f.right), min(h - 1, y + f.down)
+        if b[y0:y1 + 1, x0:x1 + 1].any():
+            return None                                  # a box on an obstacle or another box: can't stand there
+        b[y0:y1 + 1, x0:x1 + 1] = True
+    return b
+
+
+def closed(game, obs: dict, units, outside: tuple[int, int], inside: tuple[int, int], margin: int = 4 * 32,
+           walker: int = 37) -> bool:
+    """Whether these units ((type, x, y) map pixels: their collision boxes) with the cliffs and the
+    buildings in obs close the way from outside to inside to a walker (zerglings), exactly."""
+    fp = Footprints(game)
+    if getattr(game, "_walk_cache", None) is None:
+        game._walk_cache = game.terrain()[0]
+    H, W = game._walk_cache.shape[0] * 8, game._walk_cache.shape[1] * 8
+    x0, y0 = max(0, min(outside[0], inside[0]) - margin), max(0, min(outside[1], inside[1]) - margin)
+    x1, y1 = min(W, max(outside[0], inside[0]) + margin), min(H, max(outside[1], inside[1]) + margin)
+    blocked = obstacles(game, obs, fp, (x0, y0, x1, y1))
+    h, w = blocked.shape
+    for t, x, y in units:
+        bx0, by0, bx1, by1 = fp.box_at(t, x - x0, y - y0)
+        blocked[max(0, by0):max(0, min(h, by1 + 1)), max(0, bx0):max(0, min(w, bx1 + 1))] = True
+    free = fits(blocked, fp[walker])
+    return not connected(free, (inside[1] - y0, inside[0] - x0), (outside[1] - y0, outside[0] - x0))
+
+
+def block(game, obs: dict, outside: tuple[int, int], inside: tuple[int, int], pool: dict[int, int],
+          through: list[tuple[int, int]] | None = None, margin: int = 6 * 32, walker: int = 37) -> dict | None:
+    """Where units on hold position close the way from outside to inside (map pixels; e.g. the main
+    ramp's bottom and a spot inside the main) to a walker (zerglings), from a pool of unit types
+    ({type: count}): pros hold a ramp with an SCV, a marine and an SCV, or with one zealot, because
+    they know where each one has to stand. Cross-sections (wall to wall) are tried at points along
+    the way (`through`, a polyline from outside to inside; default the straight line), narrowest
+    first; on each the fewest units (BLOCK_ORDER) whose boxes, spread evenly along it, leave the
+    walker no way through (exact, as gaps(): the walker's box against the cliffs, buildings and
+    their boxes), even with any one of them BLOCK_SLOP pixels off its spot along it. Ties go to the cross-section nearest inside (on the top of a ramp, not its
+    bottom). None if nothing in the pool closes it.
+
+    {"units": [(type, x, y)...], "ends": (two map points), "behind": (x, y): where others stand
+    right behind the block, on the inside, "width": the cross-section's length}"""
+    import numpy as np
+    fp = Footprints(game)
+    if getattr(game, "_walk_cache", None) is None:
+        game._walk_cache = game.terrain()[0]
+    H, W = game._walk_cache.shape[0] * 8, game._walk_cache.shape[1] * 8
+    path = [outside] + list(through or []) + [inside]
+    x0, y0 = max(0, min(p[0] for p in path) - margin), max(0, min(p[1] for p in path) - margin)
+    x1, y1 = min(W, max(p[0] for p in path) + margin), min(H, max(p[1] for p in path) + margin)
+    blocked = obstacles(game, obs, fp, (x0, y0, x1, y1))
+    a, b = (inside[1] - y0, inside[0] - x0), (outside[1] - y0, outside[0] - x0)
+    free = fits(blocked, fp[walker])
+    a, b = _seed(free, a, 64), _seed(free, b, 64)
+    if a is None or b is None or not connected(free, a, b):
+        return None
+    # the points tried: along the polyline, every BLOCK_STEP pixels, each with its narrowest cross-section
+    tried = []
+    walked = 0.0
+    for p, q in zip(path, path[1:]):
+        n = max(1, int(math.dist(p, q) // BLOCK_STEP))
+        for k in range(n):
+            c = (p[1] + (q[1] - p[1]) * k / n - y0, p[0] + (q[0] - p[0]) * k / n - x0)
+            walked += math.dist(p, q) / n
+            if blocked[int(c[0]), int(c[1])]:
+                continue
+            ea, eb, L = min((_cross(blocked, c, math.pi * i / BLOCK_ANGLES) for i in range(BLOCK_ANGLES)),
+                            key=lambda r: r[2])
+            tried.append((L, -walked, ea, eb))
+    tried.sort()
+    order, scvs = [], pool.get(7, 0)
+    for k, t in enumerate(BLOCK_ORDER):
+        n = pool.get(t, 0) if t != 7 else (min(scvs, BLOCK_SCVS) if k == BLOCK_ORDER.index(7) else max(0, scvs - BLOCK_SCVS))
+        order += [t] * n
+    best = None
+    for L, at, ea, eb in tried[:BLOCK_TRIES]:
+        for n in range(1, len(order) + 1):
+            if best is not None and (n > len(best[0]) or (n == len(best[0]) and at >= best[1])):
+                break
+            units = _place_along(fp, order[:n], ea, eb)
+            boxes = _with_boxes(blocked, fp, units) if units else None
+            if boxes is None or connected(fits(boxes, fp[walker]), a, b):
+                continue
+            # it has to stay closed with any one unit a few pixels off its spot (clicks scatter)
+            d = ((eb[0] - ea[0]) / (L or 1), (eb[1] - ea[1]) / (L or 1))
+            robust = True
+            for i, (t, x, y) in enumerate(units):
+                for k in (BLOCK_SLOP, -BLOCK_SLOP):
+                    moved = units[:i] + [(t, int(round(x + d[1] * k)), int(round(y + d[0] * k)))] + units[i + 1:]
+                    mb = _with_boxes(blocked, fp, moved)
+                    if mb is not None and connected(fits(mb, fp[walker]), a, b):
+                        robust = False
+                        break
+                if not robust:
+                    break
+            if robust:
+                best = (units, at, ea, eb, L)
+                break
+    if best is None:
+        return None
+    units, _, ea, eb, L = best
+    # behind it: from the block's middle toward inside, past the deepest box
+    my, mx = (ea[0] + eb[0]) / 2, (ea[1] + eb[1]) / 2
+    nd = (eb[1] - ea[1], -(eb[0] - ea[0]))                # a normal to the cross-section ([y, x])
+    nl = math.hypot(*nd) or 1
+    nd = (nd[0] / nl, nd[1] / nl)
+    if (a[0] - my) * nd[0] + (a[1] - mx) * nd[1] < 0:
+        nd = (-nd[0], -nd[1])
+    depth = max(max(fp[t].box_w, fp[t].box_h) for t, _, _ in units)
+    k = depth / 2 + BLOCK_BEHIND + 10
+    return {"units": [(t, x + x0, y + y0) for t, x, y in units],
+            "ends": ((int(ea[1]) + x0, int(ea[0]) + y0), (int(eb[1]) + x0, int(eb[0]) + y0)),
+            "behind": (int(mx + nd[1] * k) + x0, int(my + nd[0] * k) + y0), "width": round(L)}
+
+
 # --- the frontier: what separates all of a player's bases from the enemy's side ------------------
 
 _source_side = None

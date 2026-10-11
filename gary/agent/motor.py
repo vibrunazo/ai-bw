@@ -6,7 +6,11 @@ intent kind, each a task on Gary's hands:
   command      the fight model's commands (MOVE, ATTACK_MOVE, ATTACK_UNIT, GATHER, OWN_UNIT, STOP,
                HOLD, STIM, RETURN_CARGO), and the roles (FIRE, CLOSE_IN, PULL_BACK, RETREAT: roles.py
                picks the point): select the group (or keep the selection when it already is the
-               group), camera on it if needed, then right-click / A-click / the key
+               group), camera on it if needed, then right-click / A-click / the key. "exact"
+               (a body block, fight.py RampRule): exactly those units, by clicks on each where the
+               game's hit test finds it (not a drag box), waiting to see the selection before
+               clicking again (any_scv: whichever mining SCVs the clicks take); "place": a
+               right-click exactly on a spot (nudged only off another unit)
   PULL         camera on the base, drag-box the miners nearest the attackers, attack-move there
   UNPULL       drag-box the pulled workers, right-click minerals
   LOAD         drag-select the marines (camera on them if needed), camera on the bunker,
@@ -43,6 +47,8 @@ TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL
 
 ENTER_TRANSPORT = 92
 UNDER_CURSOR = 24                    # a unit this close to a click point (pixels, each axis) is clicked on
+EXACT_TRIES = 3                      # exact selections clicked again this often before giving up
+PLACE_SEARCH = 12                    # "place" moves look this far for a pixel that hits no other unit
 GROUND_SEARCH = 160                  # attack-moves and moves look this far for open ground
 OTHER_SIZE = {176: (2, 1), 177: (2, 1), 178: (2, 1), 188: (4, 2), 131: (4, 3), 132: (4, 3), 133: (4, 3)}   # tiles
 PAST_FOR = 10                        # repair surround: frames the SCVs walk past the bunker before repairing
@@ -88,7 +94,8 @@ class DirectMotor:
         if self.g.hi.frame < until:                # (what Gary sees is a moment old: the load's own marines)
             for u in mine:
                 p = screen_of(obs, u["x"], u["y"])
-                if u["type"] == T.MARINE and p and x0 <= p[0] <= x1 and y0 <= p[1] <= y1                         and math.dist((u["x"], u["y"]), (bx, by)) < LOADING_NEAR:
+                if u["type"] == T.MARINE and p and x0 <= p[0] <= x1 and y0 <= p[1] <= y1 \
+                        and math.dist((u["x"], u["y"]), (bx, by)) < LOADING_NEAR:
                     return True
         for u in mine:
             if u.get("order") == ENTER_TRANSPORT and u["tag"] not in want:
@@ -115,7 +122,11 @@ class DirectMotor:
             return
         sel = set(obs["selection"])
         want = {u["tag"] for u in units}
-        if t.stage == "start":
+        if d.get("exact"):                       # exactly these units (a body block): clicks, not a box
+            if not self._exact(obs, units, sel, want, t):
+                return
+            want = sel = set(d["tags"])           # (SCVs: whichever the clicks took)
+        elif t.stage == "start":
             # the group is already selected (kiting the same units): straight to the order
             if (want <= sel and len(sel) <= len(want) + 2) or (sel and sel <= want and len(sel) >= 0.7 * len(want)):
                 t.stage = "order"
@@ -162,6 +173,16 @@ class DirectMotor:
                 g.say(f"fight: {len(want)} {_names(units)} -> move (minimap)")
             else:
                 ordered = False
+        elif a == "place":
+            # onto an exact spot (a body block, fight.py RampRule): the click right there, or the nearest
+            # pixel where it hits no other unit (the game's own hit test: a click on a unit would follow it)
+            gx, gy = self._clear_click(want, key[1], key[2])
+            p = screen_of(obs, gx, gy)
+            if p:
+                hi.right_click(*p)
+            else:
+                hi.minimap_right_click(key[1], key[2])
+            g.say(f"fight: {len(want)} {_names(units)} -> placed")
         elif a in ("move", "attack_move"):
             # on the ground next to the point: a click on a unit there would be an attack on that one
             # unit (A-click) or a follow or attack (right-click): Gary's fighters chased single zerglings
@@ -186,6 +207,79 @@ class DirectMotor:
             if "bunker" in d:                    # a retreat into a bunker: they're its marines now
                 g.loaded.setdefault(d["bunker"], set()).update(want)
         g.task = None
+
+    def _exact(self, obs: dict, units: list[dict], sel: set, want: set, t: Task) -> bool:
+        """Exactly these units selected, the camera on them (and on a "place" order's spot): a click on
+        the first, shift+clicks on the others, each where the game's hit test finds that unit; then
+        wait to see the selection (what Gary sees is reaction_ms old); when some are already selected
+        and nothing else, shift+clicks for the missing ones only (a shift+click on a selected unit
+        would drop it). True once they are the selection (go on to the order)."""
+        g, hi, d = self.g, self.g.hi, t.data
+        if sel == want:
+            t.stage = "order"
+            return True
+        if hi.frame < d.get("seen_at", -1):     # the clicks' selection isn't in sight yet
+            return False
+        # SCVs mining overlap (harvesters ignore collisions): a click takes one of them, not a chosen
+        # one; as a player does, any SCVs do when the order allows it (any_scv: about as many; the
+        # skill takes whichever it got, and sends for more if they're too few)
+        types = lambda tags: sorted(next((u["type"] for u in obs["units"] if u["tag"] == x), -1) for x in tags)
+        if d.get("any_scv") and sel and len(sel) <= len(want) + 1 and not sel & set(d.get("exclude", ())) and \
+                all(next((u["type"] for u in obs["units"] if u["tag"] == x), -1) == T.SCV for x in sel):
+            d["tags"] = sorted(sel)
+            if t.intent is not None:
+                t.intent.units = sorted(sel)
+            t.stage = "order"
+            return True
+        if d.get("clicked") is not None:
+            d["tries"] = d.get("tries", 0) + 1
+            if d["tries"] > EXACT_TRIES:
+                g.task = None
+                return False
+        key = d["key"]
+        points = [(u["x"], u["y"]) for u in units] + ([(key[1], key[2])] if key[0] == "place" else [])
+        if not all(screen_of(obs, x, y) for x, y in points):
+            if d.get("camera_moved"):
+                g.task = None
+                return False
+            d["camera_moved"] = True
+            g.camera_to(int(sum(x for x, _ in points) / len(points)), int(sum(y for _, y in points) / len(points)))
+            d["seen_at"] = hi.frame + round(hi.p.reaction_ms * 24 / 1000) + 2     # (until it's seen there)
+            return False
+        add = sel and sel < want                 # some of them, nothing else: add the others
+        todo = [u for u in units if u["tag"] not in sel] if add else units
+        landed = hi.frame
+        for i, u in enumerate(todo):
+            p = screen_of(obs, *self._hit_point(obs, u))
+            if p:
+                landed = max(landed, hi.click(*p, shift=add or i > 0).land_frame)
+        d["clicked"] = hi.frame
+        d["seen_at"] = landed + round(hi.p.reaction_ms * 24 / 1000) + 1
+        return False
+
+    def _hit_point(self, obs: dict, u: dict) -> tuple[int, int]:
+        """Where a click selects this unit: where it will be (aim), or the nearest pixel of its box there
+        where the game's hit test finds it (not a neighbor in front of it)."""
+        g = self.g
+        a = g.hi.aim(obs, u)
+        x, y = (obs["camera"]["x"] + a[0], obs["camera"]["y"] + a[1]) if a else (u["x"], u["y"])
+        for r in range(0, 9, 2):
+            for dx, dy in ((0, 0), (r, 0), (-r, 0), (0, r), (0, -r)):
+                if g.hi.game.unit_at(g.slot, x + dx, y + dy) == u["tag"]:
+                    return x + dx, y + dy
+        return x, y
+
+    def _clear_click(self, movers, x: int, y: int) -> tuple[int, int]:
+        """(x, y), or the nearest pixel within PLACE_SEARCH where a click hits no unit but the movers."""
+        g = self.g
+        ok = lambda px, py: g.hi.game.unit_at(g.slot, px, py) in (0, *movers)
+        if ok(x, y):
+            return x, y
+        for r in range(1, PLACE_SEARCH + 1):
+            for dx, dy in ((r, 0), (-r, 0), (0, r), (0, -r), (r, r), (-r, -r), (r, -r), (-r, r)):
+                if ok(x + dx, y + dy):
+                    return x + dx, y + dy
+        return x, y
 
     def _ground_near(self, obs: dict, x: int, y: int) -> tuple[int, int]:
         """The nearest point to (x, y), within GROUND_SEARCH, with no unit Gary sees under the cursor

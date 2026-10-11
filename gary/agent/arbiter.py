@@ -87,7 +87,7 @@ class FixedPriority:
                 g.army.remember(obs)
                 mine = [u for u in obs["units"] if u["owner"] == g.slot]
                 task = g.task
-                g.task = None
+                g.task, g.task_aside = None, task        # (a rule can let its own task finish: fight.py RampRule)
                 who = g.fight.block(obs, mine)
                 if who:
                     self.interrupted = task
