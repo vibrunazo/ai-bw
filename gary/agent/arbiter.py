@@ -87,7 +87,7 @@ class FixedPriority:
                 g.army.remember(obs)
                 mine = [u for u in obs["units"] if u["owner"] == g.slot]
                 task = g.task
-                g.task, g.task_aside = None, task        # (a rule can let its own task finish: fight.py RampRule)
+                g.task, g.task_aside = None, task        # (a rule can let its own task finish: block.py)
                 who = g.fight.block(obs, mine)
                 if who:
                     self.interrupted = task
@@ -139,8 +139,8 @@ class FixedPriority:
         g = self.g
         if g.posture.army_home:          # the army model's moves leave the bunker empty: none now
             done = [u for u in done if u["type"] not in g.army_types]
-        if g.ramp_units:                 # holding the ramp (fight.py RampRule)
-            done = [u for u in done if u["tag"] not in g.ramp_units]
+        if g.block_units:                # closing a choke (block.py)
+            done = [u for u in done if u["tag"] not in g.block_units]
         if g.fight is not None:
             who = g.fight.decide(obs, mine)
             if who:

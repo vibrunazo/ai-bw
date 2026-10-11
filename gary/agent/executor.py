@@ -129,7 +129,7 @@ class ScriptedExecutor:
         g = self.g
         idle = [u for u in done if u["type"] == SCV and u["order"] == IDLE and screen_of(obs, u["x"], u["y"])
                 and g.ignore_idle_until.get(u["tag"], 0) <= g.hi.frame and u["tag"] != g.scout
-                and u["tag"] not in g.ramp_units]
+                and u["tag"] not in g.block_units]
         if idle:
             g.task = Task("mine", data={"tags": [u["tag"] for u in idle]}, started=g.hi.frame)
             return True
@@ -141,7 +141,7 @@ class ScriptedExecutor:
         g, hi = self.g, self.g.hi
         if hi.frame < self.next_sweep:
             return False
-        busy = {g.scout} | g.pulled | g.ramp_units
+        busy = {g.scout} | g.pulled | g.block_units
         away = [u for u in done if u["type"] == SCV and u["order"] == IDLE and u["tag"] not in busy
                 and not screen_of(obs, u["x"], u["y"]) and g.ignore_idle_until.get(u["tag"], 0) <= hi.frame]
         self.next_sweep = hi.frame + 24 * 10
@@ -201,7 +201,7 @@ class ScriptedExecutor:
         # next build's task took it as free and sent it walking elsewhere: the first build lost)
         builders = {g.builder_of.get(r) for r in g.reserved}
         return u["type"] == SCV and u["completed"] and u["order"] not in BUSY_ORDERS \
-            and bool(screen_of(obs, u["x"], u["y"])) and u["tag"] != g.scout and u["tag"] not in g.pulled | g.ramp_units \
+            and bool(screen_of(obs, u["x"], u["y"])) and u["tag"] != g.scout and u["tag"] not in g.pulled | g.block_units \
             and (g.parked is None or g.parked.data["worker"] != u["tag"]) and u["tag"] not in builders
 
     def resume_parked(self, obs: dict, mine: list[dict]) -> bool:
@@ -482,7 +482,7 @@ class ScriptedExecutor:
             return
         if t.stage == "reselect":                    # a fight put the build aside: the same worker again
             w = next((u for u in mine if u["tag"] == t.data["worker"]), None)
-            if not w or w["tag"] in g.pulled | g.ramp_units:
+            if not w or w["tag"] in g.pulled | g.block_units:
                 self.fail_build(t)
                 return
             if obs["selection"] == [w["tag"]]:
@@ -676,7 +676,7 @@ class ScriptedExecutor:
             if not screen_of(obs, b["x"], b["y"]):
                 hi.camera_minimap(b["x"], b["y"])
                 return
-            scvs = [u for u in mine if u["type"] == SCV and u["completed"] and u["tag"] not in g.pulled | g.ramp_units
+            scvs = [u for u in mine if u["type"] == SCV and u["completed"] and u["tag"] not in g.pulled | g.block_units
                     and u["order"] not in BUSY_ORDERS and screen_of(obs, u["x"], u["y"])]
             if not scvs:
                 g.task = None

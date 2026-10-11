@@ -7,7 +7,7 @@ intent kind, each a task on Gary's hands:
                HOLD, STIM, RETURN_CARGO), and the roles (FIRE, CLOSE_IN, PULL_BACK, RETREAT: roles.py
                picks the point): select the group (or keep the selection when it already is the
                group), camera on it if needed, then right-click / A-click / the key. "exact"
-               (a body block, fight.py RampRule): exactly those units, by clicks on each where the
+               (a body block, block.py): exactly those units, by clicks on each where the
                game's hit test finds it (not a drag box), waiting to see the selection before
                clicking again (any_scv: whichever mining SCVs the clicks take); "place": a
                right-click exactly on a spot (nudged only off another unit)
@@ -174,7 +174,7 @@ class DirectMotor:
             else:
                 ordered = False
         elif a == "place":
-            # onto an exact spot (a body block, fight.py RampRule): the click right there, or the nearest
+            # onto an exact spot (a body block, block.py): the click right there, or the nearest
             # pixel where it hits no other unit (the game's own hit test: a click on a unit would follow it)
             gx, gy = self._clear_click(want, key[1], key[2])
             p = screen_of(obs, gx, gy)

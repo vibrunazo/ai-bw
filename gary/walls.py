@@ -15,6 +15,10 @@ an Academy; a Zerg with Evolution Chambers).
                                                  # sent through the opening
     python -m gary.walls --frontier 0c50ac60     # a home defense's Terran frontier at the takeover
 
+Body blocks (block()): where units on hold position close a choke to a walker (zerglings), from
+their collision boxes: the narrowest cross-section that cuts the way, wall to wall, the fewest
+units, closed even with any one a few pixels off (gary/agent/block.py: the skill that holds it).
+
 The frontier (frontier()): what separates all of a player's bases (every Command Center is inside)
 from the enemy's side, whatever the map: where the natural is the only way into the main, the
 natural's choke; where the main has another way in, that too; where the natural is behind the
@@ -350,22 +354,27 @@ BLOCK_ORDER = (32, 34, 7, 0, 7)        # who goes in a block first: firebats, me
 BLOCK_SCVS = 2                        # ...SCVs before marines (pros hold with an SCV, a marine and an SCV)
 BLOCK_ANGLES = 36                     # cross-sections tried at each point (every 5 degrees)
 BLOCK_STEP = 4                        # pixels between the points tried along the way through
-BLOCK_TRIES = 8                       # the narrowest cross-sections tried with units
-BLOCK_SLOP = 4                        # a block stays closed with any one of its units this far off its spot (pixels)
+BLOCK_TRIES = 8                       # the narrowest cross-sections that cut the way, tried with units
+BLOCK_CANDIDATES = 120                # ...looked for among this many narrowest
+SEED_SNAP = 160                       # a block's points on a building or cliff stand for the open ground this near
+BLOCK_SLOP = 8                        # a block stays closed with any one of its units this far off its spot (pixels)
 BLOCK_BEHIND = 6                      # pixels between the block's boxes and the ones behind it
 
 
-def _cross(blocked, c, angle: float, limit: int = 160):
+def _cross(blocked, c, angle: float, limit: int = 256):
     """The cross-section through c ([y, x] in the window) at this angle: its two ends (the last
-    free pixels before an obstacle, or the window's edge), and its length."""
+    free pixels before an obstacle), and its length; infinite where a side meets no obstacle within
+    limit or the window (no wall to close it against: the walker would go around)."""
     h, w = blocked.shape
     d = (math.sin(angle), math.cos(angle))
     ends = []
     for side in (1, -1):
         k = 0
-        while k < limit:
+        while True:
             y, x = int(round(c[0] + d[0] * (k + 1) * side)), int(round(c[1] + d[1] * (k + 1) * side))
-            if not (0 <= y < h and 0 <= x < w) or blocked[y, x]:
+            if k >= limit or not (0 <= y < h and 0 <= x < w):
+                return c, c, math.inf
+            if blocked[y, x]:
                 break
             k += 1
         ends.append((c[0] + d[0] * k * side, c[1] + d[1] * k * side))
@@ -404,10 +413,17 @@ def _with_boxes(blocked, fp: Footprints, units):
     return b
 
 
+def _squeezer(f: Footprint) -> Footprint:
+    """A walker a pixel smaller on each side: what a block is planned and checked against (between
+    boxes that face each other only diagonally the engine squeezes units past less predictably)."""
+    return Footprint(f.w, f.h, max(0, f.left - 1), max(0, f.up - 1), max(0, f.right - 1), max(0, f.down - 1))
+
+
 def closed(game, obs: dict, units, outside: tuple[int, int], inside: tuple[int, int], margin: int = 4 * 32,
            walker: int = 37) -> bool:
     """Whether these units ((type, x, y) map pixels: their collision boxes) with the cliffs and the
-    buildings in obs close the way from outside to inside to a walker (zerglings), exactly."""
+    buildings in obs close the way from outside to inside to a walker (zerglings; with a pixel to
+    spare on each side, _squeezer())."""
     fp = Footprints(game)
     if getattr(game, "_walk_cache", None) is None:
         game._walk_cache = game.terrain()[0]
@@ -415,12 +431,18 @@ def closed(game, obs: dict, units, outside: tuple[int, int], inside: tuple[int, 
     x0, y0 = max(0, min(outside[0], inside[0]) - margin), max(0, min(outside[1], inside[1]) - margin)
     x1, y1 = min(W, max(outside[0], inside[0]) + margin), min(H, max(outside[1], inside[1]) + margin)
     blocked = obstacles(game, obs, fp, (x0, y0, x1, y1))
+    walker = _squeezer(fp[walker])
+    # the two points on open ground first (one can be on a building: the base's Command Center)
+    bare = fits(blocked, walker)
+    a = _seed(bare, (inside[1] - y0, inside[0] - x0), SEED_SNAP)
+    b = _seed(bare, (outside[1] - y0, outside[0] - x0), SEED_SNAP)
+    if a is None or b is None:
+        return False
     h, w = blocked.shape
     for t, x, y in units:
         bx0, by0, bx1, by1 = fp.box_at(t, x - x0, y - y0)
         blocked[max(0, by0):max(0, min(h, by1 + 1)), max(0, bx0):max(0, min(w, bx1 + 1))] = True
-    free = fits(blocked, fp[walker])
-    return not connected(free, (inside[1] - y0, inside[0] - x0), (outside[1] - y0, outside[0] - x0))
+    return not connected(fits(blocked, walker), a, b)
 
 
 def block(game, obs: dict, outside: tuple[int, int], inside: tuple[int, int], pool: dict[int, int],
@@ -448,7 +470,7 @@ def block(game, obs: dict, outside: tuple[int, int], inside: tuple[int, int], po
     blocked = obstacles(game, obs, fp, (x0, y0, x1, y1))
     a, b = (inside[1] - y0, inside[0] - x0), (outside[1] - y0, outside[0] - x0)
     free = fits(blocked, fp[walker])
-    a, b = _seed(free, a, 64), _seed(free, b, 64)
+    a, b = _seed(free, a, SEED_SNAP), _seed(free, b, SEED_SNAP)
     if a is None or b is None or not connected(free, a, b):
         return None
     # the points tried: along the polyline, every BLOCK_STEP pixels, each with its narrowest cross-section
@@ -463,20 +485,35 @@ def block(game, obs: dict, outside: tuple[int, int], inside: tuple[int, int], po
                 continue
             ea, eb, L = min((_cross(blocked, c, math.pi * i / BLOCK_ANGLES) for i in range(BLOCK_ANGLES)),
                             key=lambda r: r[2])
-            tried.append((L, -walked, ea, eb))
+            if L < math.inf:
+                tried.append((L, -walked, ea, eb))
     tried.sort()
+    # only cross-sections that cut the way: closed along their whole length, the walker can't get
+    # through (a narrow place beside an island isn't one: it goes around)
+    walker_free = lambda bl: fits(bl, _squeezer(fp[walker]))
+    cuts = []
+    for L, at, ea, eb in tried[:BLOCK_CANDIDATES]:
+        line = blocked.copy()
+        n = int(L) + 1
+        for k in range(n + 1):
+            y, x = int(round(ea[0] + (eb[0] - ea[0]) * k / n)), int(round(ea[1] + (eb[1] - ea[1]) * k / n))
+            line[max(0, y - 1):y + 2, max(0, x - 1):x + 2] = True
+        if not connected(walker_free(line), a, b):
+            cuts.append((L, at, ea, eb))
+        if len(cuts) >= BLOCK_TRIES:
+            break
     order, scvs = [], pool.get(7, 0)
     for k, t in enumerate(BLOCK_ORDER):
         n = pool.get(t, 0) if t != 7 else (min(scvs, BLOCK_SCVS) if k == BLOCK_ORDER.index(7) else max(0, scvs - BLOCK_SCVS))
         order += [t] * n
     best = None
-    for L, at, ea, eb in tried[:BLOCK_TRIES]:
+    for L, at, ea, eb in cuts:
         for n in range(1, len(order) + 1):
             if best is not None and (n > len(best[0]) or (n == len(best[0]) and at >= best[1])):
                 break
             units = _place_along(fp, order[:n], ea, eb)
             boxes = _with_boxes(blocked, fp, units) if units else None
-            if boxes is None or connected(fits(boxes, fp[walker]), a, b):
+            if boxes is None or connected(walker_free(boxes), a, b):
                 continue
             # it has to stay closed with any one unit a few pixels off its spot (clicks scatter)
             d = ((eb[0] - ea[0]) / (L or 1), (eb[1] - ea[1]) / (L or 1))
@@ -485,7 +522,7 @@ def block(game, obs: dict, outside: tuple[int, int], inside: tuple[int, int], po
                 for k in (BLOCK_SLOP, -BLOCK_SLOP):
                     moved = units[:i] + [(t, int(round(x + d[1] * k)), int(round(y + d[0] * k)))] + units[i + 1:]
                     mb = _with_boxes(blocked, fp, moved)
-                    if mb is not None and connected(fits(mb, fp[walker]), a, b):
+                    if mb is not None and connected(walker_free(mb), a, b):
                         robust = False
                         break
                 if not robust:

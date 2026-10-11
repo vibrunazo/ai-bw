@@ -128,22 +128,29 @@ quicker way to a playable Gary.
   the 9-pool (29, 36); results by opponent in `gary/agent/manifests.py`. The main ramp is now found
   by walkable ground (`gary/terrain.py`: the narrowest stretch of the route out of the main), not by
   the tiles' height flags, which on tile-edited maps (Python) put its "top" partway down the slope.
-- **The ramp hold as a skill, a body block (`fight.py` RampRule, option `ramp`):** whether to hold
-  the ramp is a higher decision (nothing in play asks yet). Asked (`g.hold_ramp`), the units in the
-  main close the ramp with their bodies, as pros do with an SCV, a marine and an SCV: where each one
-  has to stand is planned to the pixel from the units' collision boxes and the cliffs
-  (`gary/walls.py` block(): the narrowest cross-section near the top, the fewest units, firebats and
-  medics first, then up to 2 SCVs, marines, more SCVs; closed even with any one unit 4 pixels off):
-  2 SCVs on Python's and Fighting Spirit's ramps, an SCV, an SCV and a marine on Heartbreak Ridge's.
-  In the engine those blocks let no zergling through (0 of 8 on each of the 9 ramps), one unit fewer
-  lets most through. Each blocker is selected by clicks, placed with a precise right-click and holds
-  position; while the block isn't closed (checked exactly) the farthest one is placed again; the
-  others wait further in until it stands, then hold right behind it. Ramp drill
-  (`eval/ramp_drill.py`: a small army in the main, 8-16 zerglings from the natural's choke; 3 maps,
-  16 seeds, 3 armies), with 12 s to get ready: closed when the first zergling arrives 92% (v0.18,
-  not asked: 0%), held (at most 2 zerglings ever in the main) 85% (1%), zerglings killed 11.1 (7.3),
-  army lost 1.2 (4.6), SCVs lost 0.5 (2.3); with 6 s, closed 58%: on Fighting Spirit the SCVs walk
-  6 s from the minerals.
+- **Choke blocks, a reusable skill (`gary/agent/block.py`; fight.py BlockRule, option `block`):**
+  units on hold position closing a choke with their bodies, as pros do (an SCV, a marine and an SCV
+  on a ramp; late in a game, a few units closing an expansion's way in against harass). Which choke
+  and when is a higher decision (`g.blocks`, name -> Choke; nothing in play asks yet): the main's
+  ramp, the natural's choke, or the ways into any group of bases (`walls.frontier()`), each with
+  who may close it (the fighters near it, SCVs from a mineral line) and what it keeps out (any unit
+  type: its collision box decides). Where each unit stands is planned to the pixel from the units'
+  collision boxes, the cliffs and the buildings (`gary/walls.py` block(): the narrowest
+  cross-section that cuts the way, wall to wall, the fewest units, closed even with any one 8
+  pixels off and against a zergling a pixel smaller each side): 2 SCVs on Python's and Fighting
+  Spirit's ramps, 3-4 bodies on Heartbreak Ridge's; the ways into 12 of 14 bases on Fighting
+  Spirit, 10 of 12 on Heartbreak Ridge and 6 of 12 on Python (the rest: open ground) close with 12
+  marines or fewer, 2-3 at a narrow way. In the engine none of 8 zerglings gets through those
+  blocks (9 ramps, 6 naturals); one unit fewer, most do. Each blocker is selected by clicks,
+  placed with a precise right-click and holds position as it gets there; when all hold and the
+  block still isn't closed (checked exactly) the farthest is placed again; the others wait further
+  in until it stands, then hold behind it. Choke drill (`eval/block_drill.py`; 3 maps, 16 seeds,
+  8-16 zerglings, 12 s to get ready): the main's ramp (6-7 units): closed when the first zergling
+  arrives 85% (v0.18, not asked: 0%), held 85% (1%), killed 11.1 (7.3), army lost 1.2 (4.6); the
+  natural's choke (12 units, 6-10 of them in a block 210-300 pixels wide): closed 42% (0%), held 69%
+  (14%), but killed minus lost no better (-0.2 ± 0.2): placing that many one by one takes most of
+  the time, and a thin line fights worse than a clump. Narrow chokes are worth closing with bodies;
+  wide ones are for buildings (a choice for the decision that asks).
 
 ### v0.17 (October 2026): no early pool from nothing seen at 2:20
 

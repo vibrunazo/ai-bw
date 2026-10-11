@@ -24,7 +24,7 @@ Rules (scripted reflexes), run before the model ("before") or before it in the a
              the fight: the rally is a plain move, and a moving marine doesn't shoot (v0.9)
   unload     zerg fighters at the base, none near a loaded bunker (the main's, from an early-pool
              scare, while the natural is attacked): let its marines out and send them to the fight
-  ramp       asked to (g.hold_ramp), the army in the main holds the main's ramp from its top
+  block      the chokes asked for (g.blocks) closed with units' bodies on hold position (block.py)
 """
 
 from __future__ import annotations
@@ -79,20 +79,7 @@ HOME = 12 * 32                       # zerg fighters this close to a Command Cen
 PACK_PX, PACK_MIN = 4 * 32, 3        # reinforce to_pack: fighters with this many (itself too) this close
 UNLOAD_CLEAR = 12 * 32               # unload: no enemy fighter this close to the bunker
 UNLOAD_EVERY = 24 * 10
-HOLD_ORDER = 107
-MOVE_ORDER = 6
-RAMP_SLACK = 40                      # ramp hold: a unit this close to its spot is there (those behind the block)
-RAMP_IN = 2 * 32                     # ...zerg fighters this much nearer the main's center than the top are in the main
-RAMP_NEAR = 9 * 32                   # ...auto: zerg fighters this close to the ramp's top or bottom ask for it
-RAMP_SCVS = 4                        # ...SCVs the block may take from the mineral line
-RAMP_SCVS_FROM = 12 * 32             # ...SCVs this close to the main's center can go
-RAMP_GATHER = 4 * 32                 # ...blockers farther from their spots walk to the block together first
-RAMP_ON_SPOT = 4                     # ...a blocker this close to its spot (pixels) is on it; placed again if farther
-RAMP_BACK_SLACK = 2 * 32             # ...the others this close to their spot are there (a clump)
-RAMP_WAIT = 2 * 32                   # ...the others wait this much further back until the block stands
-RAMP_SETTLED = 8 * 32                # ...zerg fighters this close to the top: blockers hold where they are
-RAMP_HOLD_TTL = 24 * 2               # ...the units holding it are the rule's this long, renewed every turn
-RAMP_RANGE = {0: 160, 32: 48}        # ...a zergling this close (+32) to a unit reaches it (marine, firebat; else 32)
+AUTO_RAMP_NEAR = 9 * 32              # block auto_ramp: enemy fighters this close to the ramp's top or bottom ask for it
 
 
 def enemy_fighters(obs: dict, slot: int) -> list[dict]:
@@ -547,8 +534,8 @@ class ReinforceRule:
             return False
         cx, cy = sum(u["x"] for u in new) / len(new), sum(u["y"] for u in new) / len(new)
         target = min(at_home, key=lambda e: math.dist((e["x"], e["y"]), (cx, cy)))
-        if g.ramp_point is not None:                        # (holding the ramp: to its back spot)
-            target = {"x": g.ramp_point[0], "y": g.ramp_point[1]}
+        if g.block_rally is not None:                       # (blocking a choke: right behind the block)
+            target = {"x": g.block_rally[0], "y": g.block_rally[1]}
         elif self.safe and self._outweighed(army, new, at_home, target):
             spot = self._mineral_line(obs, mine)
             if spot is not None:
@@ -633,199 +620,62 @@ class UnloadRule:
         return False
 
 
-class RampRule:
-    """Hold the main's ramp from its top, when asked (g.hold_ramp: a higher decision, or option auto:
-    on one base, zerg fighters seen at the ramp), as pros do: a body block. Where each unit has to
-    stand so that zerglings physically can't get through is planned once per ask from the units'
-    collision boxes and the cliffs, to the pixel (gary/walls.py block(): the ramp's narrowest
-    cross-section near its top, the fewest units, firebats and medics first, then SCVs from the
-    mineral line, then marines). Each blocker walks to the block, is placed on its spot with a
-    precise click and holds position (it attacks from there and nothing pushes it), and is placed
-    again if it's off before the zerg come. The others wait a little further in until the block
-    stands, then stand right behind it on hold position. Those units are the rule's while it holds
-    (g.ramp_units; the roles, the army and the chores leave them alone); new fighters rally behind
-    the block (g.ramp_point). With zerg fighters in the main the ramp is lost: the rule lets go (its
-    SCVs are pulled workers then: they fight, and mine again once it's calm)."""
+class BlockRule:
+    """Close the chokes asked for with units' bodies (g.blocks: name -> gary/agent/block.py Choke; who
+    asks is a higher decision): each held by a ChokeBlock, one order per turn, the first asked first.
+    A block lost (enemy fighters past it) is dropped from g.blocks. Option auto_ramp: on one base,
+    with enemy fighters seen at the main's ramp, it asks for the main's ramp itself (and drops it
+    when they're gone). The units blocking are the rule's (g.block_units: the roles, the army and
+    the chores leave them alone); new fighters rally behind the first block (g.block_rally)."""
 
-    name = "ramp"
+    name = "block"
 
-    def __init__(self, g: Gary, auto: bool = False, scvs: int = RAMP_SCVS):
+    def __init__(self, g: Gary, auto_ramp: bool = False):
         self.g = g
-        self.auto = auto
-        self.max_scvs = scvs                     # SCVs the block may take (0: none)
-        self.points = None                       # (top, inside, bottom, the top's distance from the main's center) or False
-        self.plan = None                         # walls.block()'s plan for this ask
-        self.slot_of: dict[int, int] = {}        # blocker tag -> its spot (index in the plan)
-        self.scvs: set[int] = set()              # SCVs the block took
-        self.fetch: Intent | None = None         # the order sending SCVs to the block (whichever the clicks take)
-        self.told: dict[int, tuple[str, int]] = {}
-        g.hold_ramp = False
-        g.ramp_units = set()
+        self.auto_ramp = auto_ramp
+        self.held: dict = {}                     # name -> ChokeBlock
+        self.ramp = None                         # auto_ramp: the main's ramp (block.main_ramp()), or False
+        g.blocks, g.block_units, g.block_rally = {}, set(), None
 
-    def _points(self):
-        if self.points is None:
-            self.points = False
-            g = self.g
-            try:
-                from gary.terrain import map_analysis
-                a = map_analysis(g.hi.game, g.map)
-                r = a["starts"][min(range(len(g.map.starts)), key=lambda k: math.dist(g.map.starts[k], g.main.center))]
-                if r["reliable"]:
-                    top = tuple(r["ramp_top"])
-                    self.points = (top, tuple(r["ramp_inside"]), tuple(r["ramp_bottom"]), math.dist(top, g.main.center))
-            except Exception:                    # (no terrain in this game: no ramp hold)
-                pass
-        return self.points or None
-
-    def _let_go(self, mine: list[dict]) -> bool:
+    def _auto_ramp(self, mine: list[dict], fighters: list[dict]) -> None:
+        from gary.agent.block import main_ramp
         g = self.g
-        g.leases.release(g.ramp_units)
-        if self.scvs:                            # to the pull rule: they fight, then mine once it's calm
-            g.pulled |= self.scvs & {u["tag"] for u in mine}
-            g.calm_since = g.hi.frame
-        g.ramp_units, g.ramp_point = set(), None
-        self.plan, self.slot_of, self.scvs, self.fetch = None, {}, set(), None
-        return False
-
-    def _closed(self, obs: dict, blockers: list[dict], p) -> bool:
-        from gary.walls import closed
-        top, inside, bottom, _ = p
-        seen = {"units": [u for u in obs["units"] if u["owner"] in (self.g.slot, 11)]}
-        return closed(self.g.hi.game, seen, [(u["type"], u["x"], u["y"]) for u in blockers], bottom, inside)
+        if self.ramp is None:
+            self.ramp = main_ramp(g) or False
+        if not self.ramp:
+            return
+        c = self.ramp
+        top = c.through[0]
+        d_top = math.dist(top, g.main.center)
+        one_base = not any(u["type"] == T.CC and math.dist((u["x"], u["y"]), g.main.center) > d_top for u in mine)
+        if one_base and any(math.dist((e["x"], e["y"]), top) < AUTO_RAMP_NEAR or
+                            math.dist((e["x"], e["y"]), c.outside) < AUTO_RAMP_NEAR for e in fighters):
+            g.blocks.setdefault(c.name, c)
+        elif g.blocks.get(c.name) is c:
+            del g.blocks[c.name]
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
+        from gary.agent.block import ChokeBlock
         g = self.g
-        p = self._points()
-        if p is None:
-            return self._let_go(mine)
-        top, inside, bottom, d_top = p
-        main = g.main.center
         fighters = enemy_fighters(obs, g.slot)
-        if self.auto:
-            one_base = not any(u["type"] == T.CC and math.dist((u["x"], u["y"]), main) > d_top for u in mine)
-            g.hold_ramp = one_base and any(math.dist((e["x"], e["y"]), top) < RAMP_NEAR or
-                                           math.dist((e["x"], e["y"]), bottom) < RAMP_NEAR for e in fighters)
-        if not g.hold_ramp or any(math.dist((e["x"], e["y"]), main) < d_top - RAMP_IN for e in fighters):
-            return self._let_go(mine)
-        by_tag = {u["tag"]: u for u in mine}
-        army = [u for u in mine if u["type"] in g.army_types and u["completed"]
-                and math.dist((u["x"], u["y"]), main) <= d_top + RAMP_SLACK]
-        if not army:
-            return self._let_go(mine)
-        now = g.hi.frame
-        aside = g.task_aside
-        busy = aside is not None and aside.intent is not None and aside.intent.source == "rule:ramp"
-        # the SCVs the last fetch took (whichever its clicks got), once it's done
-        if self.fetch is not None and not (busy and aside.intent is self.fetch):
-            took = [t for t in self.fetch.units if t in by_tag][:self.fetch.params.get("need", 99)]
-            self.scvs |= set(took)                # (an extra one goes back to mining once idle)
-            for t in took:
-                self.told[t] = ("move", now)
-            self.fetch = None
-        # (one still mining was never sent: the clicks took another, or none; fetched again)
-        self.scvs = {t for t in self.scvs if t in by_tag and by_tag[t]["order"] not in HARVEST_ORDERS}
-        # the plan, once per ask (what's in the main, and SCVs up to max_scvs)
-        if self.plan is None:
-            from gary.walls import block
-            pool = {}
-            for u in army:
-                pool[u["type"]] = pool.get(u["type"], 0) + 1
-            pool[T.SCV] = self.max_scvs
-            seen = {"units": [u for u in obs["units"] if u["owner"] in (g.slot, 11)]}
-            self.plan = block(g.hi.game, seen, bottom, inside, pool, through=[top]) or {"units": [], "behind": inside, "ends": (inside, inside)}
-        spots = self.plan["units"]
-        # each spot keeps its unit while it lives; empty ones: the nearest free unit of its type
-        self.slot_of = {t: i for t, i in self.slot_of.items() if t in by_tag}
-        taken = set(self.slot_of.values())
-        for i, (kind, x, y) in enumerate(spots):
-            if i in taken:
-                continue
-            pool = [u for u in (army if kind != T.SCV else [by_tag[t] for t in self.scvs]) if u["type"] == kind
-                    and u["tag"] not in self.slot_of]
-            if pool:
-                u = min(pool, key=lambda u: math.dist((u["x"], u["y"]), (x, y)))
-                self.slot_of[u["tag"]] = i
-        blockers = [by_tag[t] for t in self.slot_of]
-        spot = lambda u: spots[self.slot_of[u["tag"]]][1:]
-        back = [u for u in army if u["tag"] not in self.slot_of]
-        behind = self.plan["behind"]
-        formed = bool(blockers) and len(blockers) == len(spots) and all(
-            math.dist((u["x"], u["y"]), spot(u)) <= RAMP_ON_SPOT and u.get("order") == HOLD_ORDER for u in blockers)
-        if spots and not formed:                 # out of the blockers' way until the block stands
-            (ax, ay), (bx, by) = self.plan["ends"]
-            mx, my = (ax + bx) / 2, (ay + by) / 2
-            dn = math.dist((mx, my), behind) or 1
-            behind = (int(behind[0] + (behind[0] - mx) / dn * RAMP_WAIT), int(behind[1] + (behind[1] - my) / dn * RAMP_WAIT))
-        g.ramp_units = {u["tag"] for u in army} | self.scvs | ({t for t in self.fetch.units} if self.fetch else set())
-        g.ramp_point = behind
-        g.leases.take(g.ramp_units, Intent("HOLD", list(g.ramp_units), None, {}, "rule:ramp", ttl=RAMP_HOLD_TTL))
-        told = self.told
-        reached = lambda u: any(math.dist((u["x"], u["y"]), (e["x"], e["y"])) <= RAMP_RANGE.get(u["type"], 32) + 32
-                                for e in fighters)
-        coming = any(math.dist((e["x"], e["y"]), top) < RAMP_SETTLED for e in fighters)
-        fresh = lambda u, kind, wait=24: told.get(u["tag"], ("", -10 ** 9))[0] != kind or now - told[u["tag"]][1] >= wait
-        off = lambda u: math.dist((u["x"], u["y"]), spot(u))
-        walking = lambda u: u.get("order") == MOVE_ORDER
-        sent = lambda u, kind: told.get(u["tag"], ("",))[0] == kind and walking(u)
-
-        def order(kind: str, group: list[dict], key: tuple, target, fetch: bool = False) -> bool:
-            for u in group:
-                told[u["tag"]] = (kind, now)
-            tags = [u["tag"] for u in group]
-            intent = Intent(kind.upper() if kind != "place" else "MOVE", tags, target,
-                            {"key": key, "tags": tags, "center": (group[0]["x"], group[0]["y"]), "exact": True,
-                             "any_scv": fetch}, "rule:ramp")
-            if fetch:
-                self.fetch = intent
-            g.motor.start(intent)
-            return True
-
-        # 1. a zergling on a unit that isn't holding: hold (it shoots, from where it is)
-        hit = [u for u in blockers + back if reached(u) and u.get("order") != HOLD_ORDER and fresh(u, "hold")][:12]
-        if hit:
-            return order("hold", hit, ("hold",), None)
-        if busy:                                 # its last order still being given: let it finish
-            return False
-        # 2. SCVs for the block's SCV spots: any from the mineral line, to the block (one order)
-        need = sum(1 for kind, _, _ in spots if kind == T.SCV) - len(self.scvs)
-        if need > 0 and not coming:
-            free = sorted((u for u in mine if u["type"] == T.SCV and u["completed"] and u["tag"] != g.scout
-                           and u["tag"] not in g.pulled and u["tag"] not in self.scvs and u["order"] in HARVEST_ORDERS | {3}
-                           and math.dist((u["x"], u["y"]), main) < RAMP_SCVS_FROM),
-                          key=lambda u: math.dist((u["x"], u["y"]), top))[:need]
-            if free:
-                c = self.plan["behind"]
-                order("move", free, ("move", int(c[0]), int(c[1])), c, fetch=True)
-                self.fetch.params["need"] = need
-                self.fetch.params["exclude"] = sorted(self.scvs)      # (not one it already has)
-                return True
-        # 3. blockers far from their spots: to them (one order for those going to the same place)
-        away = [u for u in blockers if off(u) > RAMP_GATHER and not reached(u) and fresh(u, "move", 48) and not sent(u, "move")]
-        if away:
-            c = (sum(spot(u)[0] for u in away) // len(away), sum(spot(u)[1] for u in away) // len(away))
-            return order("move", away[:12], ("move", c[0], c[1]), c)
-        # 4. the others: out of the way until the block stands, then right behind it (one order)
-        far = [u for u in back if math.dist((u["x"], u["y"]), behind) > RAMP_BACK_SLACK and not reached(u)
-               and fresh(u, "move", 48) and not sent(u, "move")][:12]
-        if far:
-            return order("move", far, ("move", int(behind[0]), int(behind[1])), behind)
-        # 5. the block, where its units stand now: closed to zerglings (exactly: gary/walls.py), or the
-        # one farthest from its spot placed again (before the zerg come), with a precise click
-        near = all(off(u) <= RAMP_GATHER and not walking(u) for u in blockers) and len(blockers) == len(spots)
-        shut = near and self._closed(obs, blockers, p)
-        place = [u for u in blockers if not shut and not coming and not reached(u) and off(u) <= RAMP_GATHER
-                 and (off(u) > RAMP_ON_SPOT or near) and off(u) >= 1 and not sent(u, "place") and fresh(u, "place", 12)]
-        if place:
-            u = max(place, key=off)
-            x, y = spot(u)
-            return order("place", [u], ("place", x, y), (x, y))
-        # 6. closed (or on its spot, or the zerg here): hold position
-        settle = [u for u in blockers if (shut or off(u) <= RAMP_ON_SPOT or coming) and not walking(u)] + \
-                 [u for u in back if math.dist((u["x"], u["y"]), behind) <= RAMP_BACK_SLACK]
-        settle = [u for u in settle if u.get("order") != HOLD_ORDER and fresh(u, "hold")][:12]
-        if settle:
-            return order("hold", settle, ("hold",), None)
-        return False
+        if self.auto_ramp:
+            self._auto_ramp(mine, fighters)
+        for name in list(self.held):             # no longer asked for (or asked for anew): let go
+            if g.blocks.get(name) is not self.held[name].choke:
+                self.held.pop(name).release(mine)
+        acted = False
+        for name, choke in list(g.blocks.items()):
+            b = self.held.get(name)
+            if b is None:
+                b = self.held[name] = ChokeBlock(g, choke, f"rule:block:{name}")
+            if not acted:
+                acted = b.step(obs, mine, fighters)
+            if b.lost:
+                del g.blocks[name]
+                del self.held[name]
+        g.block_units = set().union(*(b.units for b in self.held.values()))
+        g.block_rally = next((b.rally for b in self.held.values() if b.rally is not None), None)
+        return acted
 
 
-RULES = {"ramp": RampRule, "pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule, "unload": UnloadRule}
+RULES = {"block": BlockRule, "pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule, "unload": UnloadRule}

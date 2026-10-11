@@ -336,14 +336,15 @@ OPTIONS = {
     # On v0.17: replayed pros on three maps lost 11 of 144 (9), won 9 (2); the 9-pool lost 1 (1), won
     # 36 (27); Zerg v2 (72) lost 8 (10). In v0.18
     "posture5": lambda m: m.update(posture="early_pool/v5"),
-    # fight.py RampRule: the army in the main holds the main's ramp from its top when asked (g.hold_ramp;
-    # nothing in play asks yet: eval/ramp_drill.py does). ramp_auto: it asks itself on one base when
-    # zerg fighters are seen at the ramp. As that (in the roles, before the skill held its units),
-    # on v0.17+posture5, lost (without): Zerg v2 on Fighting Spirit 8 (8) and Python 12 (11) of 72;
-    # replayed pros (48) Fighting Spirit 5 (5), Python 5 (3); the 9-pool 1 (1), won 29 (36). Not adopted
-    "ramp": lambda m: m["fight"].update(before=m["fight"]["before"] + ["ramp"]),
-    "ramp_auto": lambda m: (m["fight"].update(before=m["fight"]["before"] + ["ramp"]),
-                            m["fight"].setdefault("rule_options", {}).update(ramp={"auto": True})),
+    # fight.py BlockRule: the chokes asked for (g.blocks; nothing in play asks yet: eval/block_drill.py
+    # does) closed with units' bodies (gary/agent/block.py). ramp_auto: it asks for the main's ramp
+    # itself on one base when zerg fighters are seen there. As that (in the roles, before the skill
+    # held its units), on v0.17+posture5, lost (without): Zerg v2 on Fighting Spirit 8 (8) and Python
+    # 12 (11) of 72; replayed pros (48) Fighting Spirit 5 (5), Python 5 (3); the 9-pool 1 (1), won 29
+    # (36). Not adopted
+    "block": lambda m: m["fight"].update(before=m["fight"]["before"] + ["block"]),
+    "ramp_auto": lambda m: (m["fight"].update(before=m["fight"]["before"] + ["block"]),
+                            m["fight"].setdefault("rule_options", {}).update(block={"auto_ramp": True})),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)
