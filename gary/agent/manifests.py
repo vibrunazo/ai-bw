@@ -338,10 +338,11 @@ OPTIONS = {
     "posture5": lambda m: m.update(posture="early_pool/v5"),
     # fight.py BlockRule: the chokes asked for (g.blocks; nothing in play asks yet: eval/block_drill.py
     # does) closed with units' bodies (gary/agent/block.py). ramp_auto: it asks for the main's ramp
-    # itself on one base when zerg fighters are seen there. As that (in the roles, before the skill
-    # held its units), on v0.17+posture5, lost (without): Zerg v2 on Fighting Spirit 8 (8) and Python
-    # 12 (11) of 72; replayed pros (48) Fighting Spirit 5 (5), Python 5 (3); the 9-pool 1 (1), won 29
-    # (36). Not adopted
+    # itself on one base when zerg fighters are seen there. With the body block, on v0.18, lost
+    # (without): Zerg v2 on Fighting Spirit 12 (8) and Python 10 (11) of 72; replayed pros (48)
+    # Python 7 (3), Fighting Spirit 5 (5), Heartbreak Ridge 5 (3); the 9-pool 4 (1), won 25 (36): 43
+    # of 336 (31). Against the 9-pool it takes the first marines the rush bunker at the ramp wants.
+    # Not adopted: when to block is for a learned decision
     "block": lambda m: m["fight"].update(before=m["fight"]["before"] + ["block"]),
     "ramp_auto": lambda m: (m["fight"].update(before=m["fight"]["before"] + ["block"]),
                             m["fight"].setdefault("rule_options", {}).update(block={"auto_ramp": True})),

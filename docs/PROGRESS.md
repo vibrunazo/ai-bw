@@ -150,7 +150,10 @@ quicker way to a playable Gary.
   natural's choke (12 units, 6-10 of them in a block 210-300 pixels wide): closed 42% (0%), held 69%
   (14%), but killed minus lost no better (-0.2 ± 0.2): placing that many one by one takes most of
   the time, and a thin line fights worse than a clump. Narrow chokes are worth closing with bodies;
-  wide ones are for buildings (a choice for the decision that asks).
+  wide ones are for buildings (a choice for the decision that asks). Asked for by a simple rule in
+  games (`ramp_auto`: on one base, zerg fighters seen at the ramp) it does worse: lost 43 of 336
+  games (v0.18: 31), the 9-pool 4 of 48 (1), won 25 (36), where it takes the first marines the rush
+  bunker at the ramp wants. When to block is a decision for the learned model.
 
 ### v0.17 (October 2026): no early pool from nothing seen at 2:20
 
