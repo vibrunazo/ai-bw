@@ -131,6 +131,15 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.18: v0.17 whose posture (v5) calls off an alarm from nothing seen until 4:00, and lets the
+    # main's rush bunker out once the rush is over
+    "v018": {"version": "v0.18", "posture": "early_pool/v5", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.17 with learned roles (gary/policy/roles.py; the model: --fight-model / fight_path, default
     # the latest in runs/roles): the same rules around them, roles' options passed on (the post)
     "v017roleml": {"version": "v0.17", "posture": "early_pool/v4", "leases": "enforced",
@@ -323,7 +332,9 @@ OPTIONS = {
     # Python (48 seeds) lost 5 (5); Zerg v2 (72) lost 13 (9); with regroup too 5 and 14 (regroup
     # alone 5 and 12). Not adopted
     "reinforce_pack": lambda m: m["fight"].setdefault("rule_options", {}).update(reinforce={"to_pack": True}),
-    # posture.py v5: an alarm from nothing seen called off until 4:00; the main's bunker let out after
+    # posture.py v5: an alarm from nothing seen called off until 4:00; the main's bunker let out after.
+    # On v0.17: replayed pros on three maps lost 11 of 144 (9), won 9 (2); the 9-pool lost 1 (1), won
+    # 36 (27); Zerg v2 (72) lost 8 (10). In v0.18
     "posture5": lambda m: m.update(posture="early_pool/v5"),
     # roles.py: on one base, hold the main's ramp from its top (medics/firebats on it, marines just
     # behind, hold position). On v0.17+posture5, lost (without): Zerg v2 on Fighting Spirit 8 (8) and
