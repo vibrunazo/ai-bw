@@ -63,6 +63,10 @@ class Match:
         if opponent == "replayed":
             from gary.bots.zerg_replayed import ZergReplayed
             self.zerg = ZergReplayed(self.his["Z"], self.map, seed)
+        elif opponent in ("v1", "v2"):
+            from gary.bots.zerg_v1 import ZergV1
+            from gary.bots.zerg_v2 import ZergV2
+            self.zerg = {"v1": ZergV1, "v2": ZergV2}[opponent](self.his["Z"], self.map)
         else:
             self.zerg = ZergRush(self.his["Z"], self.map)
         self.zerg.attack_after = int(attack_after_s * 24)

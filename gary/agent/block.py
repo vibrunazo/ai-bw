@@ -293,3 +293,41 @@ class ChokeBlock:
     def _place(order, u: dict, spot) -> bool:
         x, y = spot(u)
         return order("place", [u], ("place", x, y), (x, y))
+
+
+# --- what a decision to block sees -----------------------------------------------------------------
+
+FEATURES = ["minutes", "bases", "enemy_near", "enemy_close", "enemy_in", "enemy_dist", "own_army", "own_at_choke",
+            "workers", "bunkers_at", "loaded_at", "bunkers_else", "loaded_else", "width"]
+NEAR, CLOSE = 12 * 32, 6 * 32        # enemy fighters this close to the choke (pixels)
+
+
+def features(g, obs: dict, choke: Choke, width: float = 0.0) -> dict:
+    """What Gary sees that bears on closing this choke now, from its own view (fogged): the enemy's
+    fighters near it (supply), how close, any already past it; its own fighters (in reach, at the
+    choke), its workers, its bunkers at the choke and elsewhere with the marines it put in them,
+    its bases, the game time, and the choke's width."""
+    from gary.policy.army import is_building, is_worker, supply_x2
+    mid = choke.through[0] if choke.through else choke.inside
+    d_mid = math.dist(mid, choke.inside)
+    enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0
+             and not is_worker(u["type"]) and not is_building(u["type"])]
+    mine = [u for u in obs["units"] if u["owner"] == g.slot]
+    sup = lambda us: sum(supply_x2(u["type"]) for u in us) / 2
+    dist = lambda u, p: math.dist((u["x"], u["y"]), p)
+    army = [u for u in mine if u["type"] in g.army_types and u["completed"]]
+    bunkers = [u for u in mine if u["type"] == T.BUNKER and u["completed"]]
+    at = [b for b in bunkers if dist(b, mid) < CLOSE]
+    loaded = lambda bs: sum(len(g.loaded.get(b["tag"], ())) for b in bs)
+    return {"minutes": obs["frame"] / 24 / 60,
+            "bases": sum(1 for u in mine if u["type"] == T.CC),
+            "enemy_near": sup([e for e in enemy if dist(e, mid) < NEAR]),
+            "enemy_close": sup([e for e in enemy if dist(e, mid) < CLOSE]),
+            "enemy_in": sup([e for e in enemy if dist(e, choke.inside) < d_mid - LOST]),
+            "enemy_dist": min((dist(e, mid) for e in enemy), default=NEAR * 2) / 32,
+            "own_army": sup([u for u in army if dist(u, choke.units_at) <= choke.units_reach]),
+            "own_at_choke": sup([u for u in army if dist(u, mid) < CLOSE]),
+            "workers": sum(1 for u in mine if u["type"] == T.SCV),
+            "bunkers_at": len(at), "loaded_at": loaded(at),
+            "bunkers_else": len(bunkers) - len(at), "loaded_else": loaded(bunkers) - loaded(at),
+            "width": width / 32}

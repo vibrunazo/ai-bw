@@ -79,6 +79,7 @@ HOME = 12 * 32                       # zerg fighters this close to a Command Cen
 PACK_PX, PACK_MIN = 4 * 32, 3        # reinforce to_pack: fighters with this many (itself too) this close
 UNLOAD_CLEAR = 12 * 32               # unload: no enemy fighter this close to the bunker
 UNLOAD_EVERY = 24 * 10
+DECIDE_EVERY = 10 * 24               # block decide: the decision this often (as the branches it learned from)
 AUTO_RAMP_NEAR = 9 * 32              # block auto_ramp: enemy fighters this close to the ramp's top or bottom ask for it
 
 
@@ -625,16 +626,21 @@ class BlockRule:
     asks is a higher decision): each held by a ChokeBlock, one order per turn, the first asked first.
     A block lost (enemy fighters past it) is dropped from g.blocks. Option auto_ramp: on one base,
     with enemy fighters seen at the main's ramp, it asks for the main's ramp itself (and drops it
-    when they're gone). The units blocking are the rule's (g.block_units: the roles, the army and
+    when they're gone). Option decide (a model from train/block_decision.py, "latest": the newest):
+    while enemy fighters are near the main's ramp, every DECIDE_EVERY it asks for the ramp where the
+    model expects blocking to gain (what Gary sees: block.features()), and drops it where not. The units blocking are the rule's (g.block_units: the roles, the army and
     the chores leave them alone); new fighters rally behind the first block (g.block_rally)."""
 
     name = "block"
 
-    def __init__(self, g: Gary, auto_ramp: bool = False):
+    def __init__(self, g: Gary, auto_ramp: bool = False, decide: str | None = None):
         self.g = g
         self.auto_ramp = auto_ramp
+        self.decider = _block_decider(decide) if decide else None
+        self.next_decide = 0
         self.held: dict = {}                     # name -> ChokeBlock
-        self.ramp = None                         # auto_ramp: the main's ramp (block.main_ramp()), or False
+        self.ramp = None                         # auto_ramp, decide: the main's ramp (block.main_ramp()), or False
+        self.ramp_width = 0.0
         g.blocks, g.block_units, g.block_rally = {}, set(), None
 
     def _auto_ramp(self, mine: list[dict], fighters: list[dict]) -> None:
@@ -654,12 +660,35 @@ class BlockRule:
         elif g.blocks.get(c.name) is c:
             del g.blocks[c.name]
 
+    def _decide(self, obs: dict, fighters: list[dict]) -> None:
+        from gary.agent import block as B
+        g = self.g
+        if self.ramp is None:
+            self.ramp = B.main_ramp(g) or False
+            if self.ramp:
+                self.ramp_width = B._analysis(g)["ramp_width"]
+        if not self.ramp or g.hi.frame < self.next_decide:
+            return
+        self.next_decide = g.hi.frame + DECIDE_EVERY
+        c = self.ramp
+        gain = None
+        if any(math.dist((e["x"], e["y"]), c.through[0]) < B.NEAR for e in fighters):
+            f = B.features(g, obs, c, self.ramp_width)
+            model, names = self.decider
+            gain = float(model.predict(np.array([[f[k] for k in names]], np.float32))[0])
+        if gain is not None and gain > 0:
+            g.blocks.setdefault(c.name, c)
+        elif g.blocks.get(c.name) is c:
+            del g.blocks[c.name]
+
     def step(self, obs: dict, mine: list[dict]) -> bool:
         from gary.agent.block import ChokeBlock
         g = self.g
         fighters = enemy_fighters(obs, g.slot)
         if self.auto_ramp:
             self._auto_ramp(mine, fighters)
+        if self.decider is not None:
+            self._decide(obs, fighters)
         for name in list(self.held):             # no longer asked for (or asked for anew): let go
             if g.blocks.get(name) is not self.held[name].choke:
                 self.held.pop(name).release(mine)
@@ -676,6 +705,19 @@ class BlockRule:
         g.block_units = set().union(*(b.units for b in self.held.values()))
         g.block_rally = next((b.rally for b in self.held.values() if b.rally is not None), None)
         return acted
+
+
+def _block_decider(ref: str):
+    """(model, feature names) from train/block_decision.py: a model.pkl, or "latest" (the newest run)."""
+    import pickle
+    from pathlib import Path
+    path = Path(ref)
+    if ref == "latest":
+        runs = sorted((Path(__file__).resolve().parents[2] / "runs" / "block_decision").glob("*/model.pkl"))
+        path = runs[-1]
+    with open(path, "rb") as f:
+        d = pickle.load(f)
+    return d["model"], d["features"]
 
 
 RULES = {"block": BlockRule, "pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule, "unload": UnloadRule}

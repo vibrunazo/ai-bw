@@ -344,6 +344,10 @@ OPTIONS = {
     # of 336 (31). Against the 9-pool it takes the first marines the rush bunker at the ramp wants.
     # Not adopted: when to block is for a learned decision
     "block": lambda m: m["fight"].update(before=m["fight"]["before"] + ["block"]),
+    # the decision learned from branches (train/block_decision.py, the newest run): on held-out games
+    # -25 a moment against never blocking's 0 (docs/PROGRESS.md). Not adopted
+    "block_learned": lambda m: (m["fight"].update(before=m["fight"]["before"] + ["block"]),
+                                m["fight"].setdefault("rule_options", {}).update(block={"decide": "latest"})),
     "ramp_auto": lambda m: (m["fight"].update(before=m["fight"]["before"] + ["block"]),
                             m["fight"].setdefault("rule_options", {}).update(block={"auto_ramp": True})),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8

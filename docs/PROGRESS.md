@@ -154,6 +154,18 @@ quicker way to a playable Gary.
   games (`ramp_auto`: on one base, zerg fighters seen at the ramp) it does worse: lost 43 of 336
   games (v0.18: 31), the 9-pool 4 of 48 (1), won 25 (36), where it takes the first marines the rush
   bunker at the ramp wants. When to block is a decision for the learned model.
+- **Block or not, learned from branches (`eval/block_branch.py`, `train/block_decision.py`,
+  option `block_learned`):** 1350 moments of Gary's games (432 games: the 9-pool, Zerg v2, the
+  replayed pros on three maps) where enemy fighters came near the main's ramp, each played on twice
+  from the same state (games are deterministic: the same game replayed to the moment, Gary's memory
+  included), without and with the block, scored over the 90 s after. Blocking did better at 38%,
+  worse at 59%, -54 on average (the 9-pool -79). A model of when it gains (gradient-boosted trees
+  on what Gary sees: block.features()) found nothing on held-out games: -25 a moment (never
+  blocking: 0; perfect hindsight +111). Placebo branches (Gary skipping half a second) measure
+  chaos alone: it changes the next 90 s at 39% of the moments, by +-425 (Zerg v2: +-607), against
+  the block's effect of about -65 against the 9-pool (chaos there +-116: a real effect) and -141
+  against Zerg v2. Single branches average effects well but can't teach when: that needs several
+  per moment. Blocking the main's ramp as it is now loses on average; not adopted.
 
 ### v0.17 (October 2026): no early pool from nothing seen at 2:20
 
