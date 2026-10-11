@@ -17,6 +17,16 @@ block is lost: the skill lets go (its workers fight, then mine again once it's c
 Who asks for a block is a higher decision: g.blocks, name -> Choke (fight.py BlockRule holds every
 one asked for). Chokes from the map: main_ramp(), natural_choke(); and the ways into any group of
 bases (base_ways(): walls.frontier(), e.g. a late expansion's, to keep small harass out).
+
+TODO (placement, later): place blockers the way pros do, by pressing them against the wall and
+each other rather than clicking exact pixels. A right-click within a unit's own box targets the
+unit itself, so a click can't nudge it a few pixels, and clicks scatter a few pixels anyway. So:
+plan a packed line from one wall (walls.block(): the units touching, the slack at the far wall),
+right-click each unit a little into the wall or past the last one placed, so the unit stops pressed
+against it (spam the click while a group compresses), then hold position; closed() checks the
+result as now. It doesn't depend on click accuracy, and a group can be pressed in at once rather
+than placed one by one (the natural's 6-10 unit blocks were too slow: closed 42% in the drill).
+Measure with eval/block_drill.py (--chokes ramp natural).
 """
 
 from __future__ import annotations
