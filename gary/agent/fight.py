@@ -72,6 +72,9 @@ CALM_FRAMES = 24 * 5                 # pulled workers go back to mining after 5 
 REPAIR_ORDER = 34
 REPAIRERS = 2
 REPAIR_THREAT = 9 * 32               # zerglings this close to the bunker: repair it
+SAFE_AROUND = 8 * 32                 # safe rally: the zerg and Gary's fighters this close to the fight compared
+MINERALS = {176, 177, 178}
+REPAIR_PAST = 64                     # surround: the move point past the bunker's center (pixels; it's 96x64)
 HOME = 12 * 32                       # zerg fighters this close to a Command Center or bunker: at home
 PACK_PX, PACK_MIN = 4 * 32, 3        # reinforce to_pack: fighters with this many (itself too) this close
 UNLOAD_CLEAR = 12 * 32               # unload: no enemy fighter this close to the bunker
@@ -455,13 +458,16 @@ class LoadRule:
 
 
 class RepairRule:
-    """A damaged bunker with zerglings near: the 2 (option: n) nearest free SCVs repair it."""
+    """A damaged bunker with zerglings near: the 2 (option: n) nearest free SCVs repair it. Option
+    surround: as pros do, they first move past the bunker, then repair it, so they spread around it
+    instead of queueing on the side they came from."""
 
     name = "repair"
 
-    def __init__(self, g: Gary, n: int = REPAIRERS):
+    def __init__(self, g: Gary, n: int = REPAIRERS, surround: bool = False):
         self.g = g
         self.n = n
+        self.surround = surround
         self.next_repair = 0
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
@@ -485,9 +491,14 @@ class RepairRule:
         if not scvs:
             return False
         self.next_repair = hi.frame + 24 * 3
-        g.motor.start(Intent("REPAIR", [u["tag"] for u in scvs], bunker["tag"],
-                             {"bunker": bunker["tag"], "x": bunker["x"], "y": bunker["y"],
-                              "scvs": [u["tag"] for u in scvs]}, "rule:repair"))
+        data = {"bunker": bunker["tag"], "x": bunker["x"], "y": bunker["y"], "scvs": [u["tag"] for u in scvs]}
+        if self.surround and len(scvs) > 1:
+            # past the bunker: its far side from the SCVs, just beyond its edge
+            cx, cy = sum(u["x"] for u in scvs) / len(scvs), sum(u["y"] for u in scvs) / len(scvs)
+            d = math.dist((cx, cy), (bunker["x"], bunker["y"])) or 1
+            ux, uy = (bunker["x"] - cx) / d, (bunker["y"] - cy) / d
+            data["past"] = (int(bunker["x"] + ux * REPAIR_PAST), int(bunker["y"] + uy * REPAIR_PAST))
+        g.motor.start(Intent("REPAIR", [u["tag"] for u in scvs], bunker["tag"], data, "rule:repair"))
         return True
 
 
@@ -496,13 +507,16 @@ class ReinforceRule:
     the fight (on the minimap). The rally is a plain move, and a moving marine doesn't shoot.
     Option to_pack: to Gary's nearest bunch of fighters instead, when there is one (one by one into
     the zerg, they died alone: in 48 games on Python, 48% of Gary's army deaths had no other of its
-    fighters within 6 tiles, pros' 12%; those were 13 s old, median)."""
+    fighters within 6 tiles, pros' 12%; those were 13 s old, median). Option safe: while the zerg
+    there outweigh Gary's fighters already at the fight, to the main's mineral line instead (as
+    pros re-rally: the new ones gather behind the SCVs until there are enough)."""
 
     name = "reinforce"
 
-    def __init__(self, g: Gary, to_pack: bool = False):
+    def __init__(self, g: Gary, to_pack: bool = False, safe: bool = False):
         self.g = g
         self.to_pack = to_pack
+        self.safe = safe
         self.known: set[int] | None = None       # fighters Gary has seen
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
@@ -519,7 +533,13 @@ class ReinforceRule:
             return False
         cx, cy = sum(u["x"] for u in new) / len(new), sum(u["y"] for u in new) / len(new)
         target = min(at_home, key=lambda e: math.dist((e["x"], e["y"]), (cx, cy)))
-        if self.to_pack:
+        if getattr(g, "ramp_point", None) is not None:      # (the roles hold the ramp: to its back spot)
+            target = {"x": g.ramp_point[0], "y": g.ramp_point[1]}
+        elif self.safe and self._outweighed(army, new, at_home, target):
+            spot = self._mineral_line(obs, mine)
+            if spot is not None:
+                target = {"x": spot[0], "y": spot[1]}
+        elif self.to_pack:
             old = [u for u in army if u["tag"] not in {n["tag"] for n in new}]
             packed = [u for u in old if sum(1 for v in old if math.dist((u["x"], u["y"]), (v["x"], v["y"])) < PACK_PX) >= PACK_MIN]
             if packed:
@@ -527,6 +547,29 @@ class ReinforceRule:
         g.motor.start(Intent("REINFORCE", [u["tag"] for u in new], (target["x"], target["y"]),
                              {"tags": [u["tag"] for u in new], "x": target["x"], "y": target["y"]}, "rule:reinforce"))
         return True
+
+
+    def _outweighed(self, army: list[dict], new: list[dict], at_home: list[dict], target: dict) -> bool:
+        """The zerg around the nearest one at home outweigh Gary's fighters already near them."""
+        p = (target["x"], target["y"])
+        fresh = {u["tag"] for u in new}
+        theirs = sum(supply_x2(e["type"]) for e in at_home if math.dist((e["x"], e["y"]), p) < SAFE_AROUND)
+        ours = sum(supply_x2(u["type"]) for u in army
+                   if u["tag"] not in fresh and math.dist((u["x"], u["y"]), p) < SAFE_AROUND)
+        return theirs > ours
+
+    def _mineral_line(self, obs: dict, mine: list[dict]) -> tuple[int, int] | None:
+        """Between the main's Command Center and its minerals: the SCVs mining there are a wall."""
+        g = self.g
+        ccs = [u for u in mine if u["type"] == T.CC and u["completed"]]
+        if not ccs:
+            return None
+        cc = min(ccs, key=lambda u: math.dist((u["x"], u["y"]), g.main.center))
+        fields = [u for u in obs["units"] if u["type"] in MINERALS and math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < 10 * 32]
+        if not fields:
+            return None
+        mx, my = sum(u["x"] for u in fields) / len(fields), sum(u["y"] for u in fields) / len(fields)
+        return int((cc["x"] + mx) / 2), int((cc["y"] + my) / 2)
 
 
 class UnloadRule:

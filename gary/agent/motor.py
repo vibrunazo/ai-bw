@@ -11,7 +11,8 @@ intent kind, each a task on Gary's hands:
   UNPULL       drag-box the pulled workers, right-click minerals
   LOAD         drag-select the marines (camera on them if needed), camera on the bunker,
                right-click it
-  REPAIR       camera on the bunker and the SCVs, drag-box them, right-click the bunker
+  REPAIR       camera on the bunker and the SCVs, drag-box them, (surround: right-click the ground
+               past the bunker, then) right-click the bunker
   REINFORCE    camera on the new units, drag-box them, attack-move on the minimap
   ARMY_MOVE, ARMY_ATTACK   drag-box the cluster 12 at a time, order each box on the minimap
   SCOUT        pick a worker once and give it a hotkey; recall it, right-click on the minimap
@@ -44,6 +45,7 @@ ENTER_TRANSPORT = 92
 UNDER_CURSOR = 24                    # a unit this close to a click point (pixels, each axis) is clicked on
 GROUND_SEARCH = 160                  # attack-moves and moves look this far for open ground
 OTHER_SIZE = {176: (2, 1), 177: (2, 1), 178: (2, 1), 188: (4, 2), 131: (4, 3), 132: (4, 3), 133: (4, 3)}   # tiles
+PAST_FOR = 10                        # repair surround: frames the SCVs walk past the bunker before repairing
 LOADING_FOR = 36                     # a load's marines are left alone this long...
 LOADING_NEAR = 5 * 32                # ...those this close to its bunker
 
@@ -397,8 +399,18 @@ class DirectMotor:
             box_around(hi, [self.g.hi.aim(obs, u) for u in units], 12)
             t.stage = "order"
             return
-        p = screen_of(obs, d["x"], d["y"])
         chosen = set(obs["selection"]) & set(d["scvs"])
+        if t.stage == "order" and d.get("past") and chosen:
+            q = screen_of(obs, *self._ground_near(obs, *d["past"]))
+            if q:
+                hi.right_click(*q)               # past the bunker first: they spread around it
+                g.leases.take(chosen, t.intent)
+                d["moved"] = hi.frame
+                t.stage = "repair"
+                return
+        if t.stage == "repair" and hi.frame - d["moved"] < PAST_FOR:
+            return
+        p = screen_of(obs, d["x"], d["y"])
         if p and chosen:
             hi.right_click(*p)                   # an SCV's right-click on a damaged building: repair
             g.leases.take(chosen, t.intent)

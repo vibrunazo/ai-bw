@@ -291,6 +291,12 @@ OPTIONS = {
     "unload": lambda m: m["fight"].update(before=m["fight"]["before"] + ["unload"]),
     # fight.py: 4 SCVs repair a bunker (not 2): against Zerg v2 (72 seeds) lost 15 (15)
     "repair4": lambda m: m["fight"].setdefault("rule_options", {}).update(repair={"n": 4}),
+    # fight.py: 4 SCVs move past the bunker, then repair it (spread around it); and new fighters rally
+    # to the main's mineral line while the zerg at home outweigh Gary's fighters there. Both on top of
+    # v0.17+posture5+ramp, lost (ramp alone): Zerg v2 on Fighting Spirit 16 (8) and Python 13 (12) of
+    # 72; replayed pros (48) Fighting Spirit 2 (5), Python 5 (5); the 9-pool 1 (1). Not adopted
+    "repair_surround": lambda m: m["fight"].setdefault("rule_options", {}).update(repair={"n": 4, "surround": True}),
+    "safe_rally": lambda m: m["fight"].setdefault("rule_options", {}).update(reinforce={"safe": True}),
     # fight.py: bunkers kept loaded. On v0.14: Zerg v2 (72 seeds, 12 min) lost 8 (15); replayed pros on
     # three maps lost 14 of 144 (15), the 9-pool 3 (3); home defenses [239] +2 ± 5. In v0.15
     "preload": lambda m: m["fight"].setdefault("rule_options", {}).update(load={"always": True}),
@@ -319,6 +325,11 @@ OPTIONS = {
     "reinforce_pack": lambda m: m["fight"].setdefault("rule_options", {}).update(reinforce={"to_pack": True}),
     # posture.py v5: an alarm from nothing seen called off until 4:00; the main's bunker let out after
     "posture5": lambda m: m.update(posture="early_pool/v5"),
+    # roles.py: on one base, hold the main's ramp from its top (medics/firebats on it, marines just
+    # behind, hold position). On v0.17+posture5, lost (without): Zerg v2 on Fighting Spirit 8 (8) and
+    # Python 12 (11) of 72; replayed pros (48) Fighting Spirit 5 (5), Python 5 (3); the 9-pool 1 (1),
+    # won 29 (36). Not adopted
+    "ramp": _roles(ramp=True),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)

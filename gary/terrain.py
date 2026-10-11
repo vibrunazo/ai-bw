@@ -4,16 +4,17 @@ Map knowledge a player has before the game starts (like gary/mapinfo.py), from t
 (walkability and ground height per 8x8-pixel minitile: Game.terrain()):
 
   main plateau    the walkable ground at the start location's height, connected to it
-  main ramp       where the ground route from the main toward the enemy leaves the plateau: its top
-                  (on the plateau's edge), its bottom (a few tiles down the route) and its width
+  main ramp       the narrowest stretch of the ground route from the main toward the enemy, near the
+                  start: its top (where the route first narrows to it), a spot just inside the main
+                  behind it, its bottom (just past it) and its width
   natural         the base nearest the ramp's bottom by ground distance
   natural choke   the narrowest point on the ground route from the natural toward the enemy,
                   between 8 and 20 tiles from it: where a wall or a bunker holds the natural
 
 Routes run through the middle of passages (each step costs more the nearer it is to unwalkable
 ground), so the narrowest point along one is the passage's real width, not a wall it brushes.
-Mains on the same ground level as their natural (e.g. Heartbreak Ridge) aren't split from it by
-height; their analysis is marked unreliable ("reliable": false) until the map is split at its chokes.
+A main whose way out has no narrow point (wider than RAMP_MAX_WIDTH) near the start is marked
+unreliable ("reliable": false).
 Widths are the narrowest walkable span there (twice the distance to the nearest unwalkable
 minitile). All positions are map pixels. Results are cached per map (data/interim/maps/).
 
@@ -35,12 +36,15 @@ from gary.env import Game
 from gary.mapinfo import MapInfo
 
 MINI = 8                          # pixels per minitile
-RAMP_DOWN = 12                    # minitiles down the route from the ramp's top to its bottom
+RAMP_PAST = 4                     # minitiles down the route past the ramp's narrow stretch: its bottom
+RAMP_IN = 10                      # minitiles up the route from the ramp's top: the spot inside it...
+RAMP_SEARCH = 20                  # ...or up to this many more, to a tile flagged at the main's height
+RAMP_MAX_WIDTH = 6 * 32           # a narrowest point wider than this isn't a ramp (pixels)
 NATURAL_AREA = 32                 # minitiles from the natural's center that are its own area
 CHOKE_SEARCH = 200                # minitiles along the route past that, where its choke is looked for
 CHOKE_WITHIN = 20 * 32            # ...and no farther than this from the natural (pixels): its own exit
-MAIN_MAX_TILES = 1200             # a main plateau bigger than this has swallowed more than the main
 RAMP_WITHIN = 30 * 32             # a main ramp farther than this from the start is a wrong guess
+ANALYSIS_VERSION = 3              # part of the cache key: a change to the analysis makes new files
 WALL_COST = 12.0                  # a step's cost: length * (1 + WALL_COST / distance to the nearest wall)
 
 
@@ -151,13 +155,24 @@ def analyze(game: Game, mapinfo: MapInfo) -> dict:
         level = height[s]
         labels, _ = ndimage.label(walk & (height == level))
         main = labels == labels[s]
-        # the main's exit: where the centered route toward the enemy leaves the plateau
+        # the main's ramp: the narrowest stretch of the centered route toward the enemy near the start,
+        # by walkability alone (ramp tiles' height flags don't follow the slope: the upper part is
+        # flagged high ground, and on old maps made with tile editors, e.g. Python, high and low tiles
+        # can sit anywhere on it). Its top: where the route first narrows to that width
         out_route = routes.route(pred, s, 4000)
-        k = next((j for j, c in enumerate(out_route) if not main[c]), len(out_route) // 8)
-        top = out_route[max(0, k - 1)]
-        bottom = out_route[min(len(out_route) - 1, k + RAMP_DOWN)]
-        ramp = out_route[max(0, k - 2):k + RAMP_DOWN]
-        ramp_width = 2 * MINI * float(min(altitude[c] for c in ramp))
+        n = 1 + max((j for j, c in enumerate(out_route) if math.dist(_px(c), mapinfo.starts[i]) <= RAMP_WITHIN), default=0)
+        narrowest = min(altitude[c] for c in out_route[:n])
+        ramp_width = 2 * MINI * float(narrowest)
+        t = next(j for j in range(n) if altitude[out_route[j]] <= narrowest + 1)
+        e = next((j for j in range(t, len(out_route)) if altitude[out_route[j]] > narrowest + 2), len(out_route) - 1)
+        top = out_route[t]
+        bottom = out_route[min(len(out_route) - 1, e + RAMP_PAST)]
+        # a hold spot inside, behind the top, on a tile flagged at the main's height (the flags, not
+        # the tiles' looks, decide vision: zerg below don't see up there)
+        j = max(0, t - RAMP_IN)
+        while j > 0 and height[out_route[j]] != level and t - j < RAMP_IN + RAMP_SEARCH:
+            j -= 1
+        inside = out_route[j]
         # the natural: the non-start base nearest the ramp's bottom by ground
         from_ramp = _ground_distance(walk, [bottom])
         main_base = mapinfo.base_near(mapinfo.starts[i])
@@ -168,12 +183,12 @@ def analyze(game: Game, mapinfo: MapInfo) -> dict:
         route = routes.route(pred, n_cell, NATURAL_AREA + CHOKE_SEARCH)
         ring = [c for c in route if NATURAL_AREA * MINI <= math.dist(_px(c), natural.center) <= CHOKE_WITHIN]
         choke = min(ring or route[NATURAL_AREA:] or route, key=lambda c: altitude[c])
-        # trust it only where the main is its own plateau with its ramp near the start; mains on the
-        # same level as their natural need a split of the map at its chokes (not done yet)
-        reliable = int(main.sum()) // 16 <= MAIN_MAX_TILES and math.dist(_px(top), mapinfo.starts[i]) <= RAMP_WITHIN
+        # trust it where the ramp is a real choke (narrow) near the start
+        reliable = ramp_width <= RAMP_MAX_WIDTH and math.dist(_px(top), mapinfo.starts[i]) <= RAMP_WITHIN
         out[i] = {"start": list(mapinfo.starts[i]), "reliable": bool(reliable),
                   "main_level": int(level), "main_area_tiles": int(main.sum()) // 16,
                   "ramp_top": list(_px(top)), "ramp_bottom": list(_px(bottom)), "ramp_width": round(ramp_width),
+                  "ramp_inside": list(_px(inside)),
                   "natural": list(natural.center), "natural_choke": list(_px(choke)),
                   "natural_choke_width": round(2 * MINI * float(altitude[choke]))}
     return {"map": {"w": int(walk.shape[1]) * MINI, "h": int(walk.shape[0]) * MINI}, "starts": out}
@@ -219,7 +234,7 @@ def map_analysis(game: Game, mapinfo: MapInfo) -> dict:
     import hashlib
     import os
     root = Path(os.environ.get("GARY_DATA", Path(__file__).resolve().parent.parent / "data"))
-    key = hashlib.sha1(json.dumps([mapinfo.size, sorted(mapinfo.starts)]).encode()).hexdigest()[:16]
+    key = hashlib.sha1(json.dumps([ANALYSIS_VERSION, mapinfo.size, sorted(mapinfo.starts)]).encode()).hexdigest()[:16]
     cache = root / "interim" / "maps" / f"{mapinfo.size[0] // 32}x{mapinfo.size[1] // 32}_{key}.json"
     if cache.exists():
         a = json.loads(cache.read_text(encoding="utf-8"))
