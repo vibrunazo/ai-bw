@@ -30,6 +30,12 @@ urgent. The hand rules:
              shoot one by one as they come in range, and the rest trickle in behind), to the edge
              of the marines' range from the nearest zerg; nobody of the group fires until 5 of it
              (or all, if fewer) are in range or one of it is attacked, then they fire together
+  anchor     (an option) at home, the army stays by its anchors (Command Centers, bunkers): a unit
+             farther than ANCHOR_OUT from all of them with zerg within ANCHOR_DANGER falls back to
+             the nearest (moving: pulled out, not fighting its way); and the leash's prey are only
+             the zerg by Gary's buildings, not those attacking a unit out there (in Gary's losses
+             to Zerg v2's all-in, 41% of its army's deaths at 5:00-8:00 were out in the open, the
+             units last told to fire or close in; the rest walked out after them)
   holds      (an option) units on hold position are left there by fire and close in (they shoot
              whatever comes in range): a pro's marines holding a gap in a wall or a choke stay in it
              (scenario 0c50ac60: the pro's 3 marines hold a gap against 17 zerglings for 45 s and
@@ -111,6 +117,8 @@ BUNKER_SLOTS = 4
 MAX_GROUP = 12
 SIDEWAYS_PX = 8                      # closer by less than this isn't coming
 LEASH = 5 * 32                       # leash: zerg this close to Gary's buildings may be closed in on
+ANCHOR_OUT = 10 * 32                 # anchor: a unit this far from every Command Center and bunker is out...
+ANCHOR_DANGER = 7 * 32               # ...and with zerg this close it falls back
 VOLLEY = 5                           # volley: this many of a closing group in range fire together
 HOLD = 107                           # the hold position order
 ENTER = 92                           # the enter transport (or bunker) order
@@ -144,9 +152,11 @@ class RoleRules:
     """rules/v1: hand rules for roles (see the module's docstring)."""
 
     def __init__(self, g, brace: bool = False, leash: bool = False, volley: bool = False, regroup: bool = False,
+                 anchor: bool = False,
                  holds: bool = False, kite: bool = False, fire: str = "enemy", post: float | str | None = None,
                  vultures: bool = False, gap_post: bool = False, pull_hp: float = PULL_HP, surround: int = 0):
         self.g = g
+        self.anchor = anchor                         # at home, units stay by the Command Centers and bunkers
         self.pull_hp = pull_hp                       # pull back: hurt below this share of max HP
         self.surround = surround                     # ...or this many melee zerg on it (0: off): to the pack
         self.post = post                             # post: tiles from the CC toward the zerg, or "minerals"
@@ -275,6 +285,17 @@ class RoleRules:
         in_range = lambda u: any(math.dist((u["x"], u["y"]), (e["x"], e["y"])) <= RANGE.get(u["type"], 160) + 32
                                  for e in enemy)
 
+        # anchor: at home, units out in the open with zerg near fall back to the nearest anchor
+        anchors = [(u["x"], u["y"]) for u in by_tag.values() if u["owner"] == g.slot and u["type"] in (T.CC, T.BUNKER)
+                   and u["completed"]] if self.anchor and home else []
+        if anchors:
+            out = [u for u in mine if min(math.dist((u["x"], u["y"]), a) for a in anchors) > ANCHOR_OUT
+                   and any(math.dist((u["x"], u["y"]), (e["x"], e["y"])) < ANCHOR_DANGER for e in enemy)
+                   and fresh(u, "RETREAT")]
+            if out:
+                group = out[:MAX_GROUP]
+                at = min(anchors, key=lambda a: math.dist(a, _mid(group)))
+                return self._intent("RETREAT", group, (int(at[0]), int(at[1])), "move")
         # retreat: the group is outweighed; into a bunker if one is near with room, else away
         if theirs > RETREAT_RATIO * max(ours, 1):
             group = [u for u in mine if fresh(u, "RETREAT")]
@@ -350,6 +371,9 @@ class RoleRules:
             if self.leash and home:
                 mine_tags = {u["tag"] for u in by_tag.values() if u["owner"] == g.slot}
                 built = [u for u in by_tag.values() if u["owner"] == g.slot and is_building(u["type"])]
+                if anchors:                              # (not the zerg on a unit out in the open)
+                    mine_tags = {u["tag"] for u in by_tag.values() if u["owner"] == g.slot
+                                 and min(math.dist((u["x"], u["y"]), a) for a in anchors) <= ANCHOR_OUT}
                 prey = [e for e in enemy if e.get("order_target") in mine_tags
                         or any(math.dist((e["x"], e["y"]), (b["x"], b["y"])) < LEASH for b in built)]
             far = [u for u in mine if not in_range(u) and u.get("order") not in ATTACK | held and fresh(u, "CLOSE_IN")]

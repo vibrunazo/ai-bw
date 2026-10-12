@@ -266,6 +266,13 @@ OPTIONS = {
     "leash": _roles(leash=True),            # close in only on zerg attacking or by buildings   -9 ± 9
     "volley": _roles(volley=True),          # close in by moving, then fire together           -38 ± 10
     "regroup": _roles(regroup=True),        # loose units rejoin the pack, the pack closes in  -13 ± 10
+    # roles.py anchor (units out in the open fall back to the Command Centers and bunkers; the leash
+    # ignores zerg on units out there) and army.py home_guard (no army moves out while enemy fighters
+    # are at home): Gary's army split in its losses to Zerg v2's all-in (41% of its army's deaths at
+    # 5:00-8:00 out in the open; with anchor 36%). On v0.18, lost (v0.18): Zerg v2 (72) Fighting Spirit
+    # 10 (8), Python 7 (11); replayed pros (48) Python 4 (3), Fighting Spirit 2 (5), Heartbreak Ridge 1
+    # (3); the 9-pool 1 (1), won 31 (36): 25 of 336 (31). Home defenses [239] -7 ± 10. Not adopted
+    "anchor": lambda m: (m["fight"].setdefault("roles", {}).update(anchor=True), m["army"].update(home_guard=True)),
     "holds": _roles(holds=True),            # units on hold position stay on it                 -4 ± 9
     "kite": _roles(kite=True),              # vultures pull back from zerglings                  -5 ± 2
     "fire_here": _roles(fire="here"),       # fire: attack-move to the group's own middle       -8 ± 5
@@ -465,7 +472,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                 models["belief"] = belief.path
             g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None, hunt=m["army"].get("hunt", False),
                                  scan=m["army"].get("scan", False), belief=belief,
-                                 belief_total=m["army"].get("belief_total", False), watch=m["army"].get("watch", False))
+                                 belief_total=m["army"].get("belief_total", False), watch=m["army"].get("watch", False),
+                                 home_guard=m["army"].get("home_guard", False))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:

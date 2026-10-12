@@ -99,8 +99,9 @@ class LearnedArmy:
     remembers = True                # whatever Gary looks at, the tracker remembers
 
     def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False, belief=None,
-                 belief_total: bool = False, watch: bool = False):
+                 belief_total: bool = False, watch: bool = False, home_guard: bool = False):
         self.g = g
+        self.home_guard = home_guard  # option: no army moves out while enemy fighters are at home
         self.watch = watch          # option: the scout stays in their bases, then watches outside the natural
         self.watch_stage = "stay"   # stay -> post
         self.dodged = False
@@ -171,6 +172,11 @@ class LearnedArmy:
             return "army" if hunt else None
         if hi.frame < self.next_ask:
             return None
+        if self.home_guard:
+            from gary.agent.fight import enemy_fighters, near_home
+            if near_home(mine, enemy_fighters(obs, g.slot)):
+                self.next_ask = hi.frame + ASK_EVERY
+                return None
         army = [u for u in done if u["type"] in g.army_types]
         clusters = self._clusters(army)
         if not clusters:
