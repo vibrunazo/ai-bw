@@ -325,3 +325,69 @@ class EarlyPoolPostureV3(EarlyPoolPostureV2):
     (on Heartbreak Ridge, pools at 1:36 with a hatchery at the natural too: the zerglings came at 3:00
     to Gary's 1 marine)."""
     pool_sure = True
+
+
+class LearnedPosture(EarlyPoolPostureV6):
+    """The posture's mode from the plan policy (gary/policy/plan.py: normal, rush, hold, flood),
+    asked every second; the rules (v6) keep the memory it decides on (what was seen, the calm,
+    the most zerglings and army seen) and, with no model, the mode itself. record (a list): the
+    facts and the mode the rules chose, every second (train/plan.py distills the policy from it).
+    temperature > 0 draws the mode (training); every decision is logged with its probability."""
+
+    def __init__(self, g: Gary, model=None, temperature: float = 0.0, record: list | None = None, seed: int = 0):
+        import numpy as np
+        super().__init__(g)
+        self.model = model
+        self.temperature = temperature
+        self.record = record
+        self.rng = np.random.default_rng(seed)
+        self.mode = "normal"
+        self.next_decide = 0
+        self.decisions: list[dict] = []         # (frame, facts vector, mode, probability): training
+
+    def _rules_mode(self) -> str:
+        return "flood" if self.flood and not self.rush else "rush" if self.rush else "hold" if self.hold else "normal"
+
+    def _set(self, mode: str) -> None:
+        g = self.g
+        before = self.mode
+        self.rush, self.hold, self.flood = mode == "rush", mode in ("rush", "hold"), mode == "flood"
+        self.mode = mode
+        if mode == before:
+            return
+        g.say(f"plan: {before} -> {mode}")
+        if mode == "rush":                       # (as the rules: marines gather behind the bunker)
+            bx, by = self.bunker_spot
+            mx, my = g.main.center
+            d = math.dist((bx, by), (mx, my)) or 1
+            g.rally = (int(bx + (mx - bx) / d * 4 * 32), int(by + (my - by) / d * 4 * 32))
+        if before in ("rush", "hold") and mode == "normal":     # (as the rules: the rush is over)
+            self._release([u for u in g.hi.observe()["units"] if u["owner"] == g.slot])
+
+    def update(self) -> None:
+        from gary.policy.plan import decide, facts, vector
+        g = self.g
+        hi = g.hi
+        prev = self.mode
+        if self.model is not None:               # (the rules see the mode the policy set)
+            self.rush, self.hold, self.flood = prev == "rush", prev in ("rush", "hold"), prev == "flood"
+        super().update()
+        rules = self._rules_mode()
+        # asked every second, and at once when the rules would change mode (so that, following them,
+        # it changes when they do)
+        if hi.pending or (hi.frame < self.next_decide and rules == prev):
+            if self.model is not None:
+                self.rush, self.hold, self.flood = prev == "rush", prev in ("rush", "hold"), prev == "flood"
+            else:
+                self.mode = rules
+            return
+        self.next_decide = hi.frame + 24
+        x = vector(facts(self, hi.observe()), prev, rules)
+        if self.record is not None:
+            self.record.append((x, rules))
+        if self.model is None:
+            self.mode = rules
+            return
+        mode, p = decide(self.model, x, self.rng, self.temperature)
+        self.decisions.append({"frame": hi.frame, "x": x, "mode": mode, "p": p})
+        self._set(mode)

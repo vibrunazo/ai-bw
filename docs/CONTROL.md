@@ -202,6 +202,25 @@ earlier speedups).
    then RL on the home defenses; variant B with a learned L4 instead of the hand rules.
 6. **The rest as needed:** KITE, SCREEN, LOAD as skills; §6.7's arbiter rules (fight priority
    with a minimum macro share); posture from more than rules.
+7. **Every decision a policy, trained together.** Rules tuned one failure at a time traded one
+   loss for another (against Zerg v2's all-in: a scout, a flood defense, an anchor, each neutral
+   on 336 games): the decisions have to be learned, together, from whole games. What that needs:
+   - **Each deciding layer a policy with probabilities**, that can sample in training and pick
+     its likeliest in play, and logs each decision with its probability: the posture's mode
+     (normal, early-pool defense, holding, zergling-flood defense) a small learned policy over
+     symbolic facts, started as a copy of today's rules (distilled from them); the macro model
+     sampling its next decision at a temperature; the army model; the roles (`RoleLearned`).
+   - **A full-game trainer**: games against the opponent pool (the 9-pool, Zerg v1/v2, the
+     replayed pros on three maps), each layer updated on what its decisions led to, kept near
+     where it started (a KL penalty, as `train/roles_rl.py`). Games are chaotic (half a second
+     of Gary's hands changes the next 90 s by +-425 net value, `eval/block_branch.py`), so
+     decisions are judged against branches from the same moment of the same game (games are
+     deterministic per seed: replayed to the moment, then a different draw), not against other
+     games.
+   - **Then the pieces the architecture lists**: the belief model (§6.9) and the opponent model
+     (§7.5) as inputs to the posture and the army, the strategy selector's table (§6.8), and a
+     Zerg Gary for self-play.
+   Benchmarks and play keep each layer's likeliest decision; only training samples.
 
 Steps 1–3 are refactoring with parity checks, and they carry the risk of the plan: they touch
 everything. They're worth it only if they stay small, so: no layer gets a provider it doesn't need

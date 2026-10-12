@@ -63,12 +63,14 @@ def describe(act: int, uid: int) -> str:
 class LearnedMacro:
     def __init__(self, g: Gary, model: MacroModel, style: int | None = None, builds: dict | None = None,
                  natural_bunker: bool = False, rax_by: int = 90 * 24, keep_busy: bool = False,
-                 decoder: str = "favorite", seed: int = 0):
+                 decoder: str = "favorite", seed: int = 0, temperature: float = 1.0):
         self.g = g
+        self.temperature = temperature                      # decoder "sample": the draw's temperature
+        self.draws: list[dict] = []                         # decoder "sample": every draw (training)
         self.rax_by = rax_by
         self.queued: dict[tuple[int, int], int] = {}        # units decided whose producer is busy -> since
         self.keep_busy = keep_busy
-        self.decoder = decoder                              # "favorite" (the most likely) or "dice"
+        self.decoder = decoder                              # "favorite" (the most likely), "dice" or "sample"
         self.rng = random.Random(seed)
         self.last_unit: dict[int, int] = {}                 # producer type -> the unit last decided for it
         self.natural_bunker = natural_bunker
@@ -163,8 +165,23 @@ class LearnedMacro:
             self.next_query = hi.frame + 12
             # the most likely decision Gary can carry out now; if none can, wait for the most
             # likely one that only needs a busy building to free up
-            probs, _ = self.model.probs(self.tracker.features(obs, self.in_production(mine)))
+            x = self.tracker.features(obs, self.in_production(mine))
+            probs, _ = self.model.probs(x)
             pick = waiting = None
+            if self.decoder == "sample":
+                # training (docs/CONTROL.md step 7): a draw at the temperature among the decisions Gary
+                # can carry out now or soon (a busy building), logged with what it was drawn from
+                cands = [k for k in np.argsort(-probs[0]) if probs[0, k] >= DICE_FLOOR
+                         and self.plan(*self.model.spec.decisions[k], obs, mine, done, me) is not None]
+                if not cands:
+                    return
+                q = np.power(probs[0, cands].astype(np.float64), 1.0 / self.temperature)
+                k = int(cands[int(self.rng.choices(range(len(cands)), weights=(q / q.sum()).tolist())[0])])
+                self.draws.append({"frame": hi.frame, "x": x[0], "cands": [int(c) for c in cands], "k": k})
+                act, uid = self.model.spec.decisions[k]
+                self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(act, uid)}
+                g.say(f"next: {self.goal['name']} ({self.goal['p']:.0%}, drawn)")
+                return
             if self.decoder == "dice":
                 # roll the model's odds rather than always take the favorite: a weighted shuffle,
                 # then the first decision Gary can carry out (Factories, Starports, Engineering Bays

@@ -230,7 +230,16 @@ def latest_role_model() -> Path:
 MODEL_PATHS = {"roles/latest": latest_role_model, "macro/latest": latest_macro_model, "army/latest": latest_army_model,
                "fight/latest": latest_fight_model, "fight_cmd/latest": lambda: latest_command_model(False),
                "fight_cmd/latest_memory": lambda: latest_command_model(True), "fight_cmd_rl/v08": latest_rl_fight_model,
-               "belief/latest": lambda: _newest("belief")}
+               "belief/latest": lambda: _newest("belief"), "plan/latest": lambda: _newest("plan")}
+
+
+def _learned_posture(g, m: dict, models: dict):
+    """The plan policy deciding the posture's mode (gary/policy/plan.py; docs/CONTROL.md step 7)."""
+    from gary.agent.posture import LearnedPosture
+    from gary.policy.plan import PlanModel
+    model = PlanModel.load(model_path(m.get("plan_model", "plan/latest")))
+    g.plan_model = model.path            # (not in the start-of-game chat: one more line shifts the game)
+    return LearnedPosture(g, model, m.get("plan_temperature", 0.0))
 
 
 def model_path(ref: str) -> Path:
@@ -356,6 +365,10 @@ OPTIONS = {
     # the 9-pool 1 (1), won 32 (36): 34 of 336 (31). It switches in 40% of the replayed pros' games
     # (false alarms), and in the losses only once the zerglings attack (6:07, 6:47); Gary floats
     # 400-700 minerals at 6:00 on one Barracks either way. Not adopted
+    # the posture's mode from the plan policy (gary/policy/plan.py, the newest run: distilled from
+    # v6's rules, then trained) with v6's builds
+    "plan": lambda m: (m.update(posture="plan/v1"),
+                       m["macro"].update(builds=m["macro"]["builds"] + ["ling_flood_defense"])),
     "flood": lambda m: (m.update(posture="early_pool/v6"),
                         m["macro"].update(builds=m["macro"]["builds"] + ["ling_flood_defense"])),
     # fight.py BlockRule: the chokes asked for (g.blocks; nothing in play asks yet: eval/block_drill.py
@@ -386,6 +399,10 @@ OPTIONS = {
     # 12:00 against 41: the SCV is rolled less often than it's the favorite), army built 40 by 12:00
     # (57), a Factory by 8:00 in 9% (19%), lost 3 (2). Not adopted
     "dice": lambda m: m["macro"].update(decoder="dice"),
+    # training (docs/CONTROL.md step 7): the macro draws its next decision at temperature 1 (or
+    # sample_t05: 0.5), each draw logged (g.macro.draws)
+    "sample": lambda m: m["macro"].update(decoder="sample", temperature=1.0),
+    "sample_t05": lambda m: m["macro"].update(decoder="sample", temperature=0.5),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
     # fast pools that beat v0.12 on Heartbreak Ridge it kept a few more SCVs; the bunker's spot mattered
     "pull_line": _pull(mineral_line=True),
@@ -449,7 +466,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture,
                  "early_pool/v2": EarlyPoolPostureV2, "early_pool/v3": EarlyPoolPostureV3,
                  "early_pool/v4": EarlyPoolPostureV4, "early_pool/v5": EarlyPoolPostureV5,
-                 "early_pool/v6": EarlyPoolPostureV6}[m["posture"]](g)
+                 "early_pool/v6": EarlyPoolPostureV6,
+                 "plan/v1": lambda g: _learned_posture(g, m, models)}[m["posture"]](g)
     if m["macro"] is not None:
         path = model_path(m["macro"]["model"])
         macro = load("macro", str(path))
@@ -458,7 +476,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                   if k in m["macro"].get("builds", [])}
         g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
                                m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False),
-                               m["macro"].get("decoder", "favorite"), seed)
+                               m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0))
     if m["army"] is not None:
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)
