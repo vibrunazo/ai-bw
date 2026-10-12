@@ -66,7 +66,9 @@ class LearnedMacro:
                  decoder: str = "favorite", seed: int = 0, temperature: float = 1.0):
         self.g = g
         self.temperature = temperature                      # decoder "sample": the draw's temperature
-        self.draws: list[dict] = []                         # decoder "sample": every draw (training)
+        self.draws: list[dict] = []                         # decoder "sample", or log: every decision (training)
+        self.log = False                                    # training: log the favorite's decisions too
+        self.force: tuple[int, int] | None = None           # training: (frame, decision) taken instead there
         self.rax_by = rax_by
         self.queued: dict[tuple[int, int], int] = {}        # units decided whose producer is busy -> since
         self.keep_busy = keep_busy
@@ -193,6 +195,20 @@ class LearnedMacro:
                 floor = DICE_FLOOR
             else:
                 order, floor = np.argsort(-probs[0]), MIN_P
+            if self.force is not None and hi.frame >= self.force[0]:
+                # a branch (train/macro_rl.py): another decision at this moment of the same game
+                k = self.force[1]
+                self.force = None
+                if self.plan(*self.model.spec.decisions[k], obs, mine, done, me) is not None:
+                    act, uid = self.model.spec.decisions[k]
+                    self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(act, uid)}
+                    g.say(f"next: {self.goal['name']} ({self.goal['p']:.0%}, forced)")
+                    return
+            if self.log:
+                cands = [int(c) for c in order if probs[0, c] >= floor
+                         and self.plan(*self.model.spec.decisions[c], obs, mine, done, me) is not None]
+                logged = {"frame": hi.frame, "x": x[0], "cands": cands}
+                self.draws.append(logged)
             for k in order:
                 if probs[0, k] < floor:
                     break
@@ -206,6 +222,8 @@ class LearnedMacro:
                         pick = k
                     break
             k = pick if pick is not None else waiting
+            if self.log:
+                logged["k"] = None if k is None else int(k)
             if k is None:
                 return
             act, uid = self.model.spec.decisions[k]

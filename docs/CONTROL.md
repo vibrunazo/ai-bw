@@ -221,6 +221,16 @@ earlier speedups).
      (§7.5) as inputs to the posture and the army, the strategy selector's table (§6.8), and a
      Zerg Gary for self-play.
    Benchmarks and play keep each layer's likeliest decision; only training samples.
+   First results: the plan policy starts as the posture's rules exactly (a strong vote for their
+   mode plus a correction at zero: the same games, 6 seeds); the macro trained on 2,268 pairs of
+   branches (`train/macro_rl.py`: at a moment of a game, its favorite against another of its
+   options, the next 3 minutes) learned nothing: held out, it prefers the better one 50.0% of the
+   time (before 50.6%). A pair's difference has a standard deviation of 848 net value (median
+   112; 23% none at all) while a single production decision is worth tens: single decisions
+   can't be credited in games this chaotic. So the learning goes where the effects are big and
+   the counting is per game: the strategy selector (§6.8: which build style to play, from the
+   map and what the scout saw, learned from game outcomes), then the fights on episodes (whose
+   measures pair the same positions: +-10 on 239 home defenses).
 
 Steps 1–3 are refactoring with parity checks, and they carry the risk of the plan: they touch
 everything. They're worth it only if they stay small, so: no layer gets a provider it doesn't need

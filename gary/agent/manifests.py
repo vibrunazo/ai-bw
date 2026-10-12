@@ -230,7 +230,8 @@ def latest_role_model() -> Path:
 MODEL_PATHS = {"roles/latest": latest_role_model, "macro/latest": latest_macro_model, "army/latest": latest_army_model,
                "fight/latest": latest_fight_model, "fight_cmd/latest": lambda: latest_command_model(False),
                "fight_cmd/latest_memory": lambda: latest_command_model(True), "fight_cmd_rl/v08": latest_rl_fight_model,
-               "belief/latest": lambda: _newest("belief"), "plan/latest": lambda: _newest("plan")}
+               "belief/latest": lambda: _newest("belief"), "plan/latest": lambda: _newest("plan"),
+               "macro_rl/latest": lambda: sorted((REPO_ROOT / "runs" / "macro_rl").glob("*/model.pt"))[-1]}
 
 
 def _learned_posture(g, m: dict, models: dict):
@@ -402,6 +403,8 @@ OPTIONS = {
     # training (docs/CONTROL.md step 7): the macro draws its next decision at temperature 1 (or
     # sample_t05: 0.5), each draw logged (g.macro.draws)
     "sample": lambda m: m["macro"].update(decoder="sample", temperature=1.0),
+    # the macro model trained from branches (train/macro_rl.py, the newest run)
+    "macro_rl": lambda m: m["macro"].update(model="macro_rl/latest"),
     "sample_t05": lambda m: m["macro"].update(decoder="sample", temperature=0.5),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
     # fast pools that beat v0.12 on Heartbreak Ridge it kept a few more SCVs; the bunker's spot mattered

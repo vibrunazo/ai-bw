@@ -44,10 +44,10 @@ def out_path() -> Path:
     return data_root() / "interim" / "blocks" / "branches.jsonl"
 
 
-def _match(opponent: str, mp: str, seed: int):
+def _match(opponent: str, mp: str, seed: int, version: str = VERSION):
     from eval.walls_bench import Match
     with contextlib.redirect_stdout(io.StringIO()):
-        return Match(seed, 0, VERSION, MAPS[mp], opponent)
+        return Match(seed, 0, version, MAPS[mp], opponent)
 
 
 class Watch:
