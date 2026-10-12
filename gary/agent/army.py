@@ -12,6 +12,13 @@
             goes where enemy buildings were seen, then to the bases it hasn't passed lately: the
             model stays near what it knows, and a hatchery Gary never saw outlived the game.
             With scan, a Comsat Station with energy scans those bases first.
+  watch     (option) the scout stays, as pros' first SCVs do (in pro TvZ the Terran has Zerg drones
+            in sight 22 s of 3:00-6:00, any Zerg 104 s; Gary without this: 5 s and 44 s): after
+            its circle it keeps going around the Zerg's main and natural, each next point the one
+            farthest from the zerglings near it, until they hunt it (STAY_LEAVE_LINGS near, or
+            hurt) or STAY_UNTIL; then it holds a post outside Gary's natural toward theirs (where an
+            attack gathers), backing off behind the natural while enemy fighters are near it and
+            back after. A scout lost before RESCOUT_BY is replaced once.
 
 Units in a fight are the fight layer's; the arbiter leaves them out (and the posture can keep the
 army home altogether). Orders are intents (ARMY_MOVE, ARMY_ATTACK, SCOUT, ATTACK_WAVE) that the
@@ -53,6 +60,16 @@ SCAN_ENERGY = 50                    # hunt with scans: a Comsat Station with thi
 NOT_ARMY = {35, 36, 41, 42, 7, 64}  # larva, egg, drone, overlord, SCV, probe: not an enemy army
 GONE_PX = 7 * 32                    # an enemy building is gone when Gary's units are this close and don't see it
 VISITED_FOR = 120 * 24              # a base Gary's units passed this recently isn't visited again
+STAY_UNTIL = 5 * 60 * 24            # watch: the scout stays in the enemy's bases until then at most
+STAY_LEAVE_LINGS = 3                # ...or until this many enemy fighters are near it
+STAY_DANGER = 5 * 32                # ...near: this close
+STAY_HURT = 0.6                     # ...or it's down to this share of its HP
+STAY_RING = 6 * 32                  # ...going around their bases this far from each one's center
+STAY_EVERY = 2 * 24                 # ...a new point at most this often
+POST_OUT = 10 * 32                  # watch post: this far out from Gary's natural's choke, toward their natural
+POST_BACK = 7 * 32                  # ...enemy fighters this close: back behind the natural
+POST_CALM = 10 * 24                 # ...back on the post after this long without them
+RESCOUT_BY = 270 * 24               # a scout lost before 4:30 is replaced (once)
 
 
 def cell_dist(a: int, b: int) -> int:
@@ -82,8 +99,14 @@ class LearnedArmy:
     remembers = True                # whatever Gary looks at, the tracker remembers
 
     def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False, belief=None,
-                 belief_total: bool = False):
+                 belief_total: bool = False, watch: bool = False):
         self.g = g
+        self.watch = watch          # option: the scout stays in their bases, then watches outside the natural
+        self.watch_stage = "stay"   # stay -> post
+        self.watch_next = 0
+        self.watch_back_since = None
+        self.rescouted = False
+        self.post = None
         self.belief_total = belief_total   # belief: compare with all the enemy army it likely has, seen or not
         self.belief = belief        # option: the belief model (gary/policy/belief.py): hold groups the
         self.belief_mem = belief.memory() if belief is not None else None   # hidden enemy army outweighs
@@ -139,6 +162,8 @@ class LearnedArmy:
         if self.pull is not None and self.pull.step(obs, mine):
             return "rule:pull"
         if self._scouting(obs, mine):
+            return "scout"
+        if self.watch and self.scout_done and self._watching(obs, mine):
             return "scout"
         hunt = self._hunt(obs, mine, done) if self.hunt else None
         if hunt is not None:                    # (the model isn't asked while the army hunts)
@@ -322,8 +347,11 @@ class LearnedArmy:
                 return True
             if not self.circle:
                 self.circle = []
-                g.motor.start(Intent("SCOUT", [g.scout], g.main.minerals[0], {"to": g.main.minerals[0], "home": True}, "scout"))
                 self.scout_done = True
+                if self.watch:                  # (it stays: _watching())
+                    self.enemy_main = self.scout_targets[0] if self.scout_targets else (scout["x"], scout["y"])
+                    return False
+                g.motor.start(Intent("SCOUT", [g.scout], g.main.minerals[0], {"to": g.main.minerals[0], "home": True}, "scout"))
                 return True
             return False
         if self.scout_targets and math.dist((scout["x"], scout["y"]), self.scout_targets[0]) < 6 * 32:
@@ -341,6 +369,68 @@ class LearnedArmy:
                 return False
             self.scout_resends += 1
             g.motor.start(Intent("SCOUT", [g.scout], self.scout_targets[0], {"to": self.scout_targets[0]}, "scout"))
+            return True
+        return False
+
+    def _watching(self, obs: dict, mine: list[dict]) -> bool:
+        """watch: the scout in their bases, then on the post outside Gary's natural. True if Gary acted."""
+        g = self.g
+        f = g.hi.frame
+        scout = next((u for u in mine if u["tag"] == g.scout), None) if g.scout is not None else None
+        if scout is None:
+            if f < RESCOUT_BY and not self.rescouted and self.watch_stage == "stay":
+                self.rescouted = True            # lost early: one more, straight to their natural
+                g.scout = None
+                self.scout_done, self.circle = False, None
+                return False
+            return False
+        enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0
+                 and u["type"] not in NOT_ARMY and not is_building(u["type"])]
+        near = [e for e in enemy if math.dist((e["x"], e["y"]), (scout["x"], scout["y"])) < STAY_DANGER]
+        hp_max = 60
+        if self.watch_stage == "stay":
+            if f >= STAY_UNTIL or len(near) >= STAY_LEAVE_LINGS or (scout.get("hp") or hp_max) < STAY_HURT * hp_max:
+                self.watch_stage = "post"
+                self.watch_next = 0
+            elif f >= self.watch_next and (scout["order"] != 6 or near):
+                main = getattr(self, "enemy_main", None) or (scout["x"], scout["y"])
+                nat = g.map.natural_of(g.map.base_near(main)).center
+                ring = [(c[0] + math.cos(k * math.pi / 4) * STAY_RING, c[1] + math.sin(k * math.pi / 4) * STAY_RING)
+                        for c in (main, nat) for k in range(8)]
+                w, h = g.map.size
+                ring = [(int(min(max(x, 32), w - 32)), int(min(max(y, 32), h - 32))) for x, y in ring]
+                here = (scout["x"], scout["y"])
+                # the next point: some way off (not where it stands), the farthest from the zerglings near
+                far = [p for p in ring if 3 * 32 < math.dist(p, here) < 14 * 32] or ring
+                pick = max(far, key=lambda p: (min((math.dist(p, (e["x"], e["y"])) for e in near), default=0), -abs(math.dist(p, here) - 6 * 32)))
+                self.watch_next = f + STAY_EVERY
+                g.motor.start(Intent("SCOUT", [g.scout], pick, {"to": pick}, "scout"))
+                return True
+            return False
+        # the post: outside Gary's natural's choke, toward their natural
+        if self.post is None:
+            from gary.agent.block import _analysis
+            try:
+                ch = tuple(_analysis(g)["natural_choke"])
+            except Exception:
+                ch = g.natural.center
+            main = getattr(self, "enemy_main", None) or (g.enemy_starts[0] if g.enemy_starts else ch)
+            their = g.map.natural_of(g.map.base_near(main)).center
+            d = math.dist(ch, their) or 1
+            self.post = (int(ch[0] + (their[0] - ch[0]) / d * POST_OUT), int(ch[1] + (their[1] - ch[1]) / d * POST_OUT))
+        threat = [e for e in enemy if math.dist((e["x"], e["y"]), (scout["x"], scout["y"])) < POST_BACK]
+        if threat:
+            self.watch_back_since = f
+            if math.dist((scout["x"], scout["y"]), g.natural.center) > 4 * 32 and f >= self.watch_next:
+                self.watch_next = f + STAY_EVERY
+                g.motor.start(Intent("SCOUT", [g.scout], g.natural.center, {"to": g.natural.center}, "scout"))
+                return True
+            return False
+        if self.watch_back_since is not None and f - self.watch_back_since < POST_CALM:
+            return False
+        if math.dist((scout["x"], scout["y"]), self.post) > 2 * 32 and f >= self.watch_next and scout["order"] != 6:
+            self.watch_next = f + STAY_EVERY * 2
+            g.motor.start(Intent("SCOUT", [g.scout], self.post, {"to": self.post}, "scout"))
             return True
         return False
 

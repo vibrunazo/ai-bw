@@ -324,6 +324,11 @@ OPTIONS = {
     # army.py: the hunt scans bases before walking there: on v0.16 without it, replayed pros on Fighting
     # Spirit to 18:00 (16 seeds) won 11 (8). In v0.16
     "scan": lambda m: m["army"].update(scan=True),
+    # army.py watch: the scout stays in the Zerg's bases (moving, away from zerglings) until hunted or
+    # 5:00, then watches outside Gary's natural; replaced once if lost by 4:30. Zerg in sight 3:00-6:00:
+    # 78 s (44; pros 104). On v0.18 against Zerg v2 (72 seeds) Fighting Spirit lost 11 (8), won 9 (3);
+    # Python lost 10 (11), won 3 (1). The macro sees the zerglings now but builds no more Barracks
+    "watch": lambda m: m["army"].update(watch=True),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
     # firsts called early pools. In v0.16
@@ -448,7 +453,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                 models["belief"] = belief.path
             g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None, hunt=m["army"].get("hunt", False),
                                  scan=m["army"].get("scan", False), belief=belief,
-                                 belief_total=m["army"].get("belief_total", False))
+                                 belief_total=m["army"].get("belief_total", False), watch=m["army"].get("watch", False))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:
