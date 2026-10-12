@@ -8,6 +8,11 @@
                     bunker at the ramp first, then depots ahead of production, marines and SCVs
                     nonstop, a second Barracks on spare money. It gives goals in the learned
                     macro's format, carried out the same way.
+  ling_flood_defense  another (posture v6's answer to a zergling mass on its way): Barracks to 3, an
+                    Academy and Stim, medics and firebats among the marines, depots ahead; SCVs
+                    from what's left. (A stand-in for a strategy layer that picks a proven build:
+                    the learned macro, seeing the zerglings, makes marines but adds no Barracks
+                    and no Academy.)
 
 The executor (L2b) carries the decisions out: a build task or a command task.
 """
@@ -511,3 +516,55 @@ class OneBaseDefense:
         g = self.g
         return any(u["type"] == T.BUNKER for u in mine) or any(ut == T.BUNKER for ut, *_ in g.reserved) or \
             g.building(T.BUNKER)
+
+
+FLOOD_RAX = 3
+FLOOD_PER_MEDIC = 4                  # a medic per this many marines
+FLOOD_PER_FIREBAT = 4                # a firebat per this many marines
+STIM = 0                             # research id: Stim Packs
+
+
+class LingFloodDefense:
+    """Against a zergling mass on its way (posture v6): depots ahead of production, Barracks to
+    FLOOD_RAX, a Refinery and an Academy, Stim; medics and firebats among the marines; SCVs only
+    from what's left. In the learned macro's goal format."""
+    label = "zergling flood"
+
+    def __init__(self, g: Gary):
+        self.g = g
+
+    def first(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> bool:
+        return False
+
+    def next_goal(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> dict | None:
+        g = self.g
+        goal = lambda act, uid, name: {"act": act, "id": uid, "p": 1.0, "since": g.hi.frame, "name": name}
+        coming = lambda ut: any(u["type"] == ut and not u["completed"] for u in mine) or \
+            any(r == ut for r, *_ in g.reserved)
+        doable = lambda act, uid: g.macro.plan(act, uid, obs, mine, done, me) not in (None, WAIT)
+        count = lambda ut: sum(1 for u in mine if u["type"] == ut)
+        budget = me["minerals"] - g.committed()
+        producers = sum(1 for u in done if u["type"] in (T.CC, T.RAX))
+        if me["supply_max"] - me["supply_used"] < 2 * producers and me["supply_max"] < 200 and \
+                not coming(T.DEPOT) and doable(BUILD, T.DEPOT):
+            return goal(BUILD, T.DEPOT, "Supply Depot")
+        if count(T.RAX) < 2 and not coming(T.RAX) and doable(BUILD, T.RAX):
+            return goal(BUILD, T.RAX, "Barracks")
+        if not count(T.REFINERY) and doable(BUILD, T.REFINERY):
+            return goal(BUILD, T.REFINERY, "Refinery")
+        if not count(T.ACADEMY) and doable(BUILD, T.ACADEMY):
+            return goal(BUILD, T.ACADEMY, "Academy")
+        if STIM not in g.researched and doable(RESEARCH, STIM):
+            return goal(RESEARCH, STIM, "Stim Packs")
+        marines = count(T.MARINE)
+        if count(T.MEDIC) * FLOOD_PER_MEDIC < marines and doable(TRAIN, T.MEDIC):
+            return goal(TRAIN, T.MEDIC, "Medic")
+        if count(T.FIREBAT) * FLOOD_PER_FIREBAT < marines and doable(TRAIN, T.FIREBAT):
+            return goal(TRAIN, T.FIREBAT, "Firebat")
+        if doable(TRAIN, T.MARINE):
+            return goal(TRAIN, T.MARINE, "Marine")
+        if count(T.RAX) < FLOOD_RAX and not coming(T.RAX) and budget >= RAX_MONEY and doable(BUILD, T.RAX):
+            return goal(BUILD, T.RAX, "Barracks")
+        if doable(TRAIN, T.SCV) and budget >= T.COST[T.SCV][0] + 50:
+            return goal(TRAIN, T.SCV, "SCV")
+        return None

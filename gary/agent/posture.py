@@ -252,6 +252,74 @@ class EarlyPoolPostureV5(EarlyPoolPostureV4):
     release_bunkers = True
 
 
+FLOOD_FROM, FLOOD_UNTIL = 210 * 24, 8 * 60 * 24   # v6: a zergling mass seen between 3:30 and 8:00...
+FLOOD_LINGS = 6                      # ...this many zerglings in sight at once (at least; pros' Terrans
+                                     # see 6 by 5:00 in a median game: the army ratio tells a flood)...
+FLOOD_RATIO = 1.5                    # ...outweighing Gary's army (supply) this many times
+FLOOD_MEMORY = 90 * 24               # ...the most seen at once over this long
+FLOOD_OVER = 1.5                     # it's over: Gary's army this many times that, and calm at home for CALM
+
+
+class EarlyPoolPostureV6(EarlyPoolPostureV5):
+    """v5 that also answers a zergling mass on its way (Zerg v2's all-in; its zerglings gather in
+    front of Gary's natural): FLOOD_LINGS+ zerglings in sight at once, outweighing Gary's army
+    FLOOD_RATIO times, between 3:30 and 8:00 (what the watching scout sees, army.py watch). Then the
+    ling_flood_defense build (macro.py), no expansion, the army home, bunkers manned; until Gary's
+    army outweighs the most seen over 90 s FLOOD_OVER times and its bases are calm. A stand-in for a
+    strategy layer that picks a proven build when it sees one coming."""
+
+    def __init__(self, g: Gary):
+        super().__init__(g)
+        self.flood = False
+        self.ling_marks: list[tuple[int, int]] = []     # (frame, zerglings in sight)
+
+    @property
+    def build(self):
+        return "ling_flood_defense" if self.flood and not self.rush else super().build
+
+    @property
+    def allowed(self):
+        return None if self.flood and not self.rush else super().allowed
+
+    @property
+    def no_expand(self) -> bool:
+        return self.flood or super().no_expand
+
+    @property
+    def army_home(self) -> bool:
+        return self.flood or super().army_home
+
+    @property
+    def preload_bunkers(self) -> bool:
+        return self.flood or super().preload_bunkers
+
+    def update(self) -> None:
+        super().update()
+        g = self.g
+        hi = g.hi
+        if hi.pending:
+            return
+        obs = hi.observe()
+        f = hi.frame
+        lings = sum(1 for u in obs["units"] if u["owner"] not in (g.slot, 11) and u["type"] == LING)
+        self.ling_marks = [(t, n) for t, n in self.ling_marks if f - t <= FLOOD_MEMORY] + [(f, lings)]
+        most = max(n for _, n in self.ling_marks)
+        mine = [u for u in obs["units"] if u["owner"] == g.slot]
+        tags = {u["tag"] for u in mine}
+        inside = set().union(set(), *(m for b, m in g.loaded.items() if b in tags)) - tags
+        army = sum(supply_x2(u["type"]) for u in mine if u["type"] in g.army_types) / 2 + len(inside)
+        if not self.flood:
+            if FLOOD_FROM <= f <= FLOOD_UNTIL and most >= FLOOD_LINGS and most / 2 >= FLOOD_RATIO * army:
+                self.flood = True
+                g.say(f"zergling flood: {most} zerglings seen, army {army:.0f}: barracks, academy, stim; home")
+        else:
+            if near_home(mine, enemy_fighters(obs, g.slot)):
+                g.calm_since = f
+            if army >= FLOOD_OVER * most / 2 and f - g.calm_since >= CALM:
+                self.flood = False
+                g.say(f"the zergling flood is held: army {army:.0f} vs {most} zerglings, back to the usual plan")
+
+
 class EarlyPoolPostureV3(EarlyPoolPostureV2):
     """v2 that also calls a pool first that takes its natural an early pool: a pool finished by 2:40
     (on Heartbreak Ridge, pools at 1:36 with a hatchery at the natural too: the zerglings came at 3:00

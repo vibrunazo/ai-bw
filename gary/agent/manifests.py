@@ -18,10 +18,10 @@ from gary.agent.arbiter import DrillArbiter, FixedPriority
 from gary.agent.executor import ScriptedExecutor
 from gary.agent.fight import RULES, FightLayer, PullRule
 from gary.agent.gary import Gary
-from gary.agent.macro import LearnedMacro, OneBaseDefense
+from gary.agent.macro import LearnedMacro, LingFloodDefense, OneBaseDefense
 from gary.agent.motor import DirectMotor
 from gary.agent.posture import (EarlyPoolPosture, EarlyPoolPostureV2, EarlyPoolPostureV3, EarlyPoolPostureV4,
-                                EarlyPoolPostureV5, NormalPosture)
+                                EarlyPoolPostureV5, EarlyPoolPostureV6, NormalPosture)
 from gary.version import announcement
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -327,7 +327,8 @@ OPTIONS = {
     # army.py watch: the scout stays in the Zerg's bases (moving, away from zerglings) until hunted or
     # 5:00, then watches outside Gary's natural; replaced once if lost by 4:30. Zerg in sight 3:00-6:00:
     # 78 s (44; pros 104). On v0.18 against Zerg v2 (72 seeds) Fighting Spirit lost 11 (8), won 9 (3);
-    # Python lost 10 (11), won 3 (1). The macro sees the zerglings now but builds no more Barracks
+    # Python lost 10 (11), won 3 (1). The macro sees the zerglings now but builds no more Barracks.
+    # With the waypoint tour (in sight 103 s): Fighting Spirit lost 10 (8), won 10 (3); Python 8 (11), 3 (1)
     "watch": lambda m: m["army"].update(watch=True),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
@@ -341,6 +342,15 @@ OPTIONS = {
     # On v0.17: replayed pros on three maps lost 11 of 144 (9), won 9 (2); the 9-pool lost 1 (1), won
     # 36 (27); Zerg v2 (72) lost 8 (10). In v0.18
     "posture5": lambda m: m.update(posture="early_pool/v5"),
+    # posture.py v6: a zergling mass seen (6+ at once, 1.5x Gary's army, 3:30-8:00): the
+    # ling_flood_defense build (macro.py), no expansion, the army home, bunkers manned. With watch
+    # (the scout that sees it coming), on v0.18, lost (v0.18): Zerg v2 (72) Fighting Spirit 8 (8),
+    # Python 7 (11); replayed pros (48) Python 8 (3), Fighting Spirit 6 (5), Heartbreak Ridge 4 (3);
+    # the 9-pool 1 (1), won 32 (36): 34 of 336 (31). It switches in 40% of the replayed pros' games
+    # (false alarms), and in the losses only once the zerglings attack (6:07, 6:47); Gary floats
+    # 400-700 minerals at 6:00 on one Barracks either way. Not adopted
+    "flood": lambda m: (m.update(posture="early_pool/v6"),
+                        m["macro"].update(builds=m["macro"]["builds"] + ["ling_flood_defense"])),
     # fight.py BlockRule: the chokes asked for (g.blocks; nothing in play asks yet: eval/block_drill.py
     # does) closed with units' bodies (gary/agent/block.py). ramp_auto: it asks for the main's ramp
     # itself on one base when zerg fighters are seen there. With the body block, on v0.18, lost
@@ -431,12 +441,14 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.simcity = SimCity(g, m.get("simcity_door", 32))
     g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture,
                  "early_pool/v2": EarlyPoolPostureV2, "early_pool/v3": EarlyPoolPostureV3,
-                 "early_pool/v4": EarlyPoolPostureV4, "early_pool/v5": EarlyPoolPostureV5}[m["posture"]](g)
+                 "early_pool/v4": EarlyPoolPostureV4, "early_pool/v5": EarlyPoolPostureV5,
+                 "early_pool/v6": EarlyPoolPostureV6}[m["posture"]](g)
     if m["macro"] is not None:
         path = model_path(m["macro"]["model"])
         macro = load("macro", str(path))
         models["macro"] = getattr(macro, "path", "?")
-        builds = {"one_base_defense": OneBaseDefense(g)} if "one_base_defense" in m["macro"].get("builds", []) else {}
+        builds = {k: c(g) for k, c in (("one_base_defense", OneBaseDefense), ("ling_flood_defense", LingFloodDefense))
+                  if k in m["macro"].get("builds", [])}
         g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
                                m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False),
                                m["macro"].get("decoder", "favorite"), seed)
