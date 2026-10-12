@@ -14,9 +14,9 @@
             With scan, a Comsat Station with energy scans those bases first.
   watch     (option) the scout stays, as pros' first SCVs do (in pro TvZ the Terran has Zerg drones
             in sight 22 s of 3:00-6:00, any Zerg 104 s; Gary without this: 5 s and 44 s): after
-            its circle it keeps going around the Zerg's main and natural, each next point the one
-            farthest from the zerglings near it, until they hunt it (STAY_LEAVE_LINGS near, or
-            hurt) or STAY_UNTIL; then it holds a post outside Gary's natural toward theirs (where an
+            its circle it keeps touring the Zerg's main and natural (waypoints shift+clicked once:
+            it walks them alone; a new tour from the point farthest from zerglings that come near)
+            until they hunt it (STAY_LEAVE_LINGS near, or hurt) or STAY_UNTIL; then it holds a post outside Gary's natural toward theirs (where an
             attack gathers), backing off behind the natural while enemy fighters are near it and
             back after. A scout lost before RESCOUT_BY is replaced once.
 
@@ -65,7 +65,7 @@ STAY_LEAVE_LINGS = 3                # ...or until this many enemy fighters are n
 STAY_DANGER = 5 * 32                # ...near: this close
 STAY_HURT = 0.6                     # ...or it's down to this share of its HP
 STAY_RING = 6 * 32                  # ...going around their bases this far from each one's center
-STAY_EVERY = 2 * 24                 # ...a new point at most this often
+STAY_EVERY = 2 * 24                 # ...a new tour at most this often
 POST_OUT = 10 * 32                  # watch post: this far out from Gary's natural's choke, toward their natural
 POST_BACK = 7 * 32                  # ...enemy fighters this close: back behind the natural
 POST_CALM = 10 * 24                 # ...back on the post after this long without them
@@ -103,6 +103,7 @@ class LearnedArmy:
         self.g = g
         self.watch = watch          # option: the scout stays in their bases, then watches outside the natural
         self.watch_stage = "stay"   # stay -> post
+        self.dodged = False
         self.watch_next = 0
         self.watch_back_since = None
         self.rescouted = False
@@ -392,20 +393,24 @@ class LearnedArmy:
             if f >= STAY_UNTIL or len(near) >= STAY_LEAVE_LINGS or (scout.get("hp") or hp_max) < STAY_HURT * hp_max:
                 self.watch_stage = "post"
                 self.watch_next = 0
-            elif f >= self.watch_next and (scout["order"] != 6 or near):
+            elif f >= self.watch_next and (scout["order"] != 6 or (near and not self.dodged)):
+                # a tour of their main and natural, shift+clicked once (it walks it alone); again when
+                # it ends, or from the point farthest from zerglings that come near (once per approach)
                 main = getattr(self, "enemy_main", None) or (scout["x"], scout["y"])
                 nat = g.map.natural_of(g.map.base_near(main)).center
-                ring = [(c[0] + math.cos(k * math.pi / 4) * STAY_RING, c[1] + math.sin(k * math.pi / 4) * STAY_RING)
-                        for c in (main, nat) for k in range(8)]
                 w, h = g.map.size
-                ring = [(int(min(max(x, 32), w - 32)), int(min(max(y, 32), h - 32))) for x, y in ring]
-                here = (scout["x"], scout["y"])
-                # the next point: some way off (not where it stands), the farthest from the zerglings near
-                far = [p for p in ring if 3 * 32 < math.dist(p, here) < 14 * 32] or ring
-                pick = max(far, key=lambda p: (min((math.dist(p, (e["x"], e["y"])) for e in near), default=0), -abs(math.dist(p, here) - 6 * 32)))
+                clip = lambda x, y: (int(min(max(x, 32), w - 32)), int(min(max(y, 32), h - 32)))
+                ring = [clip(c[0] + math.cos(k * math.pi / 3) * STAY_RING, c[1] + math.sin(k * math.pi / 3) * STAY_RING)
+                        for c in (main, nat) for k in range(6)]
+                start = max(range(len(ring)), key=lambda i: min((math.dist(ring[i], (e["x"], e["y"])) for e in near),
+                                                                 default=-math.dist(ring[i], (scout["x"], scout["y"]))))
+                tour = ring[start:] + ring[:start]
+                self.dodged = bool(near)
                 self.watch_next = f + STAY_EVERY
-                g.motor.start(Intent("SCOUT", [g.scout], pick, {"to": pick}, "scout"))
+                g.motor.start(Intent("SCOUT", [g.scout], tour[0], {"to": tour[0], "then": tour[1:]}, "scout"))
                 return True
+            if not near:
+                self.dodged = False
             return False
         # the post: outside Gary's natural's choke, toward their natural
         if self.post is None:

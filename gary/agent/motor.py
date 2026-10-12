@@ -607,6 +607,8 @@ class DirectMotor:
             t.stage = "recalled"
             return
         hi.minimap_right_click(*d["to"])
+        for p in d.get("then", ()):                       # a tour: the rest as shift+clicked waypoints
+            hi.minimap_right_click(*p, queued=True)
         g.leases.take([g.scout], t.intent)
         if d.get("home"):
             g.army.scout_done = True

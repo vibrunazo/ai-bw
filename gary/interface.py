@@ -420,15 +420,16 @@ class HumanInterface:
         """Smart command at a screen point: move, attack, gather, follow."""
         return self._schedule_click(sx, sy, 16, "right_click", queued=queued)
 
-    def minimap_right_click(self, map_x: int, map_y: int) -> ActionResult:
-        """Right click on the minimap: anywhere on the map, but imprecise."""
+    def minimap_right_click(self, map_x: int, map_y: int, queued: bool = False) -> ActionResult:
+        """Right click on the minimap: anywhere on the map, but imprecise (queued: shift held, after
+        the selection's current orders: a waypoint)."""
         if (r := self._spend()):
             return r
         land = max(self.frame, self.hand_free_at) + round(self.p.fitts_a_ms / FRAME_MS) + 1
         s = self.p.minimap_scatter_px
         self.hand_free_at = land
         self.pending.append(_Pending(land, "minimap_right_click", {
-            "x": round(map_x + self.rng.gauss(0, s)), "y": round(map_y + self.rng.gauss(0, s))}))
+            "x": round(map_x + self.rng.gauss(0, s)), "y": round(map_y + self.rng.gauss(0, s)), "queued": queued}))
         return self._game_result(land)
 
     def minimap_command(self, order: int, map_x: int, map_y: int) -> ActionResult:
@@ -638,9 +639,10 @@ class HumanInterface:
             self._send(C.right_click(x, y, tag, C.NO_UNIT if not tag else kind, a.args["queued"]))
             self._remember("rclick", -1, x, y, tag)
         elif a.kind == "minimap_right_click":
-            act = "minimap right-click (move)"
+            queued = a.args.get("queued", False)
+            act = "shift+minimap right-click (waypoint)" if queued else "minimap right-click (move)"
             cmd = {"kind": "move", "x": a.args["x"], "y": a.args["y"], "target": 0}
-            self._send(C.right_click(a.args["x"], a.args["y"]))
+            self._send(C.right_click(a.args["x"], a.args["y"], queued=queued))
             self._remember("rclick", -1, a.args["x"], a.args["y"], 0)
         elif a.kind == "minimap_order":
             act = "minimap attack-move" if a.args["order"] == C.ORDER_ATTACK_MOVE else f"minimap order {a.args['order']}"
