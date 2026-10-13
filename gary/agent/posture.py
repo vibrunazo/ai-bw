@@ -67,6 +67,8 @@ HOLD_ARMY, HOLD_RATIO = 6, 1.5       # Gary holds until its army supply is this,
 DEFENSE = {T.SCV, T.MARINE, T.DEPOT, T.RAX, T.BUNKER}
 BUNKER_FROM_CC = 3 * 32              # v2: the rush bunker this far from the main's CC, toward its way out
 BUNKER_INSIDE = 64                   # the rush bunker: this far inside the main's way out
+SWITCH_FROM, SWITCH_UNTIL = 110 * 24, 250 * 24   # the learned switch is asked from 1:50 to 4:10...
+SWITCH_EVERY = 10 * 24                           # ...every 10 s
 
 
 class EarlyPoolPosture:
@@ -76,6 +78,9 @@ class EarlyPoolPosture:
     release_bunkers = False              # v5: ...and when the rush is over, the main's bunker is let out
     unknown_alarm = False
     unknown_by = UNKNOWN_BY              # v4: nothing seen by then is an early pool (v4: 2:50)
+    force_at: int | None = None          # training (train/early_switch.py): the rush defense from this frame
+    switch = None                        # a learned switch: facts (gary/policy/plan.py) -> go into the rush
+                                         # defense now; asked every SWITCH_EVERY from SWITCH_FROM to SWITCH_UNTIL
 
     def __init__(self, g: Gary):
         self.g = g
@@ -177,6 +182,8 @@ class EarlyPoolPosture:
                     (hi.frame <= LINGS_BY and lings and one_base) or
                     (hi.frame <= MANY_LINGS_BY and lings >= MANY_LINGS and one_base))
         unknown = self.unknown_by <= hi.frame <= POOL_BY and not self.base_seen
+        if not self.rush and not self.hold and self._switched(obs):
+            evidence = self.early_pool_seen = True        # (decided: not called off by a second hatchery)
         if not self.rush and not self.hold and (evidence or unknown):
             self.rush = self.hold = True
             self.unknown_alarm = not evidence    # only nothing seen yet: maybe a hatch first after all
@@ -213,6 +220,21 @@ class EarlyPoolPosture:
                 self.hold, self.rush_over = False, True
                 g.say(f"the early pool is held: army {army:.0f} vs the zerg's {self.most_enemy:.0f} at most, back to the usual plan")
                 self._release(mine)
+
+    def _switched(self, obs: dict) -> bool:
+        """The rush defense decided outside the rules: forced from force_at (training), or by the
+        learned switch, asked every SWITCH_EVERY in its window (before the rush was ever over)."""
+        f = self.g.hi.frame
+        if self.rush_over:
+            return False
+        if self.force_at is not None and f >= self.force_at:
+            self.force_at = None
+            return True
+        if self.switch is None or not SWITCH_FROM <= f <= SWITCH_UNTIL or f < getattr(self, "next_switch", 0):
+            return False
+        self.next_switch = f + SWITCH_EVERY
+        from gary.policy.plan import facts
+        return bool(self.switch(facts(self, obs)))
 
     def _release(self, mine: list[dict]) -> None:
         """v5: the rush is over: the bunkers by the main's Command Center let their marines out and

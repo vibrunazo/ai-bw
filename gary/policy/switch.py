@@ -1,0 +1,53 @@
+"""The learned early-defense switch (docs/CONTROL.md step 7): go into the rush defense now or not.
+
+A small regression tree over the posture's facts (gary/policy/plan.py facts) predicting how much a
+game gains from switching now instead of following the rules (train/early_switch.py, from paired
+games: the same game played as the rules play it and with the switch forced at a given moment).
+The posture asks it every few seconds while it isn't in the rush defense (gary/agent/posture.py
+switch); it switches where the predicted gain is above MARGIN. Kept as plain JSON: readable, and
+read without scikit-learn.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+MARGIN = 0.02                    # predicted gain (in game outcome, 0 lost to 1 won) needed to switch
+
+
+class Switch:
+    def __init__(self, tree: dict, margin: float = MARGIN):
+        self.tree, self.margin = tree, margin
+        self.path = None
+
+    @classmethod
+    def load(cls, path: str | Path) -> "Switch":
+        d = json.loads(Path(path).read_text(encoding="utf-8"))
+        s = cls(d["tree"], d.get("margin", MARGIN))
+        s.path = str(path)
+        return s
+
+    def gain(self, fx: dict) -> float:
+        t, i = self.tree, 0
+        while t["left"][i] >= 0:
+            i = t["left"][i] if fx[t["feature"][i]] <= t["threshold"][i] else t["right"][i]
+        return t["value"][i]
+
+    def __call__(self, fx: dict) -> bool:
+        return self.gain(fx) > self.margin
+
+    @staticmethod
+    def describe(tree: dict) -> list[str]:
+        """The tree as readable rules, one line per leaf."""
+        out = []
+
+        def walk(i, conds):
+            if tree["left"][i] < 0:
+                out.append(f"{' and '.join(conds) or 'always'}: gain {tree['value'][i]:+.3f} ({tree['n'][i]} moments)")
+                return
+            f, x = tree["feature"][i], tree["threshold"][i]
+            walk(tree["left"][i], conds + [f"{f} <= {x:g}"])
+            walk(tree["right"][i], conds + [f"{f} > {x:g}"])
+        walk(0, [])
+        return out

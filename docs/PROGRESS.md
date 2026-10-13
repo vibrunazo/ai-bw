@@ -149,6 +149,20 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   as early. (2) 10 against Zerg v2 (7 on Python): Gary's army is even or ahead until about 6:00 and
   loses the big fight at 6-7 minutes (21 army deaths a game at 5:30-8:00, others 12), more of it
   in the field and the main, less at its natural.
+- **The early-defense switch, learned (2026-10-13; `train/early_switch.py`, `gary/policy/switch.py`):**
+  when to go into the early-pool defense, from paired games: each training game (seeds 1-48, the
+  six opponent and map sets) played as the rules play it and again with the defense forced at
+  2:00, 2:30, 3:00, 3:30 or 4:00 (deterministic: the switch the only difference); outcome won 1,
+  lost 0, at the time limit the value network's chance. A 3-level tree over the posture's facts
+  learned where switching pays (across seeds +0.044 a game, all 4 folds positive; its biggest leaf:
+  a second hatchery and a pool seen, +0.12). Held out (432 paired games, seeds 101-148, and Zerg v2
+  also 149-220): losses 40 → 39, wins 74 → 64, outcome −0.011 ± 0.027. The replayed pros' fast
+  pools 20 → 0 losses, Zerg v2 20 → 39: it is on by 4:30 in 430 of 432 games, false alarms in 285
+  of the 287 games without early zerglings (the rules: 154 of 285), SCVs at 6:00 25.2 → 24.1, army
+  9.2 → 11.1. In effect "always defend early", which trades the losses one for one. Not adopted
+  (posture option: `force_at`, `switch`). Every opponent in the pool attacks early and none
+  punishes over-defending (TODO.md item 1): the decision is re-learned once a greedy Zerg is in the
+  pool (item 4).
 
 ### v0.19 (October 2026): the build style chosen per map
 
