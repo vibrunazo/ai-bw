@@ -238,6 +238,18 @@ earlier speedups).
    4:00 0.73, and against Zerg v2 a coin flip until 7:00 (0.49, 0.56). The net value of the next
    60 s: 52% of its variance explained (sd 477 -> 330), the next 180 s 30% (1136 -> 953). It
    reads who is ahead, not yet who will get ahead.
+   As a judge of decisions (`eval/value_branches.py`: 288 moments of v0.19's games, each played
+   on three times: as it was, with another of the macro's options, and with Gary skipping half a
+   second; the same game replayed matched its first play in all 288): another macro decision
+   changes the next 3 minutes at 77% of the moments, chaos alone at 39%; their spreads, sd 989
+   against 529 (given any change, 1122 against 837). Judged by the value network at 30 or 60 s
+   instead, both spreads shrink alike: the ratio of their variances stays 3.1-3.6 (the score's
+   3.5), so the critic doesn't separate decisions from chaos any better than the score. It sees a
+   little ahead: its read at 60 s correlates +0.34 with the net value of the 2 minutes after
+   (the first 60 s of score: +0.27; at 30 s it sees nothing, +0.05; on placebo pairs, 0 as it
+   should). Not yet the critic that credits single decisions: that needs inputs that foresee
+   (the belief model's estimate of the enemy army, the fight in progress) and Gary's games of
+   every style (its own were all style 1: `eval/walls_bench.py`'s Match forced it, now fixed).
 
 Steps 1–3 are refactoring with parity checks, and they carry the risk of the plan: they touch
 everything. They're worth it only if they stay small, so: no layer gets a provider it doesn't need
