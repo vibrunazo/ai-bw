@@ -253,16 +253,21 @@ earlier speedups).
    Value network v2 (`gary/policy/value.py`): those inputs (the belief model's estimate of the
    enemy army, hidden or not; both armies' last 30 s) and 1,080 Gary games of every style, plus a
    head learned by bootstrapping (the next 5 s of score plus its own value after them, discounted,
-   half-life 60 s). Held out, against the same data without the new inputs: who wins against Zerg
-   v2 before 4:00 0.56 (0.44), 4:00-7:00 0.70 (0.66); the next 60 s 30% explained (18%), 180 s 19%
-   (23%). As a judge (288 new moments): worse than the score. The score's variance ratio of a
-   decision's pairs to chaos's is 4.5; the critic's reads at 30 and 60 s 1.8 and 1.9, its
-   bootstrapped head 1.2-1.3 (its reads move with chaos as much as with decisions); its win head
-   at 30 s 4.8, about the score's, but its read barely tells how the rest goes (+0.11 with the
-   score after; the net180 head +0.25, v1 +0.05). Where a decision changed nothing in 3 minutes
-   the win head hardly moves (0.12 against 1.13 elsewhere): not the decision's label, just no
-   foresight. Per-decision credit stays out of reach at this noise: the learning stays per game
-   (the strategy selector) and per fight (episodes paired on the same positions).
+   half-life 60 s; it explains 42% of the discounted score to the game's end). Held out, against
+   the same data without the new inputs: the next 60 s 30% explained (18%); the rest within noise
+   (who wins against Zerg v2 before 4:00 rests on ~16 decided games: 0.44-0.56 from one training
+   to the next). Judged once per branch (288 moments), the critic seemed worse than the score, but
+   that test measured how much more a decision disturbs a game than a skipped half-second, not
+   what it's worth. Measured right (`--repeats`: 90 moments, the macro's decision and another
+   each replayed 6 times with both players' hands drawn anew from the moment): over 3 minutes,
+   chaos spreads a pair by sd 512, a single macro decision's real effect is sd 130 (at 20 of the
+   moments it changed nothing at all), and replays barely agree on which decision was better
+   (+0.14, 95% interval -0.18 to +0.35). The critic at 30 s foretells the other replays' result as
+   well as 3 minutes of score does (+0.23 against +0.14, equal within the noise): the same
+   judgement from a sixth of the game. So single macro decisions are worth little next to the
+   chaos (crediting one takes ~15 replays of it), not a fault of the critic; the learning stays
+   per game (the strategy selector) and per fight (episodes paired on the same positions), and a
+   macro learned from branches would need tens of thousands of them, judged by the critic at 30 s.
 
 Steps 1–3 are refactoring with parity checks, and they carry the risk of the plan: they touch
 everything. They're worth it only if they stay small, so: no layer gets a provider it doesn't need

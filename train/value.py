@@ -15,7 +15,7 @@ the enemy army, the trends of the last 30 s). Heads and their data:
           Gary's games
   net180  ...over the next 180 s
   disc    the net value ahead, discounted (half-life DISC_HALF_S), by bootstrapping: the next
-          GARY_EVERY_S seconds' net value plus the head's own (as of the epoch's start) value after
+          GARY_EVERY_S seconds' net value plus the head's own value after (refreshed every REFRESH batches)
 
 Gary's games: v0.19 with each build style forced in turn (and the macro unsteered), half of them
 with the macro drawing its decisions (temperature 0.5) for variety, against the opponent pool (the
@@ -47,6 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
 STRIDE_S = 10
 GARY_EVERY_S = 5
+REFRESH = 50                                   # batches between refreshes of the bootstrapped head's targets
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
         for m in ("python_gg13676", "standard_ozp3w", "heartbreak_9rg84")}
 OPPONENTS = ("dummy", "v2", "replayed")
@@ -269,23 +270,28 @@ def main() -> None:
     print(f"samples: pro {n0} ({int(pro_test.sum())} held out), Gary {len(X) - n0} from {len(gary)} games "
           f"({int(test[n0:].sum())} held out); Gary's games won {np.mean([g['result'] == 'won' for g in gary]):.0%}, "
           f"lost {np.mean([g['result'] == 'lost' for g in gary]):.0%}", flush=True)
-    for ep in monitor.track(range(args.epochs), args.epochs, "training"):
-        # the bootstrapped head's targets from the net as it is now: r + gamma^step * disc(next);
-        # after a game's last sample nothing more if it ended, unknown (left out) at the time limit
+    gary_rows = np.arange(n0, len(X))
+
+    def bootstrapped() -> torch.Tensor:
+        """The bootstrapped head's targets from the net as it is now: r + gamma^step * disc(next);
+        after a game's last sample nothing more if it ended, unknown (left out) at the time limit."""
         net.eval()
         with torch.no_grad():
-            disc = torch.cat([net(Xn[i:i + 65536])[1][:, 2] for i in range(0, len(Xn), 65536)]).numpy()
+            disc = np.full(len(X), np.nan, np.float32)
+            disc[n0:] = torch.cat([net(Xn[i:i + 65536])[1][:, 2] for i in range(n0, len(X), 65536)]).numpy()
         net.train()
         boot = np.where(NXT >= 0, disc[np.maximum(NXT, 0)], np.where(ENDED, 0.0, np.nan))
-        D = torch.tensor((R + step * boot).astype(np.float32))
+        return torch.tensor((R + step * boot).astype(np.float32))
+
+    for ep in monitor.track(range(args.epochs), args.epochs, "training"):
         np.random.default_rng(ep).shuffle(tr)
-        for b in range(0, len(tr), 1024):
+        for n, b in enumerate(range(0, len(tr), 1024)):
+            if n % REFRESH == 0:                   # (each refresh looks GARY_EVERY_S further ahead)
+                D = bootstrapped()
             i = torch.tensor(tr[b:b + 1024])
             lw, ln = net(Xn[i])
             wm, nm, dm = ~torch.isnan(Wt[i]), ~torch.isnan(Nt[i]), ~torch.isnan(D[i])
-            loss = (F.binary_cross_entropy_with_logits(lw[wm], Wt[i][wm]) if wm.any() else 0.0) + \
-                (F.smooth_l1_loss(ln[:, :2][nm], Nt[i][nm]) if nm.any() else 0.0) + \
-                (F.smooth_l1_loss(ln[:, 2][dm], D[i][dm]) if dm.any() else 0.0)
+            loss = (F.binary_cross_entropy_with_logits(lw[wm], Wt[i][wm]) if wm.any() else 0.0) +                 (F.smooth_l1_loss(ln[:, :2][nm], Nt[i][nm]) if nm.any() else 0.0) +                 (F.smooth_l1_loss(ln[:, 2][dm], D[i][dm]) if dm.any() else 0.0)
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -304,6 +310,16 @@ def main() -> None:
         m = ~np.isnan(y)
         r2 = 1 - np.mean((y[m] - p[m]) ** 2) / np.var(y[m]) if m.any() else float("nan")
         print(f"  net{h}: sd {np.std(y[m]) * 1000:.0f}, explained {r2:.1%} (the noise left: sd {np.sqrt(np.mean((y[m] - p[m]) ** 2)) * 1000:.0f})")
+    with torch.no_grad():
+        dp = torch.cat([net(Xn[i:i + 65536])[1][:, 2] for i in range(n0, len(X), 65536)]).numpy()
+    G = np.zeros(len(X) - n0)
+    for k in range(len(X) - n0 - 1, -1, -1):                # the discounted score to the game's end
+        nx = NXT[n0 + k]
+        G[k] = (R[n0 + k] if np.isfinite(R[n0 + k]) else 0.0) + (step * G[nx - n0] if nx >= 0 else 0.0)
+    left = np.array([t for g in gary for t in (np.array(g["frames"]).max() - np.array(g["frames"])) / 1440])
+    far = test[n0:] & ((left >= 6) | ENDED[n0:])
+    print(f"  disc: against the discounted score to the end (held out, 6+ min left or ended): "
+          f"explained {1 - np.mean((G[far] - dp[far]) ** 2) / np.var(G[far]):.1%} (sd {np.std(G[far]) * 1000:.0f})")
     torch.save({"state": net.state_dict(), "n_in": X.shape[1], "mean": mean.tolist(), "std": std.tolist(),
                 "spec": spec.to_dict(), "heads": ["win", "net60", "net180", "disc"], "gamma_s": GAMMA_S}, run / "model.pt")
     print(f"-> {run / 'model.pt'}")

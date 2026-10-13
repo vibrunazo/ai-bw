@@ -76,9 +76,14 @@ def _advance(m, w, view) -> bool:
 
 
 def run(args: tuple) -> dict:
-    """One way of playing on from the point: "same", "alt" or "placebo"."""
+    """One way of playing on from the point: "same", "alt" or "placebo" (the same, Gary skipping one
+    turn at the moment); with a third element, a new draw of both players' hands from the moment on
+    (the random scatter of every click; None: as it was), to replay a decision with different chaos."""
+    import random
     from gary.policy.value import ValueView
-    point, how = args
+    point, how, *rest = args
+    redraw = rest[0] if rest else None
+    skip = 0 if how == "placebo" else None
     m = _match(point["opponent"], point["map"], point["seed"], point["version"])
     m.gary.macro.log = True                  # (as the game the point came from: the same work, the same game)
     w = Watch(m)
@@ -92,14 +97,22 @@ def run(args: tuple) -> dict:
     if m.game.frame != f0:
         m.game.close()
         return {"how": how, "error": f"at {m.game.frame}, not {f0}"}
-    if how == "placebo":
-        act = m.gary.act
-        m.gary.act = lambda: None
-        _advance(m, w, view)
-        m.gary.act = act
+    if redraw is not None:
+        for race, hi in m.his.items():
+            hi.rng = random.Random(f"{redraw}-{race}")
     views, last = {}, None
     looks = sorted(LOOKS)
-    while m.game.frame < f0 + HORIZON and _advance(m, w, view):
+    while m.game.frame < f0 + HORIZON:
+        if skip is not None and m.game.frame >= f0 + skip:        # one turn without Gary's hands
+            act = m.gary.act
+            m.gary.act = lambda: None
+            going = _advance(m, w, view)
+            m.gary.act = act
+            skip = None
+        else:
+            going = _advance(m, w, view)
+        if not going:
+            break
         while looks and m.game.frame >= f0 + looks[0] * 24:
             try:
                 obs = m.gary.hi.observe()
@@ -111,7 +124,7 @@ def run(args: tuple) -> dict:
     for t in looks:                           # the game ended first: the last view stands
         views[t] = last
     end = m.game.frame
-    out = {"how": how, "end": end, "views": views,
+    out = {"how": how, "redraw": redraw, "end": end, "views": views,
            "net": {t: w.window(f0, min(end, f0 + t * 24))["net"] for t in LOOKS},
            "forced": how != "alt" or m.gary.macro.force is None}
     m.game.close()
@@ -170,11 +183,60 @@ def judge(rows: list[dict], model_path: Path) -> None:
     print(f"  the same game played again matched its first play over 180 s in {np.mean(same):.0%} of moments")
 
 
+def judge_repeats(rows: list[dict], model_path: Path) -> None:
+    """Each moment's decision played REPEATS times each way, paired by when Gary skips a turn: the
+    decision's real effect (the mean of the pairs) against chaos (their spread). Is there a
+    consistent effect to learn (the two halves of the repeats agreeing), and does the critic at 30
+    or 60 s foretell it (its read on one half against the score of the other)?"""
+    from gary.policy.value import GAMMA_S, ValueModel
+    model = ValueModel.load(model_path)
+
+    def reads(r):
+        out = {"net180": r["net"]["180"], "net30": r["net"]["30"], "net60": r["net"]["60"]}
+        for t in (30, 60):
+            v = r["views"].get(str(t))
+            if v is None:
+                return None
+            pr = model.predict(np.array(v, np.float32))
+            out[f"v@{t}"] = r["net"][str(t)] + float(pr["net180"][0])
+            out[f"d@{t}"] = r["net"][str(t)] + GAMMA_S ** t * float(pr["disc"][0])
+            out[f"win@{t}"] = float(pr["win"][0])
+        return out
+
+    names = ["net30", "net60", "v@30", "v@60", "d@30", "d@60", "win@30", "win@60", "net180"]
+    D = []                                  # per moment: (repeats, judges) of alt - same
+    for r in rows:
+        a, b = [reads(x) for x in r["alt"]], [reads(x) for x in r["same"]]
+        if any(x is None for x in a + b):
+            continue
+        D.append(np.array([[x[k] - y[k] for k in names] for x, y in zip(a, b)]))
+    D = np.array(D)                         # (moments, repeats, judges)
+    k = D.shape[1]
+    score = D[:, :, names.index("net180")]
+    mean, spread = score.mean(1), score.var(1, ddof=1)
+    signal = mean.var(ddof=1) - spread.mean() / k
+    h1, h2 = score[:, : k // 2].mean(1), score[:, k // 2:].mean(1)
+    rel = np.corrcoef(h1, h2)[0, 1]
+    print(f"{len(D)} moments, each decision {k} times each way (alt - same over 180 s):")
+    print(f"  chaos: sd {np.sqrt(spread.mean()):.0f} between replays of the same pair; the decisions' "
+          f"real effects: sd {np.sqrt(max(signal, 0)):.0f} (variance {signal:+.0f})")
+    print(f"  do the two halves of the replays agree on a moment's effect? correlation {rel:+.2f} "
+          f"(with all {k}: {2 * rel / (1 + rel) if rel > -1 else float('nan'):+.2f})")
+    print("  each judge's read on one half against the 180 s score of the other (averaged both ways):")
+    for j, name in enumerate(names):
+        x1, x2 = D[:, : k // 2, j].mean(1), D[:, k // 2:, j].mean(1)
+        c = (np.corrcoef(x1, h2)[0, 1] + np.corrcoef(x2, h1)[0, 1]) / 2
+        print(f"    {name:7s} {c:+.2f}")
+
+
 def main() -> None:
     from train.macro_rl import base_game
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seeds", type=int, default=9)
     ap.add_argument("--points", type=int, default=4, help="decision moments per game")
+    ap.add_argument("--repeats", type=int, default=0,
+                    help="instead: each moment's two decisions played this many times each, both players' hands "
+                         "drawn anew from the moment in each (the first: as it was)")
     ap.add_argument("--version", default=VERSION)
     ap.add_argument("--model", help="the value network (default: the newest in runs/value)")
     ap.add_argument("--data", help="branches played before (JSON lines): judge them, playing none")
@@ -182,6 +244,7 @@ def main() -> None:
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
+    path = out_path().with_name("repeats.jsonl") if args.repeats else out_path()
     if args.data:
         rows = [json.loads(line) for line in open(args.data, encoding="utf-8")]
     else:
@@ -189,22 +252,31 @@ def main() -> None:
         with ProcessPoolExecutor(args.parallel) as pool:
             points = [p for ps in monitor.track(pool.map(base_game, jobs), len(jobs), "games to find moments") for p in ps]
             print(f"{len(points)} decision moments in {len(jobs)} games", flush=True)
-            runs = list(monitor.track(pool.map(run, [(p, h) for p in points for h in ("same", "alt", "placebo")]),
-                                      3 * len(points), "branches (same, alt, placebo)"))
+            if args.repeats:
+                ways = [(h, None if j == 0 else j) for h in ("same", "alt") for j in range(args.repeats)]
+            else:
+                ways = [("same",), ("alt",), ("placebo",)]
+            runs = list(monitor.track(pool.map(run, [(p, *w) for p in points for w in ways]),
+                                      len(ways) * len(points), f"branches ({len(ways)} a moment)"))
         rows = []
         for i, p in enumerate(points):
-            got = {r["how"]: r for r in runs[3 * i:3 * i + 3] if not r.get("error") and r["forced"]}
-            if "same" in got:
-                rows.append({**{k: v for k, v in p.items() if k != "x"}, **got})
+            got = [r for r in runs[len(ways) * i:len(ways) * (i + 1)]]
+            if any(r.get("error") or not r["forced"] for r in got):
+                continue
+            base = {k: v for k, v in p.items() if k != "x"}
+            if args.repeats:
+                rows.append({**base, "same": got[:args.repeats], "alt": got[args.repeats:]})
+            else:
+                rows.append({**base, **{r["how"]: r for r in got}})
         bad = len(points) - len(rows)
         if bad:
-            print(f"{bad} moments dropped (a run diverged before its moment)")
-        out_path().parent.mkdir(parents=True, exist_ok=True)
-        out_path().write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
-        print(f"-> {out_path()}")
+            print(f"{bad} moments dropped (a run diverged before its moment, or the decision wasn't taken)")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        print(f"-> {path}")
         rows = [json.loads(json.dumps(r)) for r in rows]          # (keys as read back: strings)
     model = Path(args.model) if args.model else max((REPO_ROOT / "runs" / "value").glob("*/model.pt"))
-    judge(rows, model)
+    (judge_repeats if args.repeats or (rows and isinstance(rows[0].get("same"), list)) else judge)(rows, model)
 
 
 if __name__ == "__main__":
