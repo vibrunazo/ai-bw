@@ -8,10 +8,12 @@ where the script reports it:
     monitor.tally("v019", "won")                                         # running counts
 
 The page reads those files, and lists other Gary processes running without one (started before
-this existed). GARY_MONITOR=off keeps a run off it.
+this existed). Each run shows what its script does (its docstring) and why it runs, if said
+(GARY_RUN_NOTE when it starts, or --note later). GARY_MONITOR=off keeps a run off it.
 
     python -m eval.monitor                    # http://127.0.0.1:8766
     python -m eval.monitor --host 0.0.0.0     # also from other devices on the LAN
+    python -m eval.monitor --note 1234 "why"  # say why the run with pid 1234 runs
 """
 
 from __future__ import annotations
@@ -49,7 +51,8 @@ class _Run:
             name = script.stem
         self.started = time.time()
         self.path = FOLDER / f"{time.strftime('%Y%m%d-%H%M%S')}_{os.getpid()}_{name}.json"
-        self.data = {"name": name, "args": argv[1:], "pid": os.getpid(), "started": self.started, "ended": None,
+        self.data = {"name": name, "args": argv[1:], "pid": os.getpid(), "note": os.environ.get("GARY_RUN_NOTE"),
+                     "started": self.started, "ended": None,
                      "state": "running", "error": None, "phases": [], "tally": {}, "lines": []}
         self.partial = ""
         self.saved = 0.0
@@ -58,6 +61,7 @@ class _Run:
         files = sorted(FOLDER.glob("*.json"))
         for old in files[:-KEEP]:
             old.unlink(missing_ok=True)
+            note_path(int(old.stem.split("_")[1])).unlink(missing_ok=True)
 
     def save(self, force: bool = False) -> None:
         now = time.time()
@@ -161,6 +165,37 @@ def tally(group: str, key: str, n: int = 1) -> None:
 
 # --- the page: its own process -----------------------------------------------------------------
 
+_docs: dict[str, tuple[str, str]] = {}
+
+
+def describe(name: str) -> tuple[str, str]:
+    """(first paragraph, the rest) of a run's script's docstring: "eval.vs_rush" -> eval/vs_rush.py."""
+    if name not in _docs:
+        import ast
+        path = REPO_ROOT.joinpath(*name.split(".")).with_suffix(".py")
+        try:
+            doc = ast.get_docstring(ast.parse(path.read_text(encoding="utf-8"))) or ""
+        except (OSError, SyntaxError, ValueError):
+            doc = ""
+        first, _, rest = doc.strip().partition("\n\n")
+        _docs[name] = (" ".join(first.split()), rest.strip())
+    return _docs[name]
+
+
+def note_path(pid: int) -> Path:
+    return FOLDER / f"{pid}.note"
+
+
+def _with_text(r: dict) -> dict:
+    """A run with its description and its note (a note written later, by --note, wins)."""
+    r["summary"], r["details"] = describe(r["name"])
+    try:
+        r["note"] = note_path(r["pid"]).read_text(encoding="utf-8").strip() or r.get("note")
+    except OSError:
+        pass
+    return r
+
+
 def _alive(pid: int) -> bool:
     import psutil
     return psutil.pid_exists(pid)
@@ -218,7 +253,7 @@ class _Machine:
             busy, n = self.cores(p.info["pid"])
             found.append({"name": mod, "args": cmd[cmd.index("-m") + 2:], "pid": p.info["pid"],
                           "started": p.info["create_time"], "cores": round(busy, 1), "workers": n})
-        return found
+        return [_with_text(o) for o in found]
 
     def status(self) -> dict:
         runs = []
@@ -233,7 +268,7 @@ class _Machine:
                     r.update(cores=round(busy, 1), workers=n)
                 else:
                     r["state"] = "died"
-            runs.append(r)
+            runs.append(_with_text(r))
         known = {r["pid"] for r in runs if r["state"] == "running"}
         vm = self.psutil.virtual_memory()
         return {"now": time.time(), "cpu": round(self.cpu(), 1), "cpus": self.psutil.cpu_count(),
@@ -276,8 +311,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1", help="0.0.0.0: also from other devices on the LAN")
     ap.add_argument("--port", type=int, default=PORT)
+    ap.add_argument("--note", nargs=2, metavar=("PID", "TEXT"), help="say why a run (by its pid) is running, and quit")
     args = ap.parse_args()
     FOLDER.mkdir(parents=True, exist_ok=True)
+    if args.note:
+        note_path(int(args.note[0])).write_text(args.note[1], encoding="utf-8")
+        return
     serve(args.host, args.port)
 
 

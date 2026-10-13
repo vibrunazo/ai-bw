@@ -49,6 +49,11 @@
   details summary { cursor: pointer; font-size: 0.85rem; color: var(--dim); margin-top: 8px; }
   .done-list .card { padding: 10px 14px; }
   .empty { color: var(--faint); font-size: 0.9rem; }
+  .why { margin-top: 8px; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--inset); border-radius: 0 6px 6px 0; font-size: 0.9rem; }
+  .why b { color: var(--accent); font-weight: 600; margin-right: 4px; }
+  .what { margin-top: 6px; font-size: 0.88rem; color: var(--dim); }
+  .what details summary { margin-top: 4px; font-size: 0.8rem; }
+  .what pre { font-family: var(--body); font-size: 0.82rem; white-space: pre-wrap; }
   .err { color: var(--bad); font-size: 0.85rem; margin-top: 6px; overflow-wrap: anywhere; }
   @media (max-width: 520px) { .meter .bar { width: 60px; } }
 </style>
@@ -99,6 +104,13 @@ function tallyHtml(t) {
     groups.map((g) => `<tr><td>${esc(g)}</td>${keys.map((k) => `<td class="n">${t[g][k] || 0}</td>`).join("")}
       <td class="n">${Object.values(t[g]).reduce((a, b) => a + b, 0)}</td></tr>`).join("") + "</table>";
 }
+function textHtml(r, key) {
+  // why this run (a note, when one was given) and what its script does (its docstring)
+  const why = r.note ? `<div class="why"><b>Why</b>${esc(r.note)}</div>` : "";
+  const more = r.details ? `<details data-key="${esc(key)}:doc" ${open.has(key + ":doc") ? "open" : ""}><summary>more about this script</summary><pre>${esc(r.details)}</pre></details>` : "";
+  const what = r.summary ? `<div class="what">${esc(r.summary)}${more}</div>` : "";
+  return why + what;
+}
 function runHtml(r, now) {
   const live = r.state === "running";
   const phases = r.phases || [];
@@ -113,7 +125,8 @@ function runHtml(r, now) {
   return `<div class="card">
     <div class="top"><span class="name">${esc(r.name)}</span><span class="pill ${r.state}">${r.state}</span></div>
     <div class="args">${esc((r.args || []).join(" "))}</div>
-    <div class="facts">${facts.join("")}</div>
+    ${textHtml(r, key)}
+    <div class="facts">${facts.map((f) => `<span>${f}</span>`).join("")}</div>
     ${r.error ? `<div class="err">${esc(r.error)}</div>` : ""}
     ${current.map((p) => phaseHtml(p, now, true)).join("")}
     ${live ? past.map((p) => `<div class="phases-done">✓ ${esc(p.phase)}: ${p.done} / ${p.total} in ${dur(p.ended - p.started)}</div>`).join("")
@@ -127,8 +140,9 @@ function otherHtml(o, now) {
   return `<div class="card"><div class="top"><span class="name">${esc(o.name)}</span><span class="pill running">running</span>
     <span class="small faint">not reporting progress (started before the monitor, or outside it)</span></div>
     <div class="args">${esc(o.args.join(" "))}</div>
-    <div class="facts">started <b>${clock(o.started)}</b> running <b>${dur(now - o.started)}</b>
-      <b>${o.workers}</b> workers <b>${o.cores}</b> cores busy pid ${o.pid}</div></div>`;
+    ${textHtml(o, o.started + ":" + o.pid)}
+    <div class="facts"><span>started <b>${clock(o.started)}</b></span><span>running <b>${dur(now - o.started)}</b></span>
+      <span><b>${o.workers}</b> workers</span><span><b>${o.cores}</b> cores busy</span><span>pid ${o.pid}</span></div></div>`;
 }
 async function refresh() {
   try {
