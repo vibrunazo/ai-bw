@@ -19,7 +19,10 @@ def add_argument(ap) -> None:
 
 
 def apply(level: str) -> None:
-    """Lower this process's priority (and so its children's), if asked."""
+    """Lower this process's priority (and so its children's), if asked; and show the run on the run
+    monitor (eval/monitor.py)."""
+    from eval import monitor
+    monitor.start()
     if level != "low":
         return
     if sys.platform == "win32":

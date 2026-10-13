@@ -32,7 +32,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from eval import priority
+from eval import monitor, priority
 from eval.block_branch import MAPS, Watch, _match, _step
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -159,9 +159,9 @@ def main() -> None:
     else:
         jobs = [(o, mp, s, args.points, args.version) for o in OPPONENTS for mp in MAPS for s in range(1, args.seeds + 1)]
         with ProcessPoolExecutor(args.parallel) as pool:
-            points = [p for ps in pool.map(base_game, jobs) for p in ps]
+            points = [p for ps in monitor.track(pool.map(base_game, jobs), len(jobs), "games to find moments") for p in ps]
             print(f"{len(points)} decision moments in {len(jobs)} games", flush=True)
-            rows = [r for r in pool.map(branch, points) if r["forced"]]
+            rows = [r for r in monitor.track(pool.map(branch, points), len(points), "branches") if r["forced"]]
         run.mkdir(parents=True, exist_ok=True)
         with open(run / "pairs.jsonl", "w", encoding="utf-8") as f:
             f.write("".join(json.dumps(r) + "\n" for r in rows))

@@ -24,7 +24,7 @@ import math
 import statistics as st
 from concurrent.futures import ProcessPoolExecutor
 
-from eval import priority
+from eval import monitor, priority
 from eval.scenarios import run_one, scenarios_path
 
 ARMY = {0, 1, 2, 3, 5, 30, 32, 34}           # marine, ghost, vulture, goliath, tank (both modes), firebat, medic
@@ -120,7 +120,7 @@ def main() -> None:
         jobs += [(sc, "gary", args.seconds, v, 1 + h, fights.get(v)) for v in args.versions for h in range(args.draws)]
     with ProcessPoolExecutor(args.parallel) as pool:
         per = max(1, len(jobs) // max(1, len(scs)))           # a scenario's plays on one worker (its game reused)
-        rows = list(pool.map(job, jobs, chunksize=per))
+        rows = list(monitor.track(pool.map(job, jobs, chunksize=per), len(jobs), "episodes"))
     errors = [r for r in rows if r["error"]]
     if errors:
         print(f"{len(errors)} errors, e.g. {errors[0]['error']}")

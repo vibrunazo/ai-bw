@@ -466,6 +466,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     loaded fight_model) replaces the manifest's fight model; load(kind, path) loads models (callers
     that cache pass their own); seed seeds the fight layer's sampling; flip and interruptions are
     for drills (no map)."""
+    import torch
+    torch.set_num_threads(1)       # its models are small: games run side by side (14 at once: 2.7x faster)
     m = manifest_of(manifest)
     g = Gary(hi, mapinfo, m["version"], verbose)
     g.army_types = set(T.ARMY)

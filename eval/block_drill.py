@@ -30,7 +30,7 @@ import statistics as st
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
-from eval import priority
+from eval import monitor, priority
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
@@ -233,7 +233,7 @@ def main() -> None:
     jobs = [(k, mp, s, a, n, v, save(k, mp, s, a, n, v), int(args.lead * 24)) for k in args.chokes for mp in args.maps
             for s in args.seeds for a in (args.armies or CHOKE_ARMIES[k]) for n in args.lings for v in args.versions]
     with ProcessPoolExecutor(args.parallel) as pool:
-        rows = list(pool.map(drill, jobs))
+        rows = list(monitor.track(pool.map(drill, jobs), len(jobs), "drills"))
     errors = [r for r in rows if r.get("error")]
     if errors:
         print(f"{len(errors)} drills skipped: {errors[0]['map']} {errors[0]['error']}")

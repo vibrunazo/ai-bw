@@ -44,7 +44,7 @@ class Match:
     """Gary against the rush dummy (or another of eval/vs_rush.py's Zergs), as eval/vs_rush.py plays it."""
 
     def __init__(self, seed: int, attack_after_s: float, version: str = SOURCE, map_path=None,
-                 opponent: str = "dummy"):
+                 opponent: str = "dummy", style: int | None = None):
         from gary import commands as C
         from gary.agent.manifests import build_gary
         from gary.bots.zerg_rush import HATCH, LIVE_COMMAND_DELAY, ZergRush
@@ -59,7 +59,7 @@ class Match:
                      if u["type"] in (C.COMMAND_CENTER, HATCH)}
         self.his = {r: HumanInterface(self.game, s, PROFILES["pro" if r == "T" else "b_rank"], seed=s)
                     for r, s in self.slot.items()}
-        self.gary = build_gary(self.his["T"], self.map, version, 1, verbose=False)
+        self.gary = build_gary(self.his["T"], self.map, version, style, verbose=False, seed=seed)
         if opponent == "replayed":
             from gary.bots.zerg_replayed import ZergReplayed
             self.zerg = ZergReplayed(self.his["Z"], self.map, seed)
@@ -102,7 +102,7 @@ class Match:
                                       seed=hands_seed if r == "T" else s) for r, s in self.slot.items()}
         for hi in self.his.values():
             hi.frame = self.game.frame
-        self.gary = build_gary(self.his["T"], self.map, version, 1, verbose=False)
+        self.gary = build_gary(self.his["T"], self.map, version, style, verbose=False, seed=seed)
         self.gary.announce = []
         self.gary.adopt()
         self.zerg = ZergRush(self.his["Z"], self.map)

@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from eval import priority
+from eval import monitor, priority
 from gary.policy.plan import MODES, PlanModel
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -67,7 +67,7 @@ def main() -> None:
     else:
         jobs = [(o, mp, s) for o in OPPONENTS for mp in MAPS for s in range(1, args.seeds + 1)]
         with ProcessPoolExecutor(args.parallel) as pool:
-            games = list(pool.map(collect, jobs))
+            games = list(monitor.track(pool.map(collect, jobs), len(jobs), "games"))
         data.parent.mkdir(parents=True, exist_ok=True)
         data.write_text(json.dumps(games), encoding="utf-8")
     X = np.array([x for g in games for x in g["x"]], np.float32)

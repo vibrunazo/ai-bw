@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gary run monitor</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --inset: #f0f2f5; --line: #dde1e7; --text: #16191f; --dim: #5b6472; --faint: #8b93a1;
+    --accent: #2563eb; --track: #e3e7ee; --good: #15803d; --warn: #b45309; --bad: #c62828;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace; --body: system-ui, "Segoe UI", sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1116; --panel: #161a21; --inset: #11151b; --line: #262c36; --text: #e6e9ef; --dim: #9aa3b2; --faint: #69717f;
+      --accent: #60a5fa; --track: #232934; --good: #4ade80; --warn: #fbbf24; --bad: #f87171; color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 var(--body); }
+  .wrap { max-width: 68rem; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin-bottom: 16px; }
+  h1 { margin: 0; font-size: 1.35rem; }
+  h2 { margin: 22px 0 10px; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+  .spacer { flex: 1; }
+  .dim { color: var(--dim); } .faint { color: var(--faint); } .small { font-size: 0.85rem; }
+  .mono { font-family: var(--mono); font-size: 0.85em; }
+  .meter { display: inline-flex; align-items: center; gap: 8px; }
+  .meter .bar { width: 90px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .name { font-weight: 600; font-size: 1.05rem; }
+  .args { font-family: var(--mono); font-size: 0.8rem; color: var(--dim); overflow-wrap: anywhere; margin-top: 2px; }
+  .pill { font-size: 0.75rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
+  .running { color: var(--accent); } .done { color: var(--good); } .failed, .died { color: var(--bad); } .stopped { color: var(--warn); }
+  .facts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 0.85rem; color: var(--dim); }
+  .facts b { color: var(--text); font-weight: 600; }
+  .phase { margin-top: 10px; }
+  .phase .row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.85rem; }
+  .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+  .phases-done { font-size: 0.8rem; color: var(--faint); margin-top: 6px; }
+  table { border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+  th, td { padding: 2px 12px 2px 0; text-align: left; } th { color: var(--dim); font-weight: 600; }
+  td.n { font-variant-numeric: tabular-nums; text-align: right; }
+  pre { margin: 10px 0 0; padding: 10px 12px; background: var(--inset); border: 1px solid var(--line); border-radius: 8px;
+        font: 0.78rem/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 22rem; overflow-y: auto; }
+  details summary { cursor: pointer; font-size: 0.85rem; color: var(--dim); margin-top: 8px; }
+  .done-list .card { padding: 10px 14px; }
+  .empty { color: var(--faint); font-size: 0.9rem; }
+  .err { color: var(--bad); font-size: 0.85rem; margin-top: 6px; overflow-wrap: anywhere; }
+  @media (max-width: 520px) { .meter .bar { width: 60px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Gary runs</h1>
+    <span class="meter small dim">CPU <b id="cpu">–</b><span class="bar"><i id="cpubar" style="width:0"></i></span></span>
+    <span class="small dim">memory <b id="mem">–</b></span>
+    <span class="spacer"></span>
+    <span class="small faint" id="updated">connecting…</span>
+  </header>
+  <h2>Running</h2>
+  <div id="running"></div>
+  <h2>Finished</h2>
+  <div id="finished" class="done-list"></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const open = new Set();                          // finished runs whose output is unfolded
+
+function dur(s) {
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  return h ? `${h}h ${String(m).padStart(2, "0")}m` : m ? `${m}m ${String(sec).padStart(2, "0")}s` : `${sec}s`;
+}
+function clock(t) {
+  const d = new Date(t * 1000), today = new Date().toDateString() === d.toDateString();
+  return (today ? "" : d.toLocaleDateString([], {month: "short", day: "numeric"}) + " ") +
+         d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+}
+function phaseHtml(p, now, live) {
+  const frac = p.total ? p.done / p.total : 0;
+  const spent = (p.ended || now) - p.started;
+  let eta = "";
+  if (live && !p.ended && p.done > 0 && p.done < p.total) eta = ` · about ${dur(spent / p.done * (p.total - p.done))} left`;
+  return `<div class="phase"><div class="row"><span>${esc(p.phase)}</span>
+    <span class="dim">${p.done} / ${p.total} (${Math.round(frac * 100)}%) · ${dur(spent)}${eta}</span></div>
+    <div class="bar"><i style="width:${(frac * 100).toFixed(1)}%"></i></div></div>`;
+}
+function tallyHtml(t) {
+  const groups = Object.keys(t || {});
+  if (!groups.length) return "";
+  const keys = [...new Set(groups.flatMap((g) => Object.keys(t[g])))];
+  return `<table><tr><th></th>${keys.map((k) => `<th>${esc(k)}</th>`).join("")}<th>games</th></tr>` +
+    groups.map((g) => `<tr><td>${esc(g)}</td>${keys.map((k) => `<td class="n">${t[g][k] || 0}</td>`).join("")}
+      <td class="n">${Object.values(t[g]).reduce((a, b) => a + b, 0)}</td></tr>`).join("") + "</table>";
+}
+function runHtml(r, now) {
+  const live = r.state === "running";
+  const phases = r.phases || [];
+  const current = live ? phases.filter((p) => !p.ended).slice(-1) : [];
+  const past = phases.filter((p) => !current.includes(p));
+  const facts = [`started <b>${clock(r.started)}</b>`, `${live ? "running" : "took"} <b>${dur((r.ended || now) - r.started)}</b>`];
+  if (live && r.workers !== undefined) facts.push(`<b>${r.workers}</b> workers`, `<b>${r.cores}</b> cores busy`);
+  if (r.pid) facts.push(`pid ${r.pid}`);
+  const lines = (r.lines || []).filter((l) => l.trim());
+  const tail = lines.slice(live ? -14 : -10);
+  const key = r.started + ":" + r.pid;
+  return `<div class="card">
+    <div class="top"><span class="name">${esc(r.name)}</span><span class="pill ${r.state}">${r.state}</span></div>
+    <div class="args">${esc((r.args || []).join(" "))}</div>
+    <div class="facts">${facts.join("")}</div>
+    ${r.error ? `<div class="err">${esc(r.error)}</div>` : ""}
+    ${current.map((p) => phaseHtml(p, now, true)).join("")}
+    ${live ? past.map((p) => `<div class="phases-done">✓ ${esc(p.phase)}: ${p.done} / ${p.total} in ${dur(p.ended - p.started)}</div>`).join("")
+           : past.length ? `<div class="phases-done">${past.map((p) => `${esc(p.phase)} ${p.done}/${p.total}`).join(" · ")}</div>` : ""}
+    ${tallyHtml(r.tally)}
+    ${live ? (tail.length ? `<pre>${esc(tail.join("\n"))}</pre>` : `<div class="empty" style="margin-top:8px">nothing printed yet</div>`)
+           : lines.length ? `<details data-key="${esc(key)}" ${open.has(key) ? "open" : ""}><summary>output (${lines.length} lines)</summary><pre>${esc(tail.join("\n"))}</pre></details>` : ""}
+  </div>`;
+}
+function otherHtml(o, now) {
+  return `<div class="card"><div class="top"><span class="name">${esc(o.name)}</span><span class="pill running">running</span>
+    <span class="small faint">not reporting progress (started before the monitor, or outside it)</span></div>
+    <div class="args">${esc(o.args.join(" "))}</div>
+    <div class="facts">started <b>${clock(o.started)}</b> running <b>${dur(now - o.started)}</b>
+      <b>${o.workers}</b> workers <b>${o.cores}</b> cores busy pid ${o.pid}</div></div>`;
+}
+async function refresh() {
+  try {
+    const s = await (await fetch("/api/status", {cache: "no-store"})).json();
+    $("cpu").textContent = Math.round(s.cpu) + "%";
+    $("cpubar").style.width = Math.min(100, s.cpu) + "%";
+    $("mem").textContent = Math.round(s.memory) + "%";
+    const live = s.runs.filter((r) => r.state === "running");
+    const done = s.runs.filter((r) => r.state !== "running").slice(0, 15);
+    $("running").innerHTML = live.map((r) => runHtml(r, s.now)).join("") + s.others.map((o) => otherHtml(o, s.now)).join("") ||
+      `<div class="empty">Nothing running.</div>`;
+    $("finished").innerHTML = done.map((r) => runHtml(r, s.now)).join("") || `<div class="empty">Nothing yet.</div>`;
+    $("updated").textContent = "updated " + new Date().toLocaleTimeString();
+  } catch (e) {
+    $("updated").textContent = "can't reach the monitor (" + new Date().toLocaleTimeString() + ")";
+  }
+}
+document.addEventListener("toggle", (e) => {
+  const k = e.target.dataset && e.target.dataset.key;
+  if (k) e.target.open ? open.add(k) : open.delete(k);
+}, true);
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

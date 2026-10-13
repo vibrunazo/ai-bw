@@ -285,7 +285,7 @@ def main() -> None:
                     help="the Zerg: this dummy, or gary/bots/zerg_v1.py (gathers, judges, surrounds, retreats)")
     args = ap.parse_args()
     from gary.agent.manifests import build_gary
-    make = lambda hi, m: build_gary(hi, m, args.vs, args.style)
+    make = lambda hi, m: build_gary(hi, m, args.vs, args.style, seed=args.seed)
     play_match(args.map, args.minutes, args.seed, args.save, make, f"Gary {args.vs}", args.attack_after, args.opponent)
 
 

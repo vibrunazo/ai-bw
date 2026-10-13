@@ -22,7 +22,7 @@ import math
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
-from eval import priority
+from eval import monitor, priority
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
@@ -147,9 +147,9 @@ def main() -> None:
     priority.apply(args.priority)
     jobs = [(o, mp, s) for o in args.opponents for mp in args.maps for s in range(1, args.seeds + 1)]
     with ProcessPoolExecutor(args.parallel) as pool:
-        points = [p for ps in pool.map(probe, jobs) for p in ps]
+        points = [p for ps in monitor.track(pool.map(probe, jobs), len(jobs), "games to find moments") for p in ps]
         print(f"{len(points)} decision points in {len(jobs)} games", flush=True)
-        rows = list(pool.map(branch, points))
+        rows = list(monitor.track(pool.map(branch, points), len(points), "branches"))
     bad = [r for r in rows if r.get("error")]
     if bad:
         print(f"{len(bad)} branches diverged before their point (e.g. {bad[0]['error']})")

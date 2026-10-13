@@ -20,12 +20,12 @@ import subprocess
 import statistics
 import sys
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-from eval import priority  # noqa: E402
+from eval import monitor, priority  # noqa: E402
 from eval.economy import AT, KEYS, line, pro_reference  # noqa: E402
 DEFAULT_MAP = REPO_ROOT / "tests" / "fixtures" / "replays" / "stardata_tvz_standard_ozp3w.rep"
 
@@ -72,7 +72,10 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     jobs = [(v, s) for v in args.versions for s in args.seeds]
     with ThreadPoolExecutor(args.parallel) as pool:
-        rows = list(pool.map(lambda j: play(j[0], j[1], args, out), jobs))
+        futures = [pool.submit(play, v, s, args, out) for v, s in jobs]
+        for f in monitor.track(as_completed(futures), len(jobs), "games"):    # (counted as they finish)
+            monitor.tally(f.result()["version"], f.result()["result"])
+        rows = [f.result() for f in futures]
     print(f"rush attacks after {args.attack_after:.0f} s, {args.minutes:g} min games, style {args.style}; "
           f"replays and logs in {out}")
     print(f"{'version':8} {'seed':>4}  {'result':6} {'at':>6}  buildings T-Z  army T-Z")

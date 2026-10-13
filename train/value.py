@@ -38,7 +38,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from eval import priority
+from eval import monitor, priority
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
@@ -186,10 +186,11 @@ def main() -> None:
         jobs = jobs[:args.pro_games]
         gjobs = [(o, mp, s, v) for o in OPPONENTS for mp in MAPS for s in range(1, args.gary_seeds + 1) for v in VERSIONS]
         with ProcessPoolExecutor(args.parallel) as pool:
-            pro = list(pool.map(pro_samples, [(j, spec.to_dict()) for j in jobs], chunksize=16))
+            pro = list(monitor.track(pool.map(pro_samples, [(j, spec.to_dict()) for j in jobs], chunksize=16), len(jobs),
+                                     "pro games"))
             np.savez_compressed(src / "pro.npz", x=np.concatenate([p[0] for p in pro]), win=np.concatenate([p[1] for p in pro]),
                                 game=np.concatenate([[p[2]] * len(p[1]) for p in pro]))
-            gary = list(pool.map(gary_game, gjobs))
+            gary = list(monitor.track(pool.map(gary_game, gjobs), len(gjobs), "Gary's games"))
         with open(src / "gary.jsonl", "w", encoding="utf-8") as f:
             for g in gary:
                 f.write(json.dumps({**g, "x": g["x"].astype(np.float32).round(3).tolist()}) + "\n")
