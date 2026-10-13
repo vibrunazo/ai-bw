@@ -168,6 +168,7 @@ class RoleRules:
         self.closing: dict[int, frozenset] = {}      # volley: unit -> its closing group
         self.told: dict[int, tuple[str, int]] = {}   # unit -> (role, frame)
         self._walk = None
+        self._ground = None                          # the role model's terrain (gary/policy/roles.py Ground)
         self.first_seen: dict[int, int] = {}        # unit -> frame the roles first saw it (its age)
         self.prev: dict[int, tuple[float, float]] = {}
         self.prev_frame = None
@@ -188,7 +189,27 @@ class RoleRules:
                         positions[t][1] - (positions[t][1] - p[1]) * 12 / elapsed)
                     for t, p in prev.items() if t in positions}
         extra = extra_features(rows, tags, positions, prev if elapsed else {}, self.g.flip)
+        self._terrain_extra(extra, tags, obs, positions)
         return self._own_extra(extra, tags, snap[3], now)
+
+    def _terrain_extra(self, extra, tags: list[int], obs: dict, positions: dict) -> None:
+        """The role model's terrain extras (gary/policy/roles.py terrain_features): the ground under
+        each unit, and the way to Gary's Command Centers, bunkers and main ramp."""
+        from gary.policy.roles import Ground, terrain_features
+        g = self.g
+        if self._ground is None:
+            self._ground = False
+            if getattr(g.hi.game, "terrain", None) is not None and g.map is not None and g.main is not None:
+                try:
+                    start = min(g.map.starts, key=lambda s: math.dist(s, g.main.center))
+                    self._ground = Ground.of(g.hi.game, start)
+                except Exception:                 # (a map the analysis can't read: no terrain inputs)
+                    self._ground = False
+        own = [u for u in obs["units"] if u["owner"] == g.slot]
+        extra[:, 6:] = terrain_features(tags, positions, self._ground or None,
+                                        [(u["x"], u["y"]) for u in own if u["type"] == T.CC],
+                                        [(u["x"], u["y"]) for u in own if u["type"] == T.BUNKER and u["completed"]],
+                                        g.flip)
 
     def _own_extra(self, extra, tags: list[int], by_tag: dict, now: int):
         """The role model's per-unit extras 3-5 for Gary's fighters: age, distance to its biggest

@@ -4,7 +4,8 @@ looked like to them (for gary/policy/roles.py; docs/CONTROL.md step 5).
 Plays the home-defense scenarios (eval/scenarios.py, the train split) under the pro's own commands
 and, every half second, takes the fight as the Terran sees it: the snapshot the fight models use
 (gary/policy/fight.py), enemy units only where the Terran sees them, enemy HP hidden as it is to
-Gary (full), plus each unit's motion over the last half second and how many enemies target it.
+Gary (full), plus each unit's motion over the last half second and how many enemies target it,
+and the ground under it and the way to the Terran's bases (gary/policy/roles.py terrain_features).
 Each of the Terran's army units in it is labeled with its role over the next half second, as
 eval/micro_roles.py labels marines (fire, close in, pull back, retreat, reposition, stand, other;
 toward and away measured group against group); units not fighting are unlabeled (-1).
@@ -22,9 +23,10 @@ from pathlib import Path
 
 import numpy as np
 
+from eval import monitor, priority
 from eval.micro_roles import ATTACK, CONTACT, GROUP, MOVE, NEAR, RETREAT_PX, SIDEWAYS, STAND, TARGETED_FOR
 from gary.agent.fight import MAX_HP
-from gary.policy.roles import EXTRA, MAX_UNITS, ROLES, extra_features
+from gary.policy.roles import EXTRA, MAX_UNITS, ROLES, Ground, extra_features, terrain_features
 
 SLICE = 12
 
@@ -37,6 +39,7 @@ class Probe:
         self.samples: dict[int, list] = {}  # unit -> [(frame, x, y, order, nearest enemy, targeted frame, axis)]
         self.targeted: dict[int, int] = {}
         self.prev: dict[int, tuple] = {}
+        self.ground = None
 
     def __call__(self, game, slot: int) -> None:
         from gary.policy.army import is_building, is_worker, supply_x2
@@ -50,6 +53,10 @@ class Probe:
             starts = game.start_locations()
             main = min(starts, key=lambda s: math.dist((s["x"], s["y"]), (cc["x"], cc["y"]))) if cc and starts else {"x": 0, "y": 0}
             self.flip = (main["x"] > mw / 2, main["y"] > mh / 2)
+            try:
+                self.ground = Ground.of(game, (main["x"], main["y"]))
+            except Exception:                     # (a map the analysis can't read: no terrain inputs)
+                self.ground = None
         army = [u for u in obs["units"] if u["owner"] == slot and u["completed"] and supply_x2(u["type"]) > 0
                 and not is_worker(u["type"]) and not is_building(u["type"])]
         enemy = [u for u in obs["units"] if u["owner"] not in (slot, 11) and supply_x2(u["type"]) > 0
@@ -84,7 +91,11 @@ class Probe:
         positions = {u["tag"]: (u["x"], u["y"]) for u in seen}
         if snap is not None:
             rows, tags, _ = snap
-            self.snaps.append((f, rows, extra_features(rows, tags, positions, self.prev, self.flip), tags))
+            extra = extra_features(rows, tags, positions, self.prev, self.flip)
+            own = [u for u in obs["units"] if u["owner"] == slot]
+            extra[:, 6:] = terrain_features(tags, positions, self.ground, [(u["x"], u["y"]) for u in own if u["type"] == 106],
+                                            [(u["x"], u["y"]) for u in own if u["type"] == 125 and u["completed"]], self.flip)
+            self.snaps.append((f, rows, extra, tags))
         self.prev = positions
 
     def labels(self) -> dict[tuple[int, int], str]:
@@ -160,14 +171,16 @@ def main() -> None:
     ap.add_argument("--parallel", type=int, default=16)
     ap.add_argument("--limit", type=int, help="only this many scenarios (to try it)")
     ap.add_argument("--out", help="default: data/interim/roles/roles_<split>.npz")
+    priority.add_argument(ap)
     args = ap.parse_args()
+    priority.apply(args.priority)
     from eval.scenarios import scenarios_path
     from ingest.inventory import data_root
     scs = [json.loads(line) for line in scenarios_path(args.split).read_text(encoding="utf-8").splitlines()]
     if args.limit:
         scs = scs[:args.limit]
     with ProcessPoolExecutor(args.parallel) as pool:
-        results = list(pool.map(_job, scs, chunksize=1))
+        results = list(monitor.track(pool.map(_job, scs, chunksize=1), len(scs), "scenarios"))
     n = sum(len(r["rows"]) for r in results)
     rows = np.zeros((n, MAX_UNITS, 11), np.int16)
     extra = np.zeros((n, MAX_UNITS, EXTRA), np.float32)

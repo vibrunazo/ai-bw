@@ -108,6 +108,17 @@ quicker way to a playable Gary.
   (4). **The first learned fight decision on par with the hand rules over whole defenses, not
   beyond them**: the same ceiling as RL on the 45 s scenarios. Not adopted (v0.17 keeps its rules;
   the model: `v017roleml` with `runs/roles_rl/20261010_055912/model.pt`, not in git).
+- **The role model given terrain (2026-10-13):** per unit, the ground under it and the way to its
+  bases (gary/policy/roles.py `terrain_features`: ground height, the passage's width there, in the
+  main or not, toward and how far the nearest Command Center, how far the nearest bunker and the
+  main's ramp, from anywhere on the map), in the pros' data and in play. Imitating the pros' roles
+  it adds nothing (held out 77.7% with it, 78.0% without; pull back and retreat within noise): a
+  role is what a unit does for the next half second, and that follows the fight in front of it;
+  where units stand is the skills' and the army's doing. v0.19's rules copied with it (four plays of
+  the 552 training defenses, 120 s: 90.3% of decisions), then 60 rounds of RL as before: validation
+  −149 at the start, best −124 (round 20), −135 at the end; v0.19's rules on the same defenses
+  −118. The same ceiling as without terrain: three tries at learning the role choice now end at
+  the rules. Not adopted (`v019roleml` with `runs/roles_rl/20261013_115621/model.pt`, not in git).
 
 ### v0.19 (October 2026): the build style chosen per map
 

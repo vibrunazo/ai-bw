@@ -25,9 +25,11 @@ ROLES = ["fire", "close_in", "pull_back", "retreat", "reposition", "stand", "oth
 # Gary's biggest bunch of fighters), hold (hold position)
 DECISIONS = ROLES + ["keep", "post", "join", "hold"]
 MAX_UNITS = 64
-EXTRA = 6                            # motion x, y over the last half second (tiles), enemies targeting it;
+TERRAIN = 8                          # the ground under each unit and the player's own bases (Ground)
+EXTRA = 6 + TERRAIN                  # motion x, y over the last half second (tiles), enemies targeting it;
                                      # the unit's age, its distance to Gary's biggest bunch of fighters,
-                                     # that bunch's size (gary/agent/roles.py; models before have 3)
+                                     # that bunch's size (gary/agent/roles.py); TERRAIN (models before
+                                     # have 3 or 6: they read the first n_extra)
 AGE_SCALE = 60.0                     # seconds
 PACK_DIST_SCALE = 320.0              # pixels
 PACK_SIZE_SCALE = 12.0
@@ -48,6 +50,74 @@ def extra_features(rows: np.ndarray, tags: list[int], positions: dict[int, tuple
     targets = rows[:, OTARGET]
     for j in targets[(targets >= 0) & (targets < n)]:
         out[j, 2] += 1
+    return out
+
+
+GROUND_SCALE = 1024.0                # pixels
+WIDTH_SCALE = 256.0                  # pixels: a passage's width
+
+
+class Ground:
+    """The map as the role model sees it under each unit (map knowledge, as a player studies the map
+    before playing: Game.terrain() and gary/terrain.py's analysis): ground height, how wide the
+    passage is there (narrow: a ramp or a choke), and the player's main plateau and ramp."""
+
+    def __init__(self, walk: np.ndarray, height: np.ndarray, start: tuple[float, float], ramp_top):
+        from scipy import ndimage
+        self.walk, self.height = walk, height
+        self.alt = ndimage.distance_transform_edt(walk)
+        ys, xs = np.nonzero(walk)
+        k = int(np.argmin((ys * 8 + 4 - start[1]) ** 2 + (xs * 8 + 4 - start[0]) ** 2))
+        cell = (int(ys[k]), int(xs[k]))
+        labels, _ = ndimage.label(walk & (height == height[cell]))
+        self.main = labels == labels[cell]
+        self.ramp_top = ramp_top
+
+    @classmethod
+    def of(cls, game, start: tuple[float, float]) -> "Ground":
+        """For the player whose main is at start (pixels)."""
+        from gary.mapinfo import MapInfo
+        from gary.terrain import map_analysis
+        walk, height, _ = game.terrain()
+        a = map_analysis(game, MapInfo.from_game(game))["starts"]
+        mine = a[min(a, key=lambda k: (a[k]["start"][0] - start[0]) ** 2 + (a[k]["start"][1] - start[1]) ** 2)]
+        return cls(walk, height, start, tuple(mine["ramp_top"]) if mine["reliable"] else None)
+
+    def cell(self, x: float, y: float) -> tuple[int, int]:
+        h, w = self.walk.shape
+        return min(h - 1, max(0, int(y // 8))), min(w - 1, max(0, int(x // 8)))
+
+
+def terrain_features(tags: list[int], positions: dict[int, tuple[float, float]], ground: "Ground | None",
+                     ccs: list[tuple[float, float]], bunkers: list[tuple[float, float]],
+                     flip: tuple[bool, bool]) -> np.ndarray:
+    """(n, TERRAIN) per unit: its ground's height (0 low to 1 high), the passage's width there, in
+    the player's main (0/1); toward the player's nearest Command Center (x, y mirrored like the rows)
+    and how far; how far the nearest bunker and the main's ramp are (anywhere on the map: the
+    player knows where its own bases are). Zeros without a map (drills)."""
+    out = np.zeros((len(tags), TERRAIN), np.float32)
+    if ground is None:
+        return out
+    far = 2.0
+    for i, t in enumerate(tags):
+        if t not in positions:
+            continue
+        x, y = positions[t]
+        c = ground.cell(x, y)
+        out[i, 0] = ground.height[c] / 2.0
+        out[i, 1] = min(2 * 8 * float(ground.alt[c]), 2 * WIDTH_SCALE) / WIDTH_SCALE
+        out[i, 2] = float(ground.main[c])
+        if ccs:
+            cx, cy = min(ccs, key=lambda p: (p[0] - x) ** 2 + (p[1] - y) ** 2)
+            dx, dy = cx - x, cy - y
+            out[i, 3] = (-dx if flip[0] else dx) / GROUND_SCALE
+            out[i, 4] = (-dy if flip[1] else dy) / GROUND_SCALE
+            out[i, 5] = min(np.hypot(dx, dy) / GROUND_SCALE, far)
+        else:
+            out[i, 5] = far
+        out[i, 6] = min(min((np.hypot(bx - x, by - y) for bx, by in bunkers), default=far * GROUND_SCALE) / GROUND_SCALE, far)
+        ramp = ground.ramp_top
+        out[i, 7] = min(np.hypot(ramp[0] - x, ramp[1] - y) / GROUND_SCALE, far) if ramp is not None else far
     return out
 
 

@@ -24,6 +24,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from eval import monitor, priority
 from gary.policy.roles import DECISIONS, ROLES, RoleModel, RoleNet, tensors
 from ingest.inventory import data_root
 
@@ -110,9 +111,12 @@ def main() -> None:
     ap.add_argument("--layers", type=int, default=3)
     ap.add_argument("--decisions", action="store_true", help="learn when the role changes (else keep)")
     ap.add_argument("--no-weights", action="store_true", help="plain cross entropy (rare roles not weighted up)")
+    ap.add_argument("--extra", type=int, help="read only the first this many per-unit extras (6: without the terrain)")
     ap.add_argument("--smooth", type=float, default=0.0,
                     help="label smoothing: every decision keeps some probability (room to explore for RL)")
+    priority.add_argument(ap)
     args = ap.parse_args()
+    priority.apply(args.priority)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(0)
@@ -125,12 +129,12 @@ def main() -> None:
     print(f"train {len(train[0])} snapshots, {len(y)} units; validation {len(val[0])} snapshots; "
           + ", ".join(f"{r} {s:.1%}" for r, s in zip(names, share)), flush=True)
     config = {"net": {"d": args.d, "layers": args.layers, "heads": 4, "n_roles": len(names),
-                      "n_extra": int(train[1].shape[-1])}, "data": args.data, "roles": names}
+                      "n_extra": args.extra or int(train[1].shape[-1])}, "data": args.data, "roles": names}
     net = RoleNet(**config["net"]).to(device)
     opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=0.01)
     rng = np.random.default_rng(0)
     best, best_state, history = -1.0, None, []
-    for epoch in range(args.epochs):
+    for epoch in monitor.track(range(args.epochs), args.epochs, "epochs"):
         order = rng.permutation(len(train[0]))
         total = 0.0
         for s in range(0, len(order), args.batch):

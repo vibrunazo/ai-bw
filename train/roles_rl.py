@@ -3,7 +3,7 @@
 Starts from a role model of decisions, by default the hand rules distilled into it
 (ingest/role_distill.py, train/roles.py --no-weights: as good as the rules in play), and improves
 it on real pro positions: the home defenses from training games (eval/scenarios.py --split train),
-Gary playing with learned roles (--manifest, default v017roleml; --seconds each, 120 by default:
+Gary playing with learned roles (--manifest, default v019roleml; --seconds each, 120 by default:
 eval/episodes.py). Each round Gary plays a batch of them
 several times, drawing each unit's role from the model. Every turn is judged by what happened in
 the HORIZON_S seconds after it (eval/score.py's events: value killed and lost, damage...; each
@@ -32,6 +32,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from eval import monitor, priority
 from gary.agent.manifests import latest_role_model
 from gary.policy.roles import EXTRA, RoleModel, tensors
 from train.fight_cmd_rl import decisions, real_splits
@@ -128,7 +129,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--init", help="role model of decisions to start from (default: the newest in runs/roles)")
     ap.add_argument("--rounds", type=int, default=60)
-    ap.add_argument("--manifest", default="v017roleml", help="the Gary that plays (its roles: the model trained)")
+    ap.add_argument("--manifest", default="v019roleml", help="the Gary that plays (its roles: the model trained)")
     ap.add_argument("--override", action="store_true",
                     help="the model only overrides the rules (join, hold, else the rules): manifest v017override")
     ap.add_argument("--seconds", type=float, default=120,
@@ -145,8 +146,10 @@ def main() -> None:
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--minibatch", type=int, default=256)
     ap.add_argument("--parallel", type=int, default=max(1, (os.cpu_count() or 6) * 2 // 3))
+    priority.add_argument(ap)
     args = ap.parse_args()
-    if args.override and args.manifest == "v017roleml":
+    priority.apply(args.priority)
+    if args.override and args.manifest == "v019roleml":
         args.manifest = "v017override"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -170,7 +173,7 @@ def main() -> None:
     history, best = [], None
     rng = random.Random(0)
     with ProcessPoolExecutor(args.parallel) as pool:
-        for rnd in range(args.rounds + 1):
+        for rnd in monitor.track(range(args.rounds + 1), args.rounds + 1, "rounds"):
             path = str(out / f"round{rnd}.pt")
             model.save(path)
             if rnd % args.test_every == 0 or rnd == args.rounds:

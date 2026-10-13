@@ -148,6 +148,15 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
+    # fight_path, default the latest in runs/roles): the same rules around them
+    "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
+                   "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                             "keep_busy": True, "selector": "play"},
+                   "army": {**_ARMY, "hunt": True, "scan": True},
+                   "fight": {**_V09_FIGHT, "provider": "roles", "model": "roles/latest", "roles": {"post": 3},
+                             "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+                   "arbiter": "fixed_priority/v1"},
     # v0.17 with learned roles (gary/policy/roles.py; the model: --fight-model / fight_path, default
     # the latest in runs/roles): the same rules around them, roles' options passed on (the post)
     "v017roleml": {"version": "v0.17", "posture": "early_pool/v4", "leases": "enforced",
