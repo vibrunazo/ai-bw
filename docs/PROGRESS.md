@@ -133,6 +133,19 @@ quicker way to a playable Gary.
   noise. Not adopted. With the role choice (three tries) and terrain, the home fight now looks
   near what the hand rules can get from these decisions; the losses in games come from elsewhere
   (where the army goes between fights, what is built).
+- **Why v0.19 loses (2026-10-13; `eval/losses.py`):** its 336 games of the selector test played
+  again (335 the same result: deterministic), every army death with its place, its order and the
+  layer that last ordered it, both armies every 30 s; the 30 losses against the other 306. Not
+  production: lost games built as many fighters (14 by 6:00, others 15) but kept none alive (1 at
+  5:00, others 7); their deaths come alone twice as often (47%, 23%) and in the main (44%, 26%).
+  Two kinds of loss. (1) 20 against the replayed pros, 18 of them hatch first with a pool at
+  2:01-2:08 whose first zerglings (4+ supply) reach Gary at about 3:30: Gary's early-pool posture
+  went on before them in 2 of 15 such losses (never in 11), against 19 of 34 games with the same
+  early zerglings that it survived; its marines then die one by one in the main (71% alone). A
+  pool at 2:02 after a hatchery isn't an early pool to the posture's rules, but its zerglings come
+  as early. (2) 10 against Zerg v2 (7 on Python): Gary's army is even or ahead until about 6:00 and
+  loses the big fight at 6-7 minutes (21 army deaths a game at 5:30-8:00, others 12), more of it
+  in the field and the main, less at its natural.
 
 ### v0.19 (October 2026): the build style chosen per map
 
