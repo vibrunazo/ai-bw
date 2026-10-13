@@ -51,6 +51,8 @@
   .empty { color: var(--faint); font-size: 0.9rem; }
   .why { margin-top: 8px; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--inset); border-radius: 0 6px 6px 0; font-size: 0.9rem; }
   .why b { color: var(--accent); font-weight: 600; margin-right: 4px; }
+  .why.success { border-left-color: var(--good); margin-top: 4px; }
+  .why.success b { color: var(--good); }
   .what { margin-top: 6px; font-size: 0.88rem; color: var(--dim); }
   .what details summary { margin-top: 4px; font-size: 0.8rem; }
   .what pre { font-family: var(--body); font-size: 0.82rem; white-space: pre-wrap; }
@@ -106,7 +108,8 @@ function tallyHtml(t) {
 }
 function textHtml(r, key) {
   // why this run (a note, when one was given) and what its script does (its docstring)
-  const why = r.note ? `<div class="why"><b>Why</b>${esc(r.note)}</div>` : "";
+  const why = (r.note ? `<div class="why"><b>Why</b>${esc(r.note)}</div>` : "") +
+    (r.success ? `<div class="why success"><b>Success</b>${esc(r.success)}</div>` : "");
   const more = r.details ? `<details data-key="${esc(key)}:doc" ${open.has(key + ":doc") ? "open" : ""}><summary>more about this script</summary><pre>${esc(r.details)}</pre></details>` : "";
   const what = r.summary ? `<div class="what">${esc(r.summary)}${more}</div>` : "";
   return why + what;

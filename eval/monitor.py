@@ -8,12 +8,14 @@ where the script reports it:
     monitor.tally("v019", "won")                                         # running counts
 
 The page reads those files, and lists other Gary processes running without one (started before
-this existed). Each run shows what its script does (its docstring) and why it runs, if said
-(GARY_RUN_NOTE when it starts, or --note later). GARY_MONITOR=off keeps a run off it.
+this existed). Each run shows what its script does (its docstring), why it runs and what success
+would be and how it's measured, if said (GARY_RUN_NOTE and GARY_RUN_SUCCESS when it starts, or
+--note and --success later). GARY_MONITOR=off keeps a run off it.
 
     python -m eval.monitor                    # http://127.0.0.1:8766
     python -m eval.monitor --host 0.0.0.0     # also from other devices on the LAN
     python -m eval.monitor --note 1234 "why"  # say why the run with pid 1234 runs
+    python -m eval.monitor --success 1234 "what success would be, measured how"
 """
 
 from __future__ import annotations
@@ -52,6 +54,7 @@ class _Run:
         self.started = time.time()
         self.path = FOLDER / f"{time.strftime('%Y%m%d-%H%M%S')}_{os.getpid()}_{name}.json"
         self.data = {"name": name, "args": argv[1:], "pid": os.getpid(), "note": os.environ.get("GARY_RUN_NOTE"),
+                     "success": os.environ.get("GARY_RUN_SUCCESS"),
                      "started": self.started, "ended": None,
                      "state": "running", "error": None, "phases": [], "tally": {}, "lines": []}
         self.partial = ""
@@ -61,7 +64,8 @@ class _Run:
         files = sorted(FOLDER.glob("*.json"))
         for old in files[:-KEEP]:
             old.unlink(missing_ok=True)
-            note_path(int(old.stem.split("_")[1])).unlink(missing_ok=True)
+            for kind in ("note", "success"):
+                note_path(int(old.stem.split("_")[1]), kind).unlink(missing_ok=True)
 
     def save(self, force: bool = False) -> None:
         now = time.time()
@@ -182,17 +186,20 @@ def describe(name: str) -> tuple[str, str]:
     return _docs[name]
 
 
-def note_path(pid: int) -> Path:
-    return FOLDER / f"{pid}.note"
+def note_path(pid: int, kind: str = "note") -> Path:
+    """A text said about a run after it started: why it runs ("note"), what success would be ("success")."""
+    return FOLDER / f"{pid}.{kind}"
 
 
 def _with_text(r: dict) -> dict:
-    """A run with its description and its note (a note written later, by --note, wins)."""
+    """A run with its description, its note and what success would be (written later, by --note or
+    --success, wins)."""
     r["summary"], r["details"] = describe(r["name"])
-    try:
-        r["note"] = note_path(r["pid"]).read_text(encoding="utf-8").strip() or r.get("note")
-    except OSError:
-        pass
+    for kind in ("note", "success"):
+        try:
+            r[kind] = note_path(r["pid"], kind).read_text(encoding="utf-8").strip() or r.get(kind)
+        except OSError:
+            pass
     return r
 
 
@@ -312,10 +319,14 @@ def main() -> None:
     ap.add_argument("--host", default="127.0.0.1", help="0.0.0.0: also from other devices on the LAN")
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--note", nargs=2, metavar=("PID", "TEXT"), help="say why a run (by its pid) is running, and quit")
+    ap.add_argument("--success", nargs=2, metavar=("PID", "TEXT"),
+                    help="say what success would mean for a run (by its pid) and how it's measured, and quit")
     args = ap.parse_args()
     FOLDER.mkdir(parents=True, exist_ok=True)
-    if args.note:
-        note_path(int(args.note[0])).write_text(args.note[1], encoding="utf-8")
+    if args.note or args.success:
+        for kind, said in (("note", args.note), ("success", args.success)):
+            if said:
+                note_path(int(said[0]), kind).write_text(said[1], encoding="utf-8")
         return
     serve(args.host, args.port)
 
