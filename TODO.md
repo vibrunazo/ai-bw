@@ -5,19 +5,6 @@ held up, in the order to do it. Pick these up once the early-switch work (`train
 is done and its runs have finished; none of them should run while it does (shared code, shared
 CPU). Delete this file once each item is done or moved to an issue.
 
-## 1. The early switch's test: false alarms and economy, not only losses
-
-Every opponent in the pool (the 9-pool, Zerg v2, the replayed pros) attacks early, and none punishes
-a Terran that defends too much: the replayed Zerg has no economy, so it never drones harder or
-takes more bases while Gary turtles. A switch learned against this pool can learn that false alarms
-are nearly free. In the held-out test, next to losses, report against the rules:
-
-- how often the switch fires in games with no early zerglings (false alarms);
-- Gary's SCVs and bases at 6:00.
-
-If either gets worse, the switch over-defends in a way the pool can't punish. Re-judge it against
-Zerg v3 (item 4) once that exists.
-
 ## 2. Do Gary's hands cost it games? A cheap check first
 
 No deciding model sees the state of the hands: `gary/policy/roles.py`, `army.py` and `macro.py` take
@@ -74,4 +61,6 @@ lags pros by minutes; mutas and lurkers would be played badly). On Zerg v2's cod
 - some seeds open hatch first with a pool at ~2:00 and send a few early zerglings to poke without
   committing: the moment a false alarm is tempting (item 1).
 
-Then: add it to the selector table's opponent pool and rebuild the table; re-test the switch.
+Then: add it to the selector table's opponent pool and rebuild the table; re-learn and re-test the
+early-defense switch (`train/early_switch.py`; without it: always defends early, losses 40 -> 39 of
+432, false alarms 285 of 287 quiet games).
