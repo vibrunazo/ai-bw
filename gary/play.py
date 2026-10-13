@@ -1,8 +1,8 @@
 """Play Gary: headless in OpenBW (fast, deterministic, saves a replay and Gary's POV log), or live in a
 StarCraft: Remastered client through the bridge. Any version (a manifest, gary/agent/manifests.py).
 
-    python -m gary.play --gary v018 --map path/to/map.scx --minutes 12 --style 1
-    python -m gary.play --gary v018 --live --style 1
+    python -m gary.play --gary v019 --map path/to/map.scx --minutes 12
+    python -m gary.play --gary v019 --live
 """
 
 from __future__ import annotations
@@ -118,14 +118,14 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--gary", default="v018", type=manifest_name, help="which Gary (a manifest, options with +: v010+post)")
+    ap.add_argument("--gary", default="v019", type=manifest_name, help="which Gary (a manifest, options with +: v010+post)")
     ap.add_argument("--map", help="a .scm/.scx map (or a pre-1.18 replay) for headless play")
     ap.add_argument("--minutes", type=float, default=12)
     ap.add_argument("--seed", type=int)
     ap.add_argument("--save", help="replay path (default gary_<version>.rep)")
     ap.add_argument("--command-delay", type=int, default=LIVE_COMMAND_DELAY,
                     help=f"headless: frames before a command runs (default {LIVE_COMMAND_DELAY}, as measured live)")
-    ap.add_argument("--style", type=int, help="build-style cluster to steer the macro toward")
+    ap.add_argument("--style", type=int, help="build-style cluster to steer the macro toward (default: the strategy selector's choice for the map)")
     ap.add_argument("--fight-model", help="replace the version's fight model with this checkpoint")
     ap.add_argument("--quiet", action="store_true", help="don't print each decision")
     ap.add_argument("--live", action="store_true", help="play in a live SC:R client via the bridge")

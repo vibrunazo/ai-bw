@@ -140,6 +140,14 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.19: v0.18 whose build style is chosen per map by the strategy selector (gary/agent/selector.py)
+    "v019": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play"},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.17 with learned roles (gary/policy/roles.py; the model: --fight-model / fight_path, default
     # the latest in runs/roles): the same rules around them, roles' options passed on (the post)
     "v017roleml": {"version": "v0.17", "posture": "early_pool/v4", "leases": "enforced",
@@ -403,9 +411,15 @@ OPTIONS = {
     # training (docs/CONTROL.md step 7): the macro draws its next decision at temperature 1 (or
     # sample_t05: 0.5), each draw logged (g.macro.draws)
     "sample": lambda m: m["macro"].update(decoder="sample", temperature=1.0),
+    "sample_t05": lambda m: m["macro"].update(decoder="sample", temperature=0.5),
     # the macro model trained from branches (train/macro_rl.py, the newest run)
     "macro_rl": lambda m: m["macro"].update(model="macro_rl/latest"),
-    "sample_t05": lambda m: m["macro"].update(decoder="sample", temperature=0.5),
+    # the strategy selector (gary/agent/selector.py; its table: eval/selector_table.py): the build style
+    # per map with the best expected score (selector_explore: a draw from each, Thompson sampling).
+    # On v0.18 (fresh seeds 101+, 333 games): lost 30 (57), won 64 (57); Zerg v2 on Fighting Spirit
+    # lost 3 of 72 (22). In v0.19
+    "selector": lambda m: m["macro"].update(selector="play"),
+    "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
     # fast pools that beat v0.12 on Heartbreak Ridge it kept a few more SCVs; the bunker's spot mattered
     "pull_line": _pull(mineral_line=True),
@@ -477,6 +491,13 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         models["macro"] = getattr(macro, "path", "?")
         builds = {k: c(g) for k, c in (("one_base_defense", OneBaseDefense), ("ling_flood_defense", LingFloodDefense))
                   if k in m["macro"].get("builds", [])}
+        if style is None and m["macro"].get("selector") and mapinfo is not None:
+            # the strategy selector (gary/agent/selector.py): the build style for this map, from games counted
+            import random
+            from gary.agent.selector import StrategySelector, map_key
+            explore = m["macro"]["selector"] == "explore"
+            style = StrategySelector().choose(map_key(mapinfo), explore, random.Random(seed * 7919 + int(map_key(mapinfo), 16) % 1000))
+            g.selected_style = style
         g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
                                m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False),
                                m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0))
