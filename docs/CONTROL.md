@@ -231,6 +231,13 @@ earlier speedups).
    the counting is per game: the strategy selector (§6.8: which build style to play, from the
    map and what the scout saw, learned from game outcomes), then the fights on episodes (whose
    measures pair the same positions: +-10 on 239 home defenses).
+   The value network (`train/value.py`: how good a moment is, from the macro model's view of
+   it) was the missing piece for that credit: trained on 578k moments of 6,000 pro games and 88k
+   of 648 Gary games, held out by game. Who wins: pros 0.64 AUC (from any moment, the early
+   game included), Gary's decided games 0.92, but most of that is the lead already taken: before
+   4:00 0.73, and against Zerg v2 a coin flip until 7:00 (0.49, 0.56). The net value of the next
+   60 s: 52% of its variance explained (sd 477 -> 330), the next 180 s 30% (1136 -> 953). It
+   reads who is ahead, not yet who will get ahead.
 
 Steps 1–3 are refactoring with parity checks, and they carry the risk of the plan: they touch
 everything. They're worth it only if they stay small, so: no layer gets a provider it doesn't need
