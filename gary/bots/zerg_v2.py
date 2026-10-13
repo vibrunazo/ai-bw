@@ -86,21 +86,7 @@ class ZergV2(ZergV1):
         obs = hi.observe()
         me = obs["me"]
         mine = [u for u in obs["units"] if u["owner"] == hi.slot]
-        lings_now = sum(1 for u in mine if u["type"] == LING)
-        if not self.all_in:
-            speed_done = "speed" in self.ordered and hi.frame - self.ordered["speed"] >= SPEED_FRAMES
-            if (speed_done and lings_now >= ALL_IN_LINGS) or hi.frame >= ALL_IN_LATEST:
-                self.all_in, self.muster_from = "muster", hi.frame     # everyone to the staging point first
-                self.wave = 6
-                self.log(f"all in: {lings_now} zerglings, mustering")
-        elif self.all_in == "muster":
-            staged = sum(len(self.groups[k]) for k, p in self.phase.items() if p == "staged")
-            if staged >= 0.8 * lings_now or hi.frame - self.muster_from >= MUSTER:
-                self.all_in = "go"
-                self.attack_ratio = self.patient_ratio = 0.0
-                self.retreat_ratio = float("inf")
-                self.surround = False
-                self.log(f"all in: go with {staged} of {lings_now}")
+        self._timing(mine)
         if self.army(obs, mine):                              # (hotkeys and the minimap, mostly)
             return
         count = lambda t: sum(1 for u in mine if u["type"] == t)
@@ -113,15 +99,53 @@ class ZergV2(ZergV1):
         # a step under way goes on
         if self.task:
             return self._continue(obs, mine, me)
-        # idle drones mine (at the base they stand at)
+        if self._mine_idle(obs, mine, drones, hatches):
+            return
+        if self._build_order(obs, mine, me, hatches, pool, extractor, drones):
+            return
+        # larvae: overlords when supply runs short, then what this Zerg makes
+        if me["minerals"] < 50:
+            return
+        want = self._want(me, mine, hatches, pool, eggs_drones)
+        if want is None or me["supply_used"] + (0 if want == OVERLORD else 1) > me["supply_max"]:
+            return
+        self._larva(obs, mine, want)
+
+    def _go(self, mine) -> bool:
+        """Time for the all-in: speed done and ALL_IN_LINGS zerglings, or ALL_IN_LATEST."""
+        lings_now = sum(1 for u in mine if u["type"] == LING)
+        speed_done = "speed" in self.ordered and self.hi.frame - self.ordered["speed"] >= SPEED_FRAMES
+        return (speed_done and lings_now >= ALL_IN_LINGS) or self.hi.frame >= ALL_IN_LATEST
+
+    def _timing(self, mine) -> None:
+        """The all-in: muster everyone at the staging point once it's time (_go), then everyone goes."""
+        hi = self.hi
+        lings_now = sum(1 for u in mine if u["type"] in self.sizes)
+        if not self.all_in:
+            if self._go(mine):
+                self.all_in, self.muster_from = "muster", hi.frame     # everyone to the staging point first
+                self.wave = 6
+                self.log(f"all in: {lings_now} zerglings, mustering")
+        elif self.all_in == "muster":
+            staged = sum(len(self.groups[k]) for k, p in self.phase.items() if p == "staged")
+            if staged >= 0.8 * lings_now or hi.frame - self.muster_from >= MUSTER:
+                self.all_in = "go"
+                self.attack_ratio = self.patient_ratio = 0.0
+                self.retreat_ratio = float("inf")
+                self.surround = False
+                self.log(f"all in: go with {staged} of {lings_now}")
+
+    def _mine_idle(self, obs, mine, drones, hatches) -> bool:
+        """Idle drones mine, at the base they stand at (True: it acted)."""
+        hi = self.hi
         idle = [u for u in drones if (u["order"] in IDLE_ORDERS and u["tag"] not in self.gas
                                       # (once speed is started, the gas drones go back to minerals)
-                                      or "speed" in self.ordered and u["order"] in (81, 82, 84))
+                                      or self._gas_done() and u["order"] in (81, 82, 84))
                 and hi.frame >= self.walking.get(u["tag"], 0)]
         if idle:
             u = idle[0]
             if self._look(obs, (u["x"], u["y"])):
-                return
+                return True
             sel = [s for s in mine if s["tag"] in obs["selection"]]
             # (idle drones clump: all of them; the box can take larvae and the overlords above too)
             if sel and any(s["tag"] in {i["tag"] for i in idle} for s in sel) \
@@ -132,7 +156,7 @@ class ZergV2(ZergV1):
                     hi.minimap_right_click(*self.main_base.minerals[0])
                     for s in sel:
                         self.walking[s["tag"]] = hi.frame + 20 * 24
-                    return
+                    return True
                 # (a field with an overlord over it: the click would hit the overlord, the drones follow it)
                 lords = [(o["x"], o["y"]) for o in mine if o["type"] == OVERLORD]
                 clear = [m for m in base.minerals if not any(math.dist(m, lo) < 40 for lo in lords)] or base.minerals
@@ -142,16 +166,21 @@ class ZergV2(ZergV1):
                     hi.minimap_right_click(*m)
                     for s in sel:
                         self.walking[s["tag"]] = hi.frame + 10 * 24
-                    return
+                    return True
                 hi.right_click(*p)
-                return
+                return True
             self.idle_tries[u["tag"]] = self.idle_tries.get(u["tag"], 0) + 1
             if self.idle_tries[u["tag"]] > IDLE_TRIES:          # can't get it alone: leave it be a while
                 self.idle_tries[u["tag"]] = 0
                 self.walking[u["tag"]] = hi.frame + 20 * 24
             x, y = screen_of(obs, u["x"], u["y"])
             hi.box(max(0, x - 12), max(0, y - 12), x + 12, y + 12)
-            return
+            return True
+        return False
+
+    def _build_order(self, obs, mine, me, hatches, pool, extractor, drones) -> bool:
+        """The buildings, gas, speed and rallies (True: it acted)."""
+        hi = self.hi
         # a building ordered that doesn't show up within 30 s: order it again (3 tries)
         have = {"hatch": len(hatches) >= 2, "pool": pool is not None, "extractor": extractor is not None}
         for step, ok in have.items():
@@ -161,56 +190,69 @@ class ZergV2(ZergV1):
                 del self.ordered[step]
         # the build: natural hatchery at 12, pool, extractor
         if "hatch" not in self.ordered and len(drones) >= HATCH_AT and me["minerals"] >= 250:
-            return self._start_build("hatch", HATCH, self.nat_base.tile, obs, drones)
+            self._start_build("hatch", HATCH, self.nat_base.tile, obs, drones)
+            return True
         if "hatch" in self.ordered and "pool" not in self.ordered and me["minerals"] >= 200:
             spot = self._pool_spot()
             if spot:
-                return self._start_build("pool", POOL, spot, obs, drones)
+                self._start_build("pool", POOL, spot, obs, drones)
+                return True
         if "pool" in self.ordered and "extractor" not in self.ordered and me["minerals"] >= 50 and self.main_base.geysers:
             gx, gy = self.main_base.geysers[0]
-            return self._start_build("extractor", EXTRACTOR, ((gx - 64) // 32, (gy - 32) // 32), obs, drones)
+            self._start_build("extractor", EXTRACTOR, ((gx - 64) // 32, (gy - 32) // 32), obs, drones)
+            return True
         # gas
         if extractor and extractor["completed"] and len(self.gas & {u["tag"] for u in drones}) < GAS \
-                and "speed" not in self.ordered:
+                and not self._gas_done():
             miners = [u for u in drones if u["order"] == MINING and u["tag"] not in self.gas
                       and math.dist((u["x"], u["y"]), self.main_base.center) < 12 * 32]
             if miners:
                 self.task, self.drone_for = "gas", self._pick(miners, obs)["tag"]
-                return self._continue(obs, mine, me)
+                self._continue(obs, mine, me)
+                return True
         # a macro hatchery in the main: money it can't spend, no larva to spend it on (4 at most)
         larvae_now = sum(1 for u in mine if u["type"] == C.LARVA)
         pending = [k for k, f in self.ordered.items() if k.startswith("macro") and f >= 0 and hi.frame - f < 60 * 24]
         if len(hatches) >= 2 and len(hatches) < 4 and me["minerals"] >= 350 and larvae_now == 0 and not pending:
             spot = self._spot_near(HATCH, self.home)
             if spot:
-                return self._start_build(f"macro{len(hatches)}_{hi.frame}", HATCH, spot, obs, drones)
+                self._start_build(f"macro{len(hatches)}_{hi.frame}", HATCH, spot, obs, drones)
+                return True
         # speed
         if pool and pool["completed"] and "speed" not in self.ordered and me["gas"] >= 100 and me["minerals"] >= 100:
             if self._look(obs, (pool["x"], pool["y"])):
-                return
+                return True
             if obs["selection"] == [pool["tag"]]:
                 if hi.upgrade(METABOLIC_BOOST).accepted:
                     self.ordered["speed"] = hi.frame
                     self.gas.clear()                          # (enough gas: back to minerals as they idle)
-                return
+                return True
             hi.click(*screen_of(obs, pool["x"], pool["y"]))
-            return
+            return True
         # rallies to the gathering point
         for h in hatches:
             if h["completed"] and h["tag"] not in self.rallied_at and pool:
                 if self._look(obs, (h["x"], h["y"])):
-                    return
+                    return True
                 if obs["selection"] == [h["tag"]]:
                     hi.minimap_right_click(*self.gather)
                     self.rallied_at.add(h["tag"])
-                    return
+                    return True
                 top = screen_of(obs, h["x"], h["y"] - 24)
                 if top:
                     hi.click(*top)
-                return
-        # larvae: overlords when supply runs short, drones to 18, then zerglings
-        if me["minerals"] < 50:
-            return
+                return True
+        return False
+
+    def _gas_done(self) -> bool:
+        """The gas drones go back to minerals once speed is started (100 gas is all this Zerg needs)."""
+        return "speed" in self.ordered
+
+    def _want(self, me, mine, hatches, pool, eggs_drones):
+        """What the next larva becomes: an overlord when supply runs short, drones to DRONES, then
+        zerglings (None: nothing now)."""
+        hi = self.hi
+        count = lambda t: sum(1 for u in mine if u["type"] == t)
         self.overlords_at = [f for f in self.overlords_at if hi.frame - f < 24 * 25]
         want = None
         if me["supply_max"] - me["supply_used"] <= 2 * len(hatches) and me["supply_max"] < 200 \
@@ -220,8 +262,11 @@ class ZergV2(ZergV1):
             want = DRONE
         elif pool and pool["completed"]:
             want = LING
-        if want is None or me["supply_used"] + (0 if want == OVERLORD else 1) > me["supply_max"]:
-            return
+        return want
+
+    def _larva(self, obs, mine, want) -> None:
+        """A larva (selected with a tiny box) becomes want."""
+        hi = self.hi
         larvae = [u for u in mine if u["type"] == C.LARVA]
         if not larvae:
             return

@@ -61,6 +61,7 @@ class ZergV1(ZergRush):
     attack_ratio, patient_ratio, retreat_ratio = ATTACK_RATIO, PATIENT_RATIO, RETREAT_RATIO
     surround = True
     wave = WAVE                     # zerglings in a new group
+    sizes = {LING: 1.0}             # the army's unit types, each as so many zerglings (Zerg v3: hydralisks)
     hunt = False                    # (attacking: aim at the mineral line, and again every REISSUE at SCVs
                                     # near: zerglings chasing pulled SCVs ignore the marines shooting them;
                                     # Gary lost 1 game in 48 to that, 5 without it)
@@ -99,7 +100,7 @@ class ZergV1(ZergRush):
         hi = self.hi
         if self._aimed_at != self.target:
             self._aim()
-        lings = {u["tag"]: u for u in mine if u["type"] == LING and u["completed"]}
+        lings = {u["tag"]: u for u in mine if u["type"] in self.sizes and u["completed"]}
         for n in list(self.groups):
             self.groups[n] &= set(lings)
             if not self.groups[n]:
@@ -187,7 +188,7 @@ class ZergV1(ZergRush):
             staged = [k for k, p in self.phase.items() if p == "staged"]
             if self.staged_since is None:
                 self.staged_since = hi.frame
-            ours = LING_POWER * sum(len(self.groups[k]) for k in staged)
+            ours = LING_POWER * sum(self._size(lings[t] for t in self.groups[k]) for k in staged)
             near = [e for e in enemy if math.dist((e["x"], e["y"]), self.choke) < DEFENSE_NEAR
                     and (e["type"] != 7 or e["order"] in (10, 14))
                     and (e["type"] != 125 or e["completed"])]
@@ -217,13 +218,17 @@ class ZergV1(ZergRush):
         if phase == "attack":
             near = [e for e in enemy if math.dist((e["x"], e["y"]), mid) < 8 * 32
                     and (e["type"] != 7 or e["order"] in (10, 14))]
-            if sum(POWER[e["type"]] for e in near) > self.retreat_ratio * LING_POWER * len(members):
+            if sum(POWER[e["type"]] for e in near) > self.retreat_ratio * LING_POWER * self._size(members):
                 return self._order(n, obs, "move", self.staging, "retreat")
             if self.hunt and hi.frame - self.since[n] >= REISSUE:
                 scvs = [e for e in enemy if e["type"] == 7 and math.dist((e["x"], e["y"]), mid) < 10 * 32]
                 target = _mid(scvs) if scvs else self.minerals
                 return self._order(n, obs, "attack", target, "attack")
         return False
+
+    def _size(self, units) -> float:
+        """The units as so many zerglings (a count, for zerglings alone)."""
+        return sum(self.sizes[u["type"]] for u in units)
 
     def _order(self, n: int, obs: dict, kind: str, point, then: str) -> bool:
         """Group n selected (its hotkey), then a minimap order; the group's phase becomes then."""
