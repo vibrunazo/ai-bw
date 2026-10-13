@@ -9,25 +9,28 @@ Legend: **—** not started · **○** scripted stand-in · **◐** partial · *
 
 ## Roadmap phase
 
-**Now: P2 Micro** ([ARCHITECTURE.md §12](ARCHITECTURE.md#12-roadmap)), with a rough
-P2b (first playable) reached early: Gary already plays whole TvZ games against people, through
-the Remastered bridge. The phases didn't go strictly in order: the macro and army are learned
-by imitation (P3-style pieces) rather than scripted, because the replay pipeline made that the
-quicker way to a playable Gary.
+**Now: P2 Micro going into P3/P4** ([ARCHITECTURE.md §12](ARCHITECTURE.md#12-roadmap)), with a
+rough P2b (first playable) reached early: Gary already plays whole TvZ games against people,
+through the Remastered bridge. The phases didn't go strictly in order: the macro and army are
+learned by imitation (P3-style pieces) rather than scripted, because the replay pipeline made that
+the quicker way to a playable Gary. Since v0.18 the work is docs/CONTROL.md step 7: every decision
+a policy, learned from whole games. What it has found so far: single decisions are worth little
+next to the games' chaos, so the learning goes where decisions are few and big (the build style,
+learned per map in v0.19; when to go into the early-pool defense, being learned now).
 
 | Phase | Status | What exists | What's missing for its exit criteria |
 |---|---|---|---|
-| P0 Infra | ◐ | OpenBW env, human interface v1, POV and decision logs, eval against a scripted rush and pro scenarios; ~150k 45-second scenario plays per hour on 16 parallel workers (3x faster than before profiling, same results bit for bit) | Full-game games/hour benchmark; the formal trace schema; classic bots to play against; the interface parity test |
-| P1 Data | ◐ | ~70k replays indexed, resim with Remastered support (go decided: it works), fog-of-war views | Camera logger, camera inference, fitting human profiles from data (the interface's numbers are still placeholders) |
+| P0 Infra | ◐ | OpenBW env, human interface v1, POV and decision logs, eval against scripted Zergs, replayed pros and pro scenarios; ~150k 45-second scenario plays per hour; full games 14 at a time (one torch thread each: 2.7x faster); games deterministic per seed, replayed to any moment to branch; a run monitor page (`eval/monitor.py`) | The formal trace schema; classic bots to play against; the interface parity test |
+| P1 Data | ◐ | ~70k replays indexed, resim with Remastered support (go decided: it works), fog-of-war views | Camera logger, camera inference, fitting human profiles from data (select-to-order times fitted; click scatter and camera still placeholders) |
 | P1b Taxonomy | ◐ | TvZ build clusters with readable rules (`taxonomy/discover.py`) | A reviewed `taxonomy/tvz/v1.yaml`, stability and gold-set reports |
-| P1c Strategy stats | — | | Win-rate table, feature library, guide claims |
-| **P2 Micro** | **◐ (current)** | Fight and command models learned from pro skirmishes; scenario suite from pro replays (`eval/scenarios.py`); first reinforcement learning on scenarios (`train/fight_rl.py`) | Responses within the human band: on home-defense scenarios v0.10 is the best Gary (fuller score: pro +1, v0.10 −28, v0.9 −77, v0.8 −102, v0.7 −120, v0.3 −156, nothing −302), with hand rules for roles, not a learned model; it holds the immediate 9-pool in 11 of 16 games and loses none (v0.9 13 / 1, v0.3 5 / 8) |
-| P2b First playable | ◐ | Full games against people, offline, via the bridge; learned macro steered by build style | Build timings within tolerance (≥18/20 unharassed runs); supply blocks and idle production under harass within the human band |
+| P1c Strategy stats | ◐ (started) | The strategy selector's table: each build style's results per map in Gary's own games (`eval/selector_table.py`, v0.19) | Win-rate tables from pro replays, the feature library, guide claims |
+| **P2 Micro** | **◐ (current)** | Fight, command and role models from pro skirmishes; home-defense scenarios and 120 s episodes from pro replays; roles by hand rules, a learned role model (with terrain inputs) on par with them after RL, not beyond; choke blocks as a skill | Responses within the human band: on home-defense scenarios v0.10's hand rules are still the best Gary (pro +1, v0.10 −28); learned role choice and the post's spot found nothing past them |
+| P2b First playable | ◐ | Full games against people, offline, via the bridge; learned macro steered by build style, the style chosen per map (v0.19) | Build timings within tolerance (≥18/20 unharassed runs); supply blocks and idle production under harass within the human band |
 | P2c Debug viewer | ● | POV viewer with cursor, clicks and every action in words; videos | Trace overlays beyond actions |
-| P3 BC full game | ◐ (early) | Separate imitation models for macro, army movement and fights | One policy with intent and belief heads, Opponent Model, value network |
-| P4 RL | ◐ (started) | Segment RL (T2a) on 45 s fight scenarios: runs, no gain yet | Elo gain at equal humanlikeness |
+| P3 BC full game | ◐ | Separate imitation models for macro, army movement and fights; a belief model of the enemy army; a value network (`gary/policy/value.py`: who wins, the score ahead; it judges at 30 s as 3 minutes of score do) | One policy with intent and belief heads, the Opponent Model |
+| P4 RL | ◐ (started) | RL on fights (scenarios, episodes: at the rules' level); macro from branches (nothing: a decision is worth sd 130 against chaos's 512); per game: the strategy selector (v0.19: losses 57 → 30 of 333), the early-defense switch (in progress) | Elo gain at equal humanlikeness |
 | P5 Explain, P5b Broadcast | — | (The POV viewer's action overlay is a start) | |
-| P6 Deploy | ◐ | Remastered bridge for offline games | Pro blind-test sessions |
+| P6 Deploy | ◐ | Remastered bridge for offline games | Pro blind-test sessions; the bridge's known bugs (a supply depot placed a tile off at expansions) |
 
 ## Components by version
 
