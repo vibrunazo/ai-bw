@@ -5,8 +5,8 @@ macro's decisions, as train/macro_rl.py picks them) the same game is played on t
 the start (games are deterministic per seed: identical up to the moment): as it was ("same"), with
 another of the macro's options taken there ("alt", drawn from the model's own odds), and with Gary
 skipping one turn there, half a second of hands ("placebo": nothing that matters changed; chaos
-alone). Each run records the score's net value (eval/score.py) and Gary's view (the macro model's
-features, what the value network reads) LOOKS seconds after the moment.
+alone). Each run records the score's net value (eval/score.py) and the critic's view of the moment
+(gary/policy/value.py ValueView, looking once a second from the game's start) LOOKS seconds after.
 
 Each way of judging a run is compared between the pairs: alt - same (a decision's effect plus
 chaos) against placebo - same (chaos alone). A judge that reads decisions well spreads the alt
@@ -15,7 +15,11 @@ is the judge to beat. Judges:
 
   net180         the score over the 180 s after the moment
   v@T            the score over T s, plus the value network's net180 head at T (bootstrapped)
+  d@T            the score over T s, plus its discounted head at T (discounted by T s)
   win@T          the value network's win head at T (logit)
+
+And foresight: the critic's read alone at T against the score after T (on either kind of pair:
+once a game has changed, how the rest goes can be foreseen).
 
     python -m eval.value_branches --seeds 9 --points 4    # -> data/interim/value/branches.jsonl
 """
@@ -23,7 +27,6 @@ is the judge to beat. Judges:
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 import random
 from concurrent.futures import ProcessPoolExecutor
@@ -48,30 +51,43 @@ def out_path() -> Path:
     return data_root() / "interim" / "value" / "branches.jsonl"
 
 
-def _view(m) -> list | None:
-    """Gary's view as the macro model sees it (train/value.py gary_game), or None once it's out."""
-    g = m.gary
-    try:
-        obs = g.hi.observe()
-    except StopIteration:
-        return None
-    mine = [u for u in obs["units"] if u["owner"] == g.slot]
-    tracker = copy.copy(g.macro.tracker)
-    tracker.seen_max = g.macro.tracker.seen_max.copy()
-    return tracker.features(obs, g.macro.in_production(mine))[0].astype(np.float32).round(4).tolist()
+_belief = None
+
+
+def _belief_model():
+    global _belief
+    if _belief is None:
+        from gary.agent.manifests import model_path
+        from gary.policy.belief import BeliefModel
+        _belief = BeliefModel.load(model_path("belief/latest"))
+    return _belief
+
+
+def _advance(m, w, view) -> bool:
+    """One step of the game, the critic's view looking once a second (as train/value.py's games)."""
+    if not _step(m, w):
+        return False
+    if m.game.frame % 24 < 2:
+        try:
+            view.look(m.gary.hi.observe())
+        except StopIteration:                 # Gary is out
+            pass
+    return True
 
 
 def run(args: tuple) -> dict:
     """One way of playing on from the point: "same", "alt" or "placebo"."""
+    from gary.policy.value import ValueView
     point, how = args
     m = _match(point["opponent"], point["map"], point["seed"], point["version"])
     m.gary.macro.log = True                  # (as the game the point came from: the same work, the same game)
     w = Watch(m)
     w.look()
+    view = ValueView(m.gary, _belief_model())
     f0 = point["frame"]
     if how == "alt":
         m.gary.macro.force = (f0, point["alt"])
-    while m.game.frame < f0 and _step(m, w):
+    while m.game.frame < f0 and _advance(m, w, view):
         pass
     if m.game.frame != f0:
         m.game.close()
@@ -79,13 +95,18 @@ def run(args: tuple) -> dict:
     if how == "placebo":
         act = m.gary.act
         m.gary.act = lambda: None
-        _step(m, w)
+        _advance(m, w, view)
         m.gary.act = act
     views, last = {}, None
     looks = sorted(LOOKS)
-    while m.game.frame < f0 + HORIZON and _step(m, w):
+    while m.game.frame < f0 + HORIZON and _advance(m, w, view):
         while looks and m.game.frame >= f0 + looks[0] * 24:
-            last = _view(m) or last
+            try:
+                obs = m.gary.hi.observe()
+                view.look(obs)
+                last = view.features(obs)[0].astype(np.float32).round(4).tolist()
+            except StopIteration:
+                pass
             views[looks.pop(0)] = last
     for t in looks:                           # the game ended first: the last view stands
         views[t] = last
@@ -98,41 +119,39 @@ def run(args: tuple) -> dict:
 
 
 def judge(rows: list[dict], model_path: Path) -> None:
-    import torch
-    from train.value import ValueNet
-    ck = torch.load(model_path)
-    net = ValueNet(ck["n_in"])
-    net.load_state_dict(ck["state"])
-    net.eval()
-    mean, std = np.array(ck["mean"], np.float32), np.array(ck["std"], np.float32)
-
-    def value(view):
-        with torch.no_grad():
-            lw, ln = net(torch.tensor(((np.array(view, np.float32) - mean) / std)[None]))
-        return float(lw[0]), float(ln[0, 1]) * 1000
+    from gary.policy.value import GAMMA_S, ValueModel
+    model = ValueModel.load(model_path)
+    disc = "disc" in model.ckpt.get("heads", [])
 
     def judges(r):
         out = {"net180": r["net"]["180"]}
-        for t in (30, 60):
+        for t in (30, 60, 180):
             v = r["views"].get(str(t))
-            if v is not None:
-                lw, n180 = value(v)
-                out[f"v@{t}"] = r["net"][str(t)] + n180
-                out[f"win@{t}"] = lw
-        v = r["views"].get("180")
-        if v is not None:
-            out["win@180"] = value(v)[0]
+            if v is None:
+                continue
+            p = model.predict(np.array(v, np.float32))
+            out[f"win@{t}"] = float(p["win"][0])
+            if t < 180:
+                out[f"v@{t}"] = r["net"][str(t)] + float(p["net180"][0])
+                out[f"c@{t}"] = float(p["net180"][0])                # the critic alone (what it foresees)
+                if disc:
+                    out[f"d@{t}"] = r["net"][str(t)] + GAMMA_S ** t * float(p["disc"][0])
+                    out[f"cd@{t}"] = float(p["disc"][0])
+        out["rest30"] = r["net"]["180"] - r["net"]["30"]           # the score after each look
+        out["rest60"] = r["net"]["180"] - r["net"]["60"]
         return out
 
-    names = ["net180", "v@30", "v@60", "win@30", "win@60", "win@180"]
-    d = {k: {"alt": [], "placebo": []} for k in names}
+    names = ["net180", "v@30", "v@60"] + (["d@30", "d@60"] if disc else []) + ["win@30", "win@60", "win@180"]
+    fore = ["c@30", "c@60"] + (["cd@30", "cd@60"] if disc else [])
+    d = {k: {"alt": [], "placebo": []} for k in names + fore + ["rest30", "rest60"]}
     for p in rows:
         js = {h: judges(p[h]) for h in ("same", "alt", "placebo") if h in p}
+        if not all(k in js.get("same", {}) for k in d):
+            continue
         for h in ("alt", "placebo"):
-            if h in js and "same" in js:
-                for k in names:
-                    if k in js[h] and k in js["same"]:
-                        d[k][h].append(js[h][k] - js["same"][k])
+            if h in js and all(k in js[h] for k in d):
+                for k in d:
+                    d[k][h].append(js[h][k] - js["same"][k])
     print(f"{len(rows)} moments; per judge, the spread of the pairs (sd) and how much wider a decision's "
           f"is than chaos's (variance ratio):")
     for k in names:
@@ -140,13 +159,13 @@ def judge(rows: list[dict], model_path: Path) -> None:
         if len(a) and len(pl):
             print(f"  {k:8s} alt sd {a.std():8.2f}  placebo sd {pl.std():8.2f}  ratio {a.var() / max(pl.var(), 1e-9):5.2f}  "
                   f"changed at all: alt {np.mean(a != 0):.0%}, placebo {np.mean(pl != 0):.0%}")
-    # does a judge's early read foretell how the pair ends? (the critic reads the decisions taken
-    # among its inputs, so a wider spread alone could be the label, not its consequence)
+    # foresight: does the critic's read at 30 or 60 s foretell the score after it? (the critic
+    # reads the decisions taken among its inputs, so a wider spread alone could be the label)
+    c = lambda a, b: np.corrcoef(a, b)[0, 1] if np.std(a) > 0 and np.std(b) > 0 else float("nan")
     for h in ("alt", "placebo"):
-        n = np.array(d["net180"][h])
-        cs = [f"{k} {np.corrcoef(np.array(d[k][h]), n)[0, 1]:+.2f}" for k in names[1:]
-              if len(d[k][h]) == len(n) > 2 and np.std(d[k][h]) > 0 and np.std(n) > 0]
-        print(f"  {h} pairs, correlation with net180: {', '.join(cs)}")
+        r = {k: np.array(v[h]) for k, v in d.items()}
+        parts = [f"{k} {c(r[k], r['rest' + k.split('@')[1]]):+.2f}" for k in fore]
+        print(f"  {h} pairs, the critic's read against the score after it: {', '.join(parts)}")
     same = [p["same"]["net"]["180"] == p["base"]["net"] for p in rows if "base" in p]
     print(f"  the same game played again matched its first play over 180 s in {np.mean(same):.0%} of moments")
 

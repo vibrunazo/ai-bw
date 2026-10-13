@@ -250,6 +250,19 @@ earlier speedups).
    should). Not yet the critic that credits single decisions: that needs inputs that foresee
    (the belief model's estimate of the enemy army, the fight in progress) and Gary's games of
    every style (its own were all style 1: `eval/walls_bench.py`'s Match forced it, now fixed).
+   Value network v2 (`gary/policy/value.py`): those inputs (the belief model's estimate of the
+   enemy army, hidden or not; both armies' last 30 s) and 1,080 Gary games of every style, plus a
+   head learned by bootstrapping (the next 5 s of score plus its own value after them, discounted,
+   half-life 60 s). Held out, against the same data without the new inputs: who wins against Zerg
+   v2 before 4:00 0.56 (0.44), 4:00-7:00 0.70 (0.66); the next 60 s 30% explained (18%), 180 s 19%
+   (23%). As a judge (288 new moments): worse than the score. The score's variance ratio of a
+   decision's pairs to chaos's is 4.5; the critic's reads at 30 and 60 s 1.8 and 1.9, its
+   bootstrapped head 1.2-1.3 (its reads move with chaos as much as with decisions); its win head
+   at 30 s 4.8, about the score's, but its read barely tells how the rest goes (+0.11 with the
+   score after; the net180 head +0.25, v1 +0.05). Where a decision changed nothing in 3 minutes
+   the win head hardly moves (0.12 against 1.13 elsewhere): not the decision's label, just no
+   foresight. Per-decision credit stays out of reach at this noise: the learning stays per game
+   (the strategy selector) and per fight (episodes paired on the same positions).
 
 Steps 1–3 are refactoring with parity checks, and they carry the risk of the plan: they touch
 everything. They're worth it only if they stay small, so: no layer gets a provider it doesn't need

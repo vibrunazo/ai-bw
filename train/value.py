@@ -1,4 +1,4 @@
-"""Gary's value network (ARCHITECTURE.md P3, docs/CONTROL.md step 7): how good a moment is.
+"""Train Gary's value network (gary/policy/value.py; docs/CONTROL.md step 7): how good a moment is.
 
 Reinforcement learning so far judged each decision by the raw score of what followed, and in games
 this chaotic (half a second of Gary's hands moves the next 90 s by +-425 net value; a pair of
@@ -6,19 +6,22 @@ branches differs by sd 848) that buried every effect. A critic that predicts how
 lets each decision be judged by how much it changed the prediction, and lets a change to Gary be
 judged from far fewer games.
 
-Input: the macro model's description of the moment from the player's own view (gary/policy/macro.py
-encode: time, money, supply, own units, the enemy in sight now and the most seen, the decisions so
-far). Heads:
+Inputs: gary/policy/value.py (the macro model's view of the moment, the belief model's estimate of
+the enemy army, the trends of the last 30 s). Heads and their data:
 
   win     will this player win: pro TvZ games (data/interim/build_orders.jsonl's winner) every
           STRIDE_S seconds, and Gary's decided games
-  net60   the net value (eval/score.py: killed minus lost) over the next 60 s, /1000: Gary's games
+  net60   the score's net value (eval/score.py: killed minus lost) over the next 60 s, /1000:
+          Gary's games
   net180  ...over the next 180 s
+  disc    the net value ahead, discounted (half-life DISC_HALF_S), by bootstrapping: the next
+          GARY_EVERY_S seconds' net value plus the head's own (as of the epoch's start) value after
 
-Gary's games: Gary (v0.18, some with its macro drawing decisions for variety) against the opponent
-pool (the 9-pool, Zerg v2, the replayed pros on three maps), its view every GARY_EVERY_S seconds.
+Gary's games: v0.19 with each build style forced in turn (and the macro unsteered), half of them
+with the macro drawing its decisions (temperature 0.5) for variety, against the opponent pool (the
+9-pool, Zerg v2, the replayed pros on three maps); its view every GARY_EVERY_S seconds.
 
-    python -m train.value --gary-seeds 24                 # -> runs/value/TvZ_T_<stamp>/model.pt
+    python -m train.value --gary-seeds 16                 # -> runs/value/TvZ_T_<stamp>/model.pt
 """
 
 from __future__ import annotations
@@ -36,9 +39,9 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch import nn
 
 from eval import monitor, priority
+from gary.policy.value import GAMMA_S, LOOKBACK_S, ValueNet
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
@@ -47,20 +50,9 @@ GARY_EVERY_S = 5
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
         for m in ("python_gg13676", "standard_ozp3w", "heartbreak_9rg84")}
 OPPONENTS = ("dummy", "v2", "replayed")
-VERSIONS = ("v018", "v018+sample_t05", "v018+watch")
+STYLES = (None, 1, 2, 3, 4)
+VERSIONS = ("v019", "v019+sample_t05")         # by seed: even, odd
 MINUTES = 12
-
-
-class ValueNet(nn.Module):
-    def __init__(self, n_in: int, hidden: int = 256):
-        super().__init__()
-        self.body = nn.Sequential(nn.Linear(n_in, hidden), nn.ReLU(), nn.Linear(hidden, hidden), nn.ReLU())
-        self.win = nn.Linear(hidden, 1)
-        self.net = nn.Linear(hidden, 2)          # net60, net180 (/1000)
-
-    def forward(self, x):
-        h = self.body(x)
-        return self.win(h)[:, 0], self.net(h)
 
 
 # --- pro games ---------------------------------------------------------------------------------
@@ -83,19 +75,35 @@ def pro_jobs() -> list[tuple]:
     return jobs
 
 
+_belief = None
+
+
+def _belief_model():
+    global _belief
+    if _belief is None:
+        from gary.agent.manifests import model_path
+        from gary.policy.belief import BeliefModel
+        torch.set_num_threads(1)
+        _belief = BeliefModel.load(model_path("belief/latest"))
+    return _belief
+
+
 def pro_samples(args: tuple) -> tuple[np.ndarray, np.ndarray, str]:
     """The Terran's view every STRIDE_S seconds of one pro game, and whether it won."""
     (path, i, won, sha1), spec_d = args
+    from gary.policy.belief import WORKERS, features_series
     from gary.policy.macro import FeatureSpec, encode
+    from gary.policy.value import EXTRAS, army_supply, belief_outputs, extras, no_style
     spec = FeatureSpec(**spec_d)
+    empty = np.zeros((0, spec.size + len(EXTRAS)), np.float16), np.zeros(0, np.float32), sha1
     try:
         d = np.load(path)
     except Exception:
-        return np.zeros((0, spec.size), np.float16), np.zeros(0, np.float32), sha1
+        return empty
     frames, cmds = d["frames"], d["cmds"]
     ts = np.arange(0, len(frames), STRIDE_S)
     if len(ts) < 6:
-        return np.zeros((0, spec.size), np.float16), np.zeros(0, np.float32), sha1
+        return empty
     c = cmds[cmds[:, 1] == i]
     cls = np.array([spec.decision_index(a, u) for a, u in c[:, 2:4].tolist()], dtype=np.int64) if len(c) else np.zeros(0, np.int64)
     cum = np.zeros((len(c) + 1, len(spec.decisions)), dtype=np.float32)
@@ -105,56 +113,65 @@ def pro_samples(args: tuple) -> tuple[np.ndarray, np.ndarray, str]:
     f = frames[ts]
     done = np.searchsorted(c[:, 0], f, side="right") if len(c) else np.zeros(len(ts), np.int64)
     last = np.where(done > 0, c[np.maximum(done - 1, 0), 0] if len(c) else 0, 0)
-    seen_max = np.maximum.accumulate(d["seen"][:, i].astype(np.float32), axis=0)[ts]
-    x = encode(spec, f, d["eco"][ts, i].astype(np.float32), d["units"][ts, i].astype(np.float32),
-               d["seen"][ts, i].astype(np.float32), seen_max, cum[done], (f - last) / 24.0, None)
-    return x.astype(np.float16), np.full(len(ts), float(won), np.float32), sha1
+    seen = d["seen"][:, i].astype(np.float32)
+    seen_max = np.maximum.accumulate(seen, axis=0)[ts]
+    x = no_style(spec, encode(spec, f, d["eco"][ts, i].astype(np.float32), d["units"][ts, i].astype(np.float32),
+                              seen[ts], seen_max, cum[done], (f - last) / 24.0, None))
+    # the extras (each row of the arrays is a second)
+    b = features_series(d["seen"][:, i], d["units"][:, i, :, 0], d["eco"][:, i], frames, "Z", "T")[ts]
+    own = army_supply(d["units"][:, i, :, 1].astype(np.float32), "T")
+    workers = d["units"][:, i, WORKERS["T"], 1].astype(np.float32)
+    seen_army = army_supply(seen, "Z")
+    ago = np.maximum(ts - LOOKBACK_S, 0)
+    seen_army_max = np.array([seen_army[a:t + 1].max() for a, t in zip(ago, ts)])
+    ex = extras(belief_outputs(_belief_model(), b), own[ts], own[ago], workers[ts] - workers[ago], seen_army[ts],
+                seen_army_max)
+    return np.concatenate([x, ex], 1).astype(np.float16), np.full(len(ts), float(won), np.float32), sha1
 
 
 # --- Gary's games ------------------------------------------------------------------------------
 
 def gary_game(args: tuple) -> dict:
     """Gary's view every GARY_EVERY_S seconds of one game, the score's events, and the result."""
-    opponent, mp, seed, version = args
+    opponent, mp, seed, version, style = args
     from eval.block_branch import Watch, _step
     from eval.walls_bench import Match
+    from gary.policy.value import ValueView
     with contextlib.redirect_stdout(io.StringIO()):
-        m = Match(seed, 0, version, MAPS[mp], opponent)
+        m = Match(seed, 0, version, MAPS[mp], opponent, style=style)
     w = Watch(m)
     w.look()
+    view = ValueView(m.gary, _belief_model())
     xs, frames = [], []
     end = MINUTES * 60 * 24
     while m.game.frame < end and _step(m, w):
-        if m.game.frame % (GARY_EVERY_S * 24) < 2 and m.gary.macro is not None:
-            g = m.gary
+        if m.game.frame % 24 < 2 and m.gary.macro is not None:
             try:
-                obs = g.hi.observe()
+                obs = m.gary.hi.observe()
             except StopIteration:                              # Gary was eliminated
                 break
-            mine = [u for u in obs["units"] if u["owner"] == g.slot]
-            import copy
-            tracker = copy.copy(g.macro.tracker)               # (its seen_max is kept by the macro)
-            tracker.seen_max = g.macro.tracker.seen_max.copy()
-            xs.append(tracker.features(obs, g.macro.in_production(mine))[0].astype(np.float16))
-            frames.append(m.game.frame)
+            view.look(obs)
+            if m.game.frame % (GARY_EVERY_S * 24) < 2:
+                xs.append(view.features(obs)[0].astype(np.float16))
+                frames.append(m.game.frame)
     players = {p["slot"] for p in m.game.observe()["players"]}
     result = "won" if m.slot["T"] in players and m.slot["Z"] not in players else \
         "lost" if m.slot["T"] not in players else "time"
-    out = {"game": f"{opponent}/{mp}/{seed}/{version}", "x": np.array(xs), "frames": frames,
+    out = {"game": f"{opponent}/{mp}/{seed}/{version}/{style}", "x": np.array(xs), "frames": frames,
            "events": w.score.events, "result": result}
     m.game.close()
     return out
 
 
 def gary_targets(g: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Per sample: win (1/0, nan if undecided), and the net value over the next 60 and 180 s (/1000;
-    nan where the game ended sooner)."""
+    """Per sample: win (1/0, nan if undecided); the net value over the next 60 and 180 s, and over the
+    next GARY_EVERY_S s (the bootstrapped head's step) (/1000; nan where the game was cut off first)."""
     ev = np.array(g["events"], np.float64).reshape(-1, 2)
     fr = np.array(g["frames"])
     last = fr.max() if len(fr) else 0
     win = {"won": 1.0, "lost": 0.0}.get(g["result"], np.nan)
     nets = []
-    for h in (60, 180):
+    for h in (60, 180, GARY_EVERY_S):
         e = fr + h * 24
         v = [ev[(ev[:, 0] >= a) & (ev[:, 0] < b), 1].sum() / 1000 if b <= last or g["result"] != "time" else np.nan
              for a, b in zip(fr, e)] if len(ev) else [0.0] * len(fr)
@@ -164,13 +181,25 @@ def gary_targets(g: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 # --- training ----------------------------------------------------------------------------------
 
+def auc(y, p):
+    m = ~np.isnan(y)
+    y, p = y[m], p[m]
+    if len(set(y.tolist())) < 2:
+        return float("nan")
+    r = np.empty(len(p))
+    r[np.argsort(p)] = np.arange(1, len(p) + 1)
+    n1 = y.sum()
+    return float((r[y == 1].sum() - n1 * (n1 + 1) / 2) / (n1 * (len(y) - n1)))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--gary-seeds", type=int, default=24)
+    ap.add_argument("--gary-seeds", type=int, default=16)
     ap.add_argument("--pro-games", type=int, default=6000)
-    ap.add_argument("--epochs", type=int, default=8)
+    ap.add_argument("--epochs", type=int, default=12)
     ap.add_argument("--parallel", type=int, default=14)
     ap.add_argument("--reuse", help="a run folder whose collected data to train on again")
+    ap.add_argument("--no-extras", action="store_true", help="ablation: the extras zeroed (the macro model's view alone)")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
@@ -184,7 +213,8 @@ def main() -> None:
         jobs = pro_jobs()
         random.Random(0).shuffle(jobs)
         jobs = jobs[:args.pro_games]
-        gjobs = [(o, mp, s, v) for o in OPPONENTS for mp in MAPS for s in range(1, args.gary_seeds + 1) for v in VERSIONS]
+        gjobs = [(o, mp, s, VERSIONS[s % 2], st) for o in OPPONENTS for mp in MAPS for s in range(1, args.gary_seeds + 1)
+                 for st in STYLES]
         with ProcessPoolExecutor(args.parallel) as pool:
             pro = list(monitor.track(pool.map(pro_samples, [(j, spec.to_dict()) for j in jobs], chunksize=16), len(jobs),
                                      "pro games"))
@@ -195,41 +225,67 @@ def main() -> None:
             for g in gary:
                 f.write(json.dumps({**g, "x": g["x"].astype(np.float32).round(3).tolist()}) + "\n")
     pro = np.load(src / "pro.npz")
-    gary = [json.loads(l) for l in open(src / "gary.jsonl", encoding="utf-8")]
-    # held out: a tenth of the pro games (as the other models), every fifth of Gary's
+    gary = [g for g in (json.loads(l) for l in open(src / "gary.jsonl", encoding="utf-8")) if g["x"]]
+    # held out: a tenth of the pro games (as the other models), Gary's games of every fifth seed
+    # (all the styles of a seed together: they share the game's start)
+    n0 = len(pro["win"])
     pro_test = np.array([int(s[:8], 16) % 10 == 0 for s in pro["game"]])
-    gx, gwin, gnet, ggame = [], [], [], []
-    for k, g in enumerate(gary):
-        if not g["x"]:
-            continue
-        w, n, _ = gary_targets(g)
+    gx, gwin, gnet, gtest, gnext, gend, gmin, gopp = [], [], [], [], [], [], [], []
+    k = n0
+    for g in gary:
+        w, n, fr = gary_targets(g)
         gx.append(np.array(g["x"], np.float32))
         gwin.append(w)
         gnet.append(n)
-        ggame += [k % 5 == 0] * len(w)
-    gx, gwin, gnet, gtest = np.concatenate(gx), np.concatenate(gwin), np.concatenate(gnet), np.array(ggame)
-    X = np.concatenate([pro["x"].astype(np.float32), gx])
-    W = np.concatenate([pro["win"], gwin])
-    N = np.concatenate([np.full((len(pro["win"]), 2), np.nan, np.float32), gnet])
-    test = np.concatenate([pro_test, gtest])
-    is_gary = np.concatenate([np.zeros(len(pro["win"]), bool), np.ones(len(gwin), bool)])
+        gtest.append(np.full(len(w), int(g["game"].split("/")[2]) % 5 == 0))
+        nxt = np.arange(k + 1, k + len(w) + 1)             # the next sample of the same game, -1 after its last
+        nxt[-1] = -1
+        gnext.append(nxt)
+        gend.append(np.full(len(w), g["result"] != "time"))
+        gmin.append(fr / 1440)
+        gopp.append(np.array([g["game"].split("/")[0]] * len(w), object))
+        k += len(w)
+    gnet = np.concatenate(gnet)
+    X = np.concatenate([pro["x"].astype(np.float32)] + gx)
+    W = np.concatenate([pro["win"]] + gwin)
+    N = np.concatenate([np.full((n0, 2), np.nan, np.float32), gnet[:, :2]])
+    R = np.concatenate([np.full(n0, np.nan, np.float32), gnet[:, 2]])          # each step's net value
+    NXT = np.concatenate([np.full(n0, -1)] + gnext)
+    ENDED = np.concatenate([np.zeros(n0, bool)] + gend)
+    test = np.concatenate([pro_test] + gtest)
+    is_gary = np.concatenate([np.zeros(n0, bool), np.ones(len(X) - n0, bool)])
+    t_min = np.concatenate([np.full(n0, np.nan)] + gmin)
+    opp = np.concatenate([np.full(n0, "", object)] + gopp)
+    if args.no_extras:
+        from gary.policy.value import EXTRAS
+        X[:, -len(EXTRAS):] = 0
     mean, std = X[~test].mean(0), X[~test].std(0) + 1e-3
     Xn = torch.tensor((X - mean) / std)
     Wt, Nt = torch.tensor(W), torch.tensor(N)
     net = ValueNet(X.shape[1])
     opt = torch.optim.Adam(net.parameters(), lr=1e-3, weight_decay=1e-5)
     tr = np.where(~test)[0]
-    print(f"samples: pro {len(pro['win'])} ({int(pro_test.sum())} held out), Gary {len(gwin)} from {len(gary)} games "
-          f"({int(gtest.sum())} held out); Gary's games won {np.mean([g['result'] == 'won' for g in gary]):.0%}, "
+    step = GAMMA_S ** GARY_EVERY_S
+    print(f"samples: pro {n0} ({int(pro_test.sum())} held out), Gary {len(X) - n0} from {len(gary)} games "
+          f"({int(test[n0:].sum())} held out); Gary's games won {np.mean([g['result'] == 'won' for g in gary]):.0%}, "
           f"lost {np.mean([g['result'] == 'lost' for g in gary]):.0%}", flush=True)
-    for ep in range(args.epochs):
+    for ep in monitor.track(range(args.epochs), args.epochs, "training"):
+        # the bootstrapped head's targets from the net as it is now: r + gamma^step * disc(next);
+        # after a game's last sample nothing more if it ended, unknown (left out) at the time limit
+        net.eval()
+        with torch.no_grad():
+            disc = torch.cat([net(Xn[i:i + 65536])[1][:, 2] for i in range(0, len(Xn), 65536)]).numpy()
+        net.train()
+        boot = np.where(NXT >= 0, disc[np.maximum(NXT, 0)], np.where(ENDED, 0.0, np.nan))
+        D = torch.tensor((R + step * boot).astype(np.float32))
         np.random.default_rng(ep).shuffle(tr)
         for b in range(0, len(tr), 1024):
             i = torch.tensor(tr[b:b + 1024])
             lw, ln = net(Xn[i])
-            wm, nm = ~torch.isnan(Wt[i]), ~torch.isnan(Nt[i])
+            wm, nm, dm = ~torch.isnan(Wt[i]), ~torch.isnan(Nt[i]), ~torch.isnan(D[i])
             loss = (F.binary_cross_entropy_with_logits(lw[wm], Wt[i][wm]) if wm.any() else 0.0) + \
-                (F.smooth_l1_loss(ln[nm], Nt[i][nm]) if nm.any() else 0.0)
+                (F.smooth_l1_loss(ln[:, :2][nm], Nt[i][nm]) if nm.any() else 0.0) + \
+                (F.smooth_l1_loss(ln[:, 2][dm], D[i][dm]) if dm.any() else 0.0)
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -237,27 +293,19 @@ def main() -> None:
     with torch.no_grad():
         lw, ln = net(Xn[torch.tensor(np.where(test)[0])])
     pw, pn = torch.sigmoid(lw).numpy(), ln.numpy()
-    Wte, Nte, gte = W[test], N[test], is_gary[test]
-
-    def auc(y, p):
-        m = ~np.isnan(y)
-        y, p = y[m], p[m]
-        if len(set(y.tolist())) < 2:
-            return float("nan")
-        order = np.argsort(p)
-        r = np.empty(len(p))
-        r[order] = np.arange(1, len(p) + 1)
-        n1 = y.sum()
-        return float((r[y == 1].sum() - n1 * (n1 + 1) / 2) / (n1 * (len(y) - n1)))
-
+    Wte, Nte, gte, tte, ote = W[test], N[test], is_gary[test], t_min[test], opp[test]
     print(f"held out: win AUC pro {auc(Wte[~gte], pw[~gte]):.3f}, Gary {auc(Wte[gte], pw[gte]):.3f}")
+    for o in OPPONENTS:
+        s = gte & (ote == o)
+        print(f"  {o:8s} " + ", ".join(f"{lo}-{hi} min {auc(Wte[s & (tte >= lo) & (tte < hi)], pw[s & (tte >= lo) & (tte < hi)]):.2f}"
+                                       for lo, hi in ((0, 4), (4, 7), (7, 99))))
     for j, h in enumerate((60, 180)):
         y, p = Nte[gte, j], pn[gte, j]
         m = ~np.isnan(y)
         r2 = 1 - np.mean((y[m] - p[m]) ** 2) / np.var(y[m]) if m.any() else float("nan")
         print(f"  net{h}: sd {np.std(y[m]) * 1000:.0f}, explained {r2:.1%} (the noise left: sd {np.sqrt(np.mean((y[m] - p[m]) ** 2)) * 1000:.0f})")
     torch.save({"state": net.state_dict(), "n_in": X.shape[1], "mean": mean.tolist(), "std": std.tolist(),
-                "spec": spec.to_dict()}, run / "model.pt")
+                "spec": spec.to_dict(), "heads": ["win", "net60", "net180", "disc"], "gamma_s": GAMMA_S}, run / "model.pt")
     print(f"-> {run / 'model.pt'}")
 
 
