@@ -67,6 +67,9 @@ class Match:
             from gary.bots.zerg_v1 import ZergV1
             from gary.bots.zerg_v2 import ZergV2
             self.zerg = {"v1": ZergV1, "v2": ZergV2}[opponent](self.his["Z"], self.map)
+        elif opponent == "v3":
+            from gary.bots.zerg_v3 import ZergV3
+            self.zerg = ZergV3(self.his["Z"], self.map, seed)
         else:
             self.zerg = ZergRush(self.his["Z"], self.map)
         self.zerg.attack_after = int(attack_after_s * 24)

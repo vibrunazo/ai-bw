@@ -226,6 +226,9 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
             from gary.bots import zerg_v1 as Z
             from gary.bots.zerg_v2 import ZergV2
             zerg = {"v1": Z.ZergV1, "v1a": Z.ZergV1Aggressive, "v1d": Z.ZergV1Direct, "v2": ZergV2}[opponent](his["Z"], mapinfo)
+        elif opponent == "v3":
+            from gary.bots.zerg_v3 import ZergV3
+            zerg = ZergV3(his["Z"], mapinfo, seed or 0)
         else:
             zerg = ZergRush(his["Z"], mapinfo)
         # the dummy knows where Gary is (no scouting): its waves go straight to Gary's main
@@ -281,7 +284,7 @@ def main() -> None:
     ap.add_argument("--save", default="gary_vs_rush.rep")
     ap.add_argument("--attack-after", type=float, default=0, help="no attack before this many seconds")
     ap.add_argument("--style", type=int, help="build style (taxonomy cluster) to steer Gary's macro toward")
-    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2", "replayed"],
+    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2", "v3", "replayed"],
                     help="the Zerg: this dummy, or gary/bots/zerg_v1.py (gathers, judges, surrounds, retreats)")
     args = ap.parse_args()
     from gary.agent.manifests import build_gary

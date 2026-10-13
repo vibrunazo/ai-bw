@@ -75,6 +75,7 @@ class ZergV2(ZergV1):
         self.select_tries = 0                   # boxes around the drone for a step so far
         self.builds_seen: dict[str, int] = {}   # build step -> tries
         self.builder: dict[str, int] = {}       # build step -> the drone ordered to
+        self.gas_target = None                  # the extractor a gas drone goes to (None: the first seen)
 
     def gather_point(self):
         return self.gather
@@ -210,14 +211,8 @@ class ZergV2(ZergV1):
                 self.task, self.drone_for = "gas", self._pick(miners, obs)["tag"]
                 self._continue(obs, mine, me)
                 return True
-        # a macro hatchery in the main: money it can't spend, no larva to spend it on (4 at most)
-        larvae_now = sum(1 for u in mine if u["type"] == C.LARVA)
-        pending = [k for k, f in self.ordered.items() if k.startswith("macro") and f >= 0 and hi.frame - f < 60 * 24]
-        if len(hatches) >= 2 and len(hatches) < 4 and me["minerals"] >= 350 and larvae_now == 0 and not pending:
-            spot = self._spot_near(HATCH, self.home)
-            if spot:
-                self._start_build(f"macro{len(hatches)}_{hi.frame}", HATCH, spot, obs, drones)
-                return True
+        if self._macro_hatch(obs, mine, me, hatches, drones):
+            return True
         # speed
         if pool and pool["completed"] and "speed" not in self.ordered and me["gas"] >= 100 and me["minerals"] >= 100:
             if self._look(obs, (pool["x"], pool["y"])):
@@ -229,7 +224,23 @@ class ZergV2(ZergV1):
                 return True
             hi.click(*screen_of(obs, pool["x"], pool["y"]))
             return True
-        # rallies to the gathering point
+        return self._rallies(obs, hatches, pool)
+
+    def _macro_hatch(self, obs, mine, me, hatches, drones) -> bool:
+        """A macro hatchery in the main: money it can't spend, no larva to spend it on (4 at most)."""
+        hi = self.hi
+        larvae_now = sum(1 for u in mine if u["type"] == C.LARVA)
+        pending = [k for k, f in self.ordered.items() if k.startswith("macro") and f >= 0 and hi.frame - f < 60 * 24]
+        if len(hatches) >= 2 and len(hatches) < 4 and me["minerals"] >= 350 and larvae_now == 0 and not pending:
+            spot = self._spot_near(HATCH, self.home)
+            if spot:
+                self._start_build(f"macro{len(hatches)}_{hi.frame}", HATCH, spot, obs, drones)
+                return True
+        return False
+
+    def _rallies(self, obs, hatches, pool) -> bool:
+        """Every finished hatchery rallies to the gathering point (once the pool is there)."""
+        hi = self.hi
         for h in hatches:
             if h["completed"] and h["tag"] not in self.rallied_at and pool:
                 if self._look(obs, (h["x"], h["y"])):
@@ -255,14 +266,18 @@ class ZergV2(ZergV1):
         count = lambda t: sum(1 for u in mine if u["type"] == t)
         self.overlords_at = [f for f in self.overlords_at if hi.frame - f < 24 * 25]
         want = None
-        if me["supply_max"] - me["supply_used"] <= 2 * len(hatches) and me["supply_max"] < 200 \
-                and me["minerals"] >= 100 and len(self.overlords_at) < max(1, len([h for h in hatches if h["completed"]])):
+        if self._overlord_due(me, hatches):
             want = OVERLORD
         elif eggs_drones < DRONES and (not pool or not pool["completed"] or count(LING) >= 6):
             want = DRONE
         elif pool and pool["completed"]:
             want = LING
         return want
+
+    def _overlord_due(self, me, hatches) -> bool:
+        """Supply runs short: an overlord (one at a time per finished hatchery)."""
+        return me["supply_max"] - me["supply_used"] <= 2 * len(hatches) and me["supply_max"] < 200 \
+            and me["minerals"] >= 100 and len(self.overlords_at) < max(1, len([h for h in hatches if h["completed"]]))
 
     def _larva(self, obs, mine, want) -> None:
         """A larva (selected with a tiny box) becomes want."""
@@ -332,7 +347,8 @@ class ZergV2(ZergV1):
             return
         self.select_tries = 0
         if self.task == "gas":
-            ext = next((u for u in obs["units"] if u["owner"] == hi.slot and u["type"] == EXTRACTOR), None)
+            ext = next((u for u in obs["units"] if u["owner"] == hi.slot and u["type"] == EXTRACTOR
+                        and self.gas_target in (None, u["tag"])), None)
             if ext is None:
                 self.task = ""
                 return

@@ -163,6 +163,20 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   (posture option: `force_at`, `switch`). Every opponent in the pool attacks early and none
   punishes over-defending (TODO.md item 1): the decision is re-learned once a greedy Zerg is in the
   pool (item 4).
+- **Zerg v3, a greedy Zerg (2026-10-13; `gary/bots/zerg_v3.py`, TODO.md item 4):** on Zerg v2's
+  code, through the human interface: natural 2:24, third base 3:36, Hydralisk Den 6:06 (8 seeds on
+  Fighting Spirit; Python 2:30, 4:12, 6:00), 23 drones at 6:00 and 42 at 8:00, about 10 hydralisks
+  and a few zerglings at 9:00, when everything attacks with no retreat; its army waits at home and
+  defends its hatcheries; on a third of the seeds its first zerglings poke at Gary's natural and go
+  home. Its buildings are placed as a player places them (a lone drone clicked, walked there by a
+  minimap order, the building placed, placed again if it doesn't appear): v2's way failed most of
+  the time for buildings away from its main (a box around a mining drone takes its neighbors; a
+  build order to a mining drone becomes a move; the click's scatter or Gary's scout on the spot;
+  the money spent while the drone walks), and a drone inside an extractor isn't seen, so gas was
+  oversaturated. Against v0.19 (48 seeds on each of two maps): lost 0, won 7, the rest undecided
+  at 12:00; Gary's SCVs at 8:00 35-38. It punishes over-defending, as the pool didn't: the learned
+  "always defend early" switch against the rules on it (48 paired games) won 2 (rules 8), outcome
+  −0.18 ± 0.06, SCVs at 6:00 24.9 (27.1).
 
 ### v0.19 (October 2026): the build style chosen per map
 

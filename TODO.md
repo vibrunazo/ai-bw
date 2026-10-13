@@ -61,6 +61,7 @@ lags pros by minutes; mutas and lurkers would be played badly). On Zerg v2's cod
 - some seeds open hatch first with a pool at ~2:00 and send a few early zerglings to poke without
   committing: the moment a false alarm is tempting (item 1).
 
+Done: `gary/bots/zerg_v3.py` (PROGRESS.md: it punishes the always-defend switch, outcome −0.18 ± 0.06).
 Then: add it to the selector table's opponent pool and rebuild the table; re-learn and re-test the
 early-defense switch (`train/early_switch.py`; without it: always defends early, losses 40 -> 39 of
 432, false alarms 285 of 287 quiet games).

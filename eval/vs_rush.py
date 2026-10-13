@@ -64,7 +64,8 @@ def main() -> None:
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--style", type=int, help="steer Gary's macro toward this build style")
     ap.add_argument("--out", help="folder for replays and logs (default: a temporary folder)")
-    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2", "replayed"], help="the Zerg (gary/bots/): replayed spawns a pro's army on time")
+    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2", "v3", "replayed"],
+                    help="the Zerg (gary/bots/): replayed spawns a pro's army on time; v3 is greedy")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
