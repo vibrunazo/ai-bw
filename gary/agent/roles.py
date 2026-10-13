@@ -49,7 +49,8 @@ urgent. The hand rules:
              position: they shoot what is in range, never chase). The pros' marines die on attack
              unit 52%, hold position 9%, a move 17%; v0.10's on attack unit 74%
   post       (an option) at home, the army holds a post by the Command Center, 3 tiles from it
-             toward the zerg: units with nothing in range more than 3 tiles from it go back to it
+             toward the zerg (or: "minerals", between it and its mineral line; "bunker", just behind
+             the bunker by it nearest the zerg; "ramp", just inside the main's ramp, at the main): units with nothing in range more than 3 tiles from it go back to it
              (attack-moving), and only zerg attacking something of Gary's or standing by its
              buildings are closed in on (the leash). While zerg are 7-16 tiles from their marines
              at home, the pros' stand nearer the Command Center than v0.10's (within 6 tiles 46%
@@ -134,6 +135,7 @@ AWAY = 3.5 * 32
 EASE = 3 * 32                        # reloading, zerg within reach + this: step away
 POST_FROM_CC = 3 * 32               # post: this far from the Command Center toward the zerg
 POST_SLACK = 3 * 32                  # post: units farther than this from it go back
+BEHIND_BUNKER = 2 * 32               # post="bunker": this far past the bunker, away from the zerg
 AT_GAP = 48                          # ...units this close to it hold position
 PACK_LINK = 4 * 32                   # regroup: units this close to each other are one bunch
 
@@ -169,6 +171,7 @@ class RoleRules:
         self.told: dict[int, tuple[str, int]] = {}   # unit -> (role, frame)
         self._walk = None
         self._ground = None                          # the role model's terrain (gary/policy/roles.py Ground)
+        self._ramp = None                            # post="ramp": the spot inside the main's ramp, or False
         self.first_seen: dict[int, int] = {}        # unit -> frame the roles first saw it (its age)
         self.prev: dict[int, tuple[float, float]] = {}
         self.prev_frame = None
@@ -547,6 +550,14 @@ class RoleRules:
         if not ccs:
             return None
         cc = min(ccs, key=lambda u: math.dist((u["x"], u["y"]), at))
+        if self.post == "bunker":                    # behind the bunker by that CC nearest the zerg
+            spot = self._behind_bunker(by_tag, cc, enemy)
+            if spot is not None:
+                return spot
+        if self.post == "ramp":                      # inside the main's ramp, when the fight is at the main
+            spot = self._ramp_post(cc)
+            if spot is not None:
+                return spot
         if self.post == "minerals":                  # between the CC and its mineral line
             fields = [u for u in by_tag.values() if u["owner"] == 11 and u["type"] in (176, 177, 178)
                       and math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < 10 * 32]
@@ -562,6 +573,40 @@ class RoleRules:
             if self._walkable(x, y):
                 return x, y
         return cc["x"], cc["y"]
+
+    def _behind_bunker(self, by_tag: dict, cc: dict, enemy: list[dict]):
+        """post="bunker": BEHIND_BUNKER past the bunker by this CC nearest the zerg, on the side away
+        from them (where its marines fight beside it, out of the zerg's way); None without one."""
+        zx, zy = _mid(enemy)
+        bunkers = [u for u in by_tag.values() if u["owner"] == self.g.slot and u["type"] == BUNKER and u["completed"]
+                   and math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < HOME]
+        if not bunkers:
+            return None
+        b = min(bunkers, key=lambda u: math.dist((u["x"], u["y"]), (zx, zy)))
+        d = math.dist((b["x"], b["y"]), (zx, zy)) or 1
+        for f in (1.0, 0.5, 1.5):
+            x = b["x"] + (b["x"] - zx) / d * BEHIND_BUNKER * f
+            y = b["y"] + (b["y"] - zy) / d * BEHIND_BUNKER * f
+            if self._walkable(x, y):
+                return x, y
+        return None
+
+    def _ramp_post(self, cc: dict):
+        """post="ramp": just inside the main's ramp (gary/terrain.py ramp_inside), when the CC is the
+        main's and the map analysis is reliable; else None."""
+        g = self.g
+        if g.main is None or math.dist((cc["x"], cc["y"]), g.main.center) > 6 * 32:
+            return None
+        if self._ramp is None:
+            self._ramp = False
+            try:
+                from gary.agent.block import _analysis
+                a = _analysis(g)
+                if a["reliable"]:
+                    self._ramp = tuple(a["ramp_inside"])
+            except Exception:                         # (no terrain in this game)
+                pass
+        return self._ramp or None
 
     def _pack(self, mine: list[dict], workers: list[dict], by_tag: dict) -> dict:
         """regroup: the biggest bunch (by supply) of Gary's fighters, SCVs fighting and bunkers,

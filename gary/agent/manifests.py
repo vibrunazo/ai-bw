@@ -404,6 +404,8 @@ OPTIONS = {
     "ramp_auto": lambda m: (m["fight"].update(before=m["fight"]["before"] + ["block"]),
                             m["fight"].setdefault("rule_options", {}).update(block={"auto_ramp": True})),
     "post_minerals": _roles(post="minerals"),   # ...between it and the minerals                +2 ± 8
+    "post_bunker": _roles(post="bunker"),       # ...just behind the bunker by it nearest the zerg
+    "post_ramp": _roles(post="ramp"),           # ...just inside the main's ramp (at the main)
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)
     "bunker_cc": lambda m: m.update(posture="early_pool/v2"),

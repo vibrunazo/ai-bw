@@ -119,6 +119,20 @@ quicker way to a playable Gary.
   −149 at the start, best −124 (round 20), −135 at the end; v0.19's rules on the same defenses
   −118. The same ceiling as without terrain: three tries at learning the role choice now end at
   the rules. Not adopted (`v019roleml` with `runs/roles_rl/20261013_115621/model.pt`, not in git).
+- **Where the army waits at home, per situation (2026-10-13; `eval/post_choice.py`):** the post's
+  spot as a decision with six options (3 tiles from the Command Center toward the zerg, as now; at
+  it; 6 tiles out; by the minerals; new: just inside the main's ramp, just behind the bunker), on
+  every home defense with its situation at the start (`eval/episodes.py` now records it: minute,
+  bases, bunkers, army, zerg in sight, the fight at the main or not). Learned on the 552 training
+  defenses (2 draws; cells of the two situation features that did best across halves of them:
+  bases and zerg in sight), judged once on the 239 held out (4 draws), paired with today's spot:
+  the rule +2.0 ± 7.0; always 6 tiles out +13.3 ± 8.5 (training +7.0 ± 7.1; v0.10's −4 ± 8),
+  by the minerals −4.8 ± 6.1 (training +13.0), at the ramp −6.2 ± 7.4, behind the bunker −5.7 ±
+  3.8 (bunkers are rare this early: mostly the same as now). Where the army waits in a fight at
+  home is worth less than the episodes can tell apart; a rule per situation picked from 22 found
+  noise. Not adopted. With the role choice (three tries) and terrain, the home fight now looks
+  near what the hand rules can get from these decisions; the losses in games come from elsewhere
+  (where the army goes between fights, what is built).
 
 ### v0.19 (October 2026): the build style chosen per map
 

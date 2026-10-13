@@ -40,12 +40,16 @@ class Deaths:
         self.last: dict[int, dict] = {}
         self.born: dict[int, int] = {}
         self.rows: list[dict] = []
+        self.context: dict | None = None
+        self.center = None                  # the scenario's fight (its own record)
 
     def __call__(self, game, slot: int) -> None:
         f = game.frame
         if f % EVERY:
             return
         o = game.observe()
+        if self.context is None:
+            self.context = situation(game, o, slot, self.center)
         here = {u["tag"] for u in o["units"]}
         for tag, s in list(self.last.items()):
             if tag not in here:
@@ -63,12 +67,36 @@ class Deaths:
             }
 
 
+def situation(game, o: dict, slot: int, center=None) -> dict:
+    """The episode at its start as the Terran sees it: game minute, its Command Centers, finished
+    bunkers, army (supply x2), the zerg fighters in sight (supply x2), and whether the fight (the
+    scenario's center, else the zerg in sight) is nearest its main's Command Center (by a start
+    location) or another."""
+    from gary.policy.army import supply_x2
+    mine = [u for u in o["units"] if u["owner"] == slot]
+    zerg = [u for u in o["units"] if u["owner"] not in (slot, 11) and u["type"] in ZERG_FIGHTERS
+            and (u.get("visible_to", 0) >> slot) & 1]
+    ccs = [u for u in mine if u["type"] == 106]
+    out = {"minute": round(o["frame"] / 1440, 2), "ccs": len(ccs),
+           "bunkers": sum(1 for u in mine if u["type"] == 125 and u["completed"]),
+           "army": sum(supply_x2(u["type"]) for u in mine if u["type"] in ARMY and u["completed"]),
+           "zerg": sum(supply_x2(u["type"]) for u in zerg), "at_main": None}
+    if ccs and (center or zerg):
+        zx, zy = center or (sum(z["x"] for z in zerg) / len(zerg), sum(z["y"] for z in zerg) / len(zerg))
+        cc = min(ccs, key=lambda u: math.dist((u["x"], u["y"]), (zx, zy)))
+        starts = [(s["x"], s["y"]) for s in game.start_locations()]
+        out["at_main"] = any(math.dist((cc["x"], cc["y"]), s) < 6 * 32 for s in starts)
+    return out
+
+
 def job(args: tuple) -> dict:
     sc, controller, seconds, version, hands, fight = args
     hook = Deaths()
+    hook.center = (sc["cx"], sc["cy"]) if "cx" in sc else None
     r = run_one(sc, controller, seconds, version, 1, on_step=hook, hands_seed=hands, fight_path=fight)
     return {"sha1": sc["sha1"][:8], "who": controller if controller != "gary" else version, "hands": hands,
-            "net": r.get("net"), "scvs": r.get("T_workers_lost"), "error": r.get("error"), "deaths": hook.rows}
+            "net": r.get("net"), "scvs": r.get("T_workers_lost"), "error": r.get("error"), "deaths": hook.rows,
+            "context": hook.context}
 
 
 def summarize(rows: list[dict], who: str, base: dict | None) -> dict:
