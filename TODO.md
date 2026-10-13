@@ -75,18 +75,3 @@ lags pros by minutes; mutas and lurkers would be played badly). On Zerg v2's cod
   committing: the moment a false alarm is tempting (item 1).
 
 Then: add it to the selector table's opponent pool and rebuild the table; re-test the switch.
-
-## 5. Docs (no CPU; any time)
-
-- ARCHITECTURE.md: a status per section (built / deferred / replaced by CONTROL.md). Keep the
-  deferred ones (decision models, guide mining, the residual feature loop): unbuilt, they cost
-  nothing, and the selector as built (a win-rate table with a Beta posterior) is already the light
-  version.
-- §3.1 rewritten to say what Gary does: deciding layers choose in their own spaces (builds, grid
-  cells, roles), executors and the arbiter turn that into clicks through one pair of hands; RL on
-  fights and roles plays through the real interface; no masks, no interface state in the deciders'
-  inputs (item 2 measures whether it should be).
-- §8: explanations from co-occurring records can still invent causes (a belief logged next to an
-  intent isn't why the intent was chosen). Before narrating, perturb or zero the deciding model's
-  input groups at that moment (milliseconds for models this size) and give the narrator only the
-  inputs that changed the choice: counterfactual consistency by construction, not only as a metric.

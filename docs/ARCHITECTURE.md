@@ -7,6 +7,32 @@ it plays with pro-level game sense, but with **human hands** (human APM, attenti
 and mistakes), it can be **told what to play** ("go 2 hatch muta", "play the PvT build from this
 replay"), and it can **explain why** it did what it did.
 
+**What is built (2026-10-13).** This document is the design; [PROGRESS.md](PROGRESS.md) says what
+exists, and [CONTROL.md](CONTROL.md) replaced the single-policy plan with layers of deciders and
+skills. Per section:
+
+| Section | Status |
+|---|---|
+| §3 principles | 2 (one pair of hands), 4 (symbolic layer learning by counting), 6 (swappable implementations), 7 (slots) and 8 (reproducible: games are deterministic per seed and replayed to any moment) built; 1 restated below as Gary works now; 3 partly (*z* is a build style, no prompts); 5 records exist, no narrator yet |
+| §4 overview, §5 components | Replaced by CONTROL.md's layers: posture, macro, army, fight, motor, each a provider chosen by a manifest |
+| §6.1 `StrategySpec` | Partly: *z* is a build-style cluster (`--style`, or the strategy selector's choice) |
+| §6.2 `HumanProfile` | Built (pro and lower profiles); select-to-order times fitted to pro replays, the rest placeholders |
+| §6.3 `HumanAction` | Built as the human interface every executor clicks through; no model emits these actions directly (deciders choose in their own spaces) |
+| §6.4 `Intent` | Built as each layer's intents (`gary/agent/intents.py`); the single intent head with alternatives is deferred |
+| §6.5 trace | Partly: decision and POV logs; no formal schema |
+| §6.6 slots | Built as manifests and options (`gary/agent/manifests.py`) |
+| §6.7 executors and arbiter | Built: one task at a time by fixed priority, production every other turn in fights; no minimum macro share by profile |
+| §6.8 strategy selector | Built light: a win-rate table per map with a Beta posterior (v0.19), from Gary's own games; no pro statistics, no conditioning on what was scouted yet |
+| §6.9 hidden enemy status | Partly: enemy HP hidden unless selected; no upgrade estimates |
+| §6.10 fog memory | Built: enemy buildings, and the army seen in the last 3 minutes |
+| §7.1-7.3 data, taxonomy | Built (taxonomy unreviewed) |
+| §7.4 camera logger | Not started |
+| §7.5 opponent model | Started: the belief model (the enemy's army, hidden or not); no inference of the enemy's *z* |
+| §7.6 feature discovery, §7.7 guide mining | Deferred: unbuilt, they cost nothing |
+| §8 explainability, §8.1 broadcast | The POV viewer and the decision log exist; no narrator, no broadcast |
+| §9 experiments | Built: manifests, benchmarks against scripted and replayed Zergs, pro scenarios and episodes, branches, a run monitor |
+| §10 deployment | The Remastered bridge for offline games |
+
 ---
 
 ## 1. Goals and non-goals
@@ -73,7 +99,15 @@ replay"), and it can **explain why** it did what it did.
 
 ## 3. Design principles
 
-1. **Constraints live in the action space, during training.** Adding a humanizer after training breaks policies that learned to rely on superhuman control. Concretely (§6.3):
+1. **Constraints live in the action space, during training.** Adding a humanizer after training breaks policies that learned to rely on superhuman control.
+
+   *As built:* the deciding layers choose in their own spaces (a build, a grid cell, a role per
+   unit, a posture), and the executors and the arbiter turn that into clicks through one pair of
+   hands: the human interface, the same in training and at runtime. Reinforcement learning on
+   fights and roles plays through that real interface, so what it learns already pays the hands'
+   costs. There are no action masks, and no deciding model sees the state of the hands (APM left,
+   camera, selection, actions waiting): whether that costs Gary games is being measured
+   (TODO.md item 2). The design as first written, for a single policy emitting actions:
    - **Hard limits are action masks inside the policy:** off-screen targets, more than 12 units selected, empty APM bucket. Illegal actions are never sampled. They are not silently dropped.
    - **Interface state is part of the observation:** APM tokens left, camera rectangle, current selection, pending delayed actions.
    - **The Human Interface only adds noise:** click scatter, misclicks, lapses. **Reaction delay is applied to observations**: the bot sees events late.
@@ -813,6 +847,7 @@ The adherence pseudo-reward compares the bot's build order with *z* (supply/time
 Rules:
 - Narrator answers must cite trace event IDs.
 - Counterfactual consistency is tracked as a metric: if an explanation names fact F as the reason, removing F should change the choice.
+- Records logged together can still invent causes: a belief logged next to an intent isn't why the intent was chosen. So before narrating a decision, perturb or zero each group of the deciding model's inputs at that moment (milliseconds for models this size) and give the narrator only the groups that changed the choice: counterfactual consistency by construction, not only as a metric.
 
 ### 8.1 POV broadcast mode
 
