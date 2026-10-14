@@ -54,6 +54,8 @@ HOME_PX = 20 * 32                             # ...this close to one of its Comm
 EARLY_LINGS = 4
 DEPTH = 3
 MIN_LEAF = 20
+SIZES = ((1, 40), (2, 30), (2, 60), (3, 20), (3, 40))   # tree sizes tried (depth, smallest leaf)
+REPEATS = 3                                    # reshufflings of the 4 folds by seed
 
 
 def _critic():
@@ -173,9 +175,9 @@ def moments(rows: list[dict]) -> list[dict]:
     return out
 
 
-def fit_tree(ms: list[dict]):
+def fit_tree(ms: list[dict], depth: int = DEPTH, leaf: int = MIN_LEAF):
     from sklearn.tree import DecisionTreeRegressor
-    t = DecisionTreeRegressor(max_depth=DEPTH, min_samples_leaf=MIN_LEAF, random_state=0)
+    t = DecisionTreeRegressor(max_depth=depth, min_samples_leaf=leaf, random_state=0)
     t.fit(np.array([m["x"] for m in ms]), np.array([m["gain"] for m in ms]))
     return t
 
@@ -212,24 +214,35 @@ def learn(rows: list[dict], out: Path) -> Path:
         if sub:
             print(f"  forced at {t // 60}:{t % 60:02d}: {len(sub)} games, gain {st.mean(m['gain'] for m in sub):+.3f}, "
                   f"losses {sum(m['lost'] for m in sub):+d}")
-    # across seeds (folds by seed: a seed's games on every map together)
+    # across seeds (folds by seed: a seed's games on every map together), REPEATS reshufflings of 4
+    # folds for each tree size in SIZES; the best size is kept
     seeds = sorted({k[2] for k in keys})
-    folds = [set(seeds[i::4]) for i in range(4)]
-    cv = []
-    for fold in folds:
-        train = [m for m in ms if m["key"][2] not in fold]
-        test = [m for m in ms if m["key"][2] in fold]
-        t = fit_tree(train)
-        pred = dict(zip(map(id, test), t.predict(np.array([m["x"] for m in test]))))
-        cv.append(policy_gain(test, lambda m: pred[id(m)] > MARGIN))
-    print(f"the learned switch across seeds (4 folds): {st.mean(cv):+.3f} a game ({', '.join(f'{c:+.3f}' for c in cv)}); "
+    results = []
+    for depth, leaf in SIZES:
+        cv = []
+        for rep in range(REPEATS):
+            perm = list(np.random.default_rng(rep).permutation(seeds))
+            for i in range(4):
+                fold = set(perm[i::4])
+                train = [m for m in ms if m["key"][2] not in fold]
+                test = [m for m in ms if m["key"][2] in fold]
+                t = fit_tree(train, depth, leaf)
+                pred = dict(zip(map(id, test), t.predict(np.array([m["x"] for m in test]))))
+                cv.append(policy_gain(test, lambda m: pred[id(m)] > MARGIN))
+        se = st.stdev(cv) / len(cv) ** 0.5
+        results.append((st.mean(cv), se, depth, leaf, sum(c > 0 for c in cv), len(cv)))
+        print(f"  tree depth {depth}, leaves of {leaf}+: across seeds {st.mean(cv):+.3f} a game (± {se:.3f}; "
+              f"positive in {sum(c > 0 for c in cv)} of {len(cv)} folds)")
+    best = max(results)
+    print(f"the learned switch across seeds: {best[0]:+.3f} ± {best[1]:.3f} a game (depth {best[2]}, leaves of {best[3]}+); "
           f"never switching: 0; hindsight best per game: {policy_gain(ms, lambda m: m['gain'] > 0):+.3f}")
-    t = fit_tree(ms)
+    t = fit_tree(ms, best[2], best[3])
     tree = as_json(t, ms[0]["names"])
     for line in Switch.describe(tree):
         print("  " + line)
     path = out / "switch.json"
-    path.write_text(json.dumps({"tree": tree, "margin": MARGIN, "cv_gain": st.mean(cv)}, indent=1), encoding="utf-8")
+    path.write_text(json.dumps({"tree": tree, "margin": MARGIN, "cv_gain": best[0], "cv_se": best[1]}, indent=1),
+                    encoding="utf-8")
     print(f"-> {path}")
     return path
 
