@@ -363,7 +363,13 @@ OPTIONS = {
     # 78 s (44; pros 104). On v0.18 against Zerg v2 (72 seeds) Fighting Spirit lost 11 (8), won 9 (3);
     # Python lost 10 (11), won 3 (1). The macro sees the zerglings now but builds no more Barracks.
     # With the waypoint tour (in sight 103 s): Fighting Spirit lost 10 (8), won 10 (3); Python 8 (11), 3 (1)
+    # On v0.19 over the whole pool (fresh seeds, 432 games, Zerg v3 to 20 min): lost 30 (25), won 127 (133);
+    # against v3 won 54 (64), lost 4 (1): an SCV off minerals for minutes, for information no decision uses
     "watch": lambda m: m["army"].update(watch=True),
+    # executor.py rerally: new fighters gather inside the main's ramp, at its bottom from 4:45, in front
+    # of the natural from 7:30, as the pros' marines (the rally in front of the natural from the start
+    # put a quarter of Gary's marines in the open at 3:00-6:00, the pros' 3-8%)
+    "rally_ramp": lambda m: m.update(rally="ramp"),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
     # firsts called early pools. In v0.16
@@ -490,6 +496,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     g.leases.enforced = m.get("leases") == "enforced"
     if m["macro"] is not None or m["army"] is not None:
         g.executor = ScriptedExecutor(g)
+        g.rally_plan = m.get("rally")
         if m.get("simcity"):
             from gary.agent.simcity import SimCity
             g.simcity = SimCity(g, m.get("simcity_door", 32))

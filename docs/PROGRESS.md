@@ -199,6 +199,21 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   2; most of the 17 undecided are decided in all but the last building (the Zerg down to one
   building against 67-79 of Gary's army, or Gary down to 2-3 buildings and no army), about 5
   close: Gary wins roughly 70-80%.
+- **The scout, again (2026-10-13):** v0.19's scout leaves the Zerg's base once it has found it; the
+  touring scout (option `watch`: shift+clicked waypoints around the Zerg's main and natural until
+  hunted or 5:00, then outside Gary's natural) over the whole pool (fresh seeds, 432 games: the
+  9-pool, Zerg v2 on two maps, the replayed pros on three, Zerg v3 to 20 minutes on two): lost 30
+  (25), won 127 (133), against v3 won 54 (64). What it sees isn't used by any decision (the
+  posture's rules look for an early pool only, the macro hardly reacts), and an SCV off minerals
+  costs. Not adopted alone: it belongs with a decision that reads it (the early-defense switch).
+- **Where the first marines gather (2026-10-13):** pros' marines at 3:00-4:00 stand at the top of
+  the main's ramp (33%) and in the main (30%), at 5:00-6:00 at its bottom (30-34%) and the natural
+  (17-19%), in the open 3-8% (60 pro games played again, every 30 s); Gary's at the natural (42%)
+  and in the open (25%): its rally was fixed from the start 6 tiles in front of the natural, so
+  every marine walked there alone from the main. Alone (no other fighter within 6 tiles) about
+  the same (14%, 17%). Option `rally_ramp` (executor.py rerally): the rally inside the main's
+  ramp, at its bottom from 4:45, in front of the natural from 7:30, production buildings
+  re-rallied when it moves.
 
 ### v0.19 (October 2026): the build style chosen per map
 

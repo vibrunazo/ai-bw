@@ -44,7 +44,7 @@ from gary.policy.fight_cmd import MAX_UNITS as COMMAND_MAX, MOVES, OWN_RADIUS, P
 from gary.policy.fight_memory import history_inputs
 
 ASK_EVERY = 12                       # frames between fight decisions (half a second)
-INTERRUPTIBLE = {"mine", "gas", "hotkey_building"}   # chores a fight may interrupt
+INTERRUPTIBLE = {"mine", "gas", "hotkey_building", "rerally"}   # chores a fight may interrupt
 FIGHT_TASKS = {"fight_cmd", "load", "pull", "unpull", "repair", "reinforce", "unload"}
 RESOURCES = {176, 177, 178, 188, 110}
 ACT_IF_NONE_BELOW = 0.2              # act on a unit when the model gives "nothing" less than this

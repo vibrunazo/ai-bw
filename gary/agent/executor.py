@@ -21,6 +21,12 @@ COST = {unit: minerals for unit, (minerals, _gas) in T.COST.items()}
 SIZE = T.SIZE                                              # tiles
 HK_CC = [4, 5]                        # one hotkey per Command Center (buildings can't share one)
 HK_RAX = [6, 7, 8, 9]
+RALLY_DOWN, RALLY_OUT = 285 * 24, 450 * 24   # rally_ramp: inside the main's ramp until 4:45, at its
+                                             # bottom until 7:30, then in front of the natural (pros' marines
+                                             # at 3:00-4:00: the ramp's top 33%, the main 30%; at 5:00-6:00
+                                             # its bottom 30-34%, the natural 17-19%; Gary's rally in front
+                                             # of the natural from the start put a quarter of its marines in
+                                             # the open)
 BUSY_ORDERS = {30, 31, 33}            # placing / constructing a building
 BAD_FOR = 60 * 24                     # a spot where a build failed (not for money) isn't tried again for this long
 LOST_ORDER = 6 * 24                   # a reserved spot with no SCV on its way after this: the order was lost
@@ -50,10 +56,11 @@ class ScriptedExecutor:
         self.next_sweep = 0                           # next look for idle workers off screen
         self.stalled_since: dict[int, int] = {}       # unfinished building -> since when nobody builds it
         self._terrain_cache = None                    # see terrain()
+        self._ramp = None                             # rerally: (spot inside the main's ramp, its bottom), or False
         # the map's own creep (map knowledge, read now: at the start of a game, before any zerg's)
         creep = getattr(g.hi.game, "creep", None)
         self._map_creep = creep() if creep else None
-        for kind in ("build", "hotkey_building", "mine", "resume"):
+        for kind in ("build", "hotkey_building", "mine", "resume", "rerally"):
             g.task_runners[kind] = self._run_basic
         g.task_runners["command"] = self._run_command
         g.task_runners["gas"] = self._run_command
@@ -159,6 +166,58 @@ class ScriptedExecutor:
                               started=g.hi.frame)
                 return True
         return False
+
+    def rerally(self, obs: dict, mine: list[dict], done: list[dict]) -> bool:
+        """rally_ramp (an option): where new fighters gather moves as the pros' does (the top of the
+        main's ramp, then its bottom, then in front of the natural: RALLY_PLAN), and the production
+        buildings rallied elsewhere get the new point (their hotkey, a minimap right-click)."""
+        g = self.g
+        if g.rally_plan != "ramp" or g.posture.rush or g.posture.hold:
+            return False                              # (the early-pool posture has its own rally)
+        spot = self._rally_spot()
+        if spot is not None and spot != g.rally:
+            g.rally = spot
+        for b in done:
+            hk = g.hotkeyed.get(b["tag"])
+            if b["type"] in g.production_types and b["type"] != CC and hk is not None and hk >= 0 \
+                    and g.rallied.get(b["tag"]) != g.rally:
+                g.task = Task("rerally", b["type"], data={"tag": b["tag"], "hk": hk}, started=g.hi.frame)
+                return True
+        return False
+
+    def _rally_spot(self):
+        """The rally of the moment (RALLY_PLAN), or None (no reliable ramp: as before)."""
+        g = self.g
+        if self._ramp is None:
+            self._ramp = False
+            try:
+                from gary.agent.block import _analysis
+                a = _analysis(g)
+                if a["reliable"]:
+                    self._ramp = (tuple(a["ramp_inside"]), tuple(a["ramp_bottom"]))
+            except Exception:                         # (no terrain in this game)
+                pass
+        if not self._ramp:
+            return None
+        f = g.hi.frame
+        return self._ramp[0] if f < RALLY_DOWN else self._ramp[1] if f < RALLY_OUT else g.toward_center(g.natural.center, 6 * 32)
+
+    def _task_rerally(self, obs: dict, mine: list[dict], t: Task) -> None:
+        g, hi = self.g, self.g.hi
+        tag = t.data["tag"]
+        if not any(u["tag"] == tag for u in mine):
+            g.task = None
+            return
+        if obs["selection"] != [tag]:
+            hi.hotkey_recall(t.data["hk"])
+            if t.data.setdefault("tries", 0) >= 3:
+                g.rallied[tag] = g.rally              # (its hotkey brings up something else: leave it)
+                g.task = None
+            t.data["tries"] += 1
+            return
+        hi.minimap_right_click(*g.rally)
+        g.rallied[tag] = g.rally
+        g.task = None
 
     def refill_gas(self, obs: dict, done: list[dict]) -> bool:
         """A finished refinery with fewer than three workers gets more."""
@@ -414,7 +473,7 @@ class ScriptedExecutor:
             g.task = None
             return
         {"build": self._task_build, "hotkey_building": self._task_hotkey, "mine": self._task_mine,
-         "resume": self._task_resume}[t.kind](obs, mine, t)
+         "resume": self._task_resume, "rerally": self._task_rerally}[t.kind](obs, mine, t)
 
     def _run_command(self, obs: dict, mine: list[dict], t: Task) -> None:
         if self.g.hi.frame - t.started > COMMAND_TIMEOUT:
@@ -618,6 +677,7 @@ class ScriptedExecutor:
                         hi.right_click(*p)
                 else:
                     hi.minimap_right_click(*g.rally)
+                    g.rallied[tag] = g.rally
                 g.task = None
                 return
         if not screen_of(obs, t.data["x"], t.data["y"]):
