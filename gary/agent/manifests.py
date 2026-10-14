@@ -167,6 +167,17 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.22: v0.21 that defends against an early pool from 2:30 unless the rules switched first (posture.py
+    # force_at) and scans burrowed lurkers near its fighters (fight.py DetectRule)
+    "v022": {"version": "v0.22", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
+             "home_scvs": True, "balance": True, "defend_early": 150 * 24,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play"},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "before": _V09_FIGHT["before"] + ["detect"],
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
@@ -402,11 +413,13 @@ OPTIONS = {
     # Zerg v3 won 68 (59) lost 0 (3), Zerg v2 lost 5 (8), the replayed pros on Heartbreak Ridge lost 10 (6).
     # home_scvs alone, before its defenders were left alone in fights: lost 26, won 139. In v0.21
     "balance": lambda m: m.update(home_scvs=True, balance=True),
-    # fight.py DetectRule: a lurker that burrowed near Gary's fighters is scanned (a Comsat with 50 energy)
+    # fight.py DetectRule: a lurker that burrowed near Gary's fighters is scanned (a Comsat with 50 energy).
+    # On v0.21: scans in 18 of 32 lurker games, no result changed in 432 (the lurker games end undecided). In v0.22
     "detect": lambda m: m["fight"].update(before=list(m["fight"].get("before", [])) + ["detect"]),
     # posture.py force_at: the early-pool defense from 2:30 whatever the rules see (unless they switched first).
     # Learned from paired games (train/early_switch.py, v021+watch, 312 games with Zerg v3's three plans):
-    # a tree over what the scout saw gains no more than this (+0.089 a game across seeds, both)
+    # a tree over what the scout saw gains no more than this (+0.089 a game across seeds, both). On v0.21
+    # (432 games, the new baseline): lost 15 (30), won 115 (118). In v0.22
     "defend_early": lambda m: m.update(defend_early=150 * 24),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
