@@ -51,6 +51,9 @@ DETECT_MEMORY = 30 * 24             # detect: a burrowed lurker remembered this 
 SCAN_ENERGY = 50
 SCAN_AGAIN = 8 * 24                 # detect: a spot scanned isn't scanned again for this long (a scan lasts ~10 s)
 SCAN_RADIUS = 6 * 32                # detect: a scan's reach (about)
+UNSEEN_REACH = 8 * 32               # detect: hurt with no zerg that could hit it this near: an unseen attacker
+UNSEEN_HURT = 10                    # detect: hp lost at once (one spine hits 20)
+HITTERS = {37, 38, 39, 41, 43, 44, 46, 103, 146}   # detect: zerg that hit ground units (drone and sunken too)
 INTERRUPTIBLE = {"mine", "gas", "hotkey_building", "rerally", "transfer"}   # chores a fight may interrupt
 FIGHT_TASKS = {"fight_cmd", "load", "pull", "unpull", "repair", "reinforce", "unload"}
 RESOURCES = {176, 177, 178, 188, 110}
@@ -732,7 +735,8 @@ class DetectRule:
     0 scans in 14 games against Zerg v3's lurkers): a lurker seen that has gone from sight where
     Gary's units still see (so it burrowed there, not walked off) is remembered; Gary's fighters
     within DETECT_NEAR of one and a Comsat Station with SCAN_ENERGY: a scan on the densest such
-    spot (not one scanned in the last SCAN_AGAIN)."""
+    spot (not one scanned in the last SCAN_AGAIN). And as pros do when lurkers burrowed out of sight:
+    Gary's units losing hp with no zerg in sight that could have hit them: a scan where they're hit."""
 
     name = "detect"
 
@@ -741,10 +745,18 @@ class DetectRule:
         self.seen: dict[int, tuple[int, int, int]] = {}      # lurker -> (frame, x, y) last seen
         self.buried: dict[int, tuple[int, int, int]] = {}    # lurker -> (frame, x, y): burrowed there
         self.scanned: list[tuple[int, int, int]] = []
+        self.hp: dict[int, int] = {}
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
         g, f = self.g, self.g.hi.frame
         lurkers = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and u["type"] == LURKER]
+        hitters = [(u["x"], u["y"]) for u in obs["units"] if u["owner"] not in (g.slot, 11) and u["type"] in HITTERS]
+        for u in mine:
+            was = self.hp.get(u["tag"])
+            if (was is not None and was - u["hp"] >= UNSEEN_HURT and u["type"] in g.army_types
+                    and not any(math.dist(h, (u["x"], u["y"])) < UNSEEN_REACH for h in hitters)):
+                self.buried[-u["tag"]] = (f, u["x"], u["y"])         # (an unseen attacker near this unit)
+        self.hp = {u["tag"]: u["hp"] for u in mine}
         for u in lurkers:
             self.seen[u["tag"]] = (f, u["x"], u["y"])
             self.buried.pop(u["tag"], None)
@@ -770,6 +782,7 @@ class DetectRule:
             return False
         x, y = max(spots, key=lambda p: sum(1 for q in spots if math.dist(p, q) < SCAN_RADIUS))
         self.scanned.append((f, x, y))
+        self.buried = {t: v for t, v in self.buried.items() if math.dist((x, y), v[1:]) >= SCAN_RADIUS}
         g.motor.start(Intent("SCAN", [], (x, y), {"comsat": comsat["tag"], "x": int(x), "y": int(y)}, "rule:detect"))
         g.say(f"scans burrowed lurkers at {x // 32},{y // 32}")
         return True

@@ -271,6 +271,19 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   of 32 games are still undecided at 20 minutes with or without the scans (the mutalisk plan 17 won
   of 32, the zergling pressure 24 of 32). Gary doesn't end the lurker games; seeing the lurkers
   isn't what's missing.
+- **Why the lurker games don't end (2026-10-14, `eval/lurker_games.py`):** played again with the
+  full game state (v0.22, 8 lurker seeds on Fighting Spirit and Python, 20 minutes): Gary's army
+  loses 141 units a game against the Zerg's 8 lurkers and kills 2.1 of them; 66% of its deaths
+  with a lurker within 7 tiles, 67% on the enemy's side. The lurker stood in Gary's view every
+  time: the engine wrapper's `visible_to` was the sprite's sight alone, so Gary saw burrowed
+  lurkers it hadn't detected (fixed in `env/gary_env.cpp`: a cloaked or burrowed unit is visible
+  only to those who detect it), and `detect`, waiting for a lurker to vanish, rarely scanned. It now
+  also scans where Gary's units lose hp with no zerg in sight that could have hit them (as pros do
+  when lurkers burrowed out of sight). Same 8 games: 10 scans a game (0), lurkers killed 4.0 (2.1),
+  army deaths 125 (141), a third of them by lurkers undetected; won 2, lost 0 (2, 1). Games without
+  burrowed units are unchanged (checked against Zerg v2 and the replayed pros). Still: Gary stays
+  on 2 Command Centers all game with 1,000-2,000 gas unspent from 14:00, and its army keeps walking
+  into the lurkers on the enemy's side.
 
 ### v0.22 (October 2026): defending early, and scanning lurkers
 

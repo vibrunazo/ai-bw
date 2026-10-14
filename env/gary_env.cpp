@@ -280,6 +280,13 @@ GARY_API const char* gary_env_observe(void* h) {
 	}
 	o += "],\"units\":[";
 	first = true;
+	// Who sees a unit: the players whose sight covers it, and for a cloaked or burrowed unit only those
+	// who detect it (the sprite's visibility is sight alone: a burrowed lurker would show to anyone near).
+	auto visible_to = [&](const unit_t* u) -> int {
+		int vis = u->sprite->visibility_flags;
+		if (f.u_cloaked(u) || f.u_requires_detector(u)) vis &= (int)(u->detected_flags & 0xff) | (1 << u->owner);
+		return vis;
+	};
 	for (const unit_t* u : ptr(st.visible_units)) {
 		if (!first) o += ',';
 		first = false;
@@ -292,7 +299,7 @@ GARY_API const char* gary_env_observe(void* h) {
 		         (unsigned)f.get_unit_id(u).raw_value, u->owner, (int)u->unit_type->id, u->sprite->position.x,
 		         u->sprite->position.y, u->hp.integer_part(),
 		         u->unit_type->has_shield ? u->shield_points.integer_part() : 0,
-		         f.u_completed(u) ? 1 : 0, u->sprite->visibility_flags, (int)u->order_type->id,
+		         f.u_completed(u) ? 1 : 0, visible_to(u), (int)u->order_type->id,
 		         f.ut_resource(u->unit_type) ? u->building.resource.resource_count : 0, (int)u->build_queue.size(),
 		         (int)u->ground_weapon_cooldown, target ? (unsigned)f.get_unit_id(target).raw_value : 0u,
 		         u->order_target.pos.x, u->order_target.pos.y, (int)u->carrying_flags, u->unit_type->hitpoints.integer_part(), u->energy.integer_part());
