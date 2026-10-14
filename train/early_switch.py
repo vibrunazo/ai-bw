@@ -41,7 +41,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
         for m in ("python_gg13676", "standard_ozp3w", "heartbreak_9rg84")}
 SETS = [("dummy", "standard_ozp3w"), ("v2", "standard_ozp3w"), ("v2", "python_gg13676"),
-        ("replayed", "standard_ozp3w"), ("replayed", "python_gg13676"), ("replayed", "heartbreak_9rg84")]
+        ("replayed", "standard_ozp3w"), ("replayed", "python_gg13676"), ("replayed", "heartbreak_9rg84"),
+        ("v3", "standard_ozp3w"), ("v3", "python_gg13676")]   # (v3: the greedy Zerg, punishing over-defense)
 VERSION = "v019"
 FORCE_S = (120, 150, 180, 210, 240)          # forced switch moments (seconds)
 FACTS_EVERY = 10 * 24                        # the facts recorded this often, FACTS_FROM to FACTS_UNTIL
@@ -135,8 +136,8 @@ def play(args: tuple) -> dict:
             "zerg_home_s": zerg_home // 24 if zerg_home is not None else None, "at6": at6}
 
 
-def collect(seeds: list[int], parallel: int, out: Path) -> list[dict]:
-    base_jobs = [(o, mp, s, None, None) for o, mp in SETS for s in seeds]
+def collect(seeds: list[int], parallel: int, out: Path, sets=SETS) -> list[dict]:
+    base_jobs = [(o, mp, s, None, None) for o, mp in sets for s in seeds]
     with ProcessPoolExecutor(parallel) as pool:
         base = list(monitor.track(pool.map(play, base_jobs), len(base_jobs), "games as the rules play them"))
         forced_jobs = [(b["opponent"], b["map"], b["seed"], t, None) for b in base for t in FORCE_S
@@ -295,10 +296,13 @@ def main() -> None:
         return
     out = REPO_ROOT / "runs" / "early_switch" / time.strftime("%Y%m%d-%H%M%S")
     out.mkdir(parents=True, exist_ok=True)
-    if args.data:
+    if args.data:                          # (with --sets: those sets' games collected, added to these)
         rows = [json.loads(l) for l in open(args.data, encoding="utf-8")]
+        if args.sets:
+            rows += collect(list(range(1, args.seeds + 1)), args.parallel, out / "games_added.jsonl", sets)
+            (out / "games.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     else:
-        rows = collect(list(range(1, args.seeds + 1)), args.parallel, out / "games.jsonl")
+        rows = collect(list(range(1, args.seeds + 1)), args.parallel, out / "games.jsonl", sets)
     learn(rows, out)
 
 

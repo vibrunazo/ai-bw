@@ -177,6 +177,15 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   at 12:00; Gary's SCVs at 8:00 35-38. It punishes over-defending, as the pool didn't: the learned
   "always defend early" switch against the rules on it (48 paired games) won 2 (rules 8), outcome
   −0.18 ± 0.06, SCVs at 6:00 24.9 (27.1).
+  With v3's games in the strategy selector's table (each style, 48 seeds on two maps; 12-minute
+  games: no style lost, style 4 won the most), Python's pick moved from style 1 to 4 (all three
+  maps now 4); on fresh seeds on Python, style 4 against style 1: Zerg v2 won 9 lost 4 (6, 7), the
+  replayed pros won 4 lost 5 (2, 8), v3 won 11 lost 0 (13, 0). Played to 25 minutes (30 seeds on
+  each of two maps), every game against v3 ends by 19:30 and Gary wins all 60 (median 15:30 on
+  Fighting Spirit, 13:30 on Python): too weak for outcomes to say which decision was better. The
+  early-defense switch re-learned with v3's 12-minute games: across seeds +0.021 (one fold of four
+  negative), still "switch on a second hatchery and a pool seen"; not tested further until v3 is
+  stronger and its games run long.
 
 ### v0.19 (October 2026): the build style chosen per map
 
