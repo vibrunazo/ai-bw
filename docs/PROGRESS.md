@@ -247,6 +247,14 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   lost games no more than the rest (1 s+ fight waits 0.06 a minute in losses, 0.15 in the others).
   No case yet for giving the deciding layers inputs about the hands; slow or failed execution
   (missed selections) is another question.
+- **The early-defense switch against Zerg v3's three plans (2026-10-14):** re-collected on
+  v021+watch (seeds 1-40, the whole pool, v3 to 20 minutes: 312 games, 973 forced moments). The
+  tree over what Gary knew (the scout's facts among them) gains +0.089 a game across seeds (12
+  folds, ± 0.019, 11 positive), but so does the simplest rule, the defense at 2:00 or 2:30 in every
+  game (+0.089): the best tree is one level deep. What it found is that the rules switch too late:
+  forced at 2:30, the replayed pros +0.26, v3 on Python +0.10, Zerg v2 +0.02, v3 on Fighting
+  Spirit 0, the 9-pool 0. Option `defend_early` (the defense from 2:30 unless the rules switched
+  first), held out next.
 
 ### v0.21 (October 2026): workers back to work, and where the work is
 

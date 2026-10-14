@@ -404,6 +404,10 @@ OPTIONS = {
     "balance": lambda m: m.update(home_scvs=True, balance=True),
     # fight.py DetectRule: a lurker that burrowed near Gary's fighters is scanned (a Comsat with 50 energy)
     "detect": lambda m: m["fight"].update(before=list(m["fight"].get("before", [])) + ["detect"]),
+    # posture.py force_at: the early-pool defense from 2:30 whatever the rules see (unless they switched first).
+    # Learned from paired games (train/early_switch.py, v021+watch, 312 games with Zerg v3's three plans):
+    # a tree over what the scout saw gains no more than this (+0.089 a game across seeds, both)
+    "defend_early": lambda m: m.update(defend_early=150 * 24),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
     # firsts called early pools. In v0.16
@@ -541,6 +545,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                  "early_pool/v4": EarlyPoolPostureV4, "early_pool/v5": EarlyPoolPostureV5,
                  "early_pool/v6": EarlyPoolPostureV6,
                  "plan/v1": lambda g: _learned_posture(g, m, models)}[m["posture"]](g)
+    if m.get("defend_early") and hasattr(g.posture, "force_at"):
+        g.posture.force_at = m["defend_early"]          # (option defend_early: the rush defense from then)
     if m["macro"] is not None:
         path = model_path(m["macro"]["model"])
         macro = load("macro", str(path))
