@@ -55,6 +55,7 @@ class Gary:
         self.hotkeyed: dict[int, int] = {}               # building tag -> hotkey (-1: none)
         self.rallied: dict[int, tuple] = {}             # production building tag -> the rally it was given
         self.rally_plan = None                           # "ramp": the rally moves as the pros' (executor rerally)
+        self.home_scvs = False                           # workers astray go back to mining (executor _idle)
         self.ordered_at: dict[int, int] = {}             # building tag -> frame of its last order
         self.reserved: list[tuple[int, int, int]] = []   # (unit type, tile x, tile y) about to be built
         self.reserved_at: dict[tuple[int, int, int], int] = {}

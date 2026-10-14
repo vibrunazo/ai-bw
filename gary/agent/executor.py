@@ -21,6 +21,9 @@ COST = {unit: minerals for unit, (minerals, _gas) in T.COST.items()}
 SIZE = T.SIZE                                              # tiles
 HK_CC = [4, 5]                        # one hotkey per Command Center (buildings can't share one)
 HK_RAX = [6, 7, 8, 9]
+STRAY = 12 * 32                              # home_scvs: a worker this far from every Command Center is astray
+MINE_CLICKS = 4                               # home_scvs: clicks to get an idle worker alone (a box takes marines too)
+ATTACK_MOVE_ORDER, PATROL_ORDER = 14, 152
 RALLY_DOWN, RALLY_OUT = 285 * 24, 450 * 24   # rally_ramp: inside the main's ramp until 4:45, at its
                                              # bottom until 7:30, then in front of the natural (pros' marines
                                              # at 3:00-4:00: the ramp's top 33%, the main 30%; at 5:00-6:00
@@ -131,10 +134,22 @@ class ScriptedExecutor:
                       started=now)
         return True
 
+    def _idle(self, u: dict, mine: list[dict]) -> bool:
+        """A worker the mining routine should send back: standing idle, or (home_scvs, an option) away
+        from every Command Center (STRAY) idle or still attack-moving, nobody holding it (a pull that
+        ended left them where they stood: 9-21 at once in the middle of the map, against Zerg v2/v3)."""
+        if u["order"] == IDLE:
+            return True
+        g = self.g
+        if not g.home_scvs or u["order"] not in (ATTACK_MOVE_ORDER, PATROL_ORDER) or g.leases.holder(u["tag"]):
+            return False
+        ccs = [(c["x"], c["y"]) for c in mine if c["type"] == CC]
+        return bool(ccs) and min(math.dist((u["x"], u["y"]), c) for c in ccs) > STRAY
+
     def idle_mining(self, obs: dict, done: list[dict]) -> bool:
         """Idle workers on screen go back to mining (game start, after building something)."""
         g = self.g
-        idle = [u for u in done if u["type"] == SCV and u["order"] == IDLE and screen_of(obs, u["x"], u["y"])
+        idle = [u for u in done if u["type"] == SCV and self._idle(u, done) and screen_of(obs, u["x"], u["y"])
                 and g.ignore_idle_until.get(u["tag"], 0) <= g.hi.frame and u["tag"] != g.scout
                 and u["tag"] not in g.block_units]
         if idle:
@@ -148,8 +163,8 @@ class ScriptedExecutor:
         g, hi = self.g, self.g.hi
         if hi.frame < self.next_sweep:
             return False
-        busy = {g.scout} | g.pulled | g.block_units
-        away = [u for u in done if u["type"] == SCV and u["order"] == IDLE and u["tag"] not in busy
+        busy = {g.scout} | (g.pulled if not g.home_scvs else set()) | g.block_units
+        away = [u for u in done if u["type"] == SCV and self._idle(u, done) and u["tag"] not in busy
                 and not screen_of(obs, u["x"], u["y"]) and g.ignore_idle_until.get(u["tag"], 0) <= hi.frame]
         self.next_sweep = hi.frame + 24 * 10
         if not away:
@@ -709,6 +724,13 @@ class ScriptedExecutor:
                 t.stage = "click"
                 hi.click(*hi.aim(obs, workers[0]))
                 return
+            # home_scvs: the box caught marines standing with them (out in the field): each worker
+            # clicked in turn, up to MINE_CLICKS, before they're left for 20 s
+            clicks = t.data.get("clicks", 1)
+            if g.home_scvs and clicks < MINE_CLICKS:
+                t.data["clicks"] = clicks + 1
+                hi.click(*hi.aim(obs, workers[clicks % len(workers)]))
+                return
             for tag in tags:
                 g.ignore_idle_until[tag] = hi.frame + 24 * 20
             g.task = None
@@ -723,6 +745,8 @@ class ScriptedExecutor:
         if fields:
             m = min(fields, key=lambda m: math.dist(m, base.center))
             hi.right_click(*screen_of(obs, *m))
+        elif g.home_scvs:                             # (away from the base: its minerals on the minimap)
+            hi.minimap_right_click(*min(base.minerals, key=lambda m: math.dist(m, base.center)))
         # whether or not it worked, don't fixate on these workers: look again in 20 s
         for tag in tags:
             g.ignore_idle_until[tag] = hi.frame + 24 * 20

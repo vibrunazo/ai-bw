@@ -381,6 +381,10 @@ OPTIONS = {
     # On v0.19 over the whole pool (fresh seeds, 432 games, Zerg v3 to 20 min): lost 24 (25), won 135 (133);
     # replayed pros lost 13 (17), Zerg v3 won 59 (64). In v0.20
     "rally_ramp": lambda m: m.update(rally="ramp"),
+    # executor.py _idle, motor.py unpull: workers away from every Command Center, idle or still attack-moving
+    # with nobody holding them, go back to mining (the sweep finds them off screen, pulled or not), and a
+    # pull's workers go back to the nearest base Gary owns (before: the nearest base on the map)
+    "home_scvs": lambda m: m.update(home_scvs=True),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
     # firsts called early pools. In v0.16
@@ -508,6 +512,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     if m["macro"] is not None or m["army"] is not None:
         g.executor = ScriptedExecutor(g)
         g.rally_plan = m.get("rally")
+        g.home_scvs = m.get("home_scvs", False)
         if m.get("simcity"):
             from gary.agent.simcity import SimCity
             g.simcity = SimCity(g, m.get("simcity_door", 32))

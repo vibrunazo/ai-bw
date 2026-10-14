@@ -367,7 +367,8 @@ class DirectMotor:
             sel = [u for u in back if u["tag"] in obs["selection"]]
             if sel:
                 w = sel[0]
-                base = min(g.map.bases, key=lambda b: math.dist(b.center, (w["x"], w["y"])))
+                bases = (g.executor.my_bases(mine) if g.home_scvs and g.executor is not None else None) or g.map.bases
+                base = min(bases, key=lambda b: math.dist(b.center, (w["x"], w["y"])))
                 fields = [m for m in base.minerals if screen_of(obs, *m)]
                 if fields:
                     hi.right_click(*screen_of(obs, *fields[0]))
