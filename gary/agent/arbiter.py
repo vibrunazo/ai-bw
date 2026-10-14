@@ -123,6 +123,7 @@ class FixedPriority:
                            ("executor:sweep", lambda: ex.idle_sweep(obs, done)),
                            ("executor:hotkey", lambda: ex.hotkey_new_buildings(done)),
                            ("executor:rerally", lambda: ex.rerally(obs, mine, done)),
+                           ("executor:transfer", lambda: ex.transfer(obs, mine)),
                            ("executor:gas", lambda: ex.refill_gas(obs, done))):
             if chore():
                 return who

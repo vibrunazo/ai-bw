@@ -23,6 +23,14 @@ HK_CC = [4, 5]                        # one hotkey per Command Center (buildings
 HK_RAX = [6, 7, 8, 9]
 STRAY = 12 * 32                              # home_scvs: a worker this far from every Command Center is astray
 MINE_CLICKS = 4                               # home_scvs: clicks to get an idle worker alone (a box takes marines too)
+FIGHT_CALM = 10 * 24                          # home_scvs: pulled or attack-moving workers are left alone this long
+                                              # after zerg were last at Gary's bases (a fight's defenders)
+SATURATED, UNDER = 1.8, 1.0                   # balance: workers a mineral patch at a base that gives some away,
+                                              # and at one that takes them
+TRANSFER_EVERY = 10 * 24                      # balance: bases' saturation looked at this often
+DANGER_FOR = 20 * 24                          # balance: a base with zerg fighters seen near this recently isn't sent to
+GATHERING = set(range(79, 92))                # orders: to, at, mining and returning minerals or gas
+ZERG_FIGHTERS = {37, 38, 39, 43, 103, 46, 47, 44, 45, 62}
 ATTACK_MOVE_ORDER, PATROL_ORDER = 14, 152
 RALLY_DOWN, RALLY_OUT = 285 * 24, 450 * 24   # rally_ramp: inside the main's ramp until 4:45, at its
                                              # bottom until 7:30, then in front of the natural (pros' marines
@@ -60,10 +68,12 @@ class ScriptedExecutor:
         self.stalled_since: dict[int, int] = {}       # unfinished building -> since when nobody builds it
         self._terrain_cache = None                    # see terrain()
         self._ramp = None                             # rerally: (spot inside the main's ramp, its bottom), or False
+        self.danger: dict[tuple, int] = {}            # balance: base center -> frame zerg fighters were last seen near it
+        self.next_transfer = 0
         # the map's own creep (map knowledge, read now: at the start of a game, before any zerg's)
         creep = getattr(g.hi.game, "creep", None)
         self._map_creep = creep() if creep else None
-        for kind in ("build", "hotkey_building", "mine", "resume", "rerally"):
+        for kind in ("build", "hotkey_building", "mine", "resume", "rerally", "transfer"):
             g.task_runners[kind] = self._run_basic
         g.task_runners["command"] = self._run_command
         g.task_runners["gas"] = self._run_command
@@ -141,8 +151,9 @@ class ScriptedExecutor:
         if u["order"] == IDLE:
             return True
         g = self.g
-        if not g.home_scvs or u["order"] not in (ATTACK_MOVE_ORDER, PATROL_ORDER) or g.leases.holder(u["tag"]):
-            return False
+        if not g.home_scvs or u["order"] not in (ATTACK_MOVE_ORDER, PATROL_ORDER) or g.leases.holder(u["tag"]) \
+                or g.hi.frame - g.calm_since < FIGHT_CALM:
+            return False                              # (a fight at home lately: they may be its defenders)
         ccs = [(c["x"], c["y"]) for c in mine if c["type"] == CC]
         return bool(ccs) and min(math.dist((u["x"], u["y"]), c) for c in ccs) > STRAY
 
@@ -163,7 +174,7 @@ class ScriptedExecutor:
         g, hi = self.g, self.g.hi
         if hi.frame < self.next_sweep:
             return False
-        busy = {g.scout} | (g.pulled if not g.home_scvs else set()) | g.block_units
+        busy = {g.scout} | (g.pulled if not g.home_scvs or g.hi.frame - g.calm_since < FIGHT_CALM else set()) | g.block_units
         away = [u for u in done if u["type"] == SCV and self._idle(u, done) and u["tag"] not in busy
                 and not screen_of(obs, u["x"], u["y"]) and g.ignore_idle_until.get(u["tag"], 0) <= hi.frame]
         self.next_sweep = hi.frame + 24 * 10
@@ -266,6 +277,94 @@ class ScriptedExecutor:
         """Bases with one of Gary's finished Command Centers."""
         halls = [u for u in mine if u["type"] == CC and u["completed"]]
         return [b for b in self.g.map.bases if any(math.dist(b.center, (h["x"], h["y"])) < 6 * 32 for h in halls)]
+
+    def mine_base(self, mine: list[dict], at, obs: dict | None = None):
+        """The base Gary's workers at `at` should mine at: the nearest it owns, or (balance, an
+        option) the least saturated (workers gathering there per mineral patch) with no zerg
+        fighters seen near it for DANGER_FOR, the nearest on a tie: pros send workers where the
+        patches are free, not to the nearest base."""
+        g = self.g
+        bases = self.my_bases(mine) or [g.main]
+        if not g.balance:
+            return min(bases, key=lambda b: math.dist(b.center, at))
+        if obs is not None:
+            self.note_danger(obs)
+        safe = [b for b in bases if g.hi.frame - self.danger.get(b.center, -10 ** 9) > DANGER_FOR] or bases
+        return min(safe, key=lambda b: (round(self.saturation_at(b, mine) * 2) / 2, math.dist(b.center, at)))
+
+    def saturation_at(self, base, mine: list[dict]) -> float:
+        """Workers gathering at this base per mineral patch."""
+        n = sum(1 for u in mine if u["type"] == SCV and u["order"] in GATHERING and math.dist((u["x"], u["y"]), base.center) < 10 * 32)
+        return n / max(1, len(base.minerals))
+
+    def note_danger(self, obs: dict) -> None:
+        """balance: Gary's bases with zerg fighters near them now (what Gary sees)."""
+        g = self.g
+        fighters = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and u["type"] in ZERG_FIGHTERS]
+        for b in g.map.bases:
+            if any(math.dist(b.center, (u["x"], u["y"])) < 14 * 32 for u in fighters):
+                self.danger[b.center] = g.hi.frame
+
+    def transfer(self, obs: dict, mine: list[dict]) -> bool:
+        """balance: workers from a base over SATURATED a patch to a safe one under UNDER (a new
+        Command Center, mostly), a group at once: pros move a bunch the moment a base is up."""
+        g, hi = self.g, self.g.hi
+        if not g.balance or hi.frame < self.next_transfer:
+            return False
+        self.next_transfer = hi.frame + TRANSFER_EVERY
+        self.note_danger(obs)
+        bases = self.my_bases(mine)
+        if len(bases) < 2:
+            return False
+        sat = {b.center: self.saturation_at(b, mine) for b in bases}
+        src = max(bases, key=lambda b: sat[b.center])
+        safe = [b for b in bases if b is not src and hi.frame - self.danger.get(b.center, -10 ** 9) > DANGER_FOR]
+        if sat[src.center] <= SATURATED or not safe:
+            return False
+        dst = min(safe, key=lambda b: sat[b.center])
+        if sat[dst.center] >= UNDER:
+            return False
+        k = min(int((sat[src.center] - 1.5) * len(src.minerals)), int((1.5 - sat[dst.center]) * len(dst.minerals)), 8)
+        if k < 3:
+            return False
+        line = (sum(x for x, _ in src.minerals) / len(src.minerals), sum(y for _, y in src.minerals) / len(src.minerals))
+        miners = sorted((u for u in mine if u["type"] == SCV and u["order"] in GATHERING and u["tag"] not in g.pulled | g.block_units
+                         and math.dist((u["x"], u["y"]), src.center) < 10 * 32),
+                        key=lambda u: math.dist((u["x"], u["y"]), line))[:k]
+        g.task = Task("transfer", data={"tags": [u["tag"] for u in miners], "to": dst.center}, started=hi.frame)
+        g.say(f"transfers {len(miners)} workers to the base at {dst.center[0] // 32},{dst.center[1] // 32}")
+        return True
+
+    def _task_transfer(self, obs: dict, mine: list[dict], t: Task) -> None:
+        """A box around the chosen workers (at their mineral line), then a minimap right-click on the
+        other base's minerals."""
+        g, hi = self.g, self.g.hi
+        tags = set(t.data["tags"])
+        workers = [u for u in mine if u["tag"] in tags]
+        if not workers or t.data.get("tries", 0) >= 3:
+            g.task = None
+            return
+        if t.stage == "start":
+            x = sorted(u["x"] for u in workers)[len(workers) // 2]
+            y = sorted(u["y"] for u in workers)[len(workers) // 2]
+            on = [u for u in workers if screen_of(obs, u["x"], u["y"])]
+            if len(on) < len(workers) // 2 + 1:
+                hi.camera_minimap(x, y)
+                t.data["tries"] = t.data.get("tries", 0) + 1
+                return
+            pts = [hi.aim(obs, u) for u in on]
+            hi.box(max(0, min(p[0] for p in pts) - 4), max(0, min(p[1] for p in pts) - 4),
+                   min(hi.p.viewport[0] - 1, max(p[0] for p in pts) + 4), min(hi.p.viewport[1] - 1, max(p[1] for p in pts) + 4))
+            t.stage = "send"
+            return
+        sel = [u for u in mine if u["tag"] in obs["selection"]]
+        if sel and all(u["type"] == SCV for u in sel) and len(sel) >= 2:
+            base = next(b for b in g.map.bases if b.center == tuple(t.data["to"]))
+            hi.minimap_right_click(*min(base.minerals, key=lambda m: math.dist(m, base.center)))
+            g.task = None
+            return
+        t.stage = "start"
+        t.data["tries"] = t.data.get("tries", 0) + 1
 
     def free_worker(self, obs: dict, u: dict) -> bool:
         """A finished SCV on screen that isn't busy placing or constructing a building (or walking
@@ -488,7 +587,7 @@ class ScriptedExecutor:
             g.task = None
             return
         {"build": self._task_build, "hotkey_building": self._task_hotkey, "mine": self._task_mine,
-         "resume": self._task_resume, "rerally": self._task_rerally}[t.kind](obs, mine, t)
+         "resume": self._task_resume, "rerally": self._task_rerally, "transfer": self._task_transfer}[t.kind](obs, mine, t)
 
     def _run_command(self, obs: dict, mine: list[dict], t: Task) -> None:
         if self.g.hi.frame - t.started > COMMAND_TIMEOUT:
@@ -708,6 +807,12 @@ class ScriptedExecutor:
         if not workers:
             g.task = None
             return
+        ccs = [(c["x"], c["y"]) for c in mine if c["type"] == CC]
+        if t.stage == "start" and g.balance and ccs and \
+                all(min(math.dist((u["x"], u["y"]), c) for c in ccs) > STRAY for u in workers):
+            hi.ctrl_click(*hi.aim(obs, workers[0]))   # (out in the field: every worker on the screen, at once)
+            t.stage = "send"
+            return
         if t.stage == "start":
             pts = [hi.aim(obs, u) for u in workers]
             # a drag box only picks up own units: a plain click on a worker standing on a
@@ -739,7 +844,7 @@ class ScriptedExecutor:
         # at a base without a Command Center means a long walk with every load)
         w = workers[0]
         bases = self.my_bases(mine) or [g.main]
-        base = min(bases, key=lambda b: math.dist(b.center, (w["x"], w["y"])))
+        base = self.mine_base(mine, (w["x"], w["y"]), obs)
         fields = [m for m in base.minerals if screen_of(obs, *m)] or \
                  [m for b in bases for m in b.minerals if screen_of(obs, *m)]
         if fields:

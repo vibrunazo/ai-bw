@@ -385,6 +385,10 @@ OPTIONS = {
     # with nobody holding them, go back to mining (the sweep finds them off screen, pulled or not), and a
     # pull's workers go back to the nearest base Gary owns (before: the nearest base on the map)
     "home_scvs": lambda m: m.update(home_scvs=True),
+    # home_scvs, and executor.py balance: workers sent to mine go to the least saturated safe base (not the
+    # nearest), a group of workers moves from a base over 1.8 a patch to a safe one under 1.0 (a new
+    # Command Center), and workers out in the field are selected with one ctrl+click
+    "balance": lambda m: m.update(home_scvs=True, balance=True),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
     # firsts called early pools. In v0.16
@@ -513,6 +517,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.executor = ScriptedExecutor(g)
         g.rally_plan = m.get("rally")
         g.home_scvs = m.get("home_scvs", False)
+        g.balance = m.get("balance", False)
         if m.get("simcity"):
             from gary.agent.simcity import SimCity
             g.simcity = SimCity(g, m.get("simcity_door", 32))
