@@ -86,6 +86,11 @@ def morph(unit_type: int) -> bytes:
     return struct.pack("<BH", 0x23, unit_type)
 
 
+def morph_building(unit_type: int) -> bytes:
+    """Zerg: morph the selected building into unit_type (a Hatchery into a Lair, a Lair into a Hive)."""
+    return struct.pack("<BH", 0x35, unit_type)
+
+
 LARVA = 35
 
 

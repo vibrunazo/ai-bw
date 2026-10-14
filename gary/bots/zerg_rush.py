@@ -31,6 +31,7 @@ POOL, LING, OVERLORD, DRONE, HATCH = 142, 37, 42, 41, 131
 MINING = 87                     # order: mining minerals (the drone stands at the field)
 DRONES = 9
 WAVE = 12                       # (Zerg v1's groups)
+PRO_HANDS = {"v3"}              # Zergs with pro-speed hands (the others keep b_rank: their benchmarks stay the same)
 FIRST_WAVE, LATER_WAVES = 6, 2   # the dummy: the first 6 zerglings together, then each pair as it hatches
 POOL_WALK_AT = 150              # minerals when the pool's drone sets out (the pool goes down at 200)
 RALLY = 5 * 32                  # the hatchery's rally: this far from it, toward the map's middle
@@ -217,7 +218,8 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
             elif u["type"] == HATCH:
                 slot_of["Z"] = u["owner"]
         # Gary with its pro-speed hands; the dummy keeps b_rank hands (the benchmark stays the same)
-        his = {r: HumanInterface(game, s, PROFILES["pro" if r == "T" else "b_rank"], seed=s) for r, s in slot_of.items()}
+        his = {r: HumanInterface(game, s, PROFILES["pro" if r == "T" or opponent in PRO_HANDS else "b_rank"], seed=s)
+               for r, s in slot_of.items()}
         gary = make_terran(his["T"], mapinfo)
         if opponent == "replayed":
             from gary.bots.zerg_replayed import ZergReplayed

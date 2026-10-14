@@ -186,6 +186,19 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   early-defense switch re-learned with v3's 12-minute games: across seeds +0.021 (one fold of four
   negative), still "switch on a second hatchery and a pool seen"; not tested further until v3 is
   stronger and its games run long.
+- **Zerg v3 with zerglings and mutalisks (2026-10-13):** hydralisks aren't what Zergs play against
+  Terran (marines and medics beat them), so v3 now plays the standard 3-hatch mutalisks: a Lair
+  from 3:20 (4:24 median), a Spire (6:00), mutalisks from 7:30 as one flock (hotkey 9) raiding the
+  mineral line with the least anti-air seen, home when outweighed or half lost, defending its
+  hatcheries; from 6:00 a standing zergling army (12, 4 more a minute), two sunken colonies at
+  its natural, zergling speed; everything at 11:00. Its groups attack-move everywhere but when
+  running away (on move orders its units walked through Gary's army without shooting), and it has
+  pro-speed hands (a test opponent's hands are the benchmark's choice; the other Zergs keep
+  theirs). Buildings that morph (a Lair, sunkens) go through the interface's new building morph.
+  To 20 minutes (20 seeds on each of two maps): Fighting Spirit won 10, lost 0, Python won 11, lost
+  2; most of the 17 undecided are decided in all but the last building (the Zerg down to one
+  building against 67-79 of Gary's army, or Gary down to 2-3 buildings and no army), about 5
+  close: Gary wins roughly 70-80%.
 
 ### v0.19 (October 2026): the build style chosen per map
 

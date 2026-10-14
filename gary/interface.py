@@ -479,6 +479,10 @@ class HumanInterface:
         """Hotkey: start an upgrade in the selected building."""
         return self._schedule_key("upgrade", upgrade_id=upgrade_id)
 
+    def morph_building(self, unit_type: int) -> ActionResult:
+        """Zerg: the selected building becomes unit_type (its hotkey on the command card)."""
+        return self._schedule_key("morph_building", unit_type=unit_type)
+
     def morph(self, unit_type: int) -> ActionResult:
         """Hotkey: morph the selected larva."""
         return self._schedule_key("morph", unit_type=unit_type)
@@ -658,6 +662,10 @@ class HumanInterface:
             act = f"morph {unit_name(a.args['unit_type'])}"
             self._send(C.morph(a.args["unit_type"]))
             self.last_macro_frame = self.frame
+        elif a.kind == "morph_building":
+            act = f"morph {unit_name(a.args['unit_type'])}"
+            self._send(C.morph_building(a.args["unit_type"]))
+            self.last_macro_frame = self.frame
         elif a.kind == "research":
             act = f"research {T.TECH_NAMES.get(a.args['tech'], a.args['tech'])}"
             self._send(C.research(a.args["tech"]))
@@ -717,7 +725,7 @@ RESOURCES = {176, 177, 178, 188, 110, 157, 149}      # mineral fields, geyser, r
 OTHER_NAMES = {176: "Mineral Field", 177: "Mineral Field", 178: "Mineral Field", 188: "Vespene Geyser",
                35: "Larva", 36: "Egg", 37: "Zergling", 41: "Drone", 42: "Overlord", 131: "Hatchery"}
 COMMAND_NAMES = {0x09: "select", 0x0A: "shift-select", 0x0C: "build", 0x14: "right-click", 0x15: "order",
-                 0x1F: "train", 0x23: "morph", 0x30: "research", 0x32: "upgrade", 0x5C: "chat",
+                 0x1F: "train", 0x23: "morph", 0x35: "morph building", 0x30: "research", 0x32: "upgrade", 0x5C: "chat",
                  0x1A: "stop", 0x2B: "hold", 0x36: "stim", 0x1E: "return cargo", 0x28: "unload all"}
 
 
