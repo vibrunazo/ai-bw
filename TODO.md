@@ -78,3 +78,19 @@ leaves the map: seen once in 40 games, an SCV standing in a main's corner behind
 sent to mine one of them (v0.21 against Zerg v3, Fighting Spirit seed 7). Such games count as errors
 (eval/vs_rush.py), not results. Find what puts SCVs in that corner (a depot spot by the edge?) and
 keep them out of it; the engine itself is external code.
+
+## 7. The macro reads the scout, then the scout is worth testing
+
+Gary builds the same tech whatever Zerg v3 plays (Engineering Bay ~6:00, turrets from ~7:00 against
+mutalisks, lurkers and the zergling pressure alike; 40 games, PROGRESS.md 2026-10-14), and nothing
+but the early-pool rules reads what the scout sees. The touring scout (`watch`) stays in the
+Zerg's base no longer than the plain one (65 s against 64 s median, 858 games: it leaves when 3
+zerglings come near, at ~3:00) and lost more without a reader (30 against 25 of 432, before v3's
+three plans).
+
+- First: answers to each plan as pros play them, triggered by what Gary has seen (the scout, later
+  sightings, scans): turrets and an Engineering Bay against mutalisks, Comsat, Science Vessels and
+  tanks against lurkers, bunkers and marines against the zergling pressure. Judge per Zerg v3 plan
+  (seed % 3) and over the whole pool.
+- Then: v0.22 with and without `watch` against Zerg v3, results per plan, to see whether a longer
+  look pays once something reads it (and whether the scout should dodge zerglings to stay longer).
