@@ -255,6 +255,22 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   forced at 2:30, the replayed pros +0.26, v3 on Python +0.10, Zerg v2 +0.02, v3 on Fighting
   Spirit 0, the 9-pool 0. Option `defend_early` (the defense from 2:30 unless the rules switched
   first), held out next.
+- **A fix that moved every game (2026-10-14):** the minimap clamp that came with Zerg v3's plans (a
+  minimap click's scatter kept on the map) changed v0.21's games against every opponent: a
+  scout's click scattered past the map's edge used to be refused by the game (the scout skipped
+  that waypoint), now it lands. Found by replaying one game at each commit since the baseline:
+  the commit before replays the old game exactly, and so does that commit with the clamp undone.
+  The old v0.21 numbers are no yardstick since; a new baseline at today's code, the same 432
+  games: won 118, lost 30 (the replayed pros 18 of the losses, Heartbreak Ridge 10).
+- **`defend_early` and `detect` on the same seeds (2026-10-14):** `defend_early` lost 15 (30) and
+  won 115 (118): paired by seed, 26 losses became undecided and 9 undecided games losses (2 wins
+  losses), while wins moved both ways about evenly (32 to undecided, 31 from undecided). The
+  replayed pros 18 -> 3 losses; Zerg v2 on Fighting Spirit 5 -> 7, the one set where defending early
+  costs. `detect` scanned in 18 of the 32 lurker games (2 to 17 scans each), and those games went
+  differently after the first scan, but not one result changed in 432: against the lurker plan 29
+  of 32 games are still undecided at 20 minutes with or without the scans (the mutalisk plan 17 won
+  of 32, the zergling pressure 24 of 32). Gary doesn't end the lurker games; seeing the lurkers
+  isn't what's missing.
 
 ### v0.21 (October 2026): workers back to work, and where the work is
 
