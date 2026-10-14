@@ -65,3 +65,20 @@ Done: `gary/bots/zerg_v3.py` (PROGRESS.md: it punishes the always-defend switch,
 Then: add it to the selector table's opponent pool and rebuild the table; re-learn and re-test the
 early-defense switch (`train/early_switch.py`; without it: always defends early, losses 40 -> 39 of
 432, false alarms 285 of 287 quiet games).
+
+## 5. Scattered fighters back into the main group
+
+Two different problems; don't solve them with one rule.
+
+- **Housekeeping, no fight on:** a fighter standing idle far from Gary's main group, no zerg near,
+  walks (attack-moving) back to it, as `home_scvs` sends stray SCVs back to mining. A chore, not a
+  decision. Small today: of fighters alone more than 15 tiles from the main group (0.65 a look
+  every 10 s, 16 games against Zerg v2/v3), most were walking to the rally (shorter since
+  `rally_ramp`) or chasing an attack or close-in order; idle and lost only ~4%. Measure first
+  (the stray tracker), then a rule, judged over the whole pool.
+- **In a fight:** whether a new unit joins now or waits for the group. Pros lose 12% of their army
+  alone, Gary ~48% in its losses; rules to hold new units back (`reinforce_pack`, `regroup`,
+  `safe_rally`), a learned join/hold override and RL on the role choice all measured worse or
+  equal. A real decision with exceptions (one more marine saves a bunker; one more dies alone for
+  nothing): for the learned layer, once the critic and longer episodes value a fighter kept alive
+  (the 120 s episodes reward fighting now).
