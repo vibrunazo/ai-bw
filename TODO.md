@@ -5,18 +5,6 @@ held up, in the order to do it. Pick these up once the early-switch work (`train
 is done and its runs have finished; none of them should run while it does (shared code, shared
 CPU). Delete this file once each item is done or moved to an issue.
 
-## 2. Do Gary's hands cost it games? A cheap check first
-
-No deciding model sees the state of the hands: `gary/policy/roles.py`, `army.py` and `macro.py` take
-no APM, camera, selection or pending-action inputs, and ARCHITECTURE.md §3.1's masks were never
-built. Whether that matters is unmeasured: `eval/losses.py` didn't keep arbiter traces.
-
-Replay v0.19's 30 losses (`runs/losses.jsonl`; deterministic, 335 of 336 replayed the same) and ~30
-wins with traces on, and compare the arbiter's `wait` events (≥1 s) during fights. Only if losses
-stand out: give the deciding layers inputs about the hands (time since a group's last order went
-through, the arbiter's queue). This decides only about those inputs; the deciders still assume
-pro-level execution either way (item 3).
-
 ## 3. The army model's fight estimate, from Gary's own fights
 
 The fight estimate is trained on what the pro got: the change in army share in the 45 s after the

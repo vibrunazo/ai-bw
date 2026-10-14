@@ -402,6 +402,8 @@ OPTIONS = {
     # Zerg v3 won 68 (59) lost 0 (3), Zerg v2 lost 5 (8), the replayed pros on Heartbreak Ridge lost 10 (6).
     # home_scvs alone, before its defenders were left alone in fights: lost 26, won 139. In v0.21
     "balance": lambda m: m.update(home_scvs=True, balance=True),
+    # fight.py DetectRule: a lurker that burrowed near Gary's fighters is scanned (a Comsat with 50 energy)
+    "detect": lambda m: m["fight"].update(before=list(m["fight"].get("before", [])) + ["detect"]),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
     # firsts called early pools. In v0.16

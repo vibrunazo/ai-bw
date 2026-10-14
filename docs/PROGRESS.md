@@ -235,6 +235,18 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   7 Zerg-favored, two of them with 130-150 army against 0-18). Each plan a game, and they differ,
   so what the scout finds can matter now. One game stopped on an engine error (a unit squeezed
   between edge minerals and the map's edge; counted as an error, not a result).
+- **Does Gary react to the Zerg's plan? (2026-10-14)** Its decisions against Zerg v3's three plans
+  (40 games to 20 minutes): the same tech whatever it faces: Engineering Bay ~6:00, turrets from
+  ~7:00 (15 decided a game against mutalisks, lurkers and the zergling pressure alike), Comsat
+  ~7:00, Science Vessels late in a third of the games; and no scans at all against lurkers (scans
+  only hunted buildings). The macro model plays a generic game; burrowed lurkers it can't see kill
+  its marines. Option `detect` (fight.py DetectRule): a lurker that burrowed where Gary's units see
+  it is remembered, and with Gary's fighters near it and a Comsat at 50 energy, scanned.
+- **Do Gary's hands cost it games? (2026-10-14, TODO item 2)** The arbiter's wait events in the
+  selector test's 666 games (87 lost): the fight layer waits for the hands about 0.3 s a minute,
+  lost games no more than the rest (1 s+ fight waits 0.06 a minute in losses, 0.15 in the others).
+  No case yet for giving the deciding layers inputs about the hands; slow or failed execution
+  (missed selections) is another question.
 
 ### v0.21 (October 2026): workers back to work, and where the work is
 

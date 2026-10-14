@@ -44,6 +44,13 @@ from gary.policy.fight_cmd import MAX_UNITS as COMMAND_MAX, MOVES, OWN_RADIUS, P
 from gary.policy.fight_memory import history_inputs
 
 ASK_EVERY = 12                       # frames between fight decisions (half a second)
+LURKER = 103
+SIGHT = 7 * 32                      # detect: a spot Gary's units see (a marine's sight)
+DETECT_NEAR = 8 * 32                # detect: Gary's units this near a burrowed lurker: scan it
+DETECT_MEMORY = 30 * 24             # detect: a burrowed lurker remembered this long
+SCAN_ENERGY = 50
+SCAN_AGAIN = 8 * 24                 # detect: a spot scanned isn't scanned again for this long (a scan lasts ~10 s)
+SCAN_RADIUS = 6 * 32                # detect: a scan's reach (about)
 INTERRUPTIBLE = {"mine", "gas", "hotkey_building", "rerally", "transfer"}   # chores a fight may interrupt
 FIGHT_TASKS = {"fight_cmd", "load", "pull", "unpull", "repair", "reinforce", "unload"}
 RESOURCES = {176, 177, 178, 188, 110}
@@ -720,4 +727,53 @@ def _block_decider(ref: str):
     return d["model"], d["features"]
 
 
-RULES = {"block": BlockRule, "pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule, "unload": UnloadRule}
+class DetectRule:
+    """Burrowed lurkers can't be shot without detection (pros scan them every time; Gary never did:
+    0 scans in 14 games against Zerg v3's lurkers): a lurker seen that has gone from sight where
+    Gary's units still see (so it burrowed there, not walked off) is remembered; Gary's fighters
+    within DETECT_NEAR of one and a Comsat Station with SCAN_ENERGY: a scan on the densest such
+    spot (not one scanned in the last SCAN_AGAIN)."""
+
+    name = "detect"
+
+    def __init__(self, g: Gary):
+        self.g = g
+        self.seen: dict[int, tuple[int, int, int]] = {}      # lurker -> (frame, x, y) last seen
+        self.buried: dict[int, tuple[int, int, int]] = {}    # lurker -> (frame, x, y): burrowed there
+        self.scanned: list[tuple[int, int, int]] = []
+
+    def step(self, obs: dict, mine: list[dict]) -> bool:
+        g, f = self.g, self.g.hi.frame
+        lurkers = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and u["type"] == LURKER]
+        for u in lurkers:
+            self.seen[u["tag"]] = (f, u["x"], u["y"])
+            self.buried.pop(u["tag"], None)
+        visible = {u["tag"] for u in lurkers}
+        ours = [u for u in mine if u["completed"]]
+        for t, (fr, x, y) in list(self.seen.items()):
+            # gone from where Gary still sees: burrowed (a lurker walks a few pixels in a frame or two)
+            if t not in visible and f - fr <= 2 * 24 and any(math.dist((x, y), (u["x"], u["y"])) < SIGHT for u in ours):
+                self.buried[t] = (f, x, y)
+        self.seen = {t: v for t, v in self.seen.items() if f - v[0] < DETECT_MEMORY}
+        self.buried = {t: v for t, v in self.buried.items() if f - v[0] < DETECT_MEMORY}
+        self.scanned = [s for s in self.scanned if f - s[0] < SCAN_AGAIN]
+        if not self.buried:
+            return False
+        comsat = next((u for u in mine if u["type"] == T.COMSAT and u["completed"] and (u.get("energy") or 0) >= SCAN_ENERGY), None)
+        if comsat is None:
+            return False
+        fighters = [u for u in ours if u["type"] in g.army_types or u["type"] == T.SCV]
+        spots = [(x, y) for _, x, y in self.buried.values()
+                 if any(math.dist((x, y), (u["x"], u["y"])) < DETECT_NEAR for u in fighters)
+                 and not any(math.dist((x, y), (sx, sy)) < SCAN_RADIUS for _, sx, sy in self.scanned)]
+        if not spots:
+            return False
+        x, y = max(spots, key=lambda p: sum(1 for q in spots if math.dist(p, q) < SCAN_RADIUS))
+        self.scanned.append((f, x, y))
+        g.motor.start(Intent("SCAN", [], (x, y), {"comsat": comsat["tag"], "x": int(x), "y": int(y)}, "rule:detect"))
+        g.say(f"scans burrowed lurkers at {x // 32},{y // 32}")
+        return True
+
+
+RULES = {"block": BlockRule, "pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule,
+         "unload": UnloadRule, "detect": DetectRule}
