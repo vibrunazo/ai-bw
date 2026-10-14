@@ -214,6 +214,16 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   the same (14%, 17%). Option `rally_ramp` (executor.py rerally): the rally inside the main's
   ramp, at its bottom from 4:45, in front of the natural from 7:30, production buildings
   re-rallied when it moves.
+- **The early-defense switch with the touring scout (2026-10-14):** the switch re-learned on
+  v0.19+watch's games (seeds 1-32, the whole pool with Zerg v3 to 20 minutes, 248 games, 803
+  forced moments) with the scout's facts added (the most drones seen at once, an extractor seen,
+  when the pool and the first zerglings were first seen; the posture remembers them, the switch
+  reads them: `gary/policy/switch.py` facts). The tree uses them as a player would (more than 12
+  drones seen: don't, -0.26; a hatchery but at most 4 drones seen: do, +0.15), but across seeds it
+  gains nothing: -0.013 a game (4 folds -0.026 to +0.047); simpler trees at best +0.021 (12 folds,
+  sd 0.065, 8 positive): within luck. In hindsight a switch per game would gain +0.21: there is
+  something to learn, not at 248 games against these opponents. Parked until Zerg v3 plays
+  several builds (then what the scout sees decides more).
 
 ### v0.20 (October 2026): new fighters gather where pros' do
 

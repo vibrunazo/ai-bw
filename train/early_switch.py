@@ -43,11 +43,12 @@ MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep
 SETS = [("dummy", "standard_ozp3w"), ("v2", "standard_ozp3w"), ("v2", "python_gg13676"),
         ("replayed", "standard_ozp3w"), ("replayed", "python_gg13676"), ("replayed", "heartbreak_9rg84"),
         ("v3", "standard_ozp3w"), ("v3", "python_gg13676")]   # (v3: the greedy Zerg, punishing over-defense)
-VERSION = "v019"
+VERSION = "v019"                              # (--version: the Gary that plays them)
 FORCE_S = (120, 150, 180, 210, 240)          # forced switch moments (seconds)
 FACTS_EVERY = 10 * 24                        # the facts recorded this often, FACTS_FROM to FACTS_UNTIL
 FACTS_FROM, FACTS_UNTIL = 100 * 24, 260 * 24
 MINUTES = 12
+MINUTES_V3 = 20                               # (the greedy Zerg's games are decided later: 20 minutes)
 EARLY_UNTIL = 300 * 24                        # zerglings at Gary's bases by 5:00: an early attack (not a false alarm)
 HOME_PX = 20 * 32                             # ...this close to one of its Command Centers
 EARLY_LINGS = 4
@@ -73,16 +74,19 @@ def _zerglings_home(m) -> bool:
 
 
 def play(args: tuple) -> dict:
-    """One game: as the rules play it (force None), forced at force seconds, or with a learned switch."""
-    opponent, mp, seed, force, switch = args
+    """One game: as the rules play it (force None), forced at force seconds, or with a learned switch;
+    a sixth element: the Gary that plays (default VERSION)."""
+    opponent, mp, seed, force, switch, *rest = args
+    version = rest[0] if rest else VERSION
     import torch
     from eval.walls_bench import Match
     from gary.policy.army import supply_x2
-    from gary.policy.plan import facts
+    from gary.policy.switch import facts
     from gary.policy.value import ValueView
     torch.set_num_threads(1)
     with contextlib.redirect_stdout(io.StringIO()):
-        m = Match(seed, 0, VERSION, MAPS[mp], opponent)
+        m = Match(seed, 0, version, MAPS[mp], opponent)
+    minutes = MINUTES_V3 if opponent == "v3" else MINUTES
     g = m.gary
     p = g.posture
     if force is not None:
@@ -97,7 +101,7 @@ def play(args: tuple) -> dict:
     quiet = contextlib.redirect_stdout(io.StringIO())
     quiet.__enter__()
     try:
-        while m.game.frame < MINUTES * 60 * 24 and not m.done:
+        while m.game.frame < minutes * 60 * 24 and not m.done:
             m.step()
             f = m.game.frame
             if f % 24 >= 2:
@@ -136,11 +140,11 @@ def play(args: tuple) -> dict:
             "zerg_home_s": zerg_home // 24 if zerg_home is not None else None, "at6": at6}
 
 
-def collect(seeds: list[int], parallel: int, out: Path, sets=SETS) -> list[dict]:
-    base_jobs = [(o, mp, s, None, None) for o, mp in sets for s in seeds]
+def collect(seeds: list[int], parallel: int, out: Path, sets=SETS, version: str = VERSION) -> list[dict]:
+    base_jobs = [(o, mp, s, None, None, version) for o, mp in sets for s in seeds]
     with ProcessPoolExecutor(parallel) as pool:
         base = list(monitor.track(pool.map(play, base_jobs), len(base_jobs), "games as the rules play them"))
-        forced_jobs = [(b["opponent"], b["map"], b["seed"], t, None) for b in base for t in FORCE_S
+        forced_jobs = [(b["opponent"], b["map"], b["seed"], t, None, version) for b in base for t in FORCE_S
                        if b["rush_at_s"] is None or t < b["rush_at_s"]]
         forced = list(monitor.track(pool.map(play, forced_jobs), len(forced_jobs), "the same games, switch forced"))
     rows = base + forced
@@ -149,8 +153,11 @@ def collect(seeds: list[int], parallel: int, out: Path, sets=SETS) -> list[dict]
 
 
 def moments(rows: list[dict]) -> list[dict]:
-    """Per forced game: the facts Gary knew at that moment (from the rules' game) and the gain."""
-    from gary.policy.plan import FACTS
+    """Per forced game: the facts Gary knew at that moment (from the rules' game) and the gain (the
+    scout's facts too where the games have them)."""
+    from gary.policy.switch import SCOUT, names
+    sample = next((fx for r in rows for fx in r["facts"].values()), {})
+    FACTS = names() if all(k in sample for k in SCOUT) else [k for k in names() if k not in SCOUT]
     base = {(r["opponent"], r["map"], r["seed"]): r for r in rows if r["force"] is None and not r["switch"]}
     out = []
     for r in rows:
@@ -160,7 +167,7 @@ def moments(rows: list[dict]) -> list[dict]:
         fx = b["facts"].get(str(r["force"])) or b["facts"].get(r["force"])
         if fx is None:
             continue
-        out.append({"key": (r["opponent"], r["map"], r["seed"]), "force": r["force"],
+        out.append({"key": (r["opponent"], r["map"], r["seed"]), "force": r["force"], "names": FACTS,
                     "x": [fx[k] for k in FACTS], "gain": r["grade"] - b["grade"],
                     "lost": (r["result"] == "lost") - (b["result"] == "lost")})
     return out
@@ -173,8 +180,7 @@ def fit_tree(ms: list[dict]):
     return t
 
 
-def as_json(t) -> dict:
-    from gary.policy.plan import FACTS
+def as_json(t, FACTS) -> dict:
     tr = t.tree_
     return {"left": tr.children_left.tolist(), "right": tr.children_right.tolist(),
             "feature": [FACTS[i] if i >= 0 else None for i in tr.feature],
@@ -219,7 +225,7 @@ def learn(rows: list[dict], out: Path) -> Path:
     print(f"the learned switch across seeds (4 folds): {st.mean(cv):+.3f} a game ({', '.join(f'{c:+.3f}' for c in cv)}); "
           f"never switching: 0; hindsight best per game: {policy_gain(ms, lambda m: m['gain'] > 0):+.3f}")
     t = fit_tree(ms)
-    tree = as_json(t)
+    tree = as_json(t, ms[0]["names"])
     for line in Switch.describe(tree):
         print("  " + line)
     path = out / "switch.json"
@@ -228,8 +234,8 @@ def learn(rows: list[dict], out: Path) -> Path:
     return path
 
 
-def test(switch: str, seeds: list[int], parallel: int, sets=SETS, out: Path | None = None) -> None:
-    jobs = [(o, mp, s, None, sw) for o, mp in sets for s in seeds for sw in (None, switch)]
+def test(switch: str, seeds: list[int], parallel: int, sets=SETS, out: Path | None = None, version: str = VERSION) -> None:
+    jobs = [(o, mp, s, None, sw, version) for o, mp in sets for s in seeds for sw in (None, switch)]
     with ProcessPoolExecutor(parallel) as pool:
         rows = list(monitor.track(pool.map(play, jobs), len(jobs), "held-out games, rules and learned switch"))
     if out is not None:
@@ -276,6 +282,7 @@ def report(rows: list[dict], sets=SETS) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seeds", type=int, default=48)
+    ap.add_argument("--version", default=VERSION, help="the Gary that plays (e.g. v019+watch: the touring scout)")
     ap.add_argument("--data", help="collected games (JSON lines): learn from them, playing none")
     ap.add_argument("--test", help="a learned switch (switch.json): play the held-out games with it")
     ap.add_argument("--test-seeds", type=int, nargs=2, default=[101, 148])
@@ -292,17 +299,17 @@ def main() -> None:
         return
     if args.test:
         out = Path(args.test).with_name(f"test_{args.test_seeds[0]}-{args.test_seeds[1]}.jsonl")
-        test(args.test, list(range(args.test_seeds[0], args.test_seeds[1] + 1)), args.parallel, sets, out)
+        test(args.test, list(range(args.test_seeds[0], args.test_seeds[1] + 1)), args.parallel, sets, out, args.version)
         return
     out = REPO_ROOT / "runs" / "early_switch" / time.strftime("%Y%m%d-%H%M%S")
     out.mkdir(parents=True, exist_ok=True)
     if args.data:                          # (with --sets: those sets' games collected, added to these)
         rows = [json.loads(l) for l in open(args.data, encoding="utf-8")]
         if args.sets:
-            rows += collect(list(range(1, args.seeds + 1)), args.parallel, out / "games_added.jsonl", sets)
+            rows += collect(list(range(1, args.seeds + 1)), args.parallel, out / "games_added.jsonl", sets, args.version)
             (out / "games.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     else:
-        rows = collect(list(range(1, args.seeds + 1)), args.parallel, out / "games.jsonl", sets)
+        rows = collect(list(range(1, args.seeds + 1)), args.parallel, out / "games.jsonl", sets, args.version)
     learn(rows, out)
 
 

@@ -14,6 +14,24 @@ import json
 from pathlib import Path
 
 MARGIN = 0.02                    # predicted gain (in game outcome, 0 lost to 1 won) needed to switch
+SCOUT = ["drones_most", "extractor_seen", "pool_seen_at", "lings_seen_at"]   # (minutes; 0: not yet)
+
+
+def facts(posture, obs: dict) -> dict:
+    """What the switch decides on: the plan policy's facts (gary/policy/plan.py) and the scout's:
+    the most drones seen at once, an extractor seen, when the pool and the first zerglings were
+    first seen (the posture remembers them)."""
+    from gary.policy.plan import facts as plan_facts
+    fx = plan_facts(posture, obs)
+    at = lambda f: f / 1440 if f is not None else 0.0
+    fx.update(drones_most=getattr(posture, "drones_most", 0), extractor_seen=float(getattr(posture, "extractor_seen", False)),
+              pool_seen_at=at(getattr(posture, "pool_seen_at", None)), lings_seen_at=at(getattr(posture, "lings_seen_at", None)))
+    return fx
+
+
+def names() -> list[str]:
+    from gary.policy.plan import FACTS
+    return FACTS + SCOUT
 
 
 class Switch:

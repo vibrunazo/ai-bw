@@ -45,7 +45,7 @@ class NormalPosture:
         pass
 
 
-POOL, LING = 142, 37
+POOL, LING, DRONE, EXTRACTOR = 142, 37, 41, 149
 HATCHERIES = {131, 132, 133}
 POOL_BY = 3 * 60 * 24                # a Spawning Pool seen before 3:00 with one hatchery is an early pool...
 LINGS_BY = 4 * 60 * 24               # ...and so are zerglings before 4:00
@@ -166,6 +166,14 @@ class EarlyPoolPosture:
         self.base_seen = self.base_seen or any(is_building(u["type"]) for u in enemy)
         self.pool_seen = self.pool_seen or any(u["type"] == POOL for u in enemy)
         lings = sum(1 for u in enemy if u["type"] == LING)
+        # (for the learned switch: the most drones seen at once, an extractor, when the pool and the
+        # first zerglings were first seen)
+        self.drones_most = max(getattr(self, "drones_most", 0), sum(1 for u in enemy if u["type"] == DRONE))
+        self.extractor_seen = getattr(self, "extractor_seen", False) or any(u["type"] == EXTRACTOR for u in enemy)
+        if self.pool_seen and getattr(self, "pool_seen_at", None) is None:
+            self.pool_seen_at = hi.frame
+        if lings and getattr(self, "lings_seen_at", None) is None:
+            self.lings_seen_at = hi.frame
         fighters = enemy_fighters(obs, g.slot)
         self.most_enemy = max(self.most_enemy, sum(supply_x2(u["type"]) for u in fighters) / 2)
         # a pool with one hatchery is an early pool if seen by 2:00, later once the scout has passed
@@ -235,7 +243,7 @@ class EarlyPoolPosture:
         if self.switch is None or not SWITCH_FROM <= f <= SWITCH_UNTIL or f < getattr(self, "next_switch", 0):
             return False
         self.next_switch = f + SWITCH_EVERY
-        from gary.policy.plan import facts
+        from gary.policy.switch import facts
         return bool(self.switch(facts(self, obs)))
 
     def _release(self, mine: list[dict]) -> None:
