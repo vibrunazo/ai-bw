@@ -157,6 +157,16 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.21: v0.20 whose workers astray go back to mining, at the least saturated safe base, with transfers
+    # to a new base (executor.py home_scvs, balance)
+    "v021": {"version": "v0.21", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
+             "home_scvs": True, "balance": True,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play"},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
@@ -388,6 +398,9 @@ OPTIONS = {
     # home_scvs, and executor.py balance: workers sent to mine go to the least saturated safe base (not the
     # nearest), a group of workers moves from a base over 1.8 a patch to a safe one under 1.0 (a new
     # Command Center), and workers out in the field are selected with one ctrl+click
+    # On v0.20 over the whole pool (fresh seeds, 432 games, Zerg v3 to 20 min): lost 23 (24), won 140 (135);
+    # Zerg v3 won 68 (59) lost 0 (3), Zerg v2 lost 5 (8), the replayed pros on Heartbreak Ridge lost 10 (6).
+    # home_scvs alone, before its defenders were left alone in fights: lost 26, won 139. In v0.21
     "balance": lambda m: m.update(home_scvs=True, balance=True),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
