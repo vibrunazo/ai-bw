@@ -23,7 +23,12 @@ and makes Gary pay for staying home. On Zerg v2's code, through the same human i
              without shooting back)
   attack     one big attack at ATTACK_AT, the zerglings and the flock, with no retreat (Zerg v2's
              all-in): its size is what its economy made
-  poke       on seeds where seed % 3 == 0, its first zerglings go to the staging point outside
+  plans      by seed % 3: mutalisks (as above); lurkers (a Hydralisk Den with the Lair, Lurker
+             Aspect, LURKERS lurkers burrowed in front of its natural, going with the attack: they
+             burrow when Gary's units come near and come up to move on); pressure (a 12 pool,
+             zergling speed first, PRESSURE_LINGS zerglings outside Gary's natural attacking when
+             its defense looks weaker until PRESSURE_UNTIL, then drones and mutalisks)
+  poke       on the mutalisk plan's seeds, its first zerglings go to the staging point outside
              Gary's natural at about 3:00, stay POKE_FOR, and come home without fighting: the
              moment a false early-pool alarm is tempting
 
@@ -48,6 +53,20 @@ from gary.bots.zerg_v2 import EXTRACTOR, HATCHERIES, IDLE_ORDERS, ZergV2
 from gary.interface import screen_of
 
 LAIR, SPIRE, MUTA = 132, 141, 43
+HYDRA, DEN, LURKER, LURKER_EGG = 38, 135, 103, 97
+LURKER_ASPECT = 32                  # the tech, researched at the Hydralisk Den with a Lair
+ASPECT_FRAMES = 1800 + 48           # its research time (and a little)
+LURKERS = 8                         # lurkers the lurker plan keeps
+LURKER_KEY = 0                      # their hotkey (zergling groups 1-8, the mutalisks 9)
+BURROWED = {116, 117}               # orders: burrowing, burrowed
+LURKER_NEAR = 7 * 32                # Gary's units this near: the lurkers burrow
+LURKER_CALM = 4 * 24                # ...and none near this long: up again (to move on)
+PLANS = ("mutas", "lurkers", "pressure")    # by seed % 3
+PRESSURE_POOL_AT = 11               # pressure: the pool first, at this many drones (a 12 pool)
+PRESSURE_LINGS = 12                 # ...this many zerglings for the attack
+PRESSURE_UNTIL = 285 * 24           # ...which judges and attacks (Zerg v1) until 4:45, then macro into mutalisks
+PRESSURE_LINGS_UNTIL = 210 * 24     # ...its zerglings made until 3:30 (not remade as they die: drones then)
+PRESSURE_LAIR_FROM = 300 * 24
 CREEP, SUNKEN = 143, 146
 METABOLIC_BOOST = 27
 DRONES = 44
@@ -77,9 +96,9 @@ SUNKENS, SUNKENS_FROM = 2, 330 * 24     # sunken colonies at the natural, from 5
 POKE_FROM, POKE_UNTIL = 170 * 24, 270 * 24
 POKE_LINGS = 4
 POKE_FOR = 15 * 24
-COST = {HATCH: 300, POOL: 200, EXTRACTOR: 50, SPIRE: 200, CREEP: 75}
-GAS_COST = {SPIRE: 200}
-SIZE = {HATCH: (4, 3), POOL: (3, 2), EXTRACTOR: (4, 2), SPIRE: (2, 2), CREEP: (2, 2)}   # tiles
+COST = {HATCH: 300, POOL: 200, EXTRACTOR: 50, SPIRE: 200, CREEP: 75, DEN: 100}
+GAS_COST = {SPIRE: 200, DEN: 50}
+SIZE = {HATCH: (4, 3), POOL: (3, 2), EXTRACTOR: (4, 2), SPIRE: (2, 2), CREEP: (2, 2), DEN: (3, 2)}   # tiles
 AT_SPOT = 3 * 32                # the drone this near the spot: place the building
 PLACED_WAIT = 4 * 24            # placed and not there after this, the drone standing: place again
 PICK_TRIES = 4                  # clicks to get a drone alone before trying another
@@ -110,7 +129,12 @@ class ZergV3(ZergV2):
         others = [b for b in mapinfo.bases if b is not self.main_base and b is not self.nat_base and not b.start
                   and b.minerals]
         self.third_base = min(others, key=lambda b: math.dist(b.center, nat)) if others else None
-        self.poke = seed % 3 == 0
+        self.plan = PLANS[seed % len(PLANS)]
+        self.poke = self.plan == "mutas"
+        self.lurk: set[int] = set()            # the lurkers on LURKER_KEY
+        self.lurk_state, self.lurk_since, self.lurk_calm = "home", 0, 0
+        self.aspect_at = None                  # frame Lurker Aspect was ordered
+        self.pressing = self.plan == "pressure"
         self.poke_group = None                 # (group number, frame it got there)
         self.poked = False
         self.jobs: dict[str, Job] = {}         # step -> the building on its way
@@ -158,9 +182,91 @@ class ZergV3(ZergV2):
     def army(self, obs: dict, mine: list[dict]) -> bool:
         if self.poke and not self.poked and not self.all_in and self._poke(obs, mine):
             return True
+        self._pressure()
         if self._mutas(obs, mine):
             return True
+        if self.plan == "lurkers" and self._lurkers(obs, mine):
+            return True
         return super().army(obs, mine)
+
+    def _pressure(self) -> None:
+        """Pressure: until PRESSURE_UNTIL its zerglings wait outside Gary's natural in groups of six and
+        attack when Gary's defense looks weaker (Zerg v1's judge), then go home and the macro goes on."""
+        if self.plan != "pressure" or self._aimed_at is None:
+            return
+        if self.pressing and self.hi.frame < PRESSURE_UNTIL:
+            self.staging, self.wave = self.gary_staging, 6
+            self.attack_ratio, self.patient_ratio = 1.25, 0.9
+        elif self.pressing:
+            self.pressing = False
+            self.staging, self.wave = self.gather, 12
+            self.attack_ratio = self.patient_ratio = float("inf")
+            for n in self.groups:
+                self.phase[n] = "to_staging"
+            self.log("pressure over: home, drones and mutalisks")
+
+    # --- the lurkers -------------------------------------------------------------------------------------
+
+    def _lurkers(self, obs, mine) -> bool:
+        """The lurkers (hotkey 0): burrowed in front of its natural; at the attack they go with the
+        zerglings, burrowing when Gary's units come near, up again to move on (True: it acted)."""
+        hi = self.hi
+        lurks = {u["tag"]: u for u in mine if u["type"] == LURKER and u["completed"]}
+        self.lurk &= set(lurks)
+        loose = [u for t, u in lurks.items() if t not in self.lurk]
+        if loose:
+            sel = set(obs["selection"])
+            if sel and sel <= set(lurks) and sel & {u["tag"] for u in loose}:
+                (hi.hotkey_add if self.lurk else hi.hotkey_set)(LURKER_KEY)
+                self.lurk |= sel
+                self.log(f"lurkers: {len(self.lurk)}")
+                return True
+            u = loose[0]
+            if self._look(obs, (u["x"], u["y"])):
+                return True
+            at = screen_of(obs, u["x"], u["y"])
+            if at is None:
+                return False
+            hi.ctrl_click(*at)
+            return True
+        group = [lurks[t] for t in self.lurk]
+        if not group:
+            return False
+        mid = (sum(u["x"] for u in group) / len(group), sum(u["y"] for u in group) / len(group))
+        burrowed = sum(1 for u in group if u["order"] in BURROWED) * 2 >= len(group)
+        enemy = [u for u in obs["units"] if u["owner"] not in (hi.slot, 11) and u["type"] not in (7,)
+                 and math.dist((u["x"], u["y"]), mid) < LURKER_NEAR]
+        if enemy:
+            self.lurk_calm = hi.frame
+        target = self.gary_staging if self.all_in == "go" and self._aimed_at is not None else self.gather
+        if enemy and not burrowed:
+            return self._lurk_key(obs, "burrow")
+        far = math.dist(mid, target) > 4 * 32
+        if burrowed and far and not enemy and hi.frame - self.lurk_calm >= LURKER_CALM:
+            return self._lurk_key(obs, "unburrow")
+        if not burrowed and far and hi.frame - self.lurk_since >= 4 * 24:
+            if not self._lurk_recalled(obs):
+                return True
+            hi.minimap_right_click(int(target[0]), int(target[1]))
+            self.lurk_since = hi.frame
+            return True
+        if not burrowed and not far:
+            return self._lurk_key(obs, "burrow")
+        return False
+
+    def _lurk_recalled(self, obs) -> bool:
+        """The lurkers selected (True), or their hotkey pressed now (False: the turn's action)."""
+        if set(obs["selection"]) and set(obs["selection"]) <= self.lurk:
+            return True
+        self.hi.hotkey_recall(LURKER_KEY)
+        return False
+
+    def _lurk_key(self, obs, key: str) -> bool:
+        if not self._lurk_recalled(obs):
+            return True
+        (self.hi.burrow if key == "burrow" else self.hi.unburrow)()
+        self.lurk_since = self.hi.frame
+        return True
 
     # --- the mutalisk flock ----------------------------------------------------------------------
 
@@ -357,14 +463,21 @@ class ZergV3(ZergV2):
             if tile is not None:
                 self.jobs[step] = Job(step, unit_type, tuple(tile), since=self.hi.frame)
                 self.log(f"builds {step} at {tile} ({n} drones)")
-        due("hatch", HATCH, lambda: self.nat_base.tile, n >= HATCH_AT)
-        due("pool", POOL, self._pool_spot, "hatch" in self.jobs or "hatch" in self.built)
+        if self.plan == "pressure":                # (a 12 pool: the pool first, then the natural)
+            due("pool", POOL, self._pool_spot, n >= PRESSURE_POOL_AT)
+            due("hatch", HATCH, lambda: self.nat_base.tile, n >= HATCH_AT and ("pool" in self.jobs or "pool" in self.built))
+        else:
+            due("hatch", HATCH, lambda: self.nat_base.tile, n >= HATCH_AT)
+            due("pool", POOL, self._pool_spot, "hatch" in self.jobs or "hatch" in self.built)
         due("extractor", EXTRACTOR, lambda: self._geyser_tile(self.main_base), "pool" in self.jobs or "pool" in self.built)
         if self.third_base is not None:
             due("third", HATCH, lambda: self.third_base.tile, n >= THIRD_AT and "hatch" in self.built)
         lair = next((u for u in mine if u["type"] == LAIR), None)
         due("extractor2", EXTRACTOR, lambda: self._geyser_tile(self.nat_base), lair is not None or self.lair_at is not None)
-        due("spire", SPIRE, lambda: self._spot_near(SPIRE, self.home), lair is not None and lair["completed"])
+        if self.plan == "lurkers":
+            due("den", DEN, lambda: self._spot_near(DEN, self.home), lair is not None or self.lair_at is not None)
+        else:
+            due("spire", SPIRE, lambda: self._spot_near(SPIRE, self.home), lair is not None and lair["completed"])
         nat = self.nat_base.center
         front = (int(nat[0] + (self.gather[0] - nat[0]) * 0.6), int(nat[1] + (self.gather[1] - nat[1]) * 0.6))
         for k in range(SUNKENS):                    # (one after the other: each on a free spot)
@@ -381,7 +494,8 @@ class ZergV3(ZergV2):
         """The Lair from LAIR_FROM (100 gas), zergling speed once the Spire is started (True: it acted)."""
         hi = self.hi
         lair = any(u["type"] == LAIR for u in mine)
-        if not lair and pool and pool["completed"] and hi.frame >= LAIR_FROM and me["gas"] >= 100 \
+        lair_from = PRESSURE_LAIR_FROM if self.plan == "pressure" else LAIR_FROM
+        if not lair and pool and pool["completed"] and hi.frame >= lair_from and me["gas"] >= 100 \
                 and me["minerals"] - self._kept() >= 150 and (self.lair_at is None or hi.frame - self.lair_at > LAIR_RETRY):
             main = min((h for h in hatches if h["completed"]), key=lambda h: math.dist((h["x"], h["y"]), self.home), default=None)
             if main is None:
@@ -410,7 +524,10 @@ class ZergV3(ZergV2):
                 return True
             hi.morph_building(SUNKEN)
             return True
-        started = "spire" in self.built or "spire" in self.jobs
+        if self.plan == "lurkers" and self._aspect(obs, mine, me):
+            return True
+        started = "spire" in self.built or "spire" in self.jobs or self.plan == "pressure" \
+            or (self.plan == "lurkers" and ("den" in self.built or "den" in self.jobs))
         if started and pool and pool["completed"] and "speed" not in self.ordered and me["gas"] >= 100 \
                 and me["minerals"] - self._kept() >= 100:
             if self._look(obs, (pool["x"], pool["y"])):
@@ -423,6 +540,46 @@ class ZergV3(ZergV2):
             hi.click(*screen_of(obs, pool["x"], pool["y"]))
             return True
         return False
+
+    def _aspect(self, obs, mine, me) -> bool:
+        """Lurkers: Lurker Aspect at the den once the Lair is done; then hydralisks at home become
+        lurkers (a ctrl+click takes every one on the screen) (True: it acted)."""
+        hi = self.hi
+        den = next((u for u in mine if u["type"] == DEN and u["completed"]), None)
+        lair = next((u for u in mine if u["type"] == LAIR and u["completed"]), None)
+        if den is not None and lair is not None and self.aspect_at is None and me["minerals"] - self._kept() >= 200 \
+                and me["gas"] >= 200:
+            if self._look(obs, (den["x"], den["y"])):
+                return True
+            if obs["selection"] != [den["tag"]]:
+                at = screen_of(obs, den["x"], den["y"])
+                if at is None:
+                    return False
+                hi.click(*at)
+                return True
+            if hi.research(LURKER_ASPECT).accepted:
+                self.aspect_at = hi.frame
+                self.log("Lurker Aspect")
+            return True
+        if self.aspect_at is None or hi.frame - self.aspect_at < ASPECT_FRAMES:
+            return False
+        lurkers = sum(1 for u in mine if u["type"] in (LURKER, LURKER_EGG))
+        hydras = [u for u in mine if u["type"] == HYDRA and u["completed"] and math.dist((u["x"], u["y"]), self.gather) < 12 * 32]
+        if not hydras or lurkers >= LURKERS or me["minerals"] < 50 or me["gas"] < 100:
+            return False
+        sel = [u for u in mine if u["tag"] in obs["selection"]]
+        if sel and all(u["type"] == HYDRA for u in sel):
+            hi.morph(LURKER)
+            self.log(f"lurkers: {len(sel)} hydralisks morph")
+            return True
+        h = hydras[0]
+        if self._look(obs, (h["x"], h["y"])):
+            return True
+        at = screen_of(obs, h["x"], h["y"])
+        if at is None:
+            return False
+        hi.ctrl_click(*at)
+        return True
 
     @staticmethod
     def _geyser_tile(base):
@@ -609,6 +766,15 @@ class ZergV3(ZergV2):
         muta = spire is not None and me["minerals"] >= 100 and me["gas"] >= 100
         if self._overlord_due(me, hatches):
             return OVERLORD
+        if self.plan == "pressure" and pool and pool["completed"] and hi.frame < PRESSURE_LINGS_UNTIL \
+                and count(LING) < PRESSURE_LINGS:
+            return LING
+        if self.plan == "lurkers":
+            den = next((u for u in mine if u["type"] == DEN and u["completed"]), None)
+            line = count(HYDRA) + count(LURKER) + count(LURKER_EGG)
+            if den is not None and self.aspect_at is not None and line < LURKERS + 2 and me["minerals"] >= 75 \
+                    and me["gas"] >= 25:                # (hydralisks once Lurker Aspect is on its way: the gas first for it)
+                return HYDRA
         if pool and pool["completed"] and count(LING) < LINGS_EARLY and spire is None:
             return LING
         want_lings = LINGS_AT + LINGS_A_MINUTE * (hi.frame - LINGS_FROM) / 1440 if hi.frame >= LINGS_FROM else 0

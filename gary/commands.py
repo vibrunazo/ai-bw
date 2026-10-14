@@ -62,6 +62,15 @@ def hold_position() -> bytes:
     return struct.pack("<BB", 0x2B, 0)
 
 
+def burrow() -> bytes:
+    """Zerg: the selected units burrow (lurkers, and the rest once Burrow is researched)."""
+    return struct.pack("<BB", 0x2C, 0)
+
+
+def unburrow() -> bytes:
+    return struct.pack("<BB", 0x2D, 0)
+
+
 def stim() -> bytes:
     """Marines and firebats in the selection use stim packs."""
     return struct.pack("<B", 0x36)

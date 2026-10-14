@@ -224,6 +224,17 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   sd 0.065, 8 positive): within luck. In hindsight a switch per game would gain +0.21: there is
   something to learn, not at 248 games against these opponents. Parked until Zerg v3 plays
   several builds (then what the scout sees decides more).
+- **Zerg v3 plays three plans (2026-10-14):** by seed: the 3-hatch mutalisks; lurkers (a Hydralisk
+  Den with the Lair, Lurker Aspect at ~6:40, hydralisks morphed into 6-10 lurkers by 10:00 that sit
+  burrowed in front of its natural and go with the 11:00 attack, burrowing when Gary's units come
+  within 7 tiles and coming up to move on); and a 12-pool pressure (zergling speed first, 12
+  zerglings outside Gary's natural attacking when its defense looks weaker until 4:45, then drones
+  and mutalisks). The interface can burrow and unburrow now. Against v0.21 to 20 minutes (20
+  seeds on each of two maps), by the end: the mutalisk plan Gary-favored in about 10 of 12, the
+  pressure in about 10 of 14 (three Zerg-favored on Python), the lurkers the hardest (on Python 3 of
+  7 Zerg-favored, two of them with 130-150 army against 0-18). Each plan a game, and they differ,
+  so what the scout finds can matter now. One game stopped on an engine error (a unit squeezed
+  between edge minerals and the map's edge; counted as an error, not a result).
 
 ### v0.21 (October 2026): workers back to work, and where the work is
 

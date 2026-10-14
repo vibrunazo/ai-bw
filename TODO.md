@@ -82,3 +82,11 @@ Two different problems; don't solve them with one rule.
   equal. A real decision with exceptions (one more marine saves a bunker; one more dies alone for
   nothing): for the learned layer, once the critic and longer episodes value a fighter kept alive
   (the 120 s episodes reward fighting now).
+
+## 6. An engine error at the map's edge
+
+OpenBW stops a game ("attempt to get tile index for invalid position -7 263") when a unit's path
+leaves the map: seen once in 40 games, an SCV standing in a main's corner behind its edge minerals
+sent to mine one of them (v0.21 against Zerg v3, Fighting Spirit seed 7). Such games count as errors
+(eval/vs_rush.py), not results. Find what puts SCVs in that corner (a depot spot by the edge?) and
+keep them out of it; the engine itself is external code.
