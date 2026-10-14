@@ -148,6 +148,15 @@ MANIFESTS: dict[str, dict] = {
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.20: v0.19 whose new fighters gather as pros' marines do (executor.py rerally: inside the main's ramp,
+    # at its bottom from 4:45, in front of the natural from 7:30)
+    "v020": {"version": "v0.20", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play"},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
@@ -369,6 +378,8 @@ OPTIONS = {
     # executor.py rerally: new fighters gather inside the main's ramp, at its bottom from 4:45, in front
     # of the natural from 7:30, as the pros' marines (the rally in front of the natural from the start
     # put a quarter of Gary's marines in the open at 3:00-6:00, the pros' 3-8%)
+    # On v0.19 over the whole pool (fresh seeds, 432 games, Zerg v3 to 20 min): lost 24 (25), won 135 (133);
+    # replayed pros lost 13 (17), Zerg v3 won 59 (64). In v0.20
     "rally_ramp": lambda m: m.update(rally="ramp"),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch

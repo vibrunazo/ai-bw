@@ -31,7 +31,7 @@ from eval import monitor, priority
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
         for m in ("python_gg13676", "standard_ozp3w", "heartbreak_9rg84")}
-VERSION = "v019"
+VERSION = "v020"
 MINUTES = 12
 ARMY = {0, 1, 2, 3, 5, 30, 32, 34, 8, 11, 12, 58}
 ZERG_FIGHTERS = {37, 38, 39, 43, 103, 46, 47, 45, 44, 62}
@@ -128,7 +128,7 @@ def play(args: tuple) -> dict:
 
 
 def from_logs(folder: str) -> list[tuple]:
-    """(opponent, map, seed, result) of every v018+selector / v019 game in vs_rush folders named
+    """(opponent, map, seed, result) of every v0.19 or later game (and v018+selector) in vs_rush folders named
     <opponent>_<map> under folder."""
     out = []
     for d in sorted(Path(folder).iterdir()):
@@ -136,7 +136,7 @@ def from_logs(folder: str) -> list[tuple]:
         if not d.is_dir() or not mm or mm.group(2) not in MAPS:
             continue
         for f in glob.glob(str(d / "*seed*.log")):
-            if not re.search(r"(v019|v018\+selector)_seed", f):
+            if not re.search(r"(v02\d|v019|v018\+selector)_seed", f):
                 continue
             seed = int(re.search(r"seed(\d+)", f).group(1))
             txt = Path(f).read_text(encoding="utf-8", errors="replace")
@@ -192,7 +192,7 @@ def report(games: list[dict]) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--games", nargs="*", default=[], help="opponent:map:seed")
-    ap.add_argument("--from-logs", help="every v019 game in the vs_rush folders under this one")
+    ap.add_argument("--from-logs", help="every v020 game in the vs_rush folders under this one")
     ap.add_argument("--out", default=str(REPO_ROOT / "runs" / "losses.jsonl"))
     ap.add_argument("--parallel", type=int, default=14)
     priority.add_argument(ap)
