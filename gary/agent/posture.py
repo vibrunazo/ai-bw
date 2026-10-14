@@ -155,7 +155,8 @@ class EarlyPoolPosture:
         # an early pool even if it expands too (a 12-pool and a hatchery: two hatcheries seen):
         # a pool finished by 2:50 was started by 2:00 (50 s to build; hatch firsts' at 2:05), and
         # zerglings by 3:00
-        if (hi.frame <= POOL_DONE_BY and any(u["type"] == POOL and u["completed"] for u in enemy)) or                 (hi.frame <= POOL_BY and any(u["type"] == LING for u in enemy)):
+        if (hi.frame <= POOL_DONE_BY and any(u["type"] == POOL and u["completed"] for u in enemy)) or \
+                (hi.frame <= POOL_BY and any(u["type"] == LING for u in enemy)):
             self.early_pool_seen = True
         # v3: ...and sure, with a natural or not, if finished by 2:40 (pro TvZ: 98% of pool firsts'
         # pools, 0.7% of hatch firsts'; by 2:50 16% of hatch firsts') or zerglings by 3:00
@@ -199,7 +200,8 @@ class EarlyPoolPosture:
             if near_home(mine, fighters):
                 g.calm_since = hi.frame
             late = self.late_call_off and self.unknown_alarm and hi.frame <= LATE_CALL_OFF_BY
-            if (self.rush or late) and len(self.hatcheries_seen) >= 2 and (hi.frame <= POOL_BY or late)                     and not near_home(mine, fighters) and not self.early_pool_seen:
+            if (self.rush or late) and len(self.hatcheries_seen) >= 2 and (hi.frame <= POOL_BY or late) \
+                    and not near_home(mine, fighters) and not self.early_pool_seen:
                 # a second hatchery by 3:00, no zerg at home: a hatch first (the alarm came from not
                 # having seen the base yet: the scout of a four-player map). Back to the usual plan
                 # (in 116 of 144 games against replayed pros Gary had played rush defense, its tech a

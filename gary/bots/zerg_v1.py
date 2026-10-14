@@ -110,7 +110,8 @@ class ZergV1(ZergRush):
         gather = self.gather_point()
         waiting = [u for t, u in lings.items() if t not in grouped and math.dist((u["x"], u["y"]), gather) < 10 * 32]
         fresh = [u for u in waiting if screen_of(obs, u["x"], u["y"])]
-        if len(waiting) >= self.wave and len(fresh) < self.wave // 2 and hi.frame >= self.attack_after                 and hi.frame >= self.form_after:
+        if len(waiting) >= self.wave and len(fresh) < self.wave // 2 and hi.frame >= self.attack_after \
+                and hi.frame >= self.form_after:
             hi.camera_minimap(*_mid(waiting))                  # look at them first
             self.form_tries += 1
             if self.form_tries >= 3:                           # (they keep walking off the screen)
@@ -159,7 +160,8 @@ class ZergV1(ZergRush):
             if loose:
                 sel = set(obs["selection"])
                 if self.stage == "defending" and sel and sel <= set(lings):
-                    hi.order_click(C.ORDER_ATTACK_MOVE, *screen_of(obs, int(at[0]), int(at[1])) or (0, 0))                         if screen_of(obs, int(at[0]), int(at[1])) else hi.minimap_command(C.ORDER_ATTACK_MOVE, int(at[0]), int(at[1]))
+                    hi.order_click(C.ORDER_ATTACK_MOVE, *screen_of(obs, int(at[0]), int(at[1])) or (0, 0)) \
+                            if screen_of(obs, int(at[0]), int(at[1])) else hi.minimap_command(C.ORDER_ATTACK_MOVE, int(at[0]), int(at[1]))
                     self.stage = ""
                     return True
                 self._box(obs, loose)

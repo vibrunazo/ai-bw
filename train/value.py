@@ -291,7 +291,9 @@ def main() -> None:
             i = torch.tensor(tr[b:b + 1024])
             lw, ln = net(Xn[i])
             wm, nm, dm = ~torch.isnan(Wt[i]), ~torch.isnan(Nt[i]), ~torch.isnan(D[i])
-            loss = (F.binary_cross_entropy_with_logits(lw[wm], Wt[i][wm]) if wm.any() else 0.0) +                 (F.smooth_l1_loss(ln[:, :2][nm], Nt[i][nm]) if nm.any() else 0.0) +                 (F.smooth_l1_loss(ln[:, 2][dm], D[i][dm]) if dm.any() else 0.0)
+            loss = (F.binary_cross_entropy_with_logits(lw[wm], Wt[i][wm]) if wm.any() else 0.0) + \
+                    (F.smooth_l1_loss(ln[:, :2][nm], Nt[i][nm]) if nm.any() else 0.0) + \
+                    (F.smooth_l1_loss(ln[:, 2][dm], D[i][dm]) if dm.any() else 0.0)
             opt.zero_grad()
             loss.backward()
             opt.step()

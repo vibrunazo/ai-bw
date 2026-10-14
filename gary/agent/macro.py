@@ -110,9 +110,11 @@ class LearnedMacro:
         nat = g.natural.center
         if g.hi.frame < self.next_nat_bunker or g.task is not None:
             return False
-        if not any(u["type"] == T.CC and math.dist((u["x"], u["y"]), nat) < 4 * 32 for u in mine) or                 not any(u["type"] == T.RAX and u["completed"] for u in mine):
+        if not any(u["type"] == T.CC and math.dist((u["x"], u["y"]), nat) < 4 * 32 for u in mine) or \
+                not any(u["type"] == T.RAX and u["completed"] for u in mine):
             return False
-        if any(u["type"] == T.BUNKER and math.dist((u["x"], u["y"]), nat) < 8 * 32 for u in mine) or                 any(r == T.BUNKER for r, *_ in g.reserved):
+        if any(u["type"] == T.BUNKER and math.dist((u["x"], u["y"]), nat) < 8 * 32 for u in mine) or \
+                any(r == T.BUNKER for r, *_ in g.reserved):
             return False
         if me["minerals"] - g.committed() < T.COST[T.BUNKER][0]:
             return False
@@ -132,7 +134,8 @@ class LearnedMacro:
             nat, main = g.natural.center, g.main.center
             full = g.hi.game.observe()
             fr = frontier(g.hi.game, {**full, "units": [u for u in full["units"] if u["owner"] == 11]},
-                          [main, nat], list(g.enemy_starts))                 if g.enemy_starts and getattr(g.hi.game, "terrain", None) is not None else None
+                          [main, nat], list(g.enemy_starts)) \
+                    if g.enemy_starts and getattr(g.hi.game, "terrain", None) is not None else None
             if fr and fr["openings"] and not fr["open"]:
                 op = min(fr["openings"], key=lambda o: math.dist((o.x, o.y), nat))
                 self._nat_bunker_spot = (int(nat[0] + (op.x - nat[0]) * NAT_BUNKER_ALONG),

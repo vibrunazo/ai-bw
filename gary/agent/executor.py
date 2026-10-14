@@ -226,7 +226,8 @@ class ScriptedExecutor:
             # just about there: until it stops (a box finds a standing SCV where Gary saw it; one
             # slowing down at its spot was missed 7 times a game)
             w = next(u for u in mine if u["tag"] == t.data["worker"])
-            if w["order"] == MOVE and (w.get("tx") or w.get("ty")) and                     math.dist((w["x"], w["y"]), (w["tx"], w["ty"])) < ARRIVING and g.hi.frame - t.data["walking"] < PARK_FOR:
+            if w["order"] == MOVE and (w.get("tx") or w.get("ty")) and \
+                    math.dist((w["x"], w["y"]), (w["tx"], w["ty"])) < ARRIVING and g.hi.frame - t.data["walking"] < PARK_FOR:
                 return False
         g.task, g.parked = t, None
         g.run_task(obs, mine)
@@ -349,7 +350,8 @@ class ScriptedExecutor:
         if terrain is None:
             return True
         w, h = SIZE[unit_type]
-        return bool(terrain[0][ty:ty + h, tx:tx + w].all()) and not self.creep_coming(unit_type, tx, ty)             and not self.on_addon_spot(unit_type, tx, ty)
+        return bool(terrain[0][ty:ty + h, tx:tx + w].all()) and not self.creep_coming(unit_type, tx, ty) \
+                and not self.on_addon_spot(unit_type, tx, ty)
 
     def on_addon_spot(self, unit_type: int, tx: int, ty: int) -> bool:
         """The building would stand where one of Gary's buildings' add-on goes (a Comsat Station by
@@ -468,7 +470,8 @@ class ScriptedExecutor:
                 if w is None and skip:                                      # tried them all: again
                     tries.clear()
                     w = self.pick_worker(obs, mine, t.data.get("near"))
-            if not w and t.data.get("from", "main") == "main" and                     any(u["type"] == CC and math.dist((u["x"], u["y"]), g.natural.center) < 4 * 32 for u in mine):
+            if not w and t.data.get("from", "main") == "main" and \
+                    any(u["type"] == CC and math.dist((u["x"], u["y"]), g.natural.center) < 4 * 32 for u in mine):
                 # no free SCV in the main (they mine at the natural, or died there): one from the
                 # natural (13 Barracks in a row failed for it in one game)
                 t.data["from"] = "natural"

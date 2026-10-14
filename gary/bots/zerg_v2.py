@@ -152,7 +152,8 @@ class ZergV2(ZergV1):
             if sel and any(s["tag"] in {i["tag"] for i in idle} for s in sel) \
                     and all(s["type"] in (DRONE, C.LARVA, OVERLORD) for s in sel):
                 base = min((self.main_base, self.nat_base), key=lambda b: math.dist(b.center, (u["x"], u["y"])))
-                if not any(h["completed"] and math.dist((h["x"], h["y"]), base.center) < 160 for h in hatches)                         or math.dist(base.center, (u["x"], u["y"])) > 10 * 32:
+                if not any(h["completed"] and math.dist((h["x"], h["y"]), base.center) < 160 for h in hatches) \
+                        or math.dist(base.center, (u["x"], u["y"])) > 10 * 32:
                     # away from a working base: walk home first (a minimap order), mine once there
                     hi.minimap_right_click(*self.main_base.minerals[0])
                     for s in sel:

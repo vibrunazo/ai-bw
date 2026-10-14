@@ -281,8 +281,9 @@ class LearnedArmy:
         # (a target the army hasn't reached in HUNT_FOR, out of its way or off its ground, is dropped)
         given_up = {p for p, since in self.hunted.items() if f - since > HUNT_FOR}
         self.enemy_buildings = {t: p for t, p in self.enemy_buildings.items() if p not in given_up}
-        todo = list(self.enemy_buildings.values()) or             [b.center for i, b in enumerate(g.map.bases)
-             if f - self.visited.get(i, -VISITED_FOR) >= VISITED_FOR and b.center not in given_up]
+        todo = list(self.enemy_buildings.values()) or \
+                [b.center for i, b in enumerate(g.map.bases)
+                 if f - self.visited.get(i, -VISITED_FOR) >= VISITED_FOR and b.center not in given_up]
         if not todo:
             return None
         if f < self.next_hunt:
@@ -347,7 +348,8 @@ class LearnedArmy:
                 self.circle.pop(0)              # (or it can't get there: one of Python's is off the ground)
                 reached = True
             # an order per waypoint (each one takes Gary's hands), again only if the scout stopped
-            if self.circle and (reached or self.ordered_to != self.circle[0] or scout["order"] in (2, 3))                     and g.hi.frame >= self.next_circle_order:
+            if self.circle and (reached or self.ordered_to != self.circle[0] or scout["order"] in (2, 3)) \
+                    and g.hi.frame >= self.next_circle_order:
                 self.next_circle_order = g.hi.frame + 2 * 24
                 self.ordered_to = self.circle[0]
                 g.motor.start(Intent("SCOUT", [g.scout], self.circle[0], {"to": self.circle[0]}, "scout"))
