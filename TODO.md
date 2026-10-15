@@ -7,19 +7,57 @@ CPU). Delete this file once each item is done or moved to an issue.
 
 ## Direction (2026-10-15)
 
-After an outside review: the loop of options judged by win counts against Zerg v2/v3 has run out of
-signal (self-authored opponents, two thirds of games undecided, adoption bars missed by noise).
-v0.25 stays the default; no options are adopted on Zerg v3 counts from here.
+A second outside review (2026-10-15, after v0.25) of the docs, the last 40 commits and the latest runs.
+Its findings, kept here so they aren't lost:
 
-1. The Remastered bridge's known gaps fixed (adapters/scr_bridge README), then games against a human.
-2. A self-play skeleton: every piece of ARCHITECTURE.md present and connected, crude where it has to be
-   (a Zerg Gary from the same pro-replay pipeline, on Zerg v3's execution code; the opponent model's
-   belief over the enemy's z; a strategy layer conditioned on it; a trace schema; a league loop that
-   updates at least one learned piece from outcomes, with the critic grading unfinished games and the
-   pro data as an anchor). Compute is shared: segments (T2a) and nightly batches first.
-3. Humanlikeness on the scoreboard (distances to pro distributions in every run), folded into 2.
+- **The yardstick is wrong, the architecture right.** v0.16-v0.25 followed one loop: 432 games against
+  Zerg v2, Zerg v3 and the replayed pros, read the losses, add a rule or option, keep it if the win
+  count moves. It has run out of signal:
+  - the opponents are self-authored: rules learned against them exploit their habits (hunting on "no
+    army seen" was adopted because it "pays against these Zergs");
+  - about two thirds of games end undecided, which can't rank options (and the bars were missed by
+    noise: v0.22 adopted 3 wins short, v0.25 with 2 more losses);
+  - nobody plays the sparring partner: no human game since about v0.11;
+  - none of the goals is on the scoreboard: humanlikeness (G2) is measured ad hoc (deaths alone 48%
+    against pros' 12%, 1.5 move orders a fighting minute against 8.4), steerability (G3) is a style
+    flag, adjustable skill (G4) and explanations (G5) are untouched.
+- **The learning program needs a decision.** CONTROL.md step 7 said decisions must be learned
+  together, then roles RL, the value network, the early switch and hunt_belief all ended at or below
+  the hand rules, and the work went back to tuning rules one failure at a time. Answer taken: rules
+  for execution and reflexes, learned models for decisions; the learning failed for want of signal
+  (a decision worth sd 130 against chaos's 512, scripted opponents, short horizons), which self-play
+  against a pro-derived opponent is meant to supply.
+- **Keep:** the layered design, manifests, deterministic seeds and branching, the run monitor, the
+  honest "not adopted" records, the macro model from pro replays and the fight estimate, and the
+  executor competence (hunts that finish, the camera on a unit, remembered buildings forgotten).
 
-Items 3, 5 and 7 below wait for 2's opponent; 6 (the engine edge error) stands.
+What to do, in order:
+
+1. **Freeze the v3 loop.** v0.25 stays the default; no options adopted on Zerg v2/v3 win counts. When
+   something must be ranked, weight the replayed pros (the least self-authored opponent).
+2. **A human in the loop.** The Remastered bridge's known gaps fixed (adapters/scr_bridge README; done
+   2026-10-15 offline, pinning live), then short sets against a human; that losses list sets the next
+   version. This is the product; the rest is proxy.
+3. **A self-play skeleton** (the user's priority): every piece of ARCHITECTURE.md present and
+   connected, crude where it has to be, training together:
+   - a Zerg Gary from the same pro-replay pipeline (Zerg macro and army imitation from the 14k TvZ
+     games), on Zerg v3's execution code;
+   - the opponent model's belief over the enemy's z, and a strategy layer conditioned on it;
+   - a trace schema;
+   - a league loop that updates at least one learned piece from outcomes, with the critic grading
+     unfinished games and the pro data as an anchor (KL to the imitation policy).
+   Risks: two crude imitation agents may mostly produce passive, undecided games; keep anchors outside
+   the loop (pro distributions, human games). Compute is shared: segments from mid-game states (T2a)
+   and nightly batches first; full-game league training is rented compute.
+4. **Humanlikeness on the scoreboard.** The distances to pro distributions computed by hand in
+   `eval/losses.py` and `eval/army_orders.py` become standing metrics in every run and on the
+   monitor: deaths alone, orders per fighting minute, where the army stands each minute, build
+   timings against pros. Use them alongside results, not instead of them (they can be gamed too).
+   Folds into 3 (the KL and discriminator terms).
+5. **Explainability.** A narrator over the existing records (decision log, trace, the analyses written
+   by hand): cheap once the trace schema exists, one of the goals, and no other bot has it.
+
+Items 3, 5 and 7 below wait for the skeleton's opponent; 6 (the engine edge error) stands.
 
 ## 3. The army model's fight estimate, from Gary's own fights
 
