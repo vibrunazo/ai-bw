@@ -58,6 +58,9 @@ HUNT_FOR = 60 * 24                  # ...each for this long at most
 HOME_PX = 12 * 32                   # belief: destinations this close to a Command Center are home
 SCAN_ENERGY = 50                    # hunt with scans: a Comsat Station with this much energy scans a base first
 NOT_ARMY = {35, 36, 41, 42, 7, 64}  # larva, egg, drone, overlord, SCV, probe: not an enemy army
+SCAN_STUCK = 20 * 24                # hunt: a remembered building's spot not settled after this: scanned
+HUNT_BOXES = 8                      # hunt: drag boxes for the whole army (4 left 29 of 77 units standing)
+RESCAN_SPOT = 60 * 24               # hunt: a remembered building's spot scanned again after this at most
 GONE_PX = 7 * 32                    # an enemy building is gone when Gary's units are this close and don't see it
 VISITED_FOR = 120 * 24              # a base Gary's units passed this recently isn't visited again
 STAY_UNTIL = 5 * 60 * 24            # watch: the scout stays in the enemy's bases until then at most
@@ -119,6 +122,7 @@ class LearnedArmy:
         self.hunted: dict[tuple[int, int], int] = {}             # hunt target -> frame first sent there
         self.visited: dict[int, int] = {}                       # base index -> frame Gary's units were there
         self.next_hunt = 0
+        self.scanned: dict[tuple[int, int], int] = {}            # hunt: a remembered building's spot -> frame scanned
         self.model = model
         self.tracker = ArmyTracker(model.spec, g.slot, g.map.size, g.main.center)
         self.pull = pull            # a worker-pull rule run first (v0.3; later versions: the fight layer's)
@@ -264,6 +268,10 @@ class LearnedArmy:
         for u in obs["units"]:
             if u["owner"] not in (g.slot, 11) and is_building(u["type"]):
                 self.enemy_buildings[u["tag"]] = (u["x"], u["y"])
+            elif u["tag"] in self.enemy_buildings:
+                # seen, no longer theirs: an Extractor destroyed is a neutral geyser again, with its tag
+                # (remembered as a building, the hunt went on to it, by Gary's own bases, for minutes)
+                del self.enemy_buildings[u["tag"]]
             elif u["owner"] not in (g.slot, 11) and u["type"] not in NOT_ARMY:
                 self.enemy_army_seen = f
         at = [(u["x"], u["y"]) for u in mine]
@@ -299,13 +307,24 @@ class LearnedArmy:
                     self.visited[i] = f
             g.motor.start(Intent("SCAN", [], (x, y), {"comsat": comsat["tag"], "x": x, "y": y}, "army"))
             return True
+        if (self.scan and comsat is not None and (x, y) in self.enemy_buildings.values()
+                and f - self.hunted.get((x, y), f) >= SCAN_STUCK
+                and f - self.scanned.get((x, y), -RESCAN_SPOT) >= RESCAN_SPOT):
+            # a building remembered that the army hasn't settled in SCAN_STUCK: a scan (one that died out
+            # of sight is forgotten at once: the scan is Gary's unit by the spot. The army spent a minute
+            # of the last two going to one by the map's edge its units couldn't come near; a scan before
+            # every walk delayed the hunts that end games: 11 of 38 wins against the 9-pool undecided)
+            self.scanned[(x, y)] = f
+            g.motor.start(Intent("SCAN", [], (x, y), {"comsat": comsat["tag"], "x": x, "y": y}, "army"))
+            return True
         self.hunted.setdefault((x, y), f)
         what = "where an enemy building was" if self.enemy_buildings else "to a base not seen lately"
         g.say(f"army ({len(army)} units) hunts, no enemy army seen for {(f - self.enemy_army_seen) // 24} s: "
               f"{what}, ({x}, {y})")
         tags = [u["tag"] for u in army]
         g.motor.start(Intent("ARMY_ATTACK", tags, (x, y), {"tags": tags, "x": x, "y": y, "attack": True, "p": 1.0,
-                                                          "fight": 0.0, "done": [], "boxes": 0}, "army"))
+                                                          "fight": 0.0, "done": [], "boxes": 0,
+                                                          "max_boxes": HUNT_BOXES, "hunt": True}, "army"))
         return True
 
     # --- scouting (scripted for now) -----------------------------------------------------------

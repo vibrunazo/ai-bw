@@ -1,5 +1,5 @@
 """Why the games against Zerg v3's lurker plan don't end: those games played again (deterministic per
-seed) to 20 minutes, with the full game state (not Gary's view): every death of Gary's army with what
+seed) to 25 minutes, with the full game state (not Gary's view): every death of Gary's army with what
 stood within LURKER_REACH of it (burrowed lurkers, lurkers up, other zerg fighters, nothing), the
 lurkers alive and the lurkers killed, whether Gary saw the lurkers that stood by its deaths (a burrowed
 lurker undetected isn't visible to it), the scans, and every minute both armies' supply, Gary's bank,
@@ -20,8 +20,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from eval import monitor, priority
 from eval.losses import ARMY, MAPS, ZERG_FIGHTERS, places
 
-VERSION = "v024"
-MINUTES = 20
+VERSION = "v025"
+MINUTES = 25                     # (Zerg v3 games run to 25 minutes from v0.25)
 LURKER = 103
 LURKER_REACH = 7 * 32            # a lurker's spines reach 6 tiles
 EVERY = 12

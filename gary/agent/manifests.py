@@ -200,6 +200,18 @@ MANIFESTS: dict[str, dict] = {
                        "before": _V09_FIGHT["before"] + ["detect"],
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.25: v0.24 whose hunts finish games (army.py, motor.py: a hunt's camera on a unit, 8 boxes, a scan of a
+    # remembered building the army hasn't settled in 20 s, an Extractor destroyed forgotten). Shared code: the
+    # manifest is v0.24's; the version marks where the fixes came in
+    "v025": {"version": "v0.25", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
+             "home_scvs": True, "balance": True, "defend_early": 150 * 24,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "before": _V09_FIGHT["before"] + ["detect"],
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",

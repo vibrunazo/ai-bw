@@ -46,6 +46,8 @@ TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL
 
 
 ENTER_TRANSPORT = 92
+ARMY_BOXES = 4                       # an army order's drag boxes (12 units each) at most (a hunt's: HUNT_BOXES,
+                                     # army.py; 8 for every order sent more units into fights, lurkers above all)
 UNDER_CURSOR = 24                    # a unit this close to a click point (pixels, each axis) is clicked on
 EXACT_TRIES = 3                      # exact selections clicked again this often before giving up
 PLACE_SEARCH = 12                    # "place" moves look this far for a pixel that hits no other unit
@@ -560,7 +562,7 @@ class DirectMotor:
             t.stage = "start"
             return
         left = [u for u in mine if u["tag"] in set(d["tags"]) - set(d["done"])]
-        if not left or d["boxes"] >= 4:
+        if not left or d["boxes"] >= d.get("max_boxes", ARMY_BOXES):
             if d["done"]:
                 g.say(f"army ({len(d['done'])} units): {'attack' if d['attack'] else 'move'} "
                       f"to ({d['x']}, {d['y']}) ({d['p']:.0%} sure it should move; fight estimate {d['fight']:+.0%})")
@@ -570,6 +572,14 @@ class DirectMotor:
         cy = sorted(u["y"] for u in left)[len(left) // 2]
         here = [u for u in left if screen_of(obs, u["x"], u["y"])]
         if not here:
+            if d.get("hunt"):
+                # a hunt's camera on the unit nearest the median: an army in two groups has its median
+                # point between them, where the camera found nobody until the order timed out, the army
+                # standing for minutes by the last hatchery. (Not the army model's orders: carried out
+                # in full there, they cost games, 25 won 7 lost against 28 and 4 on 120 games; those to
+                # an army in two groups failing was a protection, see PROGRESS.md)
+                u = min(left, key=lambda u: math.dist((u["x"], u["y"]), (cx, cy)))
+                cx, cy = u["x"], u["y"]
             hi.camera_minimap(cx, cy)
             return
         box_around(hi, [self.g.hi.aim(obs, u) for u in here], 10)
