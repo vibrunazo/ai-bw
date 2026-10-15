@@ -53,6 +53,7 @@ PICK_TRIES = 3                        # a builder not selected after this many t
 RESELECT_TRIES = 6                    # a parked builder not selected again after this many: the build fails
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
 TRAVEL_FOR = 24 * 40                  # ...and one walking to another base, after this at most
+RESEND_TRIES = 3                      # a build's SCV stopped on its way to another base: sent again this often
 PARK_FOR = 24 * 20                    # a build's SCV walks to the spot ahead of the money: back to it after this at most
 TASK_TIMEOUT = 24 * 40                # build, hotkey, mine and resume tasks give up after 40 s
 COMMAND_TIMEOUT = 24 * 20             # commands and gas after 20 s
@@ -390,8 +391,11 @@ class ScriptedExecutor:
             return False
         if t.data.get("resume") == "wait_arrival":           # walking to another base: until it's there
             w = next(u for u in mine if u["tag"] == t.data["worker"])
-            if math.dist((w["x"], w["y"]), g.base(t.where).center) > 6 * 32 and g.hi.frame - t.data["walking"] < TRAVEL_FOR:
-                return False
+            center = g.base(t.where).center
+            walking = w["order"] == MOVE and math.dist((w.get("tx", 0), w.get("ty", 0)), center) < 6 * 32
+            if (math.dist((w["x"], w["y"]), center) > 6 * 32 and g.hi.frame - t.data["walking"] < TRAVEL_FOR
+                    and (walking or g.hi.frame - t.data["walking"] < 2 * 24)):
+                return False                                  # (stopped short: back to it now, to send it again)
         else:
             budget = obs["me"]["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
             if budget < COST[t.unit_type] and g.hi.frame - t.data["walking"] < PARK_FOR:
@@ -403,6 +407,7 @@ class ScriptedExecutor:
                     math.dist((w["x"], w["y"]), (w["tx"], w["ty"])) < ARRIVING and g.hi.frame - t.data["walking"] < PARK_FOR:
                 return False
         g.task, g.parked = t, None
+        t.started = g.hi.frame          # (the walk had its own limit: a third base's walk outlasted TASK_TIMEOUT)
         g.run_task(obs, mine)
         return True
 
@@ -701,7 +706,21 @@ class ScriptedExecutor:
             if not w:
                 self.fail_build(t)
                 return
-            if math.dist((w["x"], w["y"]), g.base(t.where).center) > 6 * 32:
+            center = g.base(t.where).center
+            if math.dist((w["x"], w["y"]), center) > 6 * 32:
+                # stopped or taken on the way (a pull, a fight) and left standing: sent again (a third
+                # base's builder stood idle in the main for 80 s while the build waited for it)
+                going = w["order"] == MOVE and math.dist((w.get("tx", 0), w.get("ty", 0)), center) < 6 * 32
+                going = going or hi.frame - t.data.get("resent_at", -10 ** 9) < 2 * 24      # (the last click landing)
+                if not going and obs["selection"] == [w["tag"]]:
+                    t.data["resent_at"] = hi.frame
+                    t.data["resent"] = t.data.get("resent", 0) + 1
+                    if t.data["resent"] > RESEND_TRIES:
+                        self.fail_build(t)
+                        return
+                    hi.minimap_right_click(*center)
+                elif not going:
+                    t.data["resume"], t.stage = "wait_arrival", "reselect"
                 return
             if not g.look_at(obs, t.where):
                 return

@@ -85,6 +85,15 @@ class LearnedMacro:
         self.decisions: list[tuple[int, str, float]] = []   # (frame, decision, model probability)
         self.failed_until: dict[tuple[int, int], int] = {}  # decision -> frame it may be tried again
         self.builds = builds or {}                         # posture's build name -> scripted build
+        # expand_mass: the model's odds of expanding summed over the decisions Gary took since its last
+        # expansion; at this much, the next decision is the expansion (None: off). The favorite never
+        # is: after the natural the model gives it 2-4% a decision, never the likeliest, though pros
+        # take a third base in 86% of TvZ games of 15 min+ (median 12.9 min) and Gary in almost none
+        self.expand_mass: float | None = None
+        self.expand_odds = 0.0
+        self._bases_by_walk: list | None = None             # free_base: the bases by a worker's walk from the natural
+        self.p_expand = 0.0                                 # the model's odds of expanding at its last query
+        self.halls = 0                                      # Command Centers Gary has had, built or building
 
     def step(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> None:
         g = self.g
@@ -162,6 +171,10 @@ class LearnedMacro:
         if self.goal and hi.frame - self.goal["since"] > GOAL_TIMEOUT:
             g.say(f"gives up on {self.goal['name']}")
             self.goal = None
+        halls = sum(1 for u in mine if u["type"] == T.CC)
+        if halls > self.halls:
+            self.expand_odds = 0.0          # (only once one stands: a Command Center that didn't start is asked again)
+        self.halls = halls
         if self._train_queued(obs, mine, done, me) or self._keep_busy(obs, mine, done, me):
             return
         if self.goal is None:
@@ -198,6 +211,16 @@ class LearnedMacro:
                 floor = DICE_FLOOR
             else:
                 order, floor = np.argsort(-probs[0]), MIN_P
+            k_exp = self.model.spec.decisions.index(next(d for d in self.model.spec.decisions if d[0] == EXPAND))
+            self.p_expand = float(probs[0, k_exp])
+            # (from the third base on: forced at 4:00-6:00 as Gary held one base under pressure, the natural
+            # cost 7 games of 432; the model takes the natural itself)
+            if (self.expand_mass is not None and self.expand_odds >= self.expand_mass and self.halls >= 2
+                    and self.plan(*self.model.spec.decisions[k_exp], obs, mine, done, me) is not None):
+                act, uid = self.model.spec.decisions[k_exp]
+                self.goal = {"act": act, "id": uid, "p": float(probs[0, k_exp]), "since": hi.frame, "name": describe(act, uid)}
+                g.say(f"next: expand ({self.expand_odds:.2f} expansions' odds since the last)")
+                return
             if self.force is not None and hi.frame >= self.force[0]:
                 # a branch (train/macro_rl.py): another decision at this moment of the same game
                 k = self.force[1]
@@ -232,6 +255,7 @@ class LearnedMacro:
             act, uid = self.model.spec.decisions[k]
             self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame,
                          "name": describe(act, uid)}
+            self.expand_odds += float(probs[0, k_exp])
             g.say(f"next: {self.goal['name']} ({self.goal['p']:.0%})")
         goal = self.goal
         plan = self.plan(goal["act"], goal["id"], obs, mine, done, me)   # still possible?
@@ -316,7 +340,11 @@ class LearnedMacro:
         # and money kept, cost more: on 24 seeds the 9-pool lost 4 (2), Gary took no natural, and
         # against the replayed pros it built 47 army supply by 12:00 (54))
         reserve = 0
-        if self.goal is not None and self.goal["act"] not in (BUILD, EXPAND):
+        if self.goal is not None and self.goal["act"] == EXPAND and self.halls >= 2:
+            # (but a third base is saved for: production spent every mineral, the bank at 20-40, and the
+            # Command Center's 400 never came; on two bases 400 is about 10 s of mining)
+            reserve = T.COST[T.CC][0]
+        elif self.goal is not None and self.goal["act"] not in (BUILD, EXPAND):
             p = self.plan(self.goal["act"], self.goal["id"], obs, mine, done, me)
             reserve = p["cost"][0] if isinstance(p, dict) and p is not WAIT else 0
         for uid in self.last_unit.values():
@@ -329,6 +357,7 @@ class LearnedMacro:
             g.task = Task("command", data=plan, started=g.hi.frame)
             g.spend(minerals)
             self.tracker.note_decision(TRAIN, uid, obs["frame"])
+            self.expand_odds += self.p_expand   # (a decision too: pros' every unit is one, the odds count them all)
             return True
         return False
 
@@ -470,7 +499,8 @@ class LearnedMacro:
         return None
 
     def free_base(self, obs: dict):
-        """The nearest base nobody has taken (the natural first), as far as Gary has seen."""
+        """The nearest base nobody has taken (the natural first), as far as Gary has seen: nearest by a
+        worker's walk from the natural (terrain.py), not as the crow flies."""
         g = self.g
         halls = [u for u in obs["units"] if u["type"] in TOWN_HALLS]
         reserved = [(tx * 32 + 64, ty * 32 + 48) for ut, tx, ty in g.reserved if ut == T.CC]
@@ -481,7 +511,17 @@ class LearnedMacro:
                 and not any(math.dist(b.center, s) < 10 * 32 for s in enemy)]
         if g.natural in free:
             return g.natural
-        return min(free, key=lambda b: math.dist(b.center, g.main.center)) if free else None
+        if not free:
+            return None
+        if self._bases_by_walk is None:
+            from gary.agent.block import _analysis
+            try:
+                self._bases_by_walk = [tuple(c) for c in _analysis(g).get("bases_by_walk", [])]
+            except Exception:                    # (no terrain in this game)
+                self._bases_by_walk = []
+        walk = self._bases_by_walk
+        return min(free, key=lambda b: (walk.index(tuple(b.center)) if tuple(b.center) in walk else len(walk),
+                                        math.dist(b.center, g.main.center)))
 
 
 # --- scripted builds a posture switches to --------------------------------------------------

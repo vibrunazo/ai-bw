@@ -44,7 +44,7 @@ NATURAL_AREA = 32                 # minitiles from the natural's center that are
 CHOKE_SEARCH = 200                # minitiles along the route past that, where its choke is looked for
 CHOKE_WITHIN = 20 * 32            # ...and no farther than this from the natural (pixels): its own exit
 RAMP_WITHIN = 30 * 32             # a main ramp farther than this from the start is a wrong guess
-ANALYSIS_VERSION = 3              # part of the cache key: a change to the analysis makes new files
+ANALYSIS_VERSION = 4              # part of the cache key: a change to the analysis makes new files
 WALL_COST = 12.0                  # a step's cost: length * (1 + WALL_COST / distance to the nearest wall)
 
 
@@ -185,12 +185,18 @@ def analyze(game: Game, mapinfo: MapInfo) -> dict:
         choke = min(ring or route[NATURAL_AREA:] or route, key=lambda c: altitude[c])
         # trust it where the ramp is a real choke (narrow) near the start
         reliable = ramp_width <= RAMP_MAX_WIDTH and math.dist(_px(top), mapinfo.starts[i]) <= RAMP_WITHIN
+        # the other bases by how far a worker walks from the natural (the next one to take: a base
+        # beside the main as the crow flies can be a long walk past the natural and through the field)
+        from_nat = _ground_distance(walk, [n_cell])
+        others = [b for b in mapinfo.bases if b is not main_base and b is not natural]
+        walk_to = {tuple(b.center): float(from_nat[_nearest_walkable(walk, _cell(b.center))]) for b in others}
         out[i] = {"start": list(mapinfo.starts[i]), "reliable": bool(reliable),
                   "main_level": int(level), "main_area_tiles": int(main.sum()) // 16,
                   "ramp_top": list(_px(top)), "ramp_bottom": list(_px(bottom)), "ramp_width": round(ramp_width),
                   "ramp_inside": list(_px(inside)),
                   "natural": list(natural.center), "natural_choke": list(_px(choke)),
-                  "natural_choke_width": round(2 * MINI * float(altitude[choke]))}
+                  "natural_choke_width": round(2 * MINI * float(altitude[choke])),
+                  "bases_by_walk": [list(c) for c in sorted(walk_to, key=walk_to.get) if math.isfinite(walk_to[c])]}
     return {"map": {"w": int(walk.shape[1]) * MINI, "h": int(walk.shape[0]) * MINI}, "starts": out}
 
 

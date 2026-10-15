@@ -421,6 +421,9 @@ OPTIONS = {
     # a tree over what the scout saw gains no more than this (+0.089 a game across seeds, both). On v0.21
     # (432 games, the new baseline): lost 15 (30), won 115 (118). In v0.22
     "defend_early": lambda m: m.update(defend_early=150 * 24),
+    # macro.py expand_mass: the expansion once the model's odds of it, summed over Gary's decisions since
+    # the last, reach one (the favorite never picks a third base)
+    "expand": lambda m: m["macro"].update(expand_mass=1.0),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
     # firsts called early pools. In v0.16
@@ -576,6 +579,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
                                m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False),
                                m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0))
+        g.macro.expand_mass = m["macro"].get("expand_mass")
     if m["army"] is not None:
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)
