@@ -28,6 +28,14 @@ def select(tags: list[int]) -> bytes:
     return struct.pack("<BB", 0x09, len(tags)) + b"".join(struct.pack("<H", t) for t in tags)
 
 
+def hotkey(action: int, group: int) -> bytes:
+    """A control group (command 0x13): action 0 assigns the selection to the group (Ctrl+n), 1
+    recalls it (n), 2 adds the selection to it (Shift+n); groups 0-9."""
+    if action not in (0, 1, 2) or not 0 <= group <= 9:
+        raise ValueError("hotkey action 0-2, group 0-9")
+    return struct.pack("<BBB", 0x13, action, group)
+
+
 def right_click(x: int, y: int, target_tag: int = 0, target_type: int = NO_UNIT, queued: bool = False) -> bytes:
     """Move to (x, y) in pixels, or act on a target unit (mine a mineral field, attack...)."""
     return struct.pack("<BhhHHB", 0x14, x, y, target_tag, target_type, int(queued))

@@ -59,7 +59,25 @@ bool legacy_record_length(const uint8_t* p, size_t n, size_t* out_len) {
     case 0x20:  // cancel train: id, queue slot (gary_resim read_action_cancel_build_queue)
     case 0x23:  // unit morph: id, unit type
     case 0x29:  // unload: id, unit tag
+    case 0x35:  // building morph: id, unit type (a Lair, a Sunken Colony)
+    case 0x13:  // control group: id, action (0 assign, 1 recall, 2 add), group 0-9 (OpenBW actions.h)
         *out_len = 3;
+        return n >= *out_len;
+    case 0x1a:  // stop: id, queued
+    case 0x1e:  // return cargo: id, queued
+    case 0x28:  // unload all: id, queued
+    case 0x2b:  // hold position: id, queued
+    case 0x2c:  // burrow: id, queued
+    case 0x2d:  // unburrow: id, queued
+    case 0x30:  // research: id, tech
+    case 0x32:  // upgrade: id, upgrade
+        *out_len = 2;
+        return n >= *out_len;
+    case 0x36:  // stim packs: id alone
+        *out_len = 1;
+        return n >= *out_len;
+    case 0x5c:  // chat (replay record): id, sender slot, 80-byte NUL-padded text (gary/commands.py)
+        *out_len = 82;
         return n >= *out_len;
     case 0x37:  // sync (SB bw/commands.rs id::SYNC)
         *out_len = 2;

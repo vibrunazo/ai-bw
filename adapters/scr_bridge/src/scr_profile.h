@@ -99,17 +99,28 @@ constexpr uint32_t kUnitShields = 0x60;            // 96 VERIFIED (probe_live au
                                                    // 21 protoss units; matches [BWD] 0x60)
 constexpr uint32_t kUnitBuildQueue = 152;          // VERIFIED u16[5] (hunt_queue.py: a train turns
                                                    // the empty marker 228 into the unit type id)
-constexpr uint32_t kUnitBuildSlot = 166;           // UNVERIFIED u8 (raw display only: observe()'s
+constexpr uint32_t kUnitBuildSlot = 164;           // UNVERIFIED u8 (raw display only: observe()'s
                                                    // queue count does not depend on it)
-constexpr uint32_t kUnitEnergy = 168;              // UNVERIFIED u16 24.8 fixed (not in the Gary contract)
-// TODO(pin before use): kUnitBuildSlot and kUnitEnergy are probably wrong. The verified fields
-// around them (shields 0x60, build queue 152, resources 0xd0) all sit where BW 1.16's unit struct
-// has them, and 1.16 puts energy at 0xa2 (162) and the queue ring start at 0xa4 (164), right
-// after the 10-byte queue at 152. Nothing reads them yet; energy becomes part of the contract
-// with spellcasters (own energy, ARCHITECTURE §6.9). Pin like kUnitShields: probe_unit a unit
+constexpr uint32_t kUnitEnergy = 162;              // INFERRED u16 8.8 fixed (0xA2: right after the five
+                                                    // build-queue u16s at 152, BW 1.16's layout; was 168)
+// TODO(pin): kUnitEnergy and kUnitBuildSlot now sit where BW 1.16 has them (0xa2 = 162, 0xa4 = 164;
+// were 168/166), as do the other INFERRED fields: the verified ones around them (shields 0x60,
+// build queue 152, resources 0xd0, status flags 0xdc) all match 1.16's unit struct. Energy is in
+// the Gary contract now (Comsat scans need 50), so pin it before live games count. Pin like kUnitShields: probe_unit a unit
 // whose energy is known and changing (a Comsat Station after a scan, a Medic or Science Vessel
 // regenerating) and look for the u16 that tracks it (24.8 fixed: value >> 8 = energy); for the
 // slot, train 2+ units and watch which u8 steps as the queue advances (tools/hunt_queue.py).
+constexpr uint32_t kUnitGroundCooldown = 0x55;      // 85 INFERRED u8 (BW 1.16: after main order timer
+                                                    // 0x54; OpenBW unit_t: owner, order, order state,
+                                                    // order unit type, timer, ground weapon cooldown)
+constexpr uint32_t kUnitOrderTargetPos = 0x58;      // 88 INFERRED u16 x, u16 y (the order's target point)
+constexpr uint32_t kUnitOrderTargetUnit = 0x5c;     // 92 INFERRED ptr (the order's target unit, 0 if none)
+constexpr uint32_t kUnitCarrying = 0xe0;            // 224 INFERRED u8 carrying flags (1 gas, 2 minerals:
+                                                    // OpenBW carrying_flags, right after status flags 0xdc)
+constexpr uint32_t kUnitDetected = 0xe4;            // 228 INFERRED u32 players who detect it (OpenBW
+                                                    // detected_flags; 0x80000000 = not computed yet)
+constexpr uint32_t kStatusRequiresDetector = 0x100;  // OpenBW game_types.h (burrowed units)
+constexpr uint32_t kStatusCloaked = 0x200;
 constexpr uint32_t kUnitResources = 0xd0;          // 208 VERIFIED u16: window dump of a 1500-mineral shows
                                                    // 0x05dc at 208 (iscript=20 at 210, OpenBW's
                                                    // resource { count, iscript } order). Earlier 204

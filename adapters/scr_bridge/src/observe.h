@@ -43,6 +43,12 @@ struct UnitView {
     uint8_t visible_to = 0;
     uint8_t order = 0;
     int resources = 0;
+    int energy = 0;          // integer part
+    int cooldown = 0;        // ground weapon cooldown
+    uint32_t order_target_ptr = 0;
+    int tx = 0, ty = 0;      // the order's target point
+    int carrying = 0;
+    uint32_t detected = 0;
     int queue = 0;
     uint8_t elevation = 0;
     int sprite = 0;         // sprite address, 0 = dying

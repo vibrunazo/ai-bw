@@ -714,17 +714,30 @@ class HumanInterface:
         elif a.kind == "chat":
             act = f"chat: {a.args['text']}"
             self._send(C.chat(self.slot, a.args["text"]))
-        elif a.kind == "hotkey_set":
-            self.hotkeys[a.args["n"]] = list(self.selection)
-            act = f"Ctrl+{a.args['n']} (make group)"
-        elif a.kind == "hotkey_add":
-            self.hotkeys[a.args["n"]] = list(dict.fromkeys(self.hotkeys.get(a.args["n"], []) + self.selection))[:12]
-            act = f"Shift+{a.args['n']} (add to group)"
-        elif a.kind == "hotkey_recall":
-            tags = self.hotkeys.get(a.args["n"], [])
-            act = f"{a.args['n']} (select group)"
-            if tags and self._send(C.select(tags)):
-                self.selection = list(tags)
+        elif a.kind in ("hotkey_set", "hotkey_add", "hotkey_recall"):
+            # real control-group commands (0x13), as a player's keys: the game keeps the groups, and a
+            # replay shows them (re-selecting the group's units instead showed no hotkey use live,
+            # unlike every human replay). The interface's copy follows the game's rules (OpenBW
+            # actions.h action_control_group): a recall selects the group's units alive, in view of
+            # the game (not inside a bunker or transport) and its own, and drops the rest for good
+            n = a.args["n"]
+            if a.kind == "hotkey_set":
+                act = f"Ctrl+{n} (make group)"
+                mine = [t for t in self.selection if t in self._own_tags()]
+                if mine and self._send(C.hotkey(0, n)):
+                    self.hotkeys[n] = mine[:12]
+            elif a.kind == "hotkey_add":
+                act = f"Shift+{n} (add to group)"
+                mine = [t for t in self.selection if t in self._own_tags()]
+                if mine and self._send(C.hotkey(2, n)):
+                    self.hotkeys[n] = list(dict.fromkeys(self.hotkeys.get(n, []) + mine))[:12]
+            else:
+                act = f"{n} (select group)"
+                own = self._own_tags()
+                tags = [t for t in self.hotkeys.get(n, []) if t in own]
+                if tags and self._send(C.hotkey(1, n)):
+                    self.hotkeys[n] = tags
+                    self.selection = list(tags)
         at = None
         if a.kind in ("minimap_right_click", "minimap_order"):
             mx, my, mw, mh = self.p.minimap_rect
@@ -740,7 +753,7 @@ OTHER_NAMES = {176: "Mineral Field", 177: "Mineral Field", 178: "Mineral Field",
                35: "Larva", 36: "Egg", 37: "Zergling", 41: "Drone", 42: "Overlord", 131: "Hatchery"}
 COMMAND_NAMES = {0x09: "select", 0x0A: "shift-select", 0x0C: "build", 0x14: "right-click", 0x15: "order",
                  0x1F: "train", 0x23: "morph", 0x35: "morph building", 0x30: "research", 0x32: "upgrade", 0x5C: "chat",
-                 0x1A: "stop", 0x2B: "hold", 0x2C: "burrow", 0x2D: "unburrow", 0x36: "stim", 0x1E: "return cargo", 0x28: "unload all"}
+                 0x13: "hotkey", 0x1A: "stop", 0x2B: "hold", 0x2C: "burrow", 0x2D: "unburrow", 0x36: "stim", 0x1E: "return cargo", 0x28: "unload all"}
 
 
 def unit_name(unit_type: int) -> str:

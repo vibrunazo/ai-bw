@@ -84,6 +84,15 @@ bool unit_view(uint32_t ptr, UnitView* u) {
     u->visible_to = read_at<uint8_t>(sprite + profile::kSpriteVisibility);
     u->elevation = read_at<uint8_t>(sprite + profile::kSpriteElevation);
     u->resources = read_at<uint16_t>(ptr + profile::kUnitResources);
+    u->energy = read_at<uint16_t>(ptr + profile::kUnitEnergy) >> 8;
+    u->cooldown = read_at<uint8_t>(ptr + profile::kUnitGroundCooldown);
+    u->tx = read_at<uint16_t>(ptr + profile::kUnitOrderTargetPos);
+    u->ty = read_at<uint16_t>(ptr + profile::kUnitOrderTargetPos + 2);
+    u->order_target_ptr = read_ptr(ptr + profile::kUnitOrderTargetUnit);
+    u->carrying = read_at<uint8_t>(ptr + profile::kUnitCarrying);
+    u->detected = read_at<uint32_t>(ptr + profile::kUnitDetected);
+    if (u->flags & (profile::kStatusCloaked | profile::kStatusRequiresDetector))
+        u->visible_to &= (uint8_t)((u->detected & 0xff) | (1u << u->owner));
     // queue: u16[5] entries from kUnitBuildQueue (PINNED 2026-10-04 by tools/hunt_queue.py: a
     // train turns the empty marker 228 into the unit type id). Counted over all five slots so
     // the ring's start index (kUnitBuildSlot) cannot skew the Gary contract field.
@@ -213,13 +222,26 @@ bool observe_json(const World& w, std::string* out, std::string* error) {
     for (const UnitView& u : units) {
         if (!first) o += ',';
         first = false;
-        char buf[320];
+        // the order's target unit as a tag (0 if none or not a unit in the vector)
+        unsigned target = 0;
+        if (u.order_target_ptr >= w.units_base && w.unit_count &&
+            (u.order_target_ptr - w.units_base) % profile::kUnitSize == 0 &&
+            (u.order_target_ptr - w.units_base) / profile::kUnitSize < w.unit_count) {
+            UnitView t;
+            if (unit_view(u.order_target_ptr, &t)) {
+                t.ref.index1 = (u.order_target_ptr - w.units_base) / profile::kUnitSize + 1;
+                target = tag_of(t.ref, w.unit_count);
+            }
+        }
+        char buf[448];
         snprintf(buf, sizeof buf,
                  "{\"tag\":%u,\"owner\":%d,\"type\":%d,\"x\":%d,\"y\":%d,\"hp\":%d,"
                  "\"shields\":%d,\"completed\":%d,\"visible_to\":%d,\"order\":%d,"
-                 "\"resources\":%d,\"queue\":%d}",
+                 "\"resources\":%d,\"queue\":%d,\"cooldown\":%d,\"order_target\":%u,\"tx\":%d,"
+                 "\"ty\":%d,\"carrying\":%d,\"hp_max\":%d,\"energy\":%d}",
                  (unsigned)tag_of(u.ref, w.unit_count), (int)u.owner, (int)u.type, u.x, u.y, u.hp, u.shields,
-                 u.completed ? 1 : 0, (int)u.visible_to, (int)u.order, u.resources, u.queue);
+                 u.completed ? 1 : 0, (int)u.visible_to, (int)u.order, u.resources, u.queue, u.cooldown,
+                 target, u.tx, u.ty, u.carrying, (int)kHitPoints[u.type], u.energy);
         o += buf;
     }
     o += "]}";
@@ -458,11 +480,19 @@ bool depot_spot_tiles(const World& w, int tile_x, int tile_y, int tw, int th,
     for (int y = tile_y; y != tile_y + th; ++y)
         for (int x = tile_x; x != tile_x + tw; ++x)
             if (tile_unbuildable(w, x, y)) return false;
+    // a resource whose box (not its center) reaches the 3-tile margin, as OpenBW's
+    // find_units_noexpand finds it: the box's left or right edge inside the margin horizontally,
+    // overlapping it vertically (the box: position - dimensions.from .. position + dimensions.to).
+    // Testing centers allowed a natural's town hall a tile closer to a mineral field than the
+    // game does (Fighting Spirit, tile (37, 112) live against (36, 112); "Gary v03 got owned 01")
+    int ax0 = 32 * (tile_x - 3), ax1 = 32 * (tile_x + tw + 3);
+    int ay0 = 32 * (tile_y - 3), ay1 = 32 * (tile_y + th + 3);
     for (const UnitView& u : units) {
         if (!is_resource_unit(u)) continue;
-        if (u.x >= 32 * (tile_x - 3) && u.x < 32 * (tile_x + tw + 3) &&
-            u.y >= 32 * (tile_y - 3) && u.y < 32 * (tile_y + th + 3))
-            return false;
+        const uint8_t* d = kDimensions[u.type];
+        int bx0 = u.x - d[0], by0 = u.y - d[1], bx1 = u.x + d[2], by1 = u.y + d[3];
+        bool x_in = (bx0 >= ax0 && bx0 < ax1) || (bx1 >= ax0 && bx1 < ax1);
+        if (x_in && by0 < ay1 && by1 >= ay0) return false;
     }
     return true;
 }

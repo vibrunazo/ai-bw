@@ -244,10 +244,13 @@ the same game against the same opponents (including x64 clients over Battle.net)
 
 ## Known gaps (v0)
 
-- Unit energy and the build-queue ring start (`kUnitEnergy` 168, `kUnitBuildSlot` 166 in
-  `scr_profile.h`) are unverified and probably sit at 162 / 164 (BW 1.16's layout, which every
-  pinned unit field so far has matched). Not used yet: pin both before energy enters the
-  contract (spellcasters). The TODO next to them says how.
+- The unit fields added to the observation on 2026-10-15 so it matches `gary_env_observe` (energy,
+  ground weapon cooldown, the order's target unit and point, carrying flags, players who detect it;
+  `hp_max` comes from units.dat) sit where BW 1.16's unit struct has them (`scr_profile.h`, INFERRED:
+  every pinned field so far matched 1.16, and OpenBW's unit_t keeps the same order). Energy moved
+  from 168 to 162 and the queue ring start from 166 to 164. Pin them in a live game before its
+  results count: energy decides Comsat scans (the TODO in `scr_profile.h` says how). `visible_to`
+  now hides cloaked and burrowed units from players who don't detect them, as gary_env does.
 - `can_place` is an approximation (buildable tiles + collision + depot distance): the fog rule
   ("unexplored tiles not allowed") and creep/pylon-power rules need the game's own placement
   function (resolve via `samase_scarf` later) to match `gary_env_can_place` exactly.
@@ -266,22 +269,22 @@ the same game against the same opponents (including x64 clients over Battle.net)
   moves state capture onto the frame watcher tick like Shieldbattery does.
 - `act()` timing is "next frame boundary"; observed effect latency is logged and must be
   calibrated into `gary/interface.py` before human-likeness evaluation.
-- Control-group commands (replay command 0x13: assign / recall / add, groups 0-9) must pass
-  through `act()`. Today the human interface fakes hotkeys by re-selecting the group's units, so a
-  live replay shows no hotkey use at all ("Gary got owned", 2026-10-04) and looks unlike a
-  human's; real players' replays, which Gary learns from, are full of them. The interface will
-  switch to real 0x13 commands (OpenBW runs them), so verify the bridge sends them and the game
-  applies them (the live replay should show `Hotkey` commands).
+- Control groups are real 0x13 commands now (2026-10-15: the interface sends assign / recall / add,
+  a headless replay shows them, and the game is the same as before), and `act()` passes them, with
+  every other command Gary encodes that carries no unit tag (stop, hold, stim, return cargo, unload
+  all, burrow, research, upgrade, building morph, chat: research and Stim had been refused). Verify
+  in a live game that SC:R applies them (its replay should show `Hotkey` commands).
 - Observation fields Gary v0.4's fight model reads per unit, now in `gary_env_observe`:
   `cooldown` (ground weapon cooldown), `order_target` (the order's target unit tag, 0 if none),
   `carrying` (worker carrying flags). Live they default to 0, which the fight model was not
   trained on; add them to the bridge's unit records. Also: shields for units without shields
   should be 0.
-- `depot_spot_ok` disagrees with `gary_env_depot_spot_ok` by a tile: on Fighting Spirit 1.3
-  (bottom-left start) live MapInfo put the natural's town hall at tile (37, 112), OpenBW's gives
-  (36, 112), and only (36, 112) is placeable. Gary ordered its expansion three times at (37, 112)
-  and never got a natural ("Gary v03 got owned 01", 2026-10-04: CC orders at 2:51, 4:00, 4:52).
-  Match the resource-distance rule exactly (compare both on every base of a few maps).
+- `depot_spot_ok` disagreed with `gary_env_depot_spot_ok` by a tile (the natural's town hall at
+  (37, 112) live, only (36, 112) placeable: "Gary v03 got owned 01", 2026-10-04). Fixed 2026-10-15:
+  a resource blocks the spot when its box (units.dat dimensions), not its center, reaches the 3-tile
+  margin, as OpenBW's `find_units_noexpand` finds it. On every terrain-valid spot within 6 tiles of
+  every base of Fighting Spirit, Python and Heartbreak Ridge (5,927) the rule now agrees with
+  gary_env; the center rule disagreed on 392. Confirm live on one natural.
 - The headless env now delays every command by `gary.env.LIVE_COMMAND_DELAY` (3 frames: the
   reported turn latency 2 + 1 hand-off). Re-measure it once a live game sends real hotkeys, and
   keep the two in step if the latency setting changes.
