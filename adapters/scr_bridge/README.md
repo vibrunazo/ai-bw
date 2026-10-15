@@ -260,8 +260,8 @@ the same game against the same opponents (including x64 clients over Battle.net)
   (SC:R) must be measured before G2 numbers are trusted (`hunt_click.py --gold` prints gary_env's
   reference boxes per unit type).
 - `set_name`/`save_replay` are not implemented (the client writes its own replay on match end;
-  `tools/end_match.py` ends a match through the F10 menu and locates it — here
-  `D:\docs\StarCraft\Maps\Replays\LastReplay.rep`, since Documents is redirected on this machine).
+  `tools/end_match.py` ends a match through the F10 menu and locates it: `Maps\Replays\LastReplay.rep`
+  under the StarCraft folder in the user's Documents, wherever Documents points).
 - Observation reads memory on demand (pipe thread) rather than a frame-stamped snapshot; v1
   moves state capture onto the frame watcher tick like Shieldbattery does.
 - `act()` timing is "next frame boundary"; observed effect latency is logged and must be
