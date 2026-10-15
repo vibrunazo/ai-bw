@@ -305,6 +305,13 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   macro's turn mid-fight; dropped. The tech scan rarely happens: the model's Comsat often comes
   after 10:00, so lurkers are read from the first lurker or egg seen (~8:30). 21 of 32 lurker games
   still undecided at 20 minutes, often with the Zerg down to its last buildings.
+- **The touring scout, now that something reads it (2026-10-14):** v0.24 with `watch` against
+  Zerg v3 (96 games to 20 minutes, against v0.24's own on the same seeds): the plan read earlier
+  (median 7:00 against 8:36 for lurkers, 7:00 against 8:30 for mutalisks), won 53 (51) but lost 4
+  (1): mutalisks won 18 lost 2 (15, 1), lurkers won 13 (11), the zergling pressure won 22 lost 2
+  (25, 0), where the SCV off minerals costs as it did over the whole pool before. Not adopted;
+  reading lurkers earlier is worth a little, a cheaper way to it (the tech scan with an earlier
+  Comsat) is the next thing to try.
 
 ### v0.23 (October 2026): a third base
 

@@ -95,5 +95,7 @@ three plans).
   Done for lurkers: v0.24 (`gary/agent/answers.py`), lurker games won 11 of 32 (7). Mutalisks:
   the model's turrets already do, an answer on top lost games. The tech scan seldom happens (the
   model's Comsat often after 10:00); 21 lurker games still end undecided.
+  The touring scout on v0.24 against Zerg v3: plans read ~1.5 min earlier, won 53 (51) but lost 4 (1),
+  the losses against the zergling pressure: not adopted (PROGRESS.md).
 - Then: v0.22 with and without `watch` against Zerg v3, results per plan, to see whether a longer
   look pays once something reads it (and whether the scout should dodge zerglings to stay longer).
