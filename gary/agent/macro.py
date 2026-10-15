@@ -90,6 +90,7 @@ class LearnedMacro:
         # is: after the natural the model gives it 2-4% a decision, never the likeliest, though pros
         # take a third base in 86% of TvZ games of 15 min+ (median 12.9 min) and Gary in almost none
         self.expand_mass: float | None = None
+        self.answers = None                                 # answers.py Answers (option answers): the zerg's plan answered
         self.expand_odds = 0.0
         self._bases_by_walk: list | None = None             # free_base: the bases by a worker's walk from the natural
         self.p_expand = 0.0                                 # the model's odds of expanding at its last query
@@ -108,6 +109,13 @@ class LearnedMacro:
                 g.say(f"next: {self.goal['name']} ({build.label})")
         if self.natural_bunker and self._natural_bunker(mine, me):
             return
+        if self.answers is not None:
+            self.answers.observe(obs)
+            if self.goal is None and g.task is None and self.answers.tech_scan(mine):
+                return
+            if self.goal is None and (goal := self.answers.next_goal(obs, mine, done, me)) is not None:
+                self.goal = goal
+                g.say(f"next: {goal['name']}")
         self._learned(obs, mine, done, me)
 
     def _natural_bunker(self, mine: list[dict], me: dict) -> bool:
@@ -372,6 +380,8 @@ class LearnedMacro:
         if posture.allowed is not None and (act == EXPAND or act not in (TRAIN, BUILD) or uid not in posture.allowed):
             return None
         if posture.no_expand and act == EXPAND:
+            return None
+        if self.answers is not None and not self.answers.allows(act, uid, mine):
             return None
         have = {u["type"] for u in done}
         if any(r not in have for r in T.REQUIRES.get(uid, [])):

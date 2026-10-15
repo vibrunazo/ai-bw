@@ -20,7 +20,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from eval import monitor, priority
 from eval.losses import ARMY, MAPS, ZERG_FIGHTERS, places
 
-VERSION = "v023"
+VERSION = "v024"
 MINUTES = 20
 LURKER = 103
 LURKER_REACH = 7 * 32            # a lurker's spines reach 6 tiles

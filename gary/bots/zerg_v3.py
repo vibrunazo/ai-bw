@@ -39,7 +39,7 @@ the drone walks): a lone drone is clicked, walked to the spot by a minimap order
 (alone, so a click takes it) and the building placed; if it doesn't appear, placed again, on a
 free tile next to it if the spot is taken. Its cost is kept from the walk until it appears.
 
-    python -m eval.vs_rush --versions v023 --opponent v3 --seeds 1 2 3 4
+    python -m eval.vs_rush --versions v024 --opponent v3 --seeds 1 2 3 4
 """
 
 from __future__ import annotations

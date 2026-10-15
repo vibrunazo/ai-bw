@@ -92,5 +92,8 @@ three plans).
   sightings, scans): turrets and an Engineering Bay against mutalisks, Comsat, Science Vessels and
   tanks against lurkers, bunkers and marines against the zergling pressure. Judge per Zerg v3 plan
   (seed % 3) and over the whole pool.
+  Done for lurkers: v0.24 (`gary/agent/answers.py`), lurker games won 11 of 32 (7). Mutalisks:
+  the model's turrets already do, an answer on top lost games. The tech scan seldom happens (the
+  model's Comsat often after 10:00); 21 lurker games still end undecided.
 - Then: v0.22 with and without `watch` against Zerg v3, results per plan, to see whether a longer
   look pays once something reads it (and whether the scout should dodge zerglings to stay longer).

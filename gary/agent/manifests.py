@@ -189,6 +189,17 @@ MANIFESTS: dict[str, dict] = {
                        "before": _V09_FIGHT["before"] + ["detect"],
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.24: v0.23 that reads the zerg's plan and answers lurkers as pros do (answers.py: Siege Mode, tanks,
+    # a Science Facility, vessels, Irradiate, turrets one a base; a tech scan of their main at 6:30)
+    "v024": {"version": "v0.24", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
+             "home_scvs": True, "balance": True, "defend_early": 150 * 24,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "before": _V09_FIGHT["before"] + ["detect"],
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
@@ -437,6 +448,11 @@ OPTIONS = {
     # 11 (11); Zerg v3 games at 20:00 on 3+ Command Centers 31 of 48 (5 of 49). Forcing the natural too
     # (at 4:00-6:00, under pressure) lost 15. In v0.23
     "expand": lambda m: m["macro"].update(expand_mass=1.0),
+    # answers.py: the zerg's plan read from what Gary saw (a tech scan of its main at 6:30 if nothing is
+    # known), and the pros' answer to it as macro goals (against lurkers: Siege Mode, tanks, vessels,
+    # Irradiate, turrets one a base; against mutalisks nothing: the model's own turrets do). On v0.23 (432
+    # games): won 112 (109), lost 10 (11); against Zerg v3's lurkers won 11 of 32 (7). In v0.24
+    "answers": lambda m: m["macro"].update(answers=True),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
     # firsts called early pools. In v0.16
@@ -593,6 +609,9 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False),
                                m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0))
         g.macro.expand_mass = m["macro"].get("expand_mass")
+        if m["macro"].get("answers"):
+            from gary.agent.answers import Answers
+            g.macro.answers = Answers(g)
     if m["army"] is not None:
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)
