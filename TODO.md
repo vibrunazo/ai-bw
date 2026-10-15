@@ -5,6 +5,22 @@ held up, in the order to do it. Pick these up once the early-switch work (`train
 is done and its runs have finished; none of them should run while it does (shared code, shared
 CPU). Delete this file once each item is done or moved to an issue.
 
+## Direction (2026-10-15)
+
+After an outside review: the loop of options judged by win counts against Zerg v2/v3 has run out of
+signal (self-authored opponents, two thirds of games undecided, adoption bars missed by noise).
+v0.25 stays the default; no options are adopted on Zerg v3 counts from here.
+
+1. The Remastered bridge's known gaps fixed (adapters/scr_bridge README), then games against a human.
+2. A self-play skeleton: every piece of ARCHITECTURE.md present and connected, crude where it has to be
+   (a Zerg Gary from the same pro-replay pipeline, on Zerg v3's execution code; the opponent model's
+   belief over the enemy's z; a strategy layer conditioned on it; a trace schema; a league loop that
+   updates at least one learned piece from outcomes, with the critic grading unfinished games and the
+   pro data as an anchor). Compute is shared: segments (T2a) and nightly batches first.
+3. Humanlikeness on the scoreboard (distances to pro distributions in every run), folded into 2.
+
+Items 3, 5 and 7 below wait for 2's opponent; 6 (the engine edge error) stands.
+
 ## 3. The army model's fight estimate, from Gary's own fights
 
 The fight estimate is trained on what the pro got: the change in army share in the 45 s after the
