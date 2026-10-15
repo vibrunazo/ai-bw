@@ -314,6 +314,15 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   the belief, learned from pros' Zergs, expects 40-50 army supply at 15:00 where Zerg v3 has none,
   so late hunts wait; and Zerg v2 lost 14 (8) without the early hunts. Hunting on "no army seen"
   pays against these Zergs more often than not. Not adopted.
+- **What the army model's orders do (2026-10-15, `eval/army_orders.py`):** 120 games of v0.25 played
+  again (Zerg v2, the replayed pros, Zerg v3 to 25 minutes), 3,594 orders, each with the 45 s after
+  it (the group's supply lost, the zerg's lost within 10 tiles of it). On average an order trades
+  well (3 zerg supply lost per Gary's; against Zerg v3 2.3), but 6% of them, attacks that lose half a
+  group of 6+ supply or more, hold 53% of Gary's army losses and trade 0.67. The model's fight
+  estimate and confidence don't tell them apart (median +0.004 against +0.010 for all orders). Per
+  game: Zerg v3's lurkers 9.2 such orders (71% of the army lost), its mutalisks 1.8 (45%), its
+  zergling pressure 1.5 (45%), Zerg v2 1.0 (43%), the replayed pros 0.6 (27%). The army model attacks
+  into lurkers it can't see: burrowed and undetected, they aren't in its inputs.
 
 ### v0.24 (October 2026): lurkers answered
 
