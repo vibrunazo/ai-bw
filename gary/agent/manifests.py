@@ -416,6 +416,12 @@ OPTIONS = {
     # (gary/policy/belief.py, 80th percentile less what was seen in 3 min) outweighs them. On v0.17,
     # replayed pros on three maps lost 12 of 144 (11); it held 637 times. Not adopted
     "belief": lambda m: m["army"].update(belief="belief/latest"),
+    # army.py hunt_belief: the hunt (no enemy army seen for a minute) only with an army at least the belief
+    # model's 80th percentile of the zerg's (the belief loaded for this alone: no holds). On v0.25 (432 games,
+    # Zerg v3 to 25 min): won 125 (139), lost 19 (12): no pressure losses (27 won lost 2 -> 31, 0), but lurker
+    # games won 10 (20) (the belief, learned from pros' Zergs, expects 40-50 supply at 15:00 where v3 has
+    # none) and Zerg v2 lost 14 (8): early hunts pay against these Zergs. Not adopted
+    "hunt_belief": lambda m: m["army"].update(hunt_belief=True),
     # ...against all the enemy army it likely has, not only what wasn't seen (what was seen may be
     # dead): lost 13 of 144 (11), held 854 times. Not adopted
     "belief_total": lambda m: m["army"].update(belief="belief/latest", belief_total=True),
@@ -631,14 +637,15 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             army = load("army", str(model_path(m["army"]["model"])))
             models["army"] = getattr(army, "path", "?")
             belief = None
-            if m["army"].get("belief"):
+            if m["army"].get("belief") or m["army"].get("hunt_belief"):
                 from gary.policy.belief import BeliefModel
-                belief = BeliefModel.load(model_path(m["army"]["belief"]))
+                belief = BeliefModel.load(model_path(m["army"].get("belief") or "belief/latest"))
                 models["belief"] = belief.path
             g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None, hunt=m["army"].get("hunt", False),
                                  scan=m["army"].get("scan", False), belief=belief,
                                  belief_total=m["army"].get("belief_total", False), watch=m["army"].get("watch", False),
-                                 home_guard=m["army"].get("home_guard", False))
+                                 home_guard=m["army"].get("home_guard", False),
+                                 belief_hold=bool(m["army"].get("belief")), hunt_belief=m["army"].get("hunt_belief", False))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:

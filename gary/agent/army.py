@@ -102,8 +102,12 @@ class LearnedArmy:
     remembers = True                # whatever Gary looks at, the tracker remembers
 
     def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False, belief=None,
-                 belief_total: bool = False, watch: bool = False, home_guard: bool = False):
+                 belief_total: bool = False, watch: bool = False, home_guard: bool = False, belief_hold: bool = True,
+                 hunt_belief: bool = False):
         self.g = g
+        self.belief_hold = belief_hold  # belief: groups going away hold when the hidden army outweighs them
+        self.hunt_belief = hunt_belief  # option (with hunt and a belief model): hunt only with an army at
+                                        # least the belief's 80th percentile of the zerg's
         self.home_guard = home_guard  # option: no army moves out while enemy fighters are at home
         self.watch = watch          # option: the scout stays in their bases, then watches outside the natural
         self.watch_stage = "stay"   # stay -> post
@@ -244,7 +248,7 @@ class LearnedArmy:
         """With the belief model, for a destination away from Gary's bases: the enemy army supply x2
         Gary likely hasn't seen (the belief's 80th percentile less the most seen at once in the
         last 3 minutes); None otherwise."""
-        if self.belief is None:
+        if self.belief is None or not self.belief_hold:
             return None
         x, y = self.tracker.center(dest)
         if any(u["type"] == T.CC and math.dist((u["x"], u["y"]), (x, y)) < HOME_PX for u in mine):
@@ -285,6 +289,14 @@ class LearnedArmy:
         army = [u for u in done if u["type"] in g.army_types]
         if f < HUNT_AFTER or f - self.enemy_army_seen < QUIET or len(army) < HUNT_ARMY:
             return None
+        if self.hunt_belief and self.belief is not None:
+            # not seeing their army isn't their having none: the hunt only with an army at least what the
+            # Zerg likely has (the belief's 80th percentile). At 8:30 against Zerg v3's zergling pressure,
+            # 19 supply hunted into 16 (belief 17, q80 28) and was lost, then the game to the 11:00 all-in
+            workers = sum(1 for u in mine if u["type"] == T.SCV)
+            b = self.belief.predict(self.belief_mem.vector(obs["frame"], obs["me"]["supply_used"] * 2, workers))
+            if sum(supply_x2(u["type"]) for u in army) < b["q80"]:
+                return None
         cx, cy = sum(u["x"] for u in army) / len(army), sum(u["y"] for u in army) / len(army)
         # (a target the army hasn't reached in HUNT_FOR, out of its way or off its ground, is dropped)
         given_up = {p for p, since in self.hunted.items() if f - since > HUNT_FOR}

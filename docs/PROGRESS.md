@@ -306,6 +306,14 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   units into fights (with a scan before every hunt: won 99 lost 15 of 432). The army model's
   orders to an army in two groups used to fail; carried out, they cost games. Gary far ahead
   without winning is the army model's decisions, not their execution.
+- **Hunts gated by the belief model (2026-10-15, option `hunt_belief`):** v0.25's two new losses
+  (Zerg v3's zergling pressure) came after a hunt at 8:30 with 19 supply into 16 unseen (the belief
+  model: 17 expected, 28 at its 80th percentile; v0.24 lost its army there too and survived the 11:00
+  all-in by chance). The hunt only with an army at least the belief's 80th percentile: won 125 (139),
+  lost 19 (12) of 432. No pressure losses (31 won, 0 lost; 27, 2), but the lurker games won 10 (20):
+  the belief, learned from pros' Zergs, expects 40-50 army supply at 15:00 where Zerg v3 has none,
+  so late hunts wait; and Zerg v2 lost 14 (8) without the early hunts. Hunting on "no army seen"
+  pays against these Zergs more often than not. Not adopted.
 
 ### v0.24 (October 2026): lurkers answered
 
