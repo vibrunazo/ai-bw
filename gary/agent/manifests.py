@@ -178,6 +178,17 @@ MANIFESTS: dict[str, dict] = {
                        "before": _V09_FIGHT["before"] + ["detect"],
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.23: v0.22 that takes a third base (and more) once the macro model's odds of expanding add up
+    # to one (macro.py expand_mass)
+    "v023": {"version": "v0.23", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
+             "home_scvs": True, "balance": True, "defend_early": 150 * 24,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play", "expand_mass": 1.0},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "before": _V09_FIGHT["before"] + ["detect"],
+                       "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
@@ -422,7 +433,9 @@ OPTIONS = {
     # (432 games, the new baseline): lost 15 (30), won 115 (118). In v0.22
     "defend_early": lambda m: m.update(defend_early=150 * 24),
     # macro.py expand_mass: the expansion once the model's odds of it, summed over Gary's decisions since
-    # the last, reach one (the favorite never picks a third base)
+    # the last, reach one (the favorite never picks a third base). On v0.22 (432 games): won 109 (108), lost
+    # 11 (11); Zerg v3 games at 20:00 on 3+ Command Centers 31 of 48 (5 of 49). Forcing the natural too
+    # (at 4:00-6:00, under pressure) lost 15. In v0.23
     "expand": lambda m: m["macro"].update(expand_mass=1.0),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch

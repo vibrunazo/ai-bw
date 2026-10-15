@@ -31,7 +31,7 @@ from eval import monitor, priority
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
         for m in ("python_gg13676", "standard_ozp3w", "heartbreak_9rg84")}
-VERSION = "v022"
+VERSION = "v023"
 MINUTES = 12
 ARMY = {0, 1, 2, 3, 5, 30, 32, 34, 8, 11, 12, 58}
 ZERG_FIGHTERS = {37, 38, 39, 43, 103, 46, 47, 45, 44, 62}
@@ -192,7 +192,7 @@ def report(games: list[dict]) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--games", nargs="*", default=[], help="opponent:map:seed")
-    ap.add_argument("--from-logs", help="every v022 game in the vs_rush folders under this one")
+    ap.add_argument("--from-logs", help="every v023 game in the vs_rush folders under this one")
     ap.add_argument("--out", default=str(REPO_ROOT / "runs" / "losses.jsonl"))
     ap.add_argument("--parallel", type=int, default=14)
     priority.add_argument(ap)

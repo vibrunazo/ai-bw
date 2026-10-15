@@ -12,8 +12,8 @@ minus terran lost, plus the threats left at the Terran's bases), SCVs lost, army
 the share of them alone (no other Terran fighter within 6 tiles) and outnumbered 2:1 or worse, the
 median of zerg / Terran fighters around a death; Gary versions paired with the first.
 
-    python -m eval.episodes --versions v022 v022+regroup --run 239 --draws 4
-    python -m eval.episodes --split train --run 552 --versions v022      (the training episodes)
+    python -m eval.episodes --versions v023 v023+regroup --run 239 --draws 4
+    python -m eval.episodes --split train --run 552 --versions v023      (the training episodes)
 """
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ def summarize(rows: list[dict], who: str, base: dict | None) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--versions", nargs="+", default=["v022"])
+    ap.add_argument("--versions", nargs="+", default=["v023"])
     ap.add_argument("--run", type=int, default=239, help="the first N saved scenarios")
     ap.add_argument("--split", default="test", choices=["test", "train"])
     ap.add_argument("--seconds", type=float, default=120)

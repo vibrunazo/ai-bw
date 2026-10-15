@@ -6,7 +6,7 @@ the table shows wins, losses and games still running at the time limit.
 
     python -m eval.vs_rush --versions v02 v03 --seeds 1 2 3 4 --attack-after 420
     python -m eval.vs_rush --versions v03 --seeds 1 2 3 4 5 6 --attack-after 0 --minutes 10
-    python -m eval.vs_rush --versions v022 --opponent replayed --seeds 1 2 3 4 --attack-after 0
+    python -m eval.vs_rush --versions v023 --opponent replayed --seeds 1 2 3 4 --attack-after 0
 
 --opponent replayed is a test fixture (gary/bots/zerg_replayed.py): each seed's Zerg army appears
 when a pro Zerg's did, in a real TvZ game.
