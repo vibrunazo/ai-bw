@@ -104,6 +104,9 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
         gary = make_bot(hi, mapinfo)
         end = hi.frame + int(minutes * 60 * 24)
         while hi.frame < end:
+            if hi.frame % 24 < 2 and not any(p["slot"] == slot for p in game.observe()["players"]):
+                print("Gary lost: its player has left the game", flush=True)   # (eliminated)
+                break
             gary.act()
             hi.step(2)                       # waits for the live game to advance
             if hi.frame % (24 * 60) < 2:
