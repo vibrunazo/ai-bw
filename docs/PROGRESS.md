@@ -316,6 +316,9 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   every half second and stims the group around the units it picks, once Stim Packs is done (Gary
   remembers its own stims: the live client doesn't report them). On 8 seeds against Zerg v3 to 25
   minutes: won 7, lost 0, 5-8 marines a stim (without: 6, 0; seed 105, nearly lost, won at 13:00).
+- **Live check (v0.27 vs the Remastered computer Zerg, 18 minutes, 2026-10-16):** 10 stims in the
+  replay (groups of 2-10 marines, from 8:45), a Comsat that scanned burrowed lurkers at 14:01, 5
+  bunker loads in the whole game, alive and growing at 18:00 (45 SCVs, 3 Command Centers).
 - **Not addressed:** marines between main and natural picked off; the AFK feel.
 
 ### v0.26 (October 2026): the first human game's losses
