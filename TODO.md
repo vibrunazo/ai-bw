@@ -38,6 +38,17 @@ What to do, in order:
 2. **A human in the loop.** The Remastered bridge's known gaps fixed (adapters/scr_bridge README; done
    2026-10-15 offline, pinning live), then short sets against a human; that losses list sets the next
    version. This is the product; the rest is proxy.
+   Human game 1 (2026-10-16, runs/live/v025_human1, the user's Zerg won at 12:17; the bridge matched
+   OpenBW over the whole replay, so every failure is Gary's). The user's notes, and Gary's log:
+   - 4 lings did far too much: Gary reacts very slowly; a lone SCV walks out to build, gets
+     killed, and the next one walks into the same lings. Kiting (hit one SCV, pull back, repeat)
+     beats it: Gary never met an opponent who micros (the self-play Zerg's job);
+   - stuck in rush defense: no Academy, no gas, one base until 8:30; the expansion late and
+     undefended;
+   - mutas (read at 7:36) and no turret ever (the muta answer was dropped in v0.24); it can't hold
+     main and natural against mutas;
+   - pulled workers against 4 to 23 units, 9:07-11:43: SCVs 26 to 0;
+   - not inhuman to watch, other than slow: "could be a newbie human".
    Gary's failures in the live games against the computer Zerg so far (runs/live, 2026-10-15):
    - marines and medics trickle up the enemy ramp one by one, and the 8:00 hunt throws the army
      away (games 3 and 5: 14 marines to 5);

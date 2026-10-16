@@ -212,6 +212,19 @@ MANIFESTS: dict[str, dict] = {
                        "before": _V09_FIGHT["before"] + ["detect"],
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.26: v0.25 with the fixes from human game 1 (OPTIONS muta_answer, catch_up, pull_cap), and the
+    # parked build that keeps its SCV (executor.py, shared code)
+    "v026": {"version": "v0.26", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
+             "home_scvs": True, "balance": True, "defend_early": 150 * 24,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True,
+                       "answer_options": {"mutas": True, "catch_up": True}},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "before": _V09_FIGHT["before"] + ["detect"],
+                       "rule_options": {"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8},
+                                        "load": {"always": True}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
@@ -471,6 +484,13 @@ OPTIONS = {
     # Irradiate, turrets one a base; against mutalisks nothing: the model's own turrets do). On v0.23 (432
     # games): won 112 (109), lost 10 (11); against Zerg v3's lurkers won 11 of 32 (7). In v0.24
     "answers": lambda m: m["macro"].update(answers=True),
+    # Human game 1 (v0.25 vs the user's Zerg, 2026-10-16, lost at 12:17): answers.py against mutalisks
+    # (Engineering Bay, Academy, 2 turrets in every mineral line), and after the rush defense what it put
+    # off (gas, Academy, the natural); fight.py's pull not against flyers nor more than 8 zerg supply (x2).
+    # Judged by the next games against humans; the headless pool only checks they break nothing. In v0.26
+    "muta_answer": lambda m: m["macro"].setdefault("answer_options", {}).update(mutas=True),
+    "catch_up": lambda m: m["macro"].setdefault("answer_options", {}).update(catch_up=True),
+    "pull_cap": lambda m: m["fight"].setdefault("rule_options", {}).setdefault("pull", {}).update(ground_only=True, max_enemy=8),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch
     # firsts called early pools. In v0.16
@@ -629,7 +649,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro.expand_mass = m["macro"].get("expand_mass")
         if m["macro"].get("answers"):
             from gary.agent.answers import Answers
-            g.macro.answers = Answers(g)
+            g.macro.answers = Answers(g, **m["macro"].get("answer_options", {}))
     if m["army"] is not None:
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)

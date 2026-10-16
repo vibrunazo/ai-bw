@@ -79,6 +79,7 @@ MAX_HP = {37: 35, 38: 80, 39: 400, 41: 40, 42: 200, 43: 120, 44: 150, 45: 120, 4
 MINERALS = {176, 177, 178}
 MINERAL_LINE_PX = 4 * 32             # pull(mineral_line): zerg this close to a base's minerals are in its mineral line
 THREAT_PX = 10 * 32                  # enemy fighters this close to a Command Center threaten its workers
+ZERG_FLYERS = {42, 43, 44, 45, 47, 59, 62}   # overlord, mutalisk, guardian, queen, scourge, cocoon, devourer
 CALM_FRAMES = 24 * 5                 # pulled workers go back to mining after 5 s without a threat
 REPAIR_ORDER = 34
 REPAIRERS = 2
@@ -358,9 +359,14 @@ class PullRule:
     name = "pull"
 
     def __init__(self, g: Gary, ratio: float = 1.0, delay_s: float = 0, per_enemy: int = 2,
-                 attacked_only: bool = False, max_share: float | None = None, mineral_line: bool = False):
+                 attacked_only: bool = False, max_share: float | None = None, mineral_line: bool = False,
+                 ground_only: bool = False, max_enemy: int | None = None):
         self.g = g
         self.mineral_line = mineral_line
+        # options (human game 1, v0.25: SCVs pulled against 4 to 23 zerg, mutalisks among them, 9:07-11:43,
+        # until none was left): ground_only: SCVs can't hit flyers, so flyers don't call a pull; max_enemy:
+        # no pull against more than this much zerg supply (x2: a zergling 1), an army, not a few lings
+        self.ground_only, self.max_enemy = ground_only, max_enemy
         self.max_share = max_share
         self.next_pull = 0
         self.ratio, self.delay, self.per_enemy, self.attacked_only = ratio, int(delay_s * 24), per_enemy, attacked_only
@@ -369,7 +375,8 @@ class PullRule:
     def step(self, obs: dict, mine: list[dict]) -> bool:
         g = self.g
         hi = g.hi
-        enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0]
+        enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0
+                 and not (self.ground_only and u["type"] in ZERG_FLYERS)]
         for cc in (u for u in mine if u["type"] == T.CC and u["completed"]):
             near = [u for u in enemy if math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < THREAT_PX]
             if self.attacked_only and not any(u.get("order_target") in {m["tag"] for m in mine} for u in near):
@@ -388,7 +395,7 @@ class PullRule:
             theirs = sum(supply_x2(u["type"]) for u in near)
             alive = {u["tag"] for u in mine}
             g.pulled &= alive
-            threat = theirs >= 2 and theirs > self.ratio * ours
+            threat = theirs >= 2 and theirs > self.ratio * ours and (self.max_enemy is None or theirs <= self.max_enemy)
             if not threat:
                 self.threat_since = None
             elif self.threat_since is None:

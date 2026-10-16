@@ -285,6 +285,23 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   on 2 Command Centers all game with 1,000-2,000 gas unspent from 14:00, and its army keeps walking
   into the lurkers on the enemy's side.
 
+### v0.26 (October 2026): the first human game's losses
+
+- **What it is:** v0.25 with the fixes for what lost its first game against a human (the user's
+  Zerg over LAN, 2026-10-16, Gary dead at 12:17; the bridge matched OpenBW over the whole replay, so
+  every failure was Gary's): against mutalisks an Engineering Bay, an Academy and 2 turrets in every
+  base's mineral line (answers.py; v0.24 had dropped the muta answer after it lost bot games, and
+  Gary built no turret against the user's mutas); after the rush defense, what it put off: gas, an
+  Academy and the natural (the model asked only marines, SCVs and depots from 4:45 to 8:13); no
+  worker pull against flyers or more than 8 zerg supply (x2) (SCVs pulled against 4 to 23 zerg,
+  mutas among them, 26 SCVs to 0). Shared code: a parked build keeps its own SCV (executor.py).
+- **Judged by:** the next games against humans. Headless only checks it breaks nothing: 6 seeds
+  against Zerg v3 (14 minutes) won 3 (v0.25 2), lost 0 (0); every fix fired (catch-up in 6, muta
+  turrets in the natural's mineral line in 4, no worker pulls where v0.25 pulled 12 and 14 times).
+- **Not addressed (the user's notes):** reactions far too slow; a lone SCV walking out to build
+  into the lings that killed the last one; kiting beats it (Gary never met a Zerg that micros: the
+  self-play Zerg's job).
+
 ### v0.25 (October 2026): hunts that finish games
 
 - **What it is:** v0.24 whose hunts (the army going for the Zerg's last buildings once no zerg army

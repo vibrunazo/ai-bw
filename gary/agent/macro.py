@@ -291,7 +291,9 @@ class LearnedMacro:
             return                          # one builder walking ahead at a time (the parked build)
         if plan["kind"] == "build":
             data = {**plan.get("data", {}), "decision": (goal["act"], goal["id"])}
-            g.task = Task("build", goal["id"], plan["where"], data=data, started=hi.frame)
+            if "near" in goal:                  # a goal that names its base and spot (answers.py turrets)
+                data.update(near=goal["near"], level_at=goal.get("level_at"))
+            g.task = Task("build", goal["id"], goal.get("where", plan["where"]), data=data, started=hi.frame)
         else:
             g.task = Task("command", data=plan, started=hi.frame)
             g.spend(minerals)
