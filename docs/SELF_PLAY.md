@@ -83,6 +83,13 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    and bank (244/202, 248/262) match: the macro holds to 8:00; the 10:00 float is a losing game (2
    hatcheries left). The army gap is the fights (v3's scripted army): next the acceptance test and the
    Zerg army model.
+   **The Zerg army model** (runs/army/TvZ_Z_20261016-114756; held out: destination within one cell 62%,
+   staying put 58%; fight estimate correlation 0.46, the Terran's 0.40) now chooses where Gary-Z's
+   groups go, every 5 s, an attack it expects to lose held; v1's stage-judge-go and v2's scripted
+   all-in are gone, v1's home defense, v3's raid and lurkers stay; groups take every ground fighter
+   (v3's took zerglings only: hydralisks stood where they hatched). Hatcheries rally to the army's
+   meeting point from 5:00 (the user's way; groups form there). 8 seeds, 12 min: noisy (army supply
+   8/6/5 at 8/10/12, drones 27 at 12:00); judged by the acceptance test.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

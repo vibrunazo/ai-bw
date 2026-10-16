@@ -30,6 +30,7 @@ from gary import zerg as Z
 from gary.bots import zerg_v3 as V3
 from gary.bots.zerg_v3 import Job, ZergV3
 from gary.interface import screen_of
+from gary.policy.army import ArmyModel, ArmyTracker
 from gary.policy.macro import MacroModel, MacroTracker
 
 MORPH, BMORPH, BUILD, RESEARCH, UPGRADE, EXPAND = 1, 2, 3, 4, 5, 6
@@ -44,6 +45,12 @@ GAS_FLOAT, GAS_LOW = 400, 150   # gas above this (and above the minerals): its d
 RALLY_IN_LINE = 0.6              # the rally: this far from the hatchery toward its minerals' middle
 POST_OUT = 10 * 32               # px: the outer watch post, this far outside Gary's natural toward the middle
 POST_AGAIN = 60 * 24            # a post whose overlord was lost is manned again after this
+ARMY_EVERY = 5 * 24              # a group's destination asked of the army model this often
+HOLD_BELOW = -0.02              # an attack the fight estimate expects to lose more army share than this: held
+# v1's groups take every Zerg ground fighter (v3's took zerglings only: hydralisks and ultralisks stood
+# where they hatched), each as so many zerglings (a group forms at v1's wave count)
+GROUND = {Z.ZERGLING: 1.0, Z.HYDRALISK: 2.5, Z.ULTRALISK: 8.0, Z.DEFILER: 2.0, Z.QUEEN: 2.0}
+RALLY_FRONT_AT = 5 * 60 * 24     # hatcheries rally to the army's meeting point from then on
 STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)
 PLANS_FILE = "TvZ_Z_plan.json"  # data/interim/taxonomy: the plans' names and how often pros play them
 
@@ -57,10 +64,10 @@ for _t, _s in Z.SIZE.items():
     V3.SIZE.setdefault(_t, _s)
 
 
-def latest_model() -> Path:
-    found = sorted(Path("runs/macro").glob("TvZ_Z_*/model.pt"))
+def latest_model(kind: str = "macro") -> Path:
+    found = sorted(Path(f"runs/{kind}").glob("TvZ_Z_*/model.pt"))
     if not found:
-        raise FileNotFoundError("no Zerg macro model in runs/macro: python -m train.macro --race Z")
+        raise FileNotFoundError(f"no Zerg {kind} model in runs/{kind}: python -m train.{kind} --race Z")
     return found[-1]
 
 
@@ -97,6 +104,13 @@ class GaryZ(ZergV3):
         # only 4% none) and kept droning while pros switch to army (57% of larvae at 6:00)
         self.plan, self.poke, self.pressing = "mutas", True, False
         self.tracker = MacroTracker(self.model.spec, hi.slot, plan)
+        # where the groups go: the Zerg army model (runs/army/TvZ_Z_*), as the Terran's army; v1's
+        # stage-judge-go is replaced, its home defense and v3's raid and lurkers stay
+        self.army_model = ArmyModel.load(latest_model("army"))
+        self.army_tracker = ArmyTracker(self.army_model.spec, hi.slot, mapinfo.size, self.home)
+        self.sizes = dict(GROUND)
+        self.next_order: dict[int, int] = {}
+        self.rally_of: dict[int, bool] = {}     # hatchery -> rallied to the front (True) or its minerals
         self.goal: dict | None = None
         self.parked: dict | None = None        # a decision waiting for its money, kept for it meanwhile
         self.turn, self.streak = "macro", 0    # who goes first, and how many actions in a row it had
@@ -204,21 +218,27 @@ class GaryZ(ZergV3):
         user's way: with the army, then the drones picked up with a ctrl+click), 21% by the minerals
         (a third of those before 6:00), onto a mineral field practically never. (True: it acted.)"""
         hi = self.hi
+        # (the user's way: beside the minerals while droning, the army's meeting point from RALLY_FRONT_AT,
+        # when pros switch to army; v1's groups form at the meeting point, and the army model orders groups)
+        front = hi.frame >= RALLY_FRONT_AT
         for h in hatches:
-            if not h["completed"] or h["tag"] in self.rallied_at:
+            if not h["completed"] or self.rally_of.get(h["tag"]) == front:
                 continue
             base = self.map.base_near((h["x"], h["y"]))
-            if not base.minerals:
-                self.rallied_at.add(h["tag"])
+            if not base.minerals and not front:
+                self.rally_of[h["tag"]] = front
                 continue
-            mx = sum(x for x, _ in base.minerals) / len(base.minerals)
-            my = sum(y for _, y in base.minerals) / len(base.minerals)
-            spot = (int(h["x"] + (mx - h["x"]) * RALLY_IN_LINE), int(h["y"] + (my - h["y"]) * RALLY_IN_LINE))
+            if front:
+                spot = self.gather
+            else:
+                mx = sum(x for x, _ in base.minerals) / len(base.minerals)
+                my = sum(y for _, y in base.minerals) / len(base.minerals)
+                spot = (int(h["x"] + (mx - h["x"]) * RALLY_IN_LINE), int(h["y"] + (my - h["y"]) * RALLY_IN_LINE))
             if self._look(obs, (h["x"], h["y"])):
                 return True
             if obs["selection"] == [h["tag"]]:
                 hi.minimap_right_click(*spot)
-                self.rallied_at.add(h["tag"])
+                self.rally_of[h["tag"]] = front
                 return True
             top = screen_of(obs, h["x"], h["y"] - 24)
             if top:
@@ -266,7 +286,37 @@ class GaryZ(ZergV3):
             return True
         return False
 
+    def _go(self, mine) -> bool:
+        return False                               # (no scripted all-in: the army model decides when to attack)
+
+    def _group(self, n: int, obs: dict, lings: dict, enemy: list[dict]) -> bool:
+        """Group n goes where the army model says, every ARMY_EVERY: its most likely cell (the one the
+        group is in: it stays), moving or attacking; an attack the fight estimate expects to lose is held
+        (the group stays). (True: it acted.)"""
+        hi = self.hi
+        if self.phase.get(n) == "to_staging":           # (a new group: to the staging point first, as v1's)
+            return self._order(n, obs, "move", self.staging, "staging")
+        if hi.frame < self.next_order.get(n, 0):
+            return False
+        self.next_order[n] = hi.frame + ARMY_EVERY
+        members = [lings[t] for t in self.groups[n] if t in lings]
+        if not members:
+            return False
+        grid, glob = self.army_tracker.inputs(obs, members)
+        where, kind = self.army_model.predict(grid, glob)
+        cell = int(where[0].argmax())
+        attack = bool(kind[0, 1] > 0.5)
+        mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
+        here = self.army_tracker.cell(*mid)
+        if cell == here:
+            return False                                # (stay)
+        if attack and self.army_model.fight(grid, glob, cell, True) < HOLD_BELOW:
+            return False                                # (an attack it expects to lose: held, the group stays)
+        point = self.army_tracker.center(cell)
+        return self._order(n, obs, "attack" if attack else "move", point, "model")
+
     def army(self, obs: dict, mine: list[dict]) -> bool:
+        self.army_tracker.remember(obs)
         if self._overlord_posts(obs, mine):
             return True
         if self.poke and not self.poked and not self.all_in and self._poke(obs, mine):
