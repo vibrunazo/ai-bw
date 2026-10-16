@@ -90,6 +90,14 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    (v3's took zerglings only: hydralisks stood where they hatched). Hatcheries rally to the army's
    meeting point from 5:00 (the user's way; groups form there). 8 seeds, 12 min: noisy (army supply
    8/6/5 at 8/10/12, drones 27 at 12:00); judged by the acceptance test.
+   **Acceptance (2026-10-16, eval/garyz_accept.py: 3 maps x 16 seeds, 20 minutes, against v0.27):**
+   decided 65% (Gary-T won 31, lost 0, 17 undecided; Zerg v3's pool: about a third, Gary losing 3%);
+   9 plans rolled at about the pros' shares (3-hatch spire first 18 of 48, 38%; pros 40%), the plan
+   followed (lurker-first games research Lurker Aspect before the Spire); timings: Spire at 5:05-6:48
+   (pros 5:09 in that plan), Lurker Aspect 5:14-6:33 (pros 4:40-5:35), the third Hatchery about two
+   minutes late (pros 2:52); the same seed twice gives the same game. So it runs as an opponent and
+   ends games, but it never wins: weaker than Zerg v3 (its fights are v3's scripted micro). Next: Zerg
+   fight roles (and the kiting drill), the lever for its strength, and the humanlikeness classifier.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
