@@ -74,11 +74,32 @@ def resim_exe() -> Path:
 
 
 def load_styles(matchup: str) -> dict[str, int]:
-    """'rel_path|player name' -> build-style cluster, for every race in the matchup."""
+    """'rel_path|player name' -> build style, for every race in the matchup: a race's plan label
+    (taxonomy/plans.py, every game has one) where there is one, else its tech cluster
+    (taxonomy/discover.py)."""
     styles: dict[str, int] = {}
-    for path in (data_root() / "interim" / "taxonomy").glob(f"{matchup}_*_tech.json"):
-        styles.update(json.loads(path.read_text(encoding="utf-8")).get("assignments", {}))
+    folder = data_root() / "interim" / "taxonomy"
+    for path in folder.glob(f"{matchup}_*_tech.json"):
+        plan = folder / path.name.replace("_tech.json", "_plan.json")
+        styles.update(json.loads((plan if plan.exists() else path).read_text(encoding="utf-8")).get("assignments", {}))
     return styles
+
+
+def restyle(matchup: str) -> None:
+    """Rewrite the index's player styles from the current taxonomy, without rebuilding the games."""
+    styles = load_styles(matchup)
+    path = out_dir() / "index.jsonl"
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    changed = 0
+    for r in rows:
+        if r.get("matchup") != matchup:
+            continue
+        for p in r.get("players", []):
+            new = styles.get(f"{r['rel_path']}|{p['name']}")
+            changed += new != p.get("style")
+            p["style"] = new
+    path.write_text("".join(json.dumps(r, ensure_ascii=False) + chr(10) for r in rows), encoding="utf-8")
+    print(f"restyled: {changed} player styles changed")
 
 
 def run_resim(rel_path: str) -> list[dict]:
@@ -256,9 +277,13 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4)
     ap.add_argument("--force", action="store_true", help="rebuild games already in the index")
     ap.add_argument("--report", action="store_true")
+    ap.add_argument("--restyle", action="store_true", help="only rewrite the index's styles from the taxonomy")
     args = ap.parse_args()
     if args.report:
         report()
+        return
+    if args.restyle:
+        restyle(args.matchup)
         return
     done = {} if args.force else load_index()
     todo = [r for r in select(args.matchup) if r["sha1"] not in done]

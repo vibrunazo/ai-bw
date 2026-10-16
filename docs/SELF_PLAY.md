@@ -39,6 +39,13 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
      four of about 2%, two thirds of the games in none. Steering Gary-Z needs a better Zerg
      taxonomy first (another window or cluster size), its cards reviewed. The Zerg macro model
      (2026-10-04): top-1 50% (baseline 32%), timing error 2.5 s median.
+   **Then (2026-10-16):** the Zerg macro model retrained on the current pipeline (top-1 50.3%, as
+   before); Zerg plans (taxonomy/plans.py) label every pro game of 9:00 or more by opening (pool or
+   hatchery first), hatcheries by 5:00 (2 or 3) and first tech (spire, lurker, hydralisks): 10 plans,
+   the standard 3-hatch spire-first 44%, hatchery-first 2-hatch spire 12%, pool-first 3-hatch spire 11%,
+   3-hatch lurker 9%, ...; the macro index restyled with them for the Zerg only (ingest/macro_dataset.py
+   --restyle) and the model retrained steered by them (runs/macro/TvZ_Z_20261016-095424: top-1
+   50.5%); gary/zerg.py, the Zerg facts, checked against units.dat (tests/test_game_data.py).
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

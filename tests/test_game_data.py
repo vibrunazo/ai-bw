@@ -1,4 +1,5 @@
-"""Gary's Terran tables (gary/terran.py) against the game's own data: costs, footprints, supply.
+"""Gary's Terran and Zerg tables (gary/terran.py, gary/zerg.py) against the game's own data: costs,
+footprints, supply.
 
 A wrong cost is silent: the game refuses a build it can't pay for without a word, and Gary waits
 and orders it again (the Refinery said 75 minerals, the game's is 100: in about 40% of games gas
@@ -15,6 +16,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 from gary import terran as T  # noqa: E402
+from gary import zerg as Z  # noqa: E402
 
 MAP = REPO / "tests" / "fixtures" / "replays" / "stardata_tvz_standard_ozp3w.rep"
 
@@ -34,18 +36,21 @@ def test_tables_match_the_game():
         return
     with game:
         wrong = []
-        for ut, cost in T.COST.items():
-            info = game.unit_type_info(ut)
-            if info and (info["minerals"], info["gas"]) != tuple(cost):
-                wrong.append(f"cost {T.NAMES.get(ut, ut)}: {cost}, game {(info['minerals'], info['gas'])}")
-        for ut, (w, h) in T.SIZE.items():
-            info = game.unit_type_info(ut)
-            if info and (info["w"] // 32, info["h"] // 32) != (w, h):
-                wrong.append(f"size {T.NAMES.get(ut, ut)}: {(w, h)}, game {(info['w'] // 32, info['h'] // 32)}")
-        for ut, supply in T.SUPPLY.items():
-            info = game.unit_type_info(ut)
-            if info and info["supply_x2"] != supply * 2:
-                wrong.append(f"supply {T.NAMES.get(ut, ut)}: {supply}, game {info['supply_x2'] / 2}")
+        for R in (T, Z):
+            pairs = getattr(R, "PAIRS", set())          # (Zerg: one order makes two, the table has the pair's)
+            for ut, cost in R.COST.items():
+                info = game.unit_type_info(ut)
+                if info and (info["minerals"], info["gas"]) != tuple(cost):
+                    wrong.append(f"cost {R.NAMES.get(ut, ut)}: {cost}, game {(info['minerals'], info['gas'])}")
+            for ut, (w, h) in R.SIZE.items():
+                info = game.unit_type_info(ut)
+                if info and (info["w"] // 32, info["h"] // 32) != (w, h):
+                    wrong.append(f"size {R.NAMES.get(ut, ut)}: {(w, h)}, game {(info['w'] // 32, info['h'] // 32)}")
+            for ut, supply in R.SUPPLY.items():
+                info = game.unit_type_info(ut)
+                want = supply * 2 // (2 if ut in pairs else 1)
+                if info and info["supply_x2"] != want:
+                    wrong.append(f"supply {R.NAMES.get(ut, ut)}: {supply}, game {info['supply_x2'] / 2}")
     assert not wrong, "; ".join(wrong)
 
 
