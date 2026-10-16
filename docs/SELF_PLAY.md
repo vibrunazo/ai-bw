@@ -63,11 +63,21 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    point, and idle drones mine at any base Gary-Z holds (a rallied drone doesn't mine by itself in BW,
    the user's correction, checked in OpenBW: the idle routine sends it; pros' hatchery rallies in 46
    TvZ games: 78% toward the front, drones then picked up with the army's, 21% by the minerals; the
-   front rally with a ctrl+click pickup is the pro way, for later); gas drones follow the bank (back to minerals
+   front rally with a ctrl+click pickup is the pro way, for later. The user's practice: rally beside
+   the hatchery while droning (the early game, and a new expansion until it's saturated), else to the
+   army's meeting point, in front of the natural or mid map with map control); gas drones follow the bank (back to minerals
    above 400 gas). Over 8 seeds against v0.27 (eval/zerg_economy.py), medians at 4/6/8/10 min:
    drones 15/20/32/25 (Zerg v3: 12/20/29/28), hatcheries 2/3/3/2 (2/2/3/4), army supply 2/3/6/10
    (2/5/14/25), gas 392/142/274/194 (v3 piles 1,694 by 8:00). The economy is v3's; the army is half
    of it or less, and Gary-T wears it down by 12:00.
+   The army, against the pros (300 of their games): they spend 70% of larvae on drones until 5:00,
+   57-71% on army from 6:00 (drones 23/27/30, army supply 4/20/27 at 6/8/10). Gary-Z kept droning
+   (71-82% at 6:00-7:59): it had seen no Terran army by 8:00 in 8 games of 8 (pros: 4 units by 5:00,
+   4% none), so overlords now stand on watch posts outside Gary's natural and halfway (seen from
+   4:00-5:00). Then every larva shortage became a creep colony (the first decision possible taken):
+   it now waits for a larva, as the Terran's macro waits for a busy building, and no two buildings
+   share a spot. 8 seeds: drones 16/24/20, army 4/10/12/16 at 6/8/10/12, 3-4 hatcheries. Half the
+   pros' army at 8:00-10:00 still; Gary-T wears it down by 12:00.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

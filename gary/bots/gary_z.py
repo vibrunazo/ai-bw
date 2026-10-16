@@ -42,6 +42,8 @@ QUERY_EVERY = 12
 GAS_FLOAT, GAS_LOW = 400, 150   # gas above this (and above the minerals): its drones go back to minerals;
                                 # below the other, the extractors are filled again
 RALLY_IN_LINE = 0.6              # the rally: this far from the hatchery toward its minerals' middle
+POST_OUT = 10 * 32               # px: the outer watch post, this far outside Gary's natural toward the middle
+POST_AGAIN = 60 * 24            # a post whose overlord was lost is manned again after this
 STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)
 PLANS_FILE = "TvZ_Z_plan.json"  # data/interim/taxonomy: the plans' names and how often pros play them
 
@@ -89,13 +91,19 @@ class GaryZ(ZergV3):
         self.style = plan
         self.plan_name = plans[0][plan] if plans and plan is not None and plan < len(plans[0]) else str(plan)
         # v3's army: the mutalisk flock always; lurkers burrow whenever there are lurkers (army below);
-        # no scripted poke or pressure (where the army goes is the army model's, later)
-        self.plan, self.poke, self.pressing = "mutas", False, False
+        # no scripted pressure (where the army goes is the army model's, later); v3's poke on, the first
+        # zerglings outside Gary's natural at about 3:00 and home: the model decides from what it sees,
+        # and without it Gary-Z had seen no Terran army by 6:00 in 8 games of 8 (pros: 4 units by 5:00,
+        # only 4% none) and kept droning while pros switch to army (57% of larvae at 6:00)
+        self.plan, self.poke, self.pressing = "mutas", True, False
         self.tracker = MacroTracker(self.model.spec, hi.slot, plan)
         self.goal: dict | None = None
         self.parked: dict | None = None        # a decision waiting for its money, kept for it meanwhile
         self.turn, self.streak = "macro", 0    # who goes first, and how many actions in a row it had
         self.gas_floating = False              # the gas piles up: its drones mine minerals meanwhile
+        self.post_of: dict[int, int] = {}      # watch post -> its overlord
+        self.post_again: dict[int, int] = {}   # watch post -> frame from which it's manned again
+        self._post_points = None
         self.army_turn_last = False            # the army took the last turn: the rest has this one
         self.next_query = 0
         self.rng = random.Random(seed * 7919 + 1)          # the dice (deterministic per seed)
@@ -218,7 +226,51 @@ class GaryZ(ZergV3):
             return True
         return False
 
+    def _posts(self) -> list[tuple[int, int]]:
+        """Overlord watch posts: outside Gary's natural (toward the map's middle) and halfway there."""
+        if self._post_points is None:
+            nat = self.map.natural_of(self.map.base_near(self.target)).center
+            w, h = self.map.size
+            d = math.dist(nat, (w / 2, h / 2)) or 1
+            out = (int(nat[0] + (w / 2 - nat[0]) / d * POST_OUT), int(nat[1] + (h / 2 - nat[1]) / d * POST_OUT))
+            mid = (int((self.nat_base.center[0] + out[0]) / 2), int((self.nat_base.center[1] + out[1]) / 2))
+            self._post_points = [out, mid]
+        return self._post_points
+
+    def _overlord_posts(self, obs: dict, mine: list[dict]) -> bool:
+        """Overlords on the watch posts, as pros send theirs: the model decides from what Gary-Z has seen,
+        and without them it had seen no Terran army by 8:00 in 8 games of 8 (pros: 4 units by 5:00, 4%
+        none) and kept droning when pros switch to army (57% of larvae at 6:00). One lost is replaced
+        after POST_AGAIN. (True: it acted.)"""
+        hi = self.hi
+        lords = {u["tag"]: u for u in mine if u["type"] == Z.OVERLORD and u["completed"]}
+        for k, post in enumerate(self._posts()):
+            tag = self.post_of.get(k)
+            if tag in lords or hi.frame < self.post_again.get(k, 0):
+                continue
+            if tag is not None:                        # (lost: another after a while)
+                self.post_of.pop(k)
+                self.post_again[k] = hi.frame + POST_AGAIN
+                continue
+            free = [u for u in lords.values() if u["tag"] not in self.post_of.values()]
+            if not free:
+                return False
+            sel = set(obs["selection"])
+            chosen = next((u for u in free if sel == {u["tag"]}), None)
+            if chosen is None:
+                self._select_one(obs, free)
+                return True
+            hi.minimap_right_click(*post)
+            self.post_of[k] = chosen["tag"]
+            self.log(f"overlord to watch post {k} at {post}")
+            return True
+        return False
+
     def army(self, obs: dict, mine: list[dict]) -> bool:
+        if self._overlord_posts(obs, mine):
+            return True
+        if self.poke and not self.poked and not self.all_in and self._poke(obs, mine):
+            return True
         if self._mutas(obs, mine):
             return True
         if any(u["type"] == Z.LURKER for u in mine) and self._lurkers(obs, mine):
@@ -292,8 +344,13 @@ class GaryZ(ZergV3):
         # zergling speed or an army never came (the first game: 2 zerglings and no Lair by 8:00)
         order = [k for _, k in sorted(((self.rng.random() ** (1 / p), k) for k, p in enumerate(probs[0])
                                         if p >= DICE_FLOOR), reverse=True)]
+        larva = any(u["type"] == Z.LARVA for u in mine)
         for k in order:
             act, uid = self.model.spec.decisions[k]
+            if not larva and act == MORPH and uid in Z.FROM_LARVA and Z.can_make(uid, self._done_types(mine), self.researched)                     and (uid == Z.OVERLORD or me["supply_used"] + Z.SUPPLY.get(uid, 1) <= me["supply_max"]):
+                return          # (no larva free yet: wait for the next, as the Terran's macro waits for a busy
+                                # building; taking the first thing possible instead made a creep colony of
+                                # every larva shortage, 44-66% of the decisions from 3:00 to 8:00, rolled at 1-5%)
             if act < 0 or not self._can(act, uid, obs, mine, me):
                 continue
             g = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": self._name(act, uid)}
@@ -506,6 +563,18 @@ class GaryZ(ZergV3):
         self._done(act, uid)
 
     def _building_spot(self, uid: int, mine: list[dict]):
+        """A spot for uid, off the spots of buildings on their way (two creep colonies went to one)."""
+        tile = self._spot_for(uid, mine)
+        if tile is None or uid == Z.EXTRACTOR:
+            return tile
+        w, h = Z.SIZE.get(uid, (2, 2))
+        for j in self.jobs.values():
+            jw, jh = Z.SIZE.get(j.unit_type, (2, 2))
+            if tile[0] < j.tile[0] + jw and j.tile[0] < tile[0] + w and tile[1] < j.tile[1] + jh and j.tile[1] < tile[1] + h:
+                return None
+        return tile
+
+    def _spot_for(self, uid: int, mine: list[dict]):
         if uid == Z.EXTRACTOR:
             return self._free_geyser(mine)
         if uid == Z.CREEP:                          # (colonies in front of the natural, as v3's sunkens)
