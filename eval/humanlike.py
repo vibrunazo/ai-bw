@@ -23,7 +23,7 @@ Gradient-boosted trees as train/stim.py; out-of-fold scores, 5 folds by game. Pr
 pro games of 10 minutes or more on Gary's three maps (Python, Fighting Spirit, Heartbreak Ridge),
 their features cached in data/interim/humanlike/.
 
-    python -m eval.humanlike --gary "runs/garyz_accept/*/*.rep" "runs/garyz_seeds1?/*.rep"
+    python -m eval.humanlike --gary "league=runs/garyz_accept/*/*.rep" "human=runs/live/*human*.rep"
     python -m eval.humanlike --race Z --gary "runs/garyz_accept/*/*.rep"            # Gary-Z's side
     python -m eval.humanlike --gary "runs/new/*.rep" --frozen runs/humanlike/T_<first>/model.pkl
 """
@@ -301,6 +301,30 @@ def pro_rows(race: str, games: int, workers: int) -> dict[str, list[dict]]:
     return {p: have[p] for p in chosen if have.get(p)}
 
 
+def gap_score(Xs, Xp, cap: float = 5.0) -> list:
+    """Per minute range (BUCKETS, then all minutes): (the mean standardized gap, the share of features
+    with Gary's median inside the pros' interquartile range), or None where there are too few rows.
+    A feature's spread: the pros' interquartile range, else their standard deviation, else 1."""
+    out = []
+    for a, b in list(BUCKETS) + [(0, 99)]:
+        g = Xs[(Xs[:, 0] >= a) & (Xs[:, 0] <= b)]
+        q = Xp[(Xp[:, 0] >= a) & (Xp[:, 0] <= b)]
+        if len(g) < 5 or len(q) < 20:
+            out.append(None)
+            continue
+        zs, inside = [], []
+        for k in range(1, Xs.shape[1]):
+            gv, qv = g[:, k][~np.isnan(g[:, k])], q[:, k][~np.isnan(q[:, k])]
+            if len(gv) < 3 or len(qv) < 10:
+                continue
+            lo, hi = np.percentile(qv, [25, 75])
+            spread = (hi - lo) or qv.std() or 1.0
+            zs.append(min(cap, abs(gv.mean() - qv.mean()) / spread))
+            inside.append(lo <= np.median(gv) <= hi)
+        out.append((float(np.mean(zs)), float(np.mean(inside))) if zs else None)
+    return out
+
+
 def matrix(games: dict[str, list[dict]], names: list[str]):
     X, gid, keys = [], [], list(games)
     for k, key in enumerate(keys):
@@ -323,7 +347,9 @@ def auc_by_minute(y, p, minute) -> dict[int, float]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--race", choices=("T", "Z"), default="T", help="whose side is judged")
-    ap.add_argument("--gary", nargs="+", required=True, help="globs of Gary's replays")
+    ap.add_argument("--gary", nargs="+", required=True,
+                    help="globs of Gary's replays, each optionally labeled by its opponent: label=glob "
+                         "(league, replayed, human; unlabeled: league)")
     ap.add_argument("--pros", type=int, default=PRO_GAMES)
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--frozen", help="also score Gary's games with this earlier model.pkl (did the old tells go?)")
@@ -338,7 +364,12 @@ def main() -> None:
     from sklearn.model_selection import GroupKFold
 
     names = _names(args.race)
-    paths = sorted({p for pat in args.gary for p in glob.glob(pat)})
+    label_of = {}
+    for pat in args.gary:
+        label, _, pat = pat.rpartition("=") if "=" in pat else ("league", "", pat)
+        for p in glob.glob(pat):
+            label_of.setdefault(p, label)
+    paths = sorted(label_of)
     with ProcessPoolExecutor(args.workers) as pool:
         got = list(monitor.track(pool.map(_job, [(p, args.race, gary_end(p)) for p in paths]), len(paths),
                                  f"Gary {args.race} games"))
@@ -346,8 +377,11 @@ def main() -> None:
     pros = pro_rows(args.race, args.pros, args.workers)
     print(f"{len(gary)} Gary games ({sum(map(len, gary.values()))} minutes), "
           f"{len(pros)} pro games ({sum(map(len, pros.values()))} minutes), side {args.race}")
-    Xg, gg, _ = matrix(gary, names)
+    Xg, gg, gkeys = matrix(gary, names)
+    labels = np.array([label_of[gkeys[k]] for k in gg])
     Xp, gp, _ = matrix(pros, names)
+    score = {lab: gap_score(Xg[labels == lab], Xp) for lab in sorted(set(labels.tolist()))}
+    score["all"] = gap_score(Xg, Xp)
     X = np.vstack([Xg, Xp])
     y = np.r_[np.ones(len(Xg)), np.zeros(len(Xp))]
     group = np.r_[gg, gp + gg.max() + 1]
@@ -387,7 +421,8 @@ def main() -> None:
     out = Path(args.out) / f"{args.race}_{stamp}"
     out.mkdir(parents=True, exist_ok=True)
     with open(out / "model.pkl", "wb") as f:
-        pickle.dump({"model": model, "names": names, "race": args.race, "auc": auc, "per_minute": per_min}, f)
+        pickle.dump({"model": model, "names": names, "race": args.race, "auc": auc, "per_minute": per_min,
+                     "gap_score": score}, f)
 
     lines = [f"# Humanlikeness: Gary's {args.race} side against the pros'", "",
              f"{len(gary)} Gary games, {len(pros)} pro games (TvZ, 10 min or more, Python / Fighting Spirit / "
@@ -395,7 +430,20 @@ def main() -> None:
              f"**AUC {auc:.3f}** (0.5: it can't tell Gary from the pros)", "",
              "| minute | " + " | ".join(str(m) for m in per_min) + " |",
              "|---|" + "---|" * len(per_min),
-             "| AUC | " + " | ".join(f"{v:.2f}" for v in per_min.values()) + " |", ""]
+             "| AUC | " + " | ".join(f"{v:.2f}" for v in per_min.values()) + " |", "",
+             "## The gap score (moves while the AUC saturates)", "",
+             "Mean standardized gap: each feature's Gary mean less the pros', over the pros' spread (their "
+             "interquartile range; capped at 5), averaged over the features: 0 is the pros. Inside: the share "
+             "of features whose Gary median lies within the pros' interquartile range. By opponent: the "
+             "pros faced pros; human games are the only rows where Gary's opponent is real.", "",
+             "| Gary's games | games | minutes | " + " | ".join(f"{a}-{b} min" for a, b in BUCKETS) + " | all |",
+             "|---|---|---|" + "---|" * (len(BUCKETS) + 1)]
+    for lab, sc in score.items():
+        n_games = len(gary) if lab == "all" else sum(1 for p in gary if label_of[p] == lab)
+        n_rows = len(Xg) if lab == "all" else int((labels == lab).sum())
+        lines.append(f"| {lab} | {n_games} | {n_rows} | " + " | ".join(
+            "-" if v is None else f"{v[0]:.2f} ({v[1]:.0%} inside)" for v in sc) + " |")
+    lines += [""]
     if args.frozen:
         old = pickle.load(open(args.frozen, "rb"))
         ok = old["names"] == names

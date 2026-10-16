@@ -322,6 +322,17 @@ class GaryZ(ZergV3):
             return True
         return False
 
+    @property
+    def attack_after(self) -> int:
+        """No earliest attack: the army model decides (eval/vs_rush.py sets 7:00 for the scripted rushes,
+        and v1 formed no group before it: the army stood ungrouped and the model unasked until 7:00, in
+        every Gary-Z game until now; Fable's catch, the army layer before fight roles)."""
+        return 0
+
+    @attack_after.setter
+    def attack_after(self, value) -> None:
+        pass
+
     def _go(self, mine) -> bool:
         return False                               # (no scripted all-in: the army model decides when to attack)
 
@@ -413,8 +424,10 @@ class GaryZ(ZergV3):
         mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
         if self.army_tracker.cell(*mid) == cell or self.sent_to.get(n) == (cell, attack):
             return False
-        self.sent_to[n] = (cell, attack)
-        return self._order(n, obs, "attack" if attack else "move", self.army_tracker.center(cell), "model")
+        acted = self._order(n, obs, "attack" if attack else "move", self.army_tracker.center(cell), "model")
+        if self.recalled != n:              # (sent; a first call only recalls the group's hotkey: marked
+            self.sent_to[n] = (cell, attack)   # sent then, the order itself never went: 12 asks for the
+        return acted                           # field in a minute, none carried out)
 
     def army(self, obs: dict, mine: list[dict]) -> bool:
         self.army_tracker.remember(obs)

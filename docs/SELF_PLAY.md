@@ -146,6 +146,21 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    all at home (pros: half in the field from 5 min), clumped (spread 2-5 tiles, pros 8-25), drones on
    gas (0-6%, pros 15%), a third of the pros' orders per fighter. The opponent leaks in (Gary is rarely
    attacked: Gary-Z seldom leaves home), as expected until both sides are Gary.
+   **Fable's review: the army layer before fight roles (2026-10-16).** An army standing at home isn't
+   engaged, so fight roles can't move that tell. Gary-Z's army layer, probed: eval/vs_rush.py sets the
+   scripted rushes' earliest attack (7:00), and v1 formed no group before it, so until 7:00 the army
+   stood ungrouped and the army model was never asked, in every Gary-Z game so far (now ignored:
+   the model decides); and a group was marked sent when its hotkey was recalled, a turn before its
+   order, so the order never went (12 asks for the field in a minute, none carried out). Now groups
+   form from 5:00, and the army goes to the field and stays. Gary-T's army layer, from 112 games' logs:
+   at 5-6 min it holds about 90% of its decisions (985 holds, 140 orders), and in 92% of the holds the
+   fight estimate for going is within 2 points of staying, noise for an estimate correlating 0.40;
+   the hold vetoes plain moves too (positioning, not attacks). Shared design, shared tell; a change
+   to Gary-T is a new version (its loop is frozen). The classifier now labels Gary's games by opponent
+   (league, replayed pros, human: the only real opponent) and reports a gap score that moves while the
+   AUC saturates: the mean standardized gap per minute range (Gary-T in the league 0.38/0.39/0.43/0.49
+   at 2-4/5-7/8-10/11-14 min; in the two human games 0.45/0.42/0.65/0.87) and the share of features
+   inside the pros' interquartile range.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
