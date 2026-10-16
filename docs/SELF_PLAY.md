@@ -123,6 +123,15 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    drones 20/32/25/31 at 6/8/10/12 (pros 23/27/30 at 6/8/10), hatcheries 3/3/4 (pros 3/3/4), army
    supply 4/10/7/7 (pros 4/20/27), Gary-T won 0 of 8. Still open: the bank (560 at 8:00, 860 at 10:00;
    pros 250-360) with gas nearly gone (44 at 10:00), and the fights.
+   **The larva cap and the gas (2026-10-16):** eval/zerg_economy.py now measures the share of
+   hatchery-time at the 3-larva cap, next to 98 pro Zergs (TvZ games of 12:30+, cached): Gary-Z 0-1%
+   from 6:00, pros 7-13%; its larvae are used as they come, so the floating bank wasn't slow hands
+   (and not a missing macro hatchery, a learned decision). It was gas: v3 forgets a gas drone only
+   when unseen, and one sent back to minerals while the gas floated stayed counted, its extractor
+   full all game (0-3 drones on gas from 6:00). Fixed, and groups form by supply (the user's catch:
+   the zergling-equivalent weights were hand-picked). 8 seeds, Gary-Z (pros): army supply 6/12/16/15
+   at 6/8/10/12 (4/18/24/34), bank 68/234/486/494 (262/310/360/442), gas 156/82/128/213
+   (400/422/500/510), drones 17/24/23/26 (21/25/28/32), Gary-T won 0 of 8.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

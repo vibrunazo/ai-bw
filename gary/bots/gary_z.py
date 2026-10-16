@@ -49,8 +49,10 @@ POST_AGAIN = 60 * 24            # a post whose overlord was lost is manned again
 ARMY_EVERY = 5 * 24              # a group's destination asked of the army model this often
 HOLD_BELOW = -0.02              # an attack the fight estimate expects to lose more army share than this: held
 # v1's groups take every Zerg ground fighter (v3's took zerglings only: hydralisks and ultralisks stood
-# where they hatched), each as so many zerglings (a group forms at v1's wave count)
-GROUND = {Z.ZERGLING: 1.0, Z.HYDRALISK: 2.5, Z.ULTRALISK: 8.0, Z.DEFILER: 2.0, Z.QUEEN: 2.0}
+# where they hatched), each by its supply in the game's own half-units (a zergling 1, a hydralisk 2: a
+# group forms at v1's wave count, 12 = 6 supply; hand-picked weights before, the user's catch)
+GROUND = {t: 2 * Z.SUPPLY[t] / (2 if t in Z.PAIRS else 1)
+          for t in (Z.ZERGLING, Z.HYDRALISK, Z.ULTRALISK, Z.DEFILER, Z.QUEEN)}
 RALLY_FRONT_AT = 5 * 60 * 24     # hatcheries rally to the army's meeting point from then on
 PACE_MAX = 10 * 24               # the longest wait for the next decision
 STANDING = {2, 3}               # Guard, PlayerGuard: a unit standing
@@ -58,6 +60,7 @@ STRAY = 15 * 32                 # a fighter in no group this far from the meetin
 STRAY_AGAIN = 10 * 24
 TASK_TIMEOUT = 10 * 24          # a v2 task (a drone to gas or to a building) given up after this
 SIDES = ("army", "macro", "helpers")   # who shares the hands, in turn
+MINERAL_ORDERS = {85, 86, 87, 90}   # MoveToMinerals, WaitForMinerals, MiningMinerals, ReturnMinerals
 STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)
 PLANS_FILE = "TvZ_Z_plan.json"  # data/interim/taxonomy: the plans' names and how often pros play them
 
@@ -229,6 +232,12 @@ class GaryZ(ZergV3):
         return self.gas_floating                   # (v2's idle routine sends gas drones to minerals then)
 
     def _gas(self, obs, mine, me, drones) -> bool:
+        # (v3 forgets a gas drone only when it goes unseen; one sent back to minerals while the gas
+        # floated is seen, so it stayed a gas drone and its extractor looked full all game: 0-3 drones
+        # on gas from 6:00, gas 44 at 10:00 to the pros' 500, and the minerals unspent)
+        back = {u["tag"] for u in drones if u["order"] in MINERAL_ORDERS}
+        self.gas -= back
+        self.gas_of = {d: e for d, e in self.gas_of.items() if d not in back}
         return False if self.gas_floating else super()._gas(obs, mine, me, drones)
 
     def _mining_bases(self, mine) -> list:

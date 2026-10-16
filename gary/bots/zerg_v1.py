@@ -106,7 +106,7 @@ class ZergV1(ZergRush):
             if not self.groups[n]:
                 del self.groups[n], self.phase[n]
         grouped = set().union(*self.groups.values()) if self.groups else set()
-        # a new group: 12 zerglings' worth (_size) at the gathering point, not in a group, once attacks are allowed
+        # a new group: the wave's size (_size: a count for zerglings, supply for a mix) at the gathering point, not in a group, once attacks are allowed
         gather = self.gather_point()
         waiting = [u for t, u in lings.items() if t not in grouped and math.dist((u["x"], u["y"]), gather) < 10 * 32]
         fresh = [u for u in waiting if screen_of(obs, u["x"], u["y"])]
