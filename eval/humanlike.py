@@ -64,6 +64,18 @@ MET = 8 * 32
 QUIET = 5                       # samples (10 s) with no threat before a new attack starts
 SIEGED = 30                     # Siege Tank in siege mode
 BUCKETS = ((2, 4), (5, 7), (8, 10), (11, 14), (15, 20))
+TICK = 8                        # frames between in-fight looks (a marine reloads in 15)
+ENGAGE = 7 * 32                 # an enemy fighter this near: in a fight
+MOVE = 6
+ATTACKING = {10, 14}            # AttackUnit, AttackMove
+HARASS_QUIET = 10 * 24          # damage after this long without: a new harassment
+UNARMED = {T.MEDIC, T.VESSEL, Z.QUEEN, Z.DEFILER}     # (never fire: not idle when they don't)
+SIGHT = 12 * 32                 # enemy fighters seen this near its units or buildings: a sighting
+SIGHT_NEAR = 15 * 32            # its fighters this near the sighting are the ones that may answer
+SIGHT_FOR = 5 * 24              # what they do in this long after it, until the first damage
+LONE_FRIEND = 4 * 32            # alone: no fighter of its own this near
+LONE_ENEMY = 6 * 32             # outnumbered: 2+ seen enemy fighters this near
+AIR = {Z.MUTALISK, Z.SCOURGE, Z.GUARDIAN, Z.DEVOURER, T.WRAITH, T.VALKYRIE, T.BC, T.DROPSHIP, T.VESSEL}
 
 RACES = {
     "T": {"worker": T.SCV, "halls": {T.CC},
@@ -75,6 +87,7 @@ RACES = {
                         T.EBAY: "ebay", T.ARMORY: "armory", T.TURRET: "turret", T.BUNKER: "bunker",
                         T.COMSAT: "comsat", T.REFINERY: "refinery", T.SCIENCE_FACILITY: "science_facility",
                         T.MACHINE_SHOP: "machine_shop", T.CONTROL_TOWER: "control_tower"},
+          "ranged": {T.MARINE, T.GHOST, T.VULTURE, T.TANK, T.GOLIATH, T.WRAITH, T.VALKYRIE, T.BC},
           "supply": lambda t: T.SUPPLY.get(5 if t == SIEGED else t, 0)},
     "Z": {"worker": Z.DRONE, "halls": set(Z.TOWN_HALLS),
           "fighters": {Z.ZERGLING: "zergling", Z.HYDRALISK: "hydralisk", Z.MUTALISK: "mutalisk",
@@ -85,6 +98,7 @@ RACES = {
                         Z.EVO: "evo", Z.CREEP: "creep", Z.SUNKEN: "sunken", Z.SPORE: "spore",
                         Z.QUEENS_NEST: "queens_nest", Z.DEFILER_MOUND: "defiler_mound",
                         Z.ULTRA_CAVERN: "ultralisk_cavern", Z.GREATER_SPIRE: "greater_spire"},
+          "ranged": {Z.HYDRALISK, Z.MUTALISK, Z.GUARDIAN, Z.DEVOURER},
           "supply": lambda t: Z.SUPPLY.get(t, 0) / (2 if t in Z.PAIRS else 1)},
 }
 FIGHTERS_ANY = set(RACES["T"]["fighters"]) | set(RACES["Z"]["fighters"])
@@ -96,7 +110,10 @@ def _names(race: str) -> list[str]:
     return (["minute", "workers", "halls", "supply_used", "supply_max", "blocked", "minerals", "gas",
              "workers_idle", "workers_gas", "army_supply", "army_standing", "orders_per_fighter",
              "army_home", "army_field", "army_enemy", "army_alone", "army_spread", "army_gone",
-             "threatened", "threat_met", "response_s"]
+             "threatened", "threat_met", "response_s",
+             "fighting", "hit_standing", "moving_between_shots", "harass_response_s", "harass_hp_lost",
+             "sight_reorder", "sight_gather", "sight_stim", "air_sight_gather", "air_sight_stim", "lone_away",
+             "lone_attack"]
             + [f"n_{k}" for k in kinds] + [f"b_{k}" for k in sorted(set(r["buildings"].values()))])
 
 
@@ -125,9 +142,14 @@ def features(path: str, race: str, minutes: int = MINUTES, end: int | None = Non
         acc = _fresh()
         threat_run, quiet, start, met_yet = False, QUIET, 0, False
         last = min(minutes * 1440, end if end is not None else minutes * 1440)
+        ft = {"hp": {}, "last_damage": -HARASS_QUIET, "run": None}
         while g.frame + SAMPLE <= last:
             try:
-                g.step(SAMPLE)
+                for _ in range(SAMPLE // TICK - 1):
+                    g.step(TICK)
+                    if slot is not None:
+                        _fight_tick(g.observe(), slot, R, ft, acc)
+                g.step(TICK)
             except Exception:
                 break
             o = g.observe()
@@ -140,6 +162,7 @@ def features(path: str, race: str, minutes: int = MINUTES, end: int | None = Non
             mine = [u for u in units if u["owner"] == slot]
             if me is None or not any(u["type"] in R["halls"] or 106 <= u["type"] <= 175 for u in mine):
                 break                                          # (the player is out)
+            _fight_tick(o, slot, R, ft, acc)
             foes = [u for u in units if u["owner"] not in (slot, NEUTRAL)]
             workers = [u for u in mine if u["type"] == R["worker"] and u["completed"]]
             fight = [u for u in mine if u["type"] in R["fighters"] and u["completed"]]
@@ -209,11 +232,173 @@ def features(path: str, race: str, minutes: int = MINUTES, end: int | None = Non
     return rows
 
 
+def _fight_tick(o: dict, slot: int, R: dict, ft: dict, acc: dict) -> None:
+    """In fights, every TICK frames (the user's "AFK": slow to answer harassment, no stutter-step or
+    kiting, units standing while picked off). Of its fighters losing hp with an enemy fighter near, the
+    ones standing (sieged tanks aside); of its ranged fighters in a fight reloading, the ones moving
+    (stutter-step, kiting); and from the first damage to any of its units after HARASS_QUIET, the
+    seconds until a fighter of its own fights there (as long as it lasted, if none did)."""
+    units = o["units"]
+    f = o["frame"]
+    mine = [u for u in units if u["owner"] == slot]
+    foes = [u for u in units if u["owner"] not in (slot, NEUTRAL) and u["type"] in FIGHTERS_ANY]
+    hp = {u["tag"]: u["hp"] + u.get("shields", 0) for u in mine}
+    hit = {t for t, h in hp.items() if h < ft["hp"].get(t, h)}
+    was = ft.get("xy", {})
+    active = ft.setdefault("active", {})
+    for u in mine:                                  # (the last frame it moved or fired)
+        if was.get(u["tag"]) != (u["x"], u["y"]) or u.get("cooldown", 0) > 0:
+            active[u["tag"]] = f
+    ft["hp"], ft["xy"] = hp, {u["tag"]: (u["x"], u["y"]) for u in mine}
+    acc["ticks"] += 1
+    fighters = [u for u in mine if u["type"] in R["fighters"] and u["completed"] and u["type"] != SIEGED]
+    exy = np.array([(u["x"], u["y"]) for u in foes], np.float32) if foes else None
+    if exy is not None and fighters:
+        fxy = np.array([(u["x"], u["y"]) for u in fighters], np.float32)
+        engaged = np.sqrt(((fxy[:, None] - exy[None]) ** 2).sum(-1)).min(1) < ENGAGE
+        if engaged.any():
+            acc["fight_ticks"] += 1
+        for u, e in zip(fighters, engaged):
+            if not e:
+                continue
+            if u["tag"] in hit and u["tag"] in was and u["type"] not in UNARMED:
+                # idle under fire: neither moved nor fired for a second, whatever its order (an attack
+                # order on something out of reach stands as well; one tick without a shot is a reload)
+                acc["hit"] += 1
+                acc["hit_standing"] += f - active.get(u["tag"], f) >= 24
+            if u["type"] in R["ranged"] and u.get("cooldown", 0) > 0:
+                acc["reloading"] += 1
+                acc["reload_moving"] += u["order"] == MOVE
+    _sightings(o, slot, R, ft, acc, mine, [u for u in mine if u["type"] in R["fighters"] and u["completed"]], hit)
+    # harassment: damage to its workers or buildings near an enemy fighter (a fight at its army is not
+    # one), and its answer: counted only when no fighter of its own was there as it began
+    victims = [u for u in mine if u["tag"] in hit and u["type"] not in R["fighters"]]
+    if victims and exy is not None:
+        vxy = np.array([(u["x"], u["y"]) for u in victims], np.float32)
+        near = np.sqrt(((vxy[:, None] - exy[None]) ** 2).sum(-1)).min(1) < ENGAGE
+        if near.any():
+            where = vxy[near].mean(0)
+            if ft["run"] is None and f - ft["last_damage"] >= HARASS_QUIET:
+                there = any(math.dist((u["x"], u["y"]), where) < ENGAGE for u in fighters)
+                ft["run"] = {"start": f, "acc": acc, "counts": not there, "lost": 0.0}
+            ft["last_damage"] = f
+            if ft["run"] is not None:
+                ft["run"]["where"] = where
+                ft["run"]["lost"] += sum(ft["hp_was"].get(u["tag"], 0) - hp[u["tag"]] for u, n in zip(victims, near) if n)
+    run = ft["run"]
+    if run is not None:
+        answered = any(u["order"] in ATTACKING and math.dist((u["x"], u["y"]), run["where"]) < ENGAGE
+                       for u in fighters)
+        if answered or f - ft["last_damage"] >= HARASS_QUIET:
+            if run["counts"]:
+                run["acc"]["harass"].append((f - run["start"]) / 24)
+                run["acc"]["harass_lost"].append(run["lost"])
+            ft["run"] = None
+    ft["hp_was"] = hp
+
+
+def _episodes(acc: dict) -> dict:
+    nan = float("nan")
+    mean = lambda v: float(np.mean(v)) if v else nan
+    sight, air = acc["sight"], [e for e in acc["sight"] if e["air"]]
+    return {"sight_reorder": mean([e["reorder"] for e in sight]),
+            "sight_gather": mean([e["gather"] for e in sight if e["gather"] is not None]),
+            "sight_stim": mean([e["stim"] for e in sight if e["stim"] is not None]),
+            "air_sight_gather": mean([e["gather"] for e in air if e["gather"] is not None]),
+            "air_sight_stim": mean([e["stim"] for e in air if e["stim"] is not None]),
+            "lone_away": mean([e == "away" for e in acc["lone"]]),
+            "lone_attack": mean([e == "attack" for e in acc["lone"]])}
+
+
+def _sightings(o: dict, slot: int, R: dict, ft: dict, acc: dict, mine: list, fighters: list, hit: set) -> None:
+    """Before contact, from what the player sees (the user: a pro moves 6 marines into the mineral line
+    as a dozen zerglings come, and they back off with no blow traded; marines stimmed and gathered at the
+    sight of mutalisks strafing at a distance; a lone marine near 4 zerglings runs to the buildings, not
+    at them). A sighting: enemy fighters newly seen near its units or buildings (none for HARASS_QUIET
+    before); over SIGHT_FOR, or until the first damage, its fighters near it: the share given another
+    order, their spread at the end over at the start (below 1: gathered), the share of its marines
+    stimmed. Lone and outnumbered: a fighter with no other near and 2+ seen enemy fighters near; a
+    second later, moving away from them, attacking, or neither."""
+    f = o["frame"]
+    seen = [u for u in o["units"] if u["owner"] not in (slot, NEUTRAL) and u["type"] in FIGHTERS_ANY
+            and u["visible_to"] >> slot & 1]
+    ours = [(u["x"], u["y"]) for u in mine if u["completed"]]
+    near_seen = []
+    if seen and ours:
+        sxy = np.array([(u["x"], u["y"]) for u in seen], np.float32)
+        oxy = np.array(ours, np.float32)
+        close = np.sqrt(((sxy[:, None] - oxy[None]) ** 2).sum(-1)).min(1) < SIGHT
+        near_seen = [u for u, c in zip(seen, close) if c]
+    run = ft.get("sight")
+    if run is None and near_seen and f - ft.get("sight_last", -HARASS_QUIET) >= HARASS_QUIET:
+        where = (float(np.mean([u["x"] for u in near_seen])), float(np.mean([u["y"] for u in near_seen])))
+        group = {u["tag"]: (u["order"], u.get("order_target", 0)) for u in fighters
+                 if math.dist((u["x"], u["y"]), where) < SIGHT_NEAR}
+        if group:
+            run = ft["sight"] = {"start": f, "where": where, "group": group, "changed": set(),
+                                 "air": any(u["type"] in AIR for u in near_seen), "acc": acc,
+                                 "spread0": _spread([u for u in fighters if u["tag"] in group]), "stim": set()}
+    if near_seen:
+        ft["sight_last"] = f
+    if run is not None:
+        now = {u["tag"]: u for u in fighters if u["tag"] in run["group"]}
+        for t, u in now.items():
+            if (u["order"], u.get("order_target", 0)) != run["group"][t]:
+                run["changed"].add(t)
+            if u.get("stim", 0) > 0:
+                run["stim"].add(t)
+        if f - run["start"] >= SIGHT_FOR or hit & set(now) or not now:
+            marines = [t for t, u in now.items() if u["type"] == T.MARINE]
+            s1 = _spread(list(now.values()))
+            run["acc"]["sight"].append({
+                "reorder": len(run["changed"]) / len(run["group"]), "air": run["air"],
+                "gather": s1 / run["spread0"] if run["spread0"] and len(now) >= 3 else None,
+                "stim": sum(1 for t in marines if t in run["stim"]) / len(marines) if marines else None})
+            ft["sight"] = None
+    # lone and outnumbered
+    lone = ft.setdefault("lone", {})
+    for t in [t for t, e in lone.items() if f - e["start"] >= 24]:
+        e = lone.pop(t)
+        u = next((u for u in fighters if u["tag"] == t), None)
+        if u is None:
+            e["acc"]["lone"].append("died")
+        elif math.dist((u["x"], u["y"]), e["enemy"]) - e["dist"] >= 16 and u["order"] == MOVE:
+            e["acc"]["lone"].append("away")
+        elif u["order"] in ATTACKING or u.get("cooldown", 0) > 0:
+            e["acc"]["lone"].append("attack")
+        else:
+            e["acc"]["lone"].append("other")
+        ft.setdefault("lone_done", {})[t] = f
+    if seen and fighters:
+        sxy = np.array([(u["x"], u["y"]) for u in seen], np.float32)
+        fxy = np.array([(u["x"], u["y"]) for u in fighters], np.float32)
+        d_enemy = np.sqrt(((fxy[:, None] - sxy[None]) ** 2).sum(-1))
+        d_own = np.sqrt(((fxy[:, None] - fxy[None]) ** 2).sum(-1))
+        np.fill_diagonal(d_own, 1e9)
+        done = ft.setdefault("lone_done", {})
+        for k, u in enumerate(fighters):
+            if u["type"] in UNARMED or u["tag"] in lone or f - done.get(u["tag"], -HARASS_QUIET) < HARASS_QUIET:
+                continue
+            close = d_enemy[k] < LONE_ENEMY
+            if close.sum() >= 2 and d_own[k].min() > LONE_FRIEND:
+                c = sxy[close].mean(0)
+                lone[u["tag"]] = {"start": f, "enemy": (float(c[0]), float(c[1])),
+                                  "dist": math.dist((u["x"], u["y"]), c), "acc": acc}
+
+
+def _spread(units: list[dict]) -> float:
+    if len(units) < 2:
+        return 0.0
+    xy = np.array([(u["x"], u["y"]) for u in units], np.float32)
+    return float(np.sqrt(((xy - xy.mean(0)) ** 2).sum(1)).mean())
+
+
 def _fresh() -> dict:
     return {"n": 0, "fight_n": 0, "blocked": 0, "minerals": 0, "gas": 0, "workers_idle": 0, "workers_gas": 0,
             "army_gone": 0, "army_standing": 0, "changes": 0, "fighter_samples": 0, "army_home": 0,
             "army_enemy": 0, "army_field": 0, "army_alone": 0, "army_spread": 0, "threatened": 0, "met": 0,
-            "responses": []}
+            "responses": [], "ticks": 0, "fight_ticks": 0, "hit": 0, "hit_standing": 0, "reloading": 0,
+            "reload_moving": 0, "harass": [], "harass_lost": [], "sight": [], "lone": []}
 
 
 def _row(minute: int, acc: dict, me: dict, mine: list, workers: list, fight: list, R: dict, names: list) -> dict:
@@ -231,7 +416,13 @@ def _row(minute: int, acc: dict, me: dict, mine: list, workers: list, fight: lis
                army_enemy=acc["army_enemy"] / fn if fn else nan, army_alone=acc["army_alone"] / fn if fn else nan,
                army_spread=acc["army_spread"] / fn if fn else nan, threatened=acc["threatened"] / n,
                threat_met=acc["met"] / acc["threatened"] if acc["threatened"] else nan,
-               response_s=st.mean(acc["responses"]) if acc["responses"] else nan)
+               response_s=st.mean(acc["responses"]) if acc["responses"] else nan,
+               fighting=acc["fight_ticks"] / max(1, acc["ticks"]),
+               hit_standing=acc["hit_standing"] / acc["hit"] if acc["hit"] else nan,
+               moving_between_shots=acc["reload_moving"] / acc["reloading"] if acc["reloading"] else nan,
+               harass_response_s=st.mean(acc["harass"]) if acc["harass"] else nan,
+               harass_hp_lost=st.mean(acc["harass_lost"]) if acc["harass_lost"] else nan,
+               **_episodes(acc))
     for u in mine:
         if u["type"] in R["fighters"] and u["completed"]:
             row[f"n_{R['fighters'][u['type']]}"] += 1

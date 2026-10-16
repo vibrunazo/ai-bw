@@ -161,6 +161,20 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    AUC saturates: the mean standardized gap per minute range (Gary-T in the league 0.38/0.39/0.43/0.49
    at 2-4/5-7/8-10/11-14 min; in the two human games 0.45/0.42/0.65/0.87) and the share of features
    inside the pros' interquartile range.
+   **What felt AFK (the user, 2026-10-16):** not the army at home, and not damage: anticipation before
+   contact and the right answer to the situation. A pro moves 6 marines into the mineral line as a dozen
+   zerglings come and they back off, no blow traded; stims and gathers marines at the sight of mutalisks
+   strafing at a distance; a lone marine near 4 zerglings runs to the buildings. Gary attacked the lings
+   and died: a reaction-time script calls that fast. The classifier now looks every 8 frames in fights
+   and at sightings, from the player's own vision. Gary-T against 300 pro Terrans (means, 5-7 / 8-10 /
+   11-14 min): lone and outnumbered, moved away 0% / 1% / 0% (pros 18% / 18% / 11%), attacked 86% / 67% /
+   67% (52% / 42% / 39%); marines stimmed after mutalisks come into view - / 14% / 14% (33% / 40% / 36%);
+   moving while reloading 0% throughout (pros 4-10%); seconds to answer harassment 6.7 / 6.1 / 6.2 (pros
+   11.8 / 9.1 / 11.5: faster, as the user said a script would find). Gathering at a sighting doesn't
+   separate (pros spread as they move). Against the replayed pros Gary-T is the least pro-like (gap
+   1.06-1.22 from 8 min; v0.28 0.99-1.16), in the league 0.44-0.48, in the human games 0.66-0.84.
+   Gary-Z baseline (48 games at e1a3e8e): Gary-T won 20, lost 1 (Gary-Z's first win), 27 undecided;
+   army bunched (2-5 tiles, pros 5-29), standing 73-89% (5-65%), at home 84-97% (30-53%).
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

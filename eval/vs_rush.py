@@ -15,6 +15,7 @@ when a pro Zerg's did, in a real TvZ game.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import statistics
@@ -35,7 +36,9 @@ def play(version: str, seed: int, args: argparse.Namespace, out: Path) -> dict:
     cmd = [sys.executable, "-m", "gary.bots.zerg_rush", "--vs", version, "--map", str(args.map),
            "--minutes", str(args.minutes), "--seed", str(seed), "--attack-after", str(args.attack_after),
            "--save", str(rep), "--opponent", args.opponent] + (["--style", str(args.style)] if args.style is not None else [])
-    proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    # (UTF-8 out: a replayed pro's name the console's code page can't print ended the game, seed 105)
+    proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     log = proc.stdout + proc.stderr
     (out / f"{version}_seed{seed}.log").write_text(log, encoding="utf-8")
     result = "error"

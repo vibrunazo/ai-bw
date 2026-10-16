@@ -104,8 +104,15 @@ class LearnedArmy:
 
     def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False, belief=None,
                  belief_total: bool = False, watch: bool = False, home_guard: bool = False, belief_hold: bool = True,
-                 hunt_belief: bool = False):
+                 hunt_belief: bool = False, hold_moves: bool = True, hold_margin: float | None = None):
         self.g = g
+        # option: whether the fight estimate may hold a plain move (positioning), and by how much going must
+        # look worse than staying (and lose outright) to hold. v0.27's 1 and 2 points held about 90% of its
+        # army's decisions at 5-6 min, 92% of them within 2 points: noise for an estimate correlating 0.40
+        # (the army stood still 78% of 5-7 min, pros 37%: the humanlikeness table's tell)
+        self.hold_moves = hold_moves
+        self.fight_min = FIGHT_MIN if hold_margin is None else -hold_margin
+        self.fight_margin = FIGHT_MARGIN if hold_margin is None else hold_margin
         self.belief_hold = belief_hold  # belief: groups going away hold when the hidden army outweighs them
         self.hunt_belief = hunt_belief  # option (with hunt and a belief model): hunt only with an army at
                                         # least the belief's 80th percentile of the zerg's
@@ -222,7 +229,7 @@ class LearnedArmy:
         # will it go well? the model's fight estimate for going there vs staying put
         go = self.model.fight(grid, glob, best, attack)
         stay = self.model.fight(grid, glob, here, False)
-        if go < max(FIGHT_MIN, stay - FIGHT_MARGIN):
+        if go < max(self.fight_min, stay - self.fight_margin) and (attack or self.hold_moves):
             if self.held.get(here, -1) != best:
                 g.say(f"army ({len(group)} units) holds: going to {self.tracker.center(best)} "
                       f"looks like {go:+.0%} army share, staying {stay:+.0%}")

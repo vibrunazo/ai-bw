@@ -242,6 +242,20 @@ MANIFESTS: dict[str, dict] = {
                        "rule_options": {"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8},
                                         "load": {"always": True}, "repair": {"turrets": 3}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.28: v0.27 whose army isn't held by noise (the humanlikeness classifier's tell: the army stood still 78% of
+    # 5-7 min, pros 37%): plain moves (positioning) always go; an attack is held only when the fight estimate says
+    # it loses 5+ points of army share, or 5+ worse than staying (v0.27: 2 and 1, held ~90% of decisions at 5-6 min)
+    "v028": {"version": "v0.28", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
+             "home_scvs": True, "balance": True, "defend_early": 150 * 24, "builder_back": True,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True,
+                       "answer_options": {"mutas": True}},
+             "army": {**_ARMY, "hunt": True, "scan": True, "hold_moves": False, "hold_margin": 0.05},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "before": _V09_FIGHT["before"] + ["detect", "stim"],
+                       "rule_options": {"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8},
+                                        "load": {"always": True}, "repair": {"turrets": 3}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
@@ -690,7 +704,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                  scan=m["army"].get("scan", False), belief=belief,
                                  belief_total=m["army"].get("belief_total", False), watch=m["army"].get("watch", False),
                                  home_guard=m["army"].get("home_guard", False),
-                                 belief_hold=bool(m["army"].get("belief")), hunt_belief=m["army"].get("hunt_belief", False))
+                                 belief_hold=bool(m["army"].get("belief")), hunt_belief=m["army"].get("hunt_belief", False),
+                                 hold_moves=m["army"].get("hold_moves", True), hold_margin=m["army"].get("hold_margin"))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:
