@@ -24,6 +24,21 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    with an execution path in v3 (creep colonies and sunkens at chosen spots, scourge, queens,
    defilers, overlord speed, macro hatcheries, the third and fourth bases). Retrain the macro model
    with the current script before relying on it.
+   **Done 2026-10-16** (the pro Zergs' decisions in 400 TvZ games of the macro dataset, per game):
+   - covered by v3: drones 42, zerglings 32, hydralisks 20, overlords 11, mutalisks 8.8, lurkers
+     5.8 (aspect, morph), creep colonies 5.7 and sunkens 3.8, expansions 3.9 and macro hatcheries
+     1.3, extractors 3.5, the Pool, Lair 1.0, Spire 0.9, Hydralisk Den 0.9, zergling speed;
+   - missing: ultralisks 3.6, scourge 3.5, defilers 2.0; Evolution Chamber 1.2 and its upgrades,
+     Queen's Nest 0.6, Hive 0.6, Defiler Mound 0.5, Ultralisk Cavern 0.3, spores 0.3; consume,
+     plague, burrow, hydralisk and overlord upgrades;
+   - the commands are generic already (gary/commands.py morph, morph_building, build, research,
+     upgrade for any type): the gap is a dispatcher from the model's (act, id) to v3's primitives
+     (larva, building selection, jobs) and a Zerg facts module like gary/terran.py (costs, supply,
+     requirements, producers, sizes, build times).
+   - Zerg build styles exist (taxonomy TvZ_Z_tech, window 8:00) but are weak: one cluster of 24%,
+     four of about 2%, two thirds of the games in none. Steering Gary-Z needs a better Zerg
+     taxonomy first (another window or cluster size), its cards reviewed. The Zerg macro model
+     (2026-10-04): top-1 50% (baseline 32%), timing error 2.5 s median.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
