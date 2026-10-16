@@ -151,7 +151,7 @@ class ZergV2(ZergV1):
             # (idle drones clump: all of them; the box can take larvae and the overlords above too)
             if sel and any(s["tag"] in {i["tag"] for i in idle} for s in sel) \
                     and all(s["type"] in (DRONE, C.LARVA, OVERLORD) for s in sel):
-                base = min((self.main_base, self.nat_base), key=lambda b: math.dist(b.center, (u["x"], u["y"])))
+                base = min(self._mining_bases(mine), key=lambda b: math.dist(b.center, (u["x"], u["y"])))
                 if not any(h["completed"] and math.dist((h["x"], h["y"]), base.center) < 160 for h in hatches) \
                         or math.dist(base.center, (u["x"], u["y"])) > 10 * 32:
                     # away from a working base: walk home first (a minimap order), mine once there
@@ -238,6 +238,10 @@ class ZergV2(ZergV1):
                 self._start_build(f"macro{len(hatches)}_{hi.frame}", HATCH, spot, obs, drones)
                 return True
         return False
+
+    def _mining_bases(self, mine) -> tuple:
+        """Where idle drones may mine (the main and the natural: Zerg v2 and v3 take no other base)."""
+        return self.main_base, self.nat_base
 
     def _rallies(self, obs, hatches, pool) -> bool:
         """Every finished hatchery rallies to the gathering point (once the pool is there)."""

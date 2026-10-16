@@ -39,6 +39,8 @@ USED_LARVA = 2 * 24             # a larva just morphed shows as a larva a moment
 IN_FLIGHT = 24                  # money just spent shows in the bank a moment later: counted as spent
 GOAL_TIMEOUT = 30 * 24          # a decision not carried out in 30 s is dropped
 QUERY_EVERY = 12
+GAS_FLOAT, GAS_LOW = 400, 150   # gas above this (and above the minerals): its drones go back to minerals;
+                                # below the other, the extractors are filled again
 STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)
 PLANS_FILE = "TvZ_Z_plan.json"  # data/interim/taxonomy: the plans' names and how often pros play them
 
@@ -92,6 +94,7 @@ class GaryZ(ZergV3):
         self.goal: dict | None = None
         self.parked: dict | None = None        # a decision waiting for its money, kept for it meanwhile
         self.turn, self.streak = "macro", 0    # who goes first, and how many actions in a row it had
+        self.gas_floating = False              # the gas piles up: its drones mine minerals meanwhile
         self.army_turn_last = False            # the army took the last turn: the rest has this one
         self.next_query = 0
         self.rng = random.Random(seed * 7919 + 1)          # the dice (deterministic per seed)
@@ -113,6 +116,12 @@ class GaryZ(ZergV3):
         me = obs["me"]
         mine = [u for u in obs["units"] if u["owner"] == hi.slot]
         self._timing(mine)
+        # gas as it's spent: v3 put 3 drones on every extractor from the start whatever the plan, and the
+        # gas piled up (1,204 at 6:00) while the minerals ran short
+        if me["gas"] > GAS_FLOAT and me["gas"] > me["minerals"]:
+            self.gas_floating = True
+        elif me["gas"] < GAS_LOW:
+            self.gas_floating = False
         # the army and the rest take turns too: in fights v3's army took every turn, and nothing was
         # decided or morphed from 7:30 to 10:30 (1,593 minerals and 9 larvae unused at 10:00)
         if not self.army_turn_last and self.army(obs, mine):
@@ -165,6 +174,46 @@ class GaryZ(ZergV3):
         if self.goal is not None:
             self._carry_out(obs, mine, me)
         return bool(hi.pending)
+
+    def _gas_done(self) -> bool:
+        return self.gas_floating                   # (v2's idle routine sends gas drones to minerals then)
+
+    def _gas(self, obs, mine, me, drones) -> bool:
+        return False if self.gas_floating else super()._gas(obs, mine, me, drones)
+
+    def _mining_bases(self, mine) -> list:
+        """Every base Gary-Z holds (v2's took the main and the natural only: drones at a third base were
+        walked back to the main; Argon's catch)."""
+        return self._owned_bases(mine) or [self.main_base]
+
+    def _rallies(self, obs, hatches, pool) -> bool:
+        """Every finished hatchery rallies onto a mineral field of its own base (a right-click on it:
+        new drones mine on their own), not to the army's gathering point as v2's did (each drone walked
+        to the choke and stood there until the idle routine fetched it; Argon's catch). The army
+        collects its zerglings from wherever they stand. (True: it acted.)"""
+        hi = self.hi
+        for h in hatches:
+            if not h["completed"] or h["tag"] in self.rallied_at:
+                continue
+            base = self.map.base_near((h["x"], h["y"]))
+            if not base.minerals:
+                self.rallied_at.add(h["tag"])
+                continue
+            m = min(base.minerals, key=lambda m: math.dist(m, base.center))
+            if self._look(obs, (h["x"], h["y"])):
+                return True
+            if obs["selection"] == [h["tag"]]:
+                p = screen_of(obs, *m)
+                if p is None:
+                    return self._look(obs, m)
+                hi.right_click(*p)
+                self.rallied_at.add(h["tag"])
+                return True
+            top = screen_of(obs, h["x"], h["y"] - 24)
+            if top:
+                hi.click(*top)
+            return True
+        return False
 
     def army(self, obs: dict, mine: list[dict]) -> bool:
         if self._mutas(obs, mine):
