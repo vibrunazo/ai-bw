@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import math
 import random
+from collections import Counter
 from pathlib import Path
 
 from gary import commands as C
@@ -52,6 +53,11 @@ HOLD_BELOW = -0.02              # an attack the fight estimate expects to lose m
 GROUND = {Z.ZERGLING: 1.0, Z.HYDRALISK: 2.5, Z.ULTRALISK: 8.0, Z.DEFILER: 2.0, Z.QUEEN: 2.0}
 RALLY_FRONT_AT = 5 * 60 * 24     # hatcheries rally to the army's meeting point from then on
 PACE_MAX = 10 * 24               # the longest wait for the next decision
+STANDING = {2, 3}               # Guard, PlayerGuard: a unit standing
+STRAY = 15 * 32                 # a fighter in no group this far from the meeting point walks to it
+STRAY_AGAIN = 10 * 24
+TASK_TIMEOUT = 10 * 24          # a v2 task (a drone to gas or to a building) given up after this
+SIDES = ("army", "macro", "helpers")   # who shares the hands, in turn
 STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)
 PLANS_FILE = "TvZ_Z_plan.json"  # data/interim/taxonomy: the plans' names and how often pros play them
 
@@ -111,7 +117,9 @@ class GaryZ(ZergV3):
         self.army_tracker = ArmyTracker(self.army_model.spec, hi.slot, mapinfo.size, self.home)
         self.sizes = dict(GROUND)
         self.next_ask, self.army_goal = 0, None  # the whole army's destination, asked every ARMY_EVERY
-        self.sent_to: dict[int, tuple] = {}      # group -> the destination it was last sent to
+        self.sent_to: dict[int, tuple] = {}
+        self.straggle_after, self.straggle_tries = 0, 0
+        self.task_key, self.task_since = None, 0      # group -> the destination it was last sent to
         self.rally_of: dict[int, bool] = {}     # hatchery -> rallied to the front (True) or its minerals
         self.goal: dict | None = None
         self.parked: dict | None = None        # a decision waiting for its money, kept for it meanwhile
@@ -120,7 +128,6 @@ class GaryZ(ZergV3):
         self.post_of: dict[int, int] = {}      # watch post -> its overlord
         self.post_again: dict[int, int] = {}   # watch post -> frame from which it's manned again
         self._post_points = None
-        self.army_turn_last = False            # the army took the last turn: the rest has this one
         self.next_query = 0
         self.rng = random.Random(seed * 7919 + 1)          # the dice (deterministic per seed)
         self.used_larva: dict[int, int] = {}                # larva tag -> frame it was morphed
@@ -147,32 +154,50 @@ class GaryZ(ZergV3):
             self.gas_floating = True
         elif me["gas"] < GAS_LOW:
             self.gas_floating = False
-        # the army and the rest take turns too: in fights v3's army took every turn, and nothing was
-        # decided or morphed from 7:30 to 10:30 (1,593 minerals and 9 larvae unused at 10:00)
-        if not self.army_turn_last and self.army(obs, mine):
-            self.army_turn_last = True
-            return
-        self.army_turn_last = False
         hatches = [u for u in mine if u["type"] in Z.TOWN_HALLS]
         pool = next((u for u in mine if u["type"] == Z.POOL), None)
         drones = [u for u in mine if u["type"] == Z.DRONE and u["completed"]]
-        if self.task:
-            return self._continue(obs, mine, me)
-        # the macro and v3's helpers share the hands: whoever acted keeps them (a selection, then its
-        # order: alternating every action broke both, the other's selection in between), STREAK actions
-        # at most, then the other goes first; one with nothing to do hands over at once. (Either could
-        # take every turn: three jobs at once from 1:00 to 2:00; idle drones it couldn't send back,
-        # 109 turns in 40 s from 10:20; and nothing was decided meanwhile)
-        sides = [("macro", self._macro), ("helpers", self._helpers)]
-        if self.turn == "helpers":
-            sides.reverse()
-        for name, side in sides:
-            if side(obs, mine, me, hatches, pool, drones):
+        # the army, the macro and v3's helpers share the hands: whoever acted keeps them (a look, a
+        # selection, then its order: whoever came in between moved the camera or the selection, and the
+        # sequence began again), STREAK actions at most, then the next goes first; one with nothing to do
+        # hands over at once. (Each one alone took every turn at some point: v3's army in fights, nothing
+        # decided from 7:30 to 10:30; three jobs at once from 1:00 to 2:00; idle drones 109 turns in 40 s.
+        # The army every other turn moved the camera between a look and its selection: a drone to gas
+        # held the rest for 2:30, a Hydralisk goal timed out twice with 9 larvae and 3,000 minerals)
+        sides = list(SIDES)
+        k = sides.index(self.turn)
+        for name in sides[k:] + sides[:k]:
+            if getattr(self, "_side_" + name)(obs, mine, me, hatches, pool, drones):
                 self.streak = self.streak + 1 if name == self.turn else 1
                 self.turn = name
                 if self.streak >= STREAK:
-                    self.turn, self.streak = ("helpers" if name == "macro" else "macro"), 0
+                    self.turn, self.streak = sides[(sides.index(name) + 1) % len(sides)], 0
                 return
+
+    def _side_army(self, obs, mine, me, hatches, pool, drones) -> bool:
+        return self.army(obs, mine)
+
+    def _side_macro(self, obs, mine, me, hatches, pool, drones) -> bool:
+        return self._macro(obs, mine, me, hatches, pool, drones)
+
+    def _side_helpers(self, obs, mine, me, hatches, pool, drones) -> bool:
+        if self.task:                                   # (v2's task under way: a drone to gas, a building)
+            self._continue(obs, mine, me)
+            return True
+        return self._helpers(obs, mine, me, hatches, pool, drones)
+
+    def _continue(self, obs, mine, me) -> None:
+        """v2's task (a drone to gas, a building), given up after TASK_TIMEOUT: the army moves the camera
+        every other turn and the task looks back every time, so its own tries never ran out; it held
+        every turn but the army's for 2:30, the larvae and 3,000 minerals unused (seed 108)."""
+        key = (self.task, self.drone_for)
+        if key != self.task_key:
+            self.task_key, self.task_since = key, self.hi.frame
+        if self.hi.frame - self.task_since > TASK_TIMEOUT:
+            self.log(f"gives up on its {self.task.split(':')[0]} task")
+            self.task, self.task_key = "", None
+            return
+        super()._continue(obs, mine, me)
 
     def _helpers(self, obs, mine, me, hatches, pool, drones) -> bool:
         """v3's hands: building jobs, gas, idle drones, rallies (True: one acted)."""
@@ -292,11 +317,49 @@ class GaryZ(ZergV3):
         return False                               # (no scripted all-in: the army model decides when to attack)
 
     def _grab_group(self, obs: dict, fresh: list[dict]) -> None:
-        """A new group: a drag box over the fighters at the meeting point, every type (v1's ctrl+click
-        took one type only: in a mixed army the hydralisks never joined a group; Argon's catch)."""
+        """A new group: a ctrl+click on the most common fighter type (every one of it on the screen),
+        then a shift+click on each other fighter, 12 at most. v1's ctrl+click alone took one type (the
+        hydralisks never joined; Argon's catch); a drag box took the drones at the meeting point too
+        (they rally there from 5:00), and a group with a drone in it is refused."""
         mid = (sum(u["x"] for u in fresh) / len(fresh), sum(u["y"] for u in fresh) / len(fresh))
         near = sorted(fresh, key=lambda u: math.dist((u["x"], u["y"]), mid))[:12]
-        self._box(obs, near)
+        kinds = Counter(u["type"] for u in near)
+        main = kinds.most_common(1)[0][0]
+        self.hi.ctrl_click(*screen_of(obs, *next((u["x"], u["y"]) for u in near if u["type"] == main)))
+        room = 12 - sum(1 for u in fresh if u["type"] == main)
+        for u in [u for u in near if u["type"] != main][:max(0, room)]:
+            self.hi.click(*screen_of(obs, u["x"], u["y"]), shift=True)
+
+    def _grab_loose(self, obs: dict, loose: list[dict]) -> None:
+        """Loose fighters for a home defense, as a new group (a drag box at home takes the drones along,
+        and v1 refuses a selection with a drone in it: they never defended)."""
+        self._grab_group(obs, loose)
+
+    def _stragglers(self, obs: dict, mine: list[dict]) -> bool:
+        """Fighters standing away from the meeting point, in no group (hatched before the rallies moved
+        to the front, or left after a defense), walk to it: a look, then a click on them and a right
+        click on the minimap. (True: it acted.)"""
+        hi = self.hi
+        if hi.frame < RALLY_FRONT_AT or hi.frame < self.straggle_after:
+            return False
+        gather = self.gather_point()
+        grouped = set().union(*self.groups.values()) if self.groups else set()
+        far = [u for u in mine if u["type"] in self.sizes and u["completed"] and u["tag"] not in grouped
+               and u["order"] in STANDING and math.dist((u["x"], u["y"]), gather) > STRAY]
+        if not far:
+            return False
+        seen = [u for u in far if screen_of(obs, u["x"], u["y"])]
+        if not seen:
+            self.straggle_tries += 1
+            if self.straggle_tries > 2:                     # (they don't come on the screen: later)
+                self.straggle_after, self.straggle_tries = hi.frame + STRAY_AGAIN, 0
+                return False
+            hi.camera_minimap(far[0]["x"], far[0]["y"])
+            return True
+        self._grab_group(obs, seen)
+        hi.minimap_right_click(int(gather[0]), int(gather[1]))
+        self.straggle_after, self.straggle_tries = hi.frame + STRAY_AGAIN, 0
+        return True
 
     def _grab_idle(self, obs, u) -> None:
         """An idle drone away from every hatchery (at the meeting point, among the army): a ctrl+click on
@@ -354,7 +417,7 @@ class GaryZ(ZergV3):
             return True
         if any(u["type"] == Z.LURKER for u in mine) and self._lurkers(obs, mine):
             return True
-        return super(ZergV3, self).army(obs, mine)
+        return super(ZergV3, self).army(obs, mine) or self._stragglers(obs, mine)
 
     # --- deciding --------------------------------------------------------------------------------
 
@@ -391,7 +454,9 @@ class GaryZ(ZergV3):
         if self.parked is not None and self.parked is not but:
             pm, pg = self._cost(self.parked["act"], self.parked["id"])
             minerals, gas = minerals - pm, gas - pg
-        return minerals, gas
+        # (none below zero: a Lurker Aspect parked for gas, 200 of a 158 bank, left -42 gas free and no
+        # zergling (0 gas) was affordable: a minute with 9 larvae and 1,480 minerals unspent)
+        return max(0, minerals), max(0, gas)
 
     def _affordable(self, g: dict, me: dict) -> bool:
         if g["act"] in (BUILD, EXPAND):                     # (a job keeps its own money, from the walk on)
@@ -446,7 +511,9 @@ class GaryZ(ZergV3):
             if self._affordable(g, me):
                 self.goal = g
                 self.log(f"next: {g['name']} ({g['p']:.0%})")
-                return
+                if larva:                       # (pros spend larvae in bursts, a hatchery's at once: the timing
+                    self.next_query = hi.frame + QUERY_EVERY    # head's gap is between bursts; paced by it,
+                return                                          # the larvae piled up, 2,000 minerals at 10:00)
             if not larva and self.parked is None:
                 self.parked = g
                 self.log(f"next: {g['name']} ({g['p']:.0%}), parked for its money")

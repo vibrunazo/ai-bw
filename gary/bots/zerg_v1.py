@@ -106,24 +106,24 @@ class ZergV1(ZergRush):
             if not self.groups[n]:
                 del self.groups[n], self.phase[n]
         grouped = set().union(*self.groups.values()) if self.groups else set()
-        # a new group: 12 zerglings at the gathering point, not in a group, once attacks are allowed
+        # a new group: 12 zerglings' worth (_size) at the gathering point, not in a group, once attacks are allowed
         gather = self.gather_point()
         waiting = [u for t, u in lings.items() if t not in grouped and math.dist((u["x"], u["y"]), gather) < 10 * 32]
         fresh = [u for u in waiting if screen_of(obs, u["x"], u["y"])]
-        if len(waiting) >= self.wave and len(fresh) < self.wave // 2 and hi.frame >= self.attack_after \
+        if self._size(waiting) >= self.wave and self._size(fresh) < self.wave // 2 and hi.frame >= self.attack_after \
                 and hi.frame >= self.form_after:
             hi.camera_minimap(*_mid(waiting))                  # look at them first
             self.form_tries += 1
             if self.form_tries >= 3:                           # (they keep walking off the screen)
                 self.form_after, self.form_tries = hi.frame + 3 * 24, 0
             return True
-        if len(fresh) >= self.wave and hi.frame >= self.attack_after and hi.frame >= self.form_after:
+        if self._size(fresh) >= self.wave and hi.frame >= self.attack_after and hi.frame >= self.form_after:
             n = next((k for k in GROUPS if k not in self.groups), None)
             if n is not None:
                 sel = set(obs["selection"])
                 if self.stage == "forming":
                     self.stage = ""
-                    if sel and sel <= set(lings) and len(sel - grouped) >= self.wave // 2:
+                    if sel and sel <= set(lings) and self._size(lings[t] for t in sel - grouped) >= self.wave // 2:
                         hi.hotkey_set(n)
                         self.groups[n], self.phase[n], self.since[n] = set(sel), "to_staging", hi.frame
                         for k in self.groups:              # (a zergling is in one group)
@@ -162,7 +162,7 @@ class ZergV1(ZergRush):
                             if screen_of(obs, int(at[0]), int(at[1])) else hi.minimap_command(C.ORDER_ATTACK_MOVE, int(at[0]), int(at[1]))
                     self.stage = ""
                     return True
-                self._box(obs, loose)
+                self._grab_loose(obs, loose)
                 self.stage = "defending"
                 return True
             return False
@@ -230,6 +230,10 @@ class ZergV1(ZergRush):
         """Select a new group: a ctrl+click on one, every zergling on the screen, nothing else (12 at most)."""
         u = min(fresh, key=lambda u: math.dist((u["x"], u["y"]), _mid(fresh)))
         self.hi.ctrl_click(*screen_of(obs, u["x"], u["y"]))
+
+    def _grab_loose(self, obs: dict, loose: list[dict]) -> None:
+        """Select the loose fighters for a home defense: a drag box over them."""
+        self._box(obs, loose)
 
     def _size(self, units) -> float:
         """The units as so many zerglings (a count, for zerglings alone)."""

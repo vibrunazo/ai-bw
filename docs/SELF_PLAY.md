@@ -110,6 +110,19 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    drones 18/28 at 6/8 min (pros 23/27), army supply 4/10/5/6 at 6/8/10/12 (pros 4/20/27 at 6/8/10),
    Gary-T won 0 of 8 (2 before). The army model still gives 1-5 orders a game: groups seldom form
    before Gary-T's push (8:30-10:00), and the army dies defending at home. Fights are the lever.
+   **Execution leaks, found with probes (2026-10-16):** groups form by zergling-equivalents (hydralisks
+   counted as 1 each, a group waited for 12 units; Argon's catch); a group is a ctrl+click on its main
+   type and shift+clicks on the rest (a drag box at the meeting point took the drones rallied there,
+   and v1 refused it: groups took a minute to form, home defenses never formed); fighters left behind
+   (hatched before the rallies moved, 4 of 12 at 8:00) walk to the meeting point; a parked decision's
+   reserve no longer goes below zero (200 gas parked of 158 made every zergling unaffordable); larvae
+   are spent in bursts, buildings at the timing head's pace (its gap is between pros' bursts); the
+   army, the macro and the helpers share the hands by streaks (the army every other turn moved the
+   camera between a look and its selection: a drone-to-gas task held every other turn for 2:30, and
+   a Hydralisk goal timed out twice with 9 larvae and 3,000 minerals); v2's tasks time out. 8 seeds:
+   drones 20/32/25/31 at 6/8/10/12 (pros 23/27/30 at 6/8/10), hatcheries 3/3/4 (pros 3/3/4), army
+   supply 4/10/7/7 (pros 4/20/27), Gary-T won 0 of 8. Still open: the bank (560 at 8:00, 860 at 10:00;
+   pros 250-360) with gas nearly gone (44 at 10:00), and the fights.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
