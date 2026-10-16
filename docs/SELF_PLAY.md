@@ -43,7 +43,10 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    before); Zerg plans (taxonomy/plans.py) label every pro game of 9:00 or more by opening (pool or
    hatchery first), hatcheries by 5:00 (2 or 3) and first tech (spire, lurker, hydralisks): 10 plans,
    the standard 3-hatch spire-first 44%, hatchery-first 2-hatch spire 12%, pool-first 3-hatch spire 11%,
-   3-hatch lurker 9%, ...; the macro index restyled with them for the Zerg only (ingest/macro_dataset.py
+   3-hatch lurker 9%, ... Then every game, short ones too, from what it showed by its end (Argon:
+   "no style" meant "a short game", and early-pool rushes were in no plan): 11 plans with zergling
+   pressure (10+ zerglings by 4:00, no tech, 1.3%); undecided short games and rare ones are "other"
+   (5.6%); model TvZ_Z_20261016-101426, top-1 50.6%; the macro index restyled with them for the Zerg only (ingest/macro_dataset.py
    --restyle) and the model retrained steered by them (runs/macro/TvZ_Z_20261016-095424: top-1
    50.5%); gary/zerg.py, the Zerg facts, checked against units.dat (tests/test_game_data.py).
    **Gary-Z v0 runs (2026-10-16, gary/bots/gary_z.py, `--opponent garyz`):** v3's hands, the steered
