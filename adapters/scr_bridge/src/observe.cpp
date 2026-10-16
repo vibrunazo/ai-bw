@@ -416,6 +416,8 @@ std::vector<uint16_t> box_select(const World& w, int slot, int x0, int y0, int x
 // what gary_env_depot_spot_ok tests. (Also fixed here: the base pointer is game_ptr's value --
 // wrapping it in read_ptr double-dereferences -- and the entry stride is map_tile_width, not 256.)
 constexpr uint16_t kTileUnbuildable = 0x0080;
+constexpr uint16_t kTileCreep = 0x0040;            // OpenBW tile_t::flag_has_creep
+constexpr uint16_t kTileOccupied = 0x0800;         // OpenBW tile_t::flag_occupied (a building's footprint)
 constexpr uint16_t kTilePartiallyWalkable = 0x2000;
 
 static uint16_t tile_flags_at(const World& w, int tile_x, int tile_y) {
@@ -512,15 +514,25 @@ bool can_place(const World& w, int slot, uint16_t builder_tag, int unit_type, in
     int mw = read_at<uint16_t>(w.game + profile::kGameMapWidthTiles);
     int mh = read_at<uint16_t>(w.game + profile::kGameMapHeightTiles);
     if (tile_x < 0 || tile_y < 0 || tile_x + tw > mw || tile_y + th > mh) return false;
+    // OpenBW can_place_building (gary_env's rule): terrain, creep for a non-Zerg building, and the tile's own
+    // "occupied" flag for buildings already there (the game's footprint, not the graphic: the image boxes
+    // blocked tiles next to buildings live, and depots "couldn't build" once the main was busy)
+    bool zerg = unit_type >= 130 && unit_type <= 152;
     for (int y = tile_y; y != tile_y + th; ++y)
-        for (int x = tile_x; x != tile_x + tw; ++x)
+        for (int x = tile_x; x != tile_x + tw; ++x) {
             if (tile_unbuildable(w, x, y)) return false;
-    // units in the way (v1: sprite bounding boxes; the builder itself does not block)
+            uint16_t flags = tile_flags_at(w, x, y);
+            if (flags & kTileOccupied) return false;
+            if (!zerg && (flags & kTileCreep)) return false;
+        }
+    // ground units in the way, by their collision box (units.dat dimensions, OpenBW's unit finder box);
+    // flying units, grounded buildings (the occupied flag above) and the builder itself don't block
     int px0 = 32 * tile_x, py0 = 32 * tile_y, px1 = px0 + 32 * tw, py1 = py0 + 32 * th;
     for (const UnitView& u : units) {
         if (tag_of(u.ref, w.unit_count) == builder_tag) continue;
-        int x0, y0, x1, y1;
-        if (!clickable_rect(w, u, &x0, &y0, &x1, &y1)) continue;
+        if (u.flags & (profile::kStatusGroundedBuilding | profile::kStatusFlying)) continue;
+        const uint8_t* d = kDimensions[u.type];
+        int x0 = u.x - d[0], y0 = u.y - d[1], x1 = u.x + d[2], y1 = u.y + d[3];
         if (x1 > px0 && y1 > py0 && x0 < px1 && y0 < py1) return false;
     }
     return true;

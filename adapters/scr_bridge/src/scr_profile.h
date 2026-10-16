@@ -133,6 +133,7 @@ constexpr uint32_t kProbeWindowLen = 192;
 // status-flag bits: values from OpenBW's enum, which mirrors BW's bit values [GARY/openbw]
 constexpr uint32_t kStatusCompleted = 0x1;
 constexpr uint32_t kStatusGroundedBuilding = 0x2;
+constexpr uint32_t kStatusFlying = 0x4;             // OpenBW status_flag_flying
 constexpr uint32_t kStatusDisabled = 0x400;
 
 // --- Sprite struct (layout) -------------------------------------------------------

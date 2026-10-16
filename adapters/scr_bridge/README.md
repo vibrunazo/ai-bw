@@ -251,9 +251,12 @@ the same game against the same opponents (including x64 clients over Battle.net)
   from 168 to 162 and the queue ring start from 166 to 164. Pin them in a live game before its
   results count: energy decides Comsat scans (the TODO in `scr_profile.h` says how). `visible_to`
   now hides cloaked and burrowed units from players who don't detect them, as gary_env does.
-- `can_place` is an approximation (buildable tiles + collision + depot distance): the fog rule
-  ("unexplored tiles not allowed") and creep/pylon-power rules need the game's own placement
-  function (resolve via `samase_scarf` later) to match `gary_env_can_place` exactly.
+- `can_place` follows OpenBW's `can_place_building` (gary_env's) since 2026-10-15: terrain, creep for a
+  non-Zerg building, the tile's own occupied flag for buildings (it used the buildings' graphics, which
+  blocked free tiles beside them: in the third live game depots and turrets "couldn't build" from 11:00
+  and Gary sat supply-blocked on 1,300-1,600 minerals), ground units by their units.dat collision box
+  (flying units and the builder don't block). Still missing: the fog rule (unexplored tiles) and pylon
+  power. Not yet confirmed live.
 - The click model read the wrong image list until 2026-10-15: it started at the sprite's first word
   (the previous sprite) and read flags, offsets and frame from the wrong bytes, so an SCV's clickable
   box came out about 16 px off (a Marine's, a critter's, an Overlord's death images unioned). In the
