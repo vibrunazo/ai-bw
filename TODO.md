@@ -45,8 +45,10 @@ What to do, in order:
    - refused builds: the game refused 13 turrets at 13 spots in game 5. In LAN game 1 (replayed in
      OpenBW, identical to the live game) a depot and a Starport were refused because Gary's own
      parked SCV stood on the spot while the build went to another SCV (an empty drag box kept the
-     old selection; fixed in executor.py reselect). Headless still has ~2 a game (depots, turrets):
-     trace them the same way (Game.scenario on the replay);
+     old selection; fixed in executor.py reselect). LAN game 2's 17 turret orders, replayed in
+     OpenBW: 10 built; the rest had their builder stop 45-210 px short of a valid spot (spots it
+     can't reach well, behind the mineral line), get re-tasked by Gary before arriving, or once find
+     an SCV on the spot. Headless has the same (~2 a game); trace with Game.scenario on the replay;
    - minerals float on two bases (game 5: 1,207 at 14:00), and turrets only in the main (game 1).
 3. **A self-play skeleton** (the user's priority): every piece of ARCHITECTURE.md present and
    connected, crude where it has to be, training together:
