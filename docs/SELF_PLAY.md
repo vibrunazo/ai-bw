@@ -53,9 +53,15 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    Zerg macro model's decisions (dice-rolled, as the Terran's), any Zerg unit, building, morph,
    research or upgrade. Fixed on the way: a larva just morphed was ordered again (29 of 60 morphs
    went to eggs), money just spent counted twice, v3's overlord list never cleared (supply-blocked).
-   Not yet an opponent: one decision at a time, so a building waiting for its money holds every
-   larva (8 drones at 2:00, 19 at 6:00, 21 at 8:00; Zerg v3 11, 24, 41). Next: larva decisions go on
-   while a building waits (the Terran's keep_busy, for Zerg), then the acceptance test.
+   Then: a decision short of money is parked, its money kept, while larvae go on with the rest
+   (Argon: a Lair waiting for gas held every larva); one pair of hands shared between the macro and
+   v3's helpers (jobs, gas, idle drones, rallies) and the army: whoever acted keeps them for up to 3
+   actions (a selection and its order), then the other goes first (each could take every turn: three
+   jobs at once from 1:00 to 2:00; idle drones it couldn't send back, 109 turns in 40 s). Seed 101:
+   13 drones at 4:00, 21 at 6:00, 22 and 3 hatcheries, a Lair and a Spire by 8:00 (Zerg v3 13, 24,
+   41). Still not an opponent: v3's gas routine takes 3 drones an extractor from the start and the
+   gas piles up (1,204 at 6:00); 6 zerglings when Gary-T came at 8:00. Next: gas as the model's
+   needs, then the acceptance test over many seeds.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

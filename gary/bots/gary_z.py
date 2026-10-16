@@ -39,6 +39,7 @@ USED_LARVA = 2 * 24             # a larva just morphed shows as a larva a moment
 IN_FLIGHT = 24                  # money just spent shows in the bank a moment later: counted as spent
 GOAL_TIMEOUT = 30 * 24          # a decision not carried out in 30 s is dropped
 QUERY_EVERY = 12
+STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)
 PLANS_FILE = "TvZ_Z_plan.json"  # data/interim/taxonomy: the plans' names and how often pros play them
 
 # v3's job code knows its own six buildings; Gary-Z builds any (only types v3 doesn't have are added,
@@ -89,6 +90,9 @@ class GaryZ(ZergV3):
         self.plan, self.poke, self.pressing = "mutas", False, False
         self.tracker = MacroTracker(self.model.spec, hi.slot, plan)
         self.goal: dict | None = None
+        self.parked: dict | None = None        # a decision waiting for its money, kept for it meanwhile
+        self.turn, self.streak = "macro", 0    # who goes first, and how many actions in a row it had
+        self.army_turn_last = False            # the army took the last turn: the rest has this one
         self.next_query = 0
         self.rng = random.Random(seed * 7919 + 1)          # the dice (deterministic per seed)
         self.used_larva: dict[int, int] = {}                # larva tag -> frame it was morphed
@@ -109,32 +113,58 @@ class GaryZ(ZergV3):
         me = obs["me"]
         mine = [u for u in obs["units"] if u["owner"] == hi.slot]
         self._timing(mine)
-        if self.army(obs, mine):
+        # the army and the rest take turns too: in fights v3's army took every turn, and nothing was
+        # decided or morphed from 7:30 to 10:30 (1,593 minerals and 9 larvae unused at 10:00)
+        if not self.army_turn_last and self.army(obs, mine):
+            self.army_turn_last = True
             return
+        self.army_turn_last = False
         hatches = [u for u in mine if u["type"] in Z.TOWN_HALLS]
         pool = next((u for u in mine if u["type"] == Z.POOL), None)
         drones = [u for u in mine if u["type"] == Z.DRONE and u["completed"]]
         if self.task:
             return self._continue(obs, mine, me)
+        # the macro and v3's helpers share the hands: whoever acted keeps them (a selection, then its
+        # order: alternating every action broke both, the other's selection in between), STREAK actions
+        # at most, then the other goes first; one with nothing to do hands over at once. (Either could
+        # take every turn: three jobs at once from 1:00 to 2:00; idle drones it couldn't send back,
+        # 109 turns in 40 s from 10:20; and nothing was decided meanwhile)
+        sides = [("macro", self._macro), ("helpers", self._helpers)]
+        if self.turn == "helpers":
+            sides.reverse()
+        for name, side in sides:
+            if side(obs, mine, me, hatches, pool, drones):
+                self.streak = self.streak + 1 if name == self.turn else 1
+                self.turn = name
+                if self.streak >= STREAK:
+                    self.turn, self.streak = ("helpers" if name == "macro" else "macro"), 0
+                return
+
+    def _helpers(self, obs, mine, me, hatches, pool, drones) -> bool:
+        """v3's hands: building jobs, gas, idle drones, rallies (True: one acted)."""
         for job in list(self.jobs.values()):
             if self._work(job, obs, mine, me, drones):
-                return
+                return True
         if self._gas(obs, mine, me, drones):
-            return
+            return True
         if self._mine_idle(obs, mine, [d for d in drones if d["tag"] not in self._builders()], hatches):
-            return
-        if self._rallies(obs, hatches, pool):
-            return
+            return True
+        return bool(self._rallies(obs, hatches, pool))
+
+    def _macro(self, obs, mine, me, hatches, pool, drones) -> bool:
+        """An overlord before a supply block, else the model's next decision carried out (True: acted)."""
+        hi = self.hi
         # (v3 forgets an overlord 25 s after ordering it in its _want, which Gary-Z doesn't use: kept,
         # the list said one was always coming, and Gary-Z sat supply-blocked: 15/17 at 4:00)
         self.overlords_at = [f for f in self.overlords_at if hi.frame - f < 24 * 25]
         if self._overlord_due(me, hatches) and (self.goal is None or self.goal["id"] != Z.OVERLORD):
             if self._larva_morph(obs, mine, Z.OVERLORD):        # (an execution guard, as v3's)
                 self.overlords_at.append(hi.frame)
-            return
+            return bool(hi.pending)
         self._decide(obs, mine, me)
         if self.goal is not None:
             self._carry_out(obs, mine, me)
+        return bool(hi.pending)
 
     def army(self, obs: dict, mine: list[dict]) -> bool:
         if self._mutas(obs, mine):
@@ -161,11 +191,45 @@ class GaryZ(ZergV3):
             self.build_frames[uid] = int(info["build_frames"]) if info else 30 * 24
         return self.build_frames[uid]
 
+    def _cost(self, act: int, uid: int) -> tuple[int, int]:
+        if act == EXPAND:
+            return Z.COST[Z.HATCHERY]
+        if act == RESEARCH:
+            return Z.RESEARCH[uid][1]
+        if act == UPGRADE:
+            return Z.UPGRADE[uid][1]
+        return Z.COST.get(uid, (0, 0))
+
+    def _free(self, me: dict, but: dict | None = None) -> tuple[int, int]:
+        """The money free now: the bank, less what's just spent, the buildings on their way, and the
+        parked decision's (unless it's the one asking)."""
+        minerals, gas = self._bank(me)
+        minerals -= self._kept()
+        if self.parked is not None and self.parked is not but:
+            pm, pg = self._cost(self.parked["act"], self.parked["id"])
+            minerals, gas = minerals - pm, gas - pg
+        return minerals, gas
+
+    def _affordable(self, g: dict, me: dict) -> bool:
+        if g["act"] in (BUILD, EXPAND):                     # (a job keeps its own money, from the walk on)
+            return True
+        m, gas = self._cost(g["act"], g["id"])
+        fm, fg = self._free(me, g)
+        return fm >= m and fg >= gas
+
     def _decide(self, obs: dict, mine: list[dict], me: dict) -> None:
+        """The next decision. One the money doesn't cover yet (a Lair or zergling speed waiting for gas,
+        a Spire for minerals) is parked, its money kept, and the larvae go on meanwhile with what's left
+        (a decision at a time held every larva: 8 drones at 2:00, 21 at 8:00, Zerg v3 11 and 41)."""
         hi = self.hi
-        if self.goal is not None and hi.frame - self.goal["since"] > GOAL_TIMEOUT:
-            self.log(f"gives up on {self.goal['name']}")
-            self.goal = None
+        for which in ("goal", "parked"):
+            g = getattr(self, which)
+            if g is not None and hi.frame - g["since"] > GOAL_TIMEOUT:
+                self.log(f"gives up on {g['name']}")
+                setattr(self, which, None)
+        if self.goal is None and self.parked is not None and self._affordable(self.parked, me):
+            self.goal, self.parked = self.parked, None          # (its money is there: it goes first)
+            return
         if self.goal is not None or hi.frame < self.next_query:
             return
         self.next_query = hi.frame + QUERY_EVERY
@@ -180,9 +244,19 @@ class GaryZ(ZergV3):
             act, uid = self.model.spec.decisions[k]
             if act < 0 or not self._can(act, uid, obs, mine, me):
                 continue
-            self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": self._name(act, uid)}
-            self.log(f"next: {self.goal['name']} ({self.goal['p']:.0%})")
-            return
+            g = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": self._name(act, uid)}
+            larva = act == MORPH and uid in Z.FROM_LARVA
+            if self._affordable(g, me):
+                self.goal = g
+                self.log(f"next: {g['name']} ({g['p']:.0%})")
+                return
+            if not larva and self.parked is None:
+                self.parked = g
+                self.log(f"next: {g['name']} ({g['p']:.0%}), parked for its money")
+                continue                                     # (and a larva meanwhile, if one is affordable)
+            if self.parked is not None and not larva:
+                continue                                     # (one parked at a time; meanwhile only larvae)
+            return                                           # (a larva the money doesn't cover yet: wait)
 
     def _name(self, act: int, uid: int) -> str:
         if act == RESEARCH:
@@ -260,8 +334,7 @@ class GaryZ(ZergV3):
         if act in (BUILD, EXPAND):                  # (a job keeps its money from the walk on)
             self._new_job(obs, mine, act, uid)
             return
-        minerals, gas = self._bank(me)
-        if minerals - self._kept() < cost[0] or gas < cost[1]:
+        if not self._affordable(g, me):
             return
         if act == MORPH and uid in Z.FROM_LARVA:
             if self._larva_morph(obs, mine, uid):
