@@ -103,10 +103,12 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
               f"(adapter reported latency_frames={st.get('latency_frames')})", flush=True)
         gary = make_bot(hi, mapinfo)
         end = hi.frame + int(minutes * 60 * 24)
+        minute = hi.frame // 1440
         while hi.frame < end:
             gary.act()
-            hi.step(2)                       # waits for the live game to advance
-            if hi.frame % (24 * 60) < 2:
+            hi.step(2)                       # waits for the live game to advance (its clock can jump)
+            if hi.frame // 1440 > minute:
+                minute = hi.frame // 1440
                 report(hi, game)
     except GameError as e:
         print(f"game over / bridge lost: {e}")

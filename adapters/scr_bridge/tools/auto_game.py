@@ -4,6 +4,8 @@
     python adapters/scr_bridge/tools/auto_game.py               # click through to a melee game
     python adapters/scr_bridge/tools/auto_game.py --calibrate   # screenshot the game window only
     python adapters/scr_bridge/tools/auto_game.py --click 0.5,0.3   # one click at (fx, fy)
+    python adapters/scr_bridge/tools/auto_game.py --seq tvz         # a named click sequence (SEQUENCES)
+    python adapters/scr_bridge/tools/auto_game.py --target ok       # one named click (CLICKS)
 
 Clicks are (fx, fy) fractions of the game window rect, so the map is resolution-independent.
 Every run saves build/auto_game/step_NN_before.png screenshots; the STEPS table is calibrated
@@ -58,6 +60,47 @@ LOBBY_RACE_ITEMS: dict[str, tuple[float, float]] = {
     "R": (0.395, 0.196),
 }
 LOBBY_ROW_FY_AWAY = 0.066  # add for the away-team row (--row away); measured 95px at 1440p
+
+# Single-player clicks (real input, fullscreen layout), calibrated 2026-10-15 at 2560x1440 against
+# 1.23.10. The Create screen (Play Custom) remembers the map and folder, not the races or slots: a
+# fresh one has the local player Random-raced and three Computer slots. Its race and slot widgets are
+# dropdowns: click the combo, then the item in the list that pops below it.
+CLICKS: dict[str, tuple[float, float]] = {
+    # single-player menu
+    "play_custom": (0.510, 0.864),
+    # Create screen: the map list and folders (a folder opens with a select click plus Ok)
+    "map_row_1": (0.249, 0.293),          # first row of the map list ([ladder] in the maps root)
+    "map_scroll_up": (0.523, 0.289),      # the list's up arrow
+    "season_11_row": (0.270, 0.373),      # ladder folder scrolled to the top: Season 11
+    "fighting_spirit_row": (0.315, 0.492),  # Season 11: [4]Fighting_Spirit_1.3 (Season 10 has it too)
+    "ok": (0.730, 0.820),                 # Ok: opens a selected folder, or starts the game
+    # Create screen: player rows (the local player first, then slots 2-4)
+    "my_race": (0.438, 0.672),
+    "my_race_terran": (0.375, 0.736),
+    "slot2_race": (0.438, 0.712),         # the first Computer's race
+    "slot2_race_zerg": (0.369, 0.742),
+    "slot3": (0.252, 0.751),              # slot 3's player combo (Computer / Closed / ...)
+    "slot3_closed": (0.187, 0.782),
+    "slot4": (0.326, 0.790),
+    "slot4_closed": (0.187, 0.822),
+    # in a match: the game menu (the console's Menu button, or F10)
+    "game_menu": (0.651, 0.828),
+    "end_mission": (0.494, 0.524),
+    "quit_mission": (0.494, 0.312),       # pressed twice: the second confirms
+    "minimap_corner": (0.137, 0.889),     # in a match: the minimap, to move the real camera away
+}
+# Named sequences for --seq: (target, seconds to settle after the click)
+SEQUENCES: dict[str, list[tuple[str, float]]] = {
+    # the Create screen at the maps root -> Fighting Spirit selected (skip if it's already selected:
+    # the screen remembers the folder and map)
+    "fighting-spirit": [("map_row_1", 2), ("ok", 3), ("map_scroll_up", 1), ("map_scroll_up", 1),
+                        ("season_11_row", 2), ("ok", 3), ("fighting_spirit_row", 2)],
+    # the Create screen -> local player Terran vs one Zerg computer (Gary's live-test setup)
+    "tvz": [("my_race", 1), ("my_race_terran", 1), ("slot3", 1), ("slot3_closed", 1),
+            ("slot4", 1), ("slot4_closed", 1), ("slot2_race", 1), ("slot2_race_zerg", 2)],
+    # in a match -> back at the menus; the client writes Maps/Replays/LastReplay.rep
+    "end": [("game_menu", 2), ("end_mission", 2), ("quit_mission", 3), ("quit_mission", 4)],
+}
 
 # Menu key flows for --preset (posted background keys). lan-create/lan-join end in the
 # multiplayer LOBBY (not a running game), so they skip the in_game() success check.
@@ -397,6 +440,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--calibrate", action="store_true", help="screenshot the game window, click nothing")
     ap.add_argument("--click", metavar="FX,FY", help="perform exactly one click, then screenshot")
+    ap.add_argument("--seq", choices=sorted(SEQUENCES),
+                    help="run a named click sequence (CLICKS/SEQUENCES), then screenshot: "
+                         "fighting-spirit, tvz (Terran vs Zerg computer), end (end the match)")
+    ap.add_argument("--target", choices=sorted(CLICKS), help="one click on a named target, then screenshot")
     ap.add_argument("--settle", type=float, default=4.0,
                     help="seconds to wait after each click (SC:R textures load late)")
     ap.add_argument("--mode", choices=("keys", "clicks"), default="keys",
@@ -436,8 +483,16 @@ def main() -> None:
         print(f"calibration screenshot: {p}")
         return
 
-    if args.click:
-        fx, fy = (float(v) for v in args.click.split(","))
+    if args.seq:
+        for name, settle in SEQUENCES[args.seq]:
+            pos = click(hwnd, *CLICKS[name])
+            print(f"{name}: clicked at {pos}")
+            time.sleep(settle)
+        print(f"screenshot: {shot(hwnd, f'after_{args.seq}.png')}")
+        return
+
+    if args.click or args.target:
+        fx, fy = CLICKS[args.target] if args.target else (float(v) for v in args.click.split(","))
         pos = click(hwnd, fx, fy)
         print(f"clicked at {pos}")
         shot(hwnd, "after_click.png")

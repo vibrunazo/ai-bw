@@ -203,6 +203,28 @@ bot's window (harmless: multiplayer never pauses unfocused) — and `--start` po
 the lobby (map size + local player are already set there), so `frames > 0` is the "match
 running" signal (`auto_game.match_started()`), not `in_game`.
 
+**Gary vs the computer Zerg, step by step** (the live test loop; all clicks are named in
+`auto_game.py`'s `CLICKS` / `SEQUENCES`, window fractions of the fullscreen layout, so they hold at
+any resolution; they are real-input clicks and move the mouse):
+
+1. `launch.py` (starts SC:R with the bridge). The menu hotkeys `S,E,O,U` (Single player,
+   Expansion, Ok on the account, cUstom) reach the Create screen: `auto_game.py --keys S,E,O,U`.
+   Sent while the client is still loading, they land in Options: back out and resend with
+   `--keys Enter,S,E,O,U --delay 3`.
+2. The Create screen remembers its folder and map, not the races or slots. If Fighting Spirit
+   isn't selected: `--seq fighting-spirit` from the maps root (`[ladder]` → Season 11 →
+   `[4]Fighting_Spirit_1.3`).
+3. `--seq tvz`: the local player Terran, slots 3 and 4 Closed, the computer Zerg. Check the
+   screenshot it saves (`build/auto_game/after_tvz.png`).
+4. Start Gary first: `python -m gary.play --gary v025 --live --pov runs/live/NAME.pov.jsonl`. It
+   waits for a match where the local player is Terran and starts on frame 0.
+5. `--target ok` starts the match.
+6. To end a match early: `--seq end` (Menu → End Mission → Quit Mission, twice). The client
+   writes `Maps\Replays\LastReplay.rep` under its user folder.
+
+Pass `--pid N` when two clients run. Only text labels are buttons in BW menus; never click
+(0.755, 0.894) at the single-player menu (its Cancel quits the game).
+
 **Two instances on one machine** (needed for local human-vs-Gary practice): SC:R enforces a
 single instance via the named kernel Event `\Sessions\1\BaseNamedObjects\Starcraft Check For
 Other Instances` — a second client exits within seconds of the first (the x86 and x64 clients

@@ -557,7 +557,7 @@ class DirectMotor:
                     hi.minimap_command(C.ORDER_ATTACK_MOVE, d["x"], d["y"])
                 else:
                     hi.minimap_right_click(d["x"], d["y"])
-                d["done"] += sel
+                d["done"] += [s for s in sel if s not in d["done"]]   # a box also grabs units already ordered
                 g.leases.take(sel, t.intent)
             t.stage = "start"
             return

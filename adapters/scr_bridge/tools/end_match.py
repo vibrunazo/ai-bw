@@ -26,8 +26,18 @@ from auto_game import click, find_game_window, raise_window, shot, window_rect  
 from gary.scr_env import ScrGame  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "build" / "auto_game"
+
+
+def documents() -> Path:
+    """The user's Documents folder as Windows has it (it can be moved off the home folder)."""
+    buf = ctypes.create_unicode_buffer(260)
+    if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf) == 0:   # CSIDL_PERSONAL
+        return Path(buf.value)
+    return Path.home() / "Documents"
+
+
 REPLAY_DIRS = [
-    Path.home() / "Documents" / "StarCraft" / "Maps" / "Replays",
+    documents() / "StarCraft" / "Maps" / "Replays",
     *([Path(os.environ["GARY_SC_INSTALL"]) / "Maps" / "Replays", Path(os.environ["GARY_SC_INSTALL"]) / "Maps" / "Save"]
       if os.environ.get("GARY_SC_INSTALL") else []),     # (GARY_SC_INSTALL: your StarCraft folder)
 ]

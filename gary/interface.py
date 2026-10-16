@@ -533,9 +533,14 @@ class HumanInterface:
             if advance_game:
                 self.game.step(1)
             self._log_pov()
-            self.frame += 1
-            self.tokens = min(self.p.apm_capacity, self.tokens + self.p.apm_per_second * FRAME_MS / 1000)
-            self.history.append([self.frame, self._observe_raw() if self._observe_raw else self.game.observe()])
+            obs = self._observe_raw() if self._observe_raw else self.game.observe()
+            # Gary's clock is the game's: live, the game runs on while Gary thinks (several frames a
+            # step; counting one a step, Gary's clock fell 40 s behind in 15 minutes); headless (raw
+            # observations, parsed later) it's +1
+            ran = max(1, obs["frame"] - self.frame) if isinstance(obs, dict) else 1
+            self.frame += ran
+            self.tokens = min(self.p.apm_capacity, self.tokens + self.p.apm_per_second * FRAME_MS / 1000 * ran)
+            self.history.append([self.frame, obs])
 
     def _displayed_cursor(self) -> tuple[int, int]:
         """Where the mouse is drawn this frame: moving along its path while a click travels."""

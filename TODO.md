@@ -38,6 +38,14 @@ What to do, in order:
 2. **A human in the loop.** The Remastered bridge's known gaps fixed (adapters/scr_bridge README; done
    2026-10-15 offline, pinning live), then short sets against a human; that losses list sets the next
    version. This is the product; the rest is proxy.
+   Gary's failures in the live games against the computer Zerg so far (runs/live, 2026-10-15):
+   - marines and medics trickle up the enemy ramp one by one, and the 8:00 hunt throws the army
+     away (games 3 and 5: 14 marines to 5);
+   - the computer's early zergling rush lost game 2;
+   - turrets: the game refused 13 turret builds at 13 spots in a row in game 5 (7:04-8:01, the
+     Engineering Bay done, the money kept), and in game 4; the cause is unknown: log the builder,
+     the spot and the game's error text when one fails;
+   - minerals float on two bases (game 5: 1,207 at 14:00), and turrets only in the main (game 1).
 3. **A self-play skeleton** (the user's priority): every piece of ARCHITECTURE.md present and
    connected, crude where it has to be, training together:
    - a Zerg Gary from the same pro-replay pipeline (Zerg macro and army imitation from the 14k TvZ
