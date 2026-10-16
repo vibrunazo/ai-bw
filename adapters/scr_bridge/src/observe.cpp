@@ -8,7 +8,6 @@
 #include <string>
 
 #include "scr_profile.h"
-#include "image_dat.h"
 #include "unit_dat.h"
 
 namespace garyscr {
@@ -300,11 +299,11 @@ bool multi_selectable(const UnitView& u) {
     return u.type < 228 && kMultiSelectable[u.type] && !(u.flags & profile::kStatusDisabled);
 }
 
-// gary_env's clickable rectangle: the union of the sprite's clickable images' GRP frames, each at
-// its map position (sprite position + image offset + frame/canvas centring, per OpenBW
-// get_image_map_position). Frame geometry comes from the game's GRP files (image_dat.h): live
-// memory holds only the image type + frame index (offsets pinned in scr_profile.h, measured by
-// tools/hunt_click.py).
+// gary_env's clickable rectangle: the union of the sprite's clickable images' frames, each where the
+// game draws it: the image's own map position (the frame's top-left, what OpenBW's
+// get_image_map_position computes) and its frame bounds, both kept by the game in the image (bw_dat
+// map_position, grp_bounds). Rebuilding them from the GRP files' frame tables went wrong for some
+// images: a Command Center's centre was outside its box live, so Gary couldn't select it (2026-10-15).
 bool clickable_rect(const World& w, const UnitView& u, int* x0, int* y0, int* x1, int* y1) {
     (void)w;
     uint32_t sprite = (uint32_t)u.sprite;
@@ -318,18 +317,13 @@ bool clickable_rect(const World& w, const UnitView& u, int* x0, int* y0, int* x1
         uint16_t type = read_at<uint16_t>(img + profile::kImageType);
         // clickability: the runtime flag_clickable bit, exactly gary_env's gate (images.dat
         // is_clickable is copied in at image creation; overlays can differ at runtime).
-        if ((flags & profile::kImageFlagClickable) && type < 999) {
-            uint16_t frame = read_at<uint16_t>(img + profile::kImageFrameIndex);
-            uint16_t nframes = kImageFramesOff[type + 1] - kImageFramesOff[type];
-            if (frame < nframes) {
-                const uint8_t* fr = kImageFrames[kImageFramesOff[type] + frame];
-                int gw = kImageGrpSize[type][0], gh = kImageGrpSize[type][1];
-                int px = u.x + (int)(int8_t)read_at<uint8_t>(img + profile::kImageX);
-                int py = u.y + (int)(int8_t)read_at<uint8_t>(img + profile::kImageY);
-                if (flags & profile::kImageFlagFlipped) px += gw / 2 - (fr[0] + fr[2]);
-                else                                 px += fr[0] - gw / 2;
-                py += fr[1] - gh / 2;
-                int rx1 = px + fr[2], ry1 = py + fr[3];
+        int bw = read_at<int16_t>(img + profile::kImageGrpBounds + 4);
+        int bh = read_at<int16_t>(img + profile::kImageGrpBounds + 6);
+        if ((flags & profile::kImageFlagClickable) && type < 999 && bw > 0 && bh > 0) {
+            {
+                int px = read_at<int16_t>(img + profile::kImageMapPosition) + read_at<int16_t>(img + profile::kImageGrpBounds);
+                int py = read_at<int16_t>(img + profile::kImageMapPosition + 2) + read_at<int16_t>(img + profile::kImageGrpBounds + 2);
+                int rx1 = px + bw, ry1 = py + bh;
                 if (!any) {
                     *x0 = px; *y0 = py; *x1 = rx1; *y1 = ry1;
                     any = true;

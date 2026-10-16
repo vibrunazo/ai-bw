@@ -157,6 +157,9 @@ constexpr uint32_t kImageFlags = 0x0c;             // u16 (OpenBW image_t::flags
 constexpr uint32_t kImageX = 0x0e;                 // s8 (offset from the sprite's position)
 constexpr uint32_t kImageY = 0x0f;                 // s8
 constexpr uint32_t kImageFrameIndex = 0x1a;        // u16 (frame in the type's GRP; frameset @0x18)
+constexpr uint32_t kImageMapPosition = 0x1c;       // i16 x, y: the frame's top-left on the map
+constexpr uint32_t kImageGrpBounds = 0x24;         // i16 x, y, w, h: the frame's bounds from there
+                                                   // (live: a Command Center (0, 0, 127, 100))
 constexpr uint32_t kImageParent = 0x3c;            // ptr: the sprite that owns the image
 constexpr uint16_t kImageFlagFlipped = 0x02;
 constexpr uint16_t kImageFlagClickable = 0x20;
