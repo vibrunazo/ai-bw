@@ -66,6 +66,13 @@ What to do, in order:
    - a Zerg Gary from the same pro-replay pipeline (Zerg macro and army imitation from the 14k TvZ
      games), on Zerg v3's execution code;
    - the opponent model's belief over the enemy's z, and a strategy layer conditioned on it;
+   - anticipation (human game 1, the user: "like playing against someone AFK"; Gary acts on what is,
+     never on what is coming): a model of where each enemy group will be in 2-5 s and what it is
+     going for (a mineral line, the natural, the army), learned from the 14k pro TvZ games
+     (supervised: their positions seconds later), an input to the army and fight decisions;
+   - how much to commit to defense, and acting first instead of waiting: learned from outcomes in
+     the league (RL against a Zerg that kites and punishes waiting), not scripted (the user's call:
+     pros pull back just enough to survive, not a marine more);
    - a trace schema;
    - a league loop that updates at least one learned piece from outcomes, with the critic grading
      unfinished games and the pro data as an anchor (KL to the imitation policy).

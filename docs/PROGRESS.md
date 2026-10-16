@@ -291,16 +291,20 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   Zerg over LAN, 2026-10-16, Gary dead at 12:17; the bridge matched OpenBW over the whole replay, so
   every failure was Gary's): against mutalisks an Engineering Bay, an Academy and 2 turrets in every
   base's mineral line (answers.py; v0.24 had dropped the muta answer after it lost bot games, and
-  Gary built no turret against the user's mutas); after the rush defense, what it put off: gas, an
-  Academy and the natural (the model asked only marines, SCVs and depots from 4:45 to 8:13); no
-  worker pull against flyers or more than 8 zerg supply (x2) (SCVs pulled against 4 to 23 zerg,
+  Gary built no turret against the user's mutas); no worker pull against flyers or more than 8 zerg supply (x2) (SCVs pulled against 4 to 23 zerg,
   mutas among them, 26 SCVs to 0). Shared code: a parked build keeps its own SCV (executor.py).
 - **Judged by:** the next games against humans. Headless only checks it breaks nothing: 6 seeds
-  against Zerg v3 (14 minutes) won 3 (v0.25 2), lost 0 (0); every fix fired (catch-up in 6, muta
-  turrets in the natural's mineral line in 4, no worker pulls where v0.25 pulled 12 and 14 times).
-- **Not addressed (the user's notes):** reactions far too slow; a lone SCV walking out to build
-  into the lings that killed the last one; kiting beats it (Gary never met a Zerg that micros: the
-  self-play Zerg's job).
+  against Zerg v3 (14 minutes) won 2 (v0.25 2), lost 0 (0); the muta turrets fired where mutas came,
+  no worker pulls where v0.25 pulled 12 and 14 times.
+- **Not scripted, on purpose (the user's call):** leaving the rush defense (the model asked only
+  marines, SCVs and depots from 4:45 to 8:13). How much to commit to defense is learned: pros pull
+  back just enough to survive, and the nuances are too many for a rule (a catch-up rule, gas, Academy
+  and the natural after the early pool, was written and removed).
+- **Not addressed (the user's notes):** Gary plays like someone AFK: it waits for the opponent to
+  act, and acts on what is, never on what is coming (lings running from marines turn toward the
+  mineral line: the marines should go back then, not when SCVs are hit); a lone SCV walks out to
+  build into the lings that killed the last one; kiting beats it. Learned pieces of the self-play
+  skeleton (TODO, Direction 3).
 
 ### v0.25 (October 2026): hunts that finish games
 

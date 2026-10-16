@@ -25,7 +25,7 @@ from gary import terran as T
 from gary.agent.gary import Gary
 from gary.agent.intents import Intent
 
-TRAIN, BUILD, RESEARCH, EXPAND = 0, 3, 4, 6
+TRAIN, BUILD, RESEARCH = 0, 3, 4
 SIEGE_MODE, IRRADIATE = 5, 7
 LAIR, HIVE, SPIRE, GREATER_SPIRE, DEN = 132, 133, 141, 137, 135
 MUTALISK, LURKER, LURKER_EGG = 43, 103, 97
@@ -50,15 +50,12 @@ MUTA_ANSWER = [(BUILD, T.EBAY, 1), (BUILD, T.ACADEMY, 1)]
 MUTA_TURRETS_PER_BASE = 2                 # pros 6.9 by 10:00 over their bases
 TURRET_IN_LINE = 0.5                      # a turret this far from the CC toward its minerals' middle
 TURRET_OF_BASE = 10 * 32                  # px: a turret this close to a base's minerals guards it
-# catch_up (option): after the rush defense, what it put off. Human game 1: the early pool held at 4:45,
-# then the model asked only marines, SCVs and depots: no gas, no Academy and one base until 8:30
-AFTER_RUSH = [(BUILD, T.REFINERY, 1), (BUILD, T.ACADEMY, 1), (EXPAND, T.CC, 2)]
 
 
 class Answers:
-    def __init__(self, g: Gary, mutas: bool = False, catch_up: bool = False):
+    def __init__(self, g: Gary, mutas: bool = False):
         self.g = g
-        self.mutas, self.catch_up = mutas, catch_up
+        self.mutas = mutas
         self.seen: dict[int, int] = {}       # zerg type -> frame first seen
         self.plan: str | None = None         # "mutas", "lurkers"
         self.scans = 0
@@ -105,8 +102,6 @@ class Answers:
         """The first part of the answer Gary lacks and can make (or wait for), as a macro goal."""
         g, f, mac = self.g, self.g.hi.frame, self.g.macro
         answer = LURKER_ANSWER if self.plan == "lurkers" else MUTA_ANSWER if self.plan == "mutas" and self.mutas else []
-        if self.catch_up and getattr(g.posture, "rush_over", False):
-            answer = AFTER_RUSH + answer
         for act, uid, n in answer:
             have = (1 if uid in g.researched else 0) if act == RESEARCH else mac.count(mine, uid)
             if have >= n or f - self.asked.get((act, uid), -ASK_AGAIN) < ASK_AGAIN:
@@ -115,9 +110,8 @@ class Answers:
             if not isinstance(plan, dict) or plan.get("kind") == "wait":
                 continue                     # (not possible, or not now: a research underway, a busy Factory)
             self.asked[(act, uid)] = f
-            name = "expand" if act == EXPAND else (T.TECH_NAMES.get(uid) if act == RESEARCH else T.NAMES.get(uid)) or str(uid)
-            why = f"against {self.plan}" if (act, uid, n) not in AFTER_RUSH else "after the early pool"
-            return {"act": act, "id": uid, "p": 1.0, "since": f, "name": f"{name} ({why})"}
+            name = (T.TECH_NAMES.get(uid) if act == RESEARCH else T.NAMES.get(uid)) or str(uid)
+            return {"act": act, "id": uid, "p": 1.0, "since": f, "name": f"{name} (against {self.plan})"}
         if self.plan == "mutas" and self.mutas:
             return self.turret_goal(obs, mine, done, me)
         return None
