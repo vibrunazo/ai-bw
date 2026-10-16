@@ -31,7 +31,7 @@ POOL, LING, OVERLORD, DRONE, HATCH = 142, 37, 42, 41, 131
 MINING = 87                     # order: mining minerals (the drone stands at the field)
 DRONES = 9
 WAVE = 12                       # (Zerg v1's groups)
-PRO_HANDS = {"v3"}              # Zergs with pro-speed hands (the others keep b_rank: their benchmarks stay the same)
+PRO_HANDS = {"v3", "garyz"}              # Zergs with pro-speed hands (the others keep b_rank: their benchmarks stay the same)
 FIRST_WAVE, LATER_WAVES = 6, 2   # the dummy: the first 6 zerglings together, then each pair as it hatches
 POOL_WALK_AT = 150              # minerals when the pool's drone sets out (the pool goes down at 200)
 RALLY = 5 * 32                  # the hatchery's rally: this far from it, toward the map's middle
@@ -231,6 +231,9 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
         elif opponent == "v3":
             from gary.bots.zerg_v3 import ZergV3
             zerg = ZergV3(his["Z"], mapinfo, seed or 0)
+        elif opponent == "garyz":
+            from gary.bots.gary_z import GaryZ
+            zerg = GaryZ(his["Z"], mapinfo, seed or 0)
         else:
             zerg = ZergRush(his["Z"], mapinfo)
         # the dummy knows where Gary is (no scouting): its waves go straight to Gary's main
@@ -286,7 +289,7 @@ def main() -> None:
     ap.add_argument("--save", default="gary_vs_rush.rep")
     ap.add_argument("--attack-after", type=float, default=0, help="no attack before this many seconds")
     ap.add_argument("--style", type=int, help="build style (taxonomy cluster) to steer Gary's macro toward")
-    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2", "v3", "replayed"],
+    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2", "v3", "garyz", "replayed"],
                     help="the Zerg: this dummy, or gary/bots/zerg_v1.py (gathers, judges, surrounds, retreats)")
     args = ap.parse_args()
     from gary.agent.manifests import build_gary

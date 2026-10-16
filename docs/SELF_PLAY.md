@@ -46,6 +46,13 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    3-hatch lurker 9%, ...; the macro index restyled with them for the Zerg only (ingest/macro_dataset.py
    --restyle) and the model retrained steered by them (runs/macro/TvZ_Z_20261016-095424: top-1
    50.5%); gary/zerg.py, the Zerg facts, checked against units.dat (tests/test_game_data.py).
+   **Gary-Z v0 runs (2026-10-16, gary/bots/gary_z.py, `--opponent garyz`):** v3's hands, the steered
+   Zerg macro model's decisions (dice-rolled, as the Terran's), any Zerg unit, building, morph,
+   research or upgrade. Fixed on the way: a larva just morphed was ordered again (29 of 60 morphs
+   went to eggs), money just spent counted twice, v3's overlord list never cleared (supply-blocked).
+   Not yet an opponent: one decision at a time, so a building waiting for its money holds every
+   larva (8 drones at 2:00, 19 at 6:00, 21 at 8:00; Zerg v3 11, 24, 41). Next: larva decisions go on
+   while a building waits (the Terran's keep_busy, for Zerg), then the acceptance test.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
