@@ -59,8 +59,11 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    actions (a selection and its order), then the other goes first (each could take every turn: three
    jobs at once from 1:00 to 2:00; idle drones it couldn't send back, 109 turns in 40 s). Seed 101:
    13 drones at 4:00, 21 at 6:00, 22 and 3 hatcheries, a Lair and a Spire by 8:00 (Zerg v3 13, 24,
-   41). Then (Argon's catches) hatcheries rally onto their own minerals, not the army's gathering
-   point, and idle drones mine at any base Gary-Z holds; gas drones follow the bank (back to minerals
+   41). Then (Argon's catches) hatcheries rally beside their own minerals, not the army's gathering
+   point, and idle drones mine at any base Gary-Z holds (a rallied drone doesn't mine by itself in BW,
+   the user's correction, checked in OpenBW: the idle routine sends it; pros' hatchery rallies in 46
+   TvZ games: 78% toward the front, drones then picked up with the army's, 21% by the minerals; the
+   front rally with a ctrl+click pickup is the pro way, for later); gas drones follow the bank (back to minerals
    above 400 gas). Over 8 seeds against v0.27 (eval/zerg_economy.py), medians at 4/6/8/10 min:
    drones 15/20/32/25 (Zerg v3: 12/20/29/28), hatcheries 2/3/3/2 (2/2/3/4), army supply 2/3/6/10
    (2/5/14/25), gas 392/142/274/194 (v3 piles 1,694 by 8:00). The economy is v3's; the army is half

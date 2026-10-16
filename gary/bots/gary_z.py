@@ -41,6 +41,7 @@ GOAL_TIMEOUT = 30 * 24          # a decision not carried out in 30 s is dropped
 QUERY_EVERY = 12
 GAS_FLOAT, GAS_LOW = 400, 150   # gas above this (and above the minerals): its drones go back to minerals;
                                 # below the other, the extractors are filled again
+RALLY_IN_LINE = 0.6              # the rally: this far from the hatchery toward its minerals' middle
 STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)
 PLANS_FILE = "TvZ_Z_plan.json"  # data/interim/taxonomy: the plans' names and how often pros play them
 
@@ -187,10 +188,13 @@ class GaryZ(ZergV3):
         return self._owned_bases(mine) or [self.main_base]
 
     def _rallies(self, obs, hatches, pool) -> bool:
-        """Every finished hatchery rallies onto a mineral field of its own base (a right-click on it:
-        new drones mine on their own), not to the army's gathering point as v2's did (each drone walked
-        to the choke and stood there until the idle routine fetched it; Argon's catch). The army
-        collects its zerglings from wherever they stand. (True: it acted.)"""
+        """Every finished hatchery rallies to the ground beside its own base's minerals (a minimap
+        right-click there), not to the army's gathering point as v2's did: each drone walked to the
+        choke and stood there until the idle routine fetched it (Argon's catch). In BW a rallied drone
+        doesn't mine by itself (OpenBW: it stands by the field), so the idle routine still sends it,
+        from next to the minerals. Pros' hatchery rallies in 46 TvZ games: 78% toward the front (the
+        user's way: with the army, then the drones picked up with a ctrl+click), 21% by the minerals
+        (a third of those before 6:00), onto a mineral field practically never. (True: it acted.)"""
         hi = self.hi
         for h in hatches:
             if not h["completed"] or h["tag"] in self.rallied_at:
@@ -199,14 +203,13 @@ class GaryZ(ZergV3):
             if not base.minerals:
                 self.rallied_at.add(h["tag"])
                 continue
-            m = min(base.minerals, key=lambda m: math.dist(m, base.center))
+            mx = sum(x for x, _ in base.minerals) / len(base.minerals)
+            my = sum(y for _, y in base.minerals) / len(base.minerals)
+            spot = (int(h["x"] + (mx - h["x"]) * RALLY_IN_LINE), int(h["y"] + (my - h["y"]) * RALLY_IN_LINE))
             if self._look(obs, (h["x"], h["y"])):
                 return True
             if obs["selection"] == [h["tag"]]:
-                p = screen_of(obs, *m)
-                if p is None:
-                    return self._look(obs, m)
-                hi.right_click(*p)
+                hi.minimap_right_click(*spot)
                 self.rallied_at.add(h["tag"])
                 return True
             top = screen_of(obs, h["x"], h["y"] - 24)
