@@ -32,7 +32,8 @@ SLICE = 12
 
 
 class Probe:
-    def __init__(self):
+    def __init__(self, near: float = NEAR):
+        self.near = near                   # units with an enemy fighter this close are labeled
         self.start = None
         self.flip = None
         self.snaps = []                    # (frame, rows, extra, tags)
@@ -114,7 +115,7 @@ class Probe:
                 x1, y1 = part[-1][1:3]
                 threatened = part[0][0] - tgt0 <= TARGETED_FOR or near0 < CONTACT
                 kind = None
-                if near0 < NEAR:
+                if near0 < self.near:
                     orders = [p[3] for p in part]
                     if sum(o in ATTACK for o in orders) * 2 >= len(orders):
                         kind = "fire"

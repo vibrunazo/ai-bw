@@ -26,7 +26,10 @@ import torch.nn.functional as F
 
 from eval import monitor, priority
 from gary.policy.roles import DECISIONS, ROLES, RoleModel, RoleNet, tensors
+from eval.micro_roles import NEAR
 from ingest.inventory import data_root
+
+PRE_VAL: list = []                      # the validation set's labels before contact only (if the data has them)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -68,6 +71,10 @@ def load(path: Path, decisions: bool = False):
         labels = decision_labels(d) if decisions else d["labels"]
     arrays = {"rows": d["rows"], "extra": d["extra"], "labels": labels, "count": d["count"], "time": d["time"]}
     pick = lambda m: tuple(arrays[k][m] for k in ("rows", "extra", "labels", "count", "time"))
+    if "near" in d:                     # (ingest/response_dataset.py: labels before contact scored apart too)
+        pre = np.where(d["near"] >= NEAR, labels, -1).astype(labels.dtype)
+        arrays["labels_pre"] = pre
+        PRE_VAL[:] = [tuple(arrays[k][val] for k in ("rows", "extra", "labels_pre", "count", "time"))]
     return pick(~val), pick(val), names
 
 
@@ -161,7 +168,14 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     RoleModel(net.cpu(), config).save(out / "model.pt")
     final = evaluate(net.to(device), val, device, names)
-    (out / "report.json").write_text(json.dumps({"val": final, "history": history}, indent=1), encoding="utf-8")
+    report = {"val": final, "history": history}
+    if PRE_VAL:
+        pre = evaluate(net, PRE_VAL[0], device, names)
+        report["val_before_contact"] = pre
+        print("before contact (recall/precision): "
+              + ", ".join(f"{r} {pre[r]['recall']:.2f}/{pre[r]['precision']:.2f} ({pre[r]['share']:.0%})" for r in names)
+              + f"; accuracy {pre['accuracy']}")
+    (out / "report.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     print(f"saved {out / 'model.pt'}; validation (recall/precision): "
           + ", ".join(f"{r} {final[r]['recall']:.2f}/{final[r]['precision']:.2f}" for r in names)
           + f"; accuracy {final['accuracy']} (always fire: {final['baseline_fire']})")
