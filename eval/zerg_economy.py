@@ -93,14 +93,18 @@ def _pro_game(path: str) -> dict | None:
 
 
 def pro_reference(games: int) -> dict:
-    """{minute: {key: median}} over pro TvZ Zergs in games of 12:30 or more (cached)."""
+    """{minute: {key: median}} over pro TvZ Zergs in games of 12:30 or more that play the same in
+    OpenBW (cached)."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
     from inventory import data_root
     cache = data_root() / "interim" / f"pro_zerg_economy_{games}.json"
     if cache.exists():
         return {int(k): v for k, v in json.loads(cache.read_text()).items()}
     recs = [json.loads(line) for line in open(data_root() / "interim" / "build_orders.jsonl", encoding="utf-8")]
-    recs = [r for r in recs if r["matchup"] == "TvZ" and r["race"] == "Z" and r.get("duration_s", 0) >= 750]
+    from eval.humanlike import clean_replays
+    clean = clean_replays()
+    recs = [r for r in recs if r["matchup"] == "TvZ" and r["race"] == "Z" and r.get("duration_s", 0) >= 750
+            and r["rel_path"] in clean]
     random.Random(0).shuffle(recs)
     with ProcessPoolExecutor(4) as pool:
         found = [g for g in pool.map(_pro_game, [str(data_root() / "raw" / r["rel_path"]) for r in recs[:games]]) if g]

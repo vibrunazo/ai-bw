@@ -132,6 +132,20 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    the zergling-equivalent weights were hand-picked). 8 seeds, Gary-Z (pros): army supply 6/12/16/15
    at 6/8/10/12 (4/18/24/34), bank 68/234/486/494 (262/310/360/442), gas 156/82/128/213
    (400/422/500/510), drones 17/24/23/26 (21/25/28/32), Gary-T won 0 of 8.
+   **The humanlikeness classifier, first version (2026-10-16, eval/humanlike.py):** one player's side,
+   features per minute from the replays re-simulated (cut at each game's real end: OpenBW plays on
+   past a replay's last command, and idle minutes looked like 8,000 minerals banked), against 300 pro
+   games of 10 minutes or more on the three maps that re-simulate cleanly (a desynced pro replay had
+   18 SCVs and no army at 10:00). Gary-T (112 games) and Gary-Z (16) are told apart at AUC 0.998-0.999
+   in every minute, and still at 0.99 with the top 12 tells dropped: they differ in many ways at once,
+   so the combined score saturates until Gary is closer, and the per-feature gap table (each feature
+   alone, Gary against the pros per minute range) is the work list. Gary-T's biggest gaps: bunkers
+   (2 by 5-7 min, pros 0), refineries (1, pros 2 from 8 min), the army standing (78% at 5-7 min, pros
+   37%) with half the pros' orders per fighter, minerals banked (1,010 at 11-14 min, pros 423), turrets
+   (11, pros 7), no vessels or tanks late. Gary-Z's: the army standing (87-95% to 7 min, pros 5-30%),
+   all at home (pros: half in the field from 5 min), clumped (spread 2-5 tiles, pros 8-25), drones on
+   gas (0-6%, pros 15%), a third of the pros' orders per fighter. The opponent leaks in (Gary is rarely
+   attacked: Gary-Z seldom leaves home), as expected until both sides are Gary.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
