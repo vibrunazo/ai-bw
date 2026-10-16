@@ -258,15 +258,17 @@ MANIFESTS: dict[str, dict] = {
              "arbiter": "fixed_priority/v1"},
     # v0.29: v0.28 whose fighters answer what they see before contact as the pros do: the role model (decisions:
     # keep or a new role, with a where head) learned from 600 pro games' units whenever a seen enemy fighter was
-    # within 12 tiles (ingest/response_dataset.py: 1.3M labels before contact); the fight layer watches 12 tiles;
-    # retreat, pull back and reposition go where the model moves them, fire and close in by v0.27's skills
+    # within 12 tiles (ingest/response_dataset.py: 1.3M labels before contact); the fight layer watches 12 tiles.
+    # The hand rules in contact, the model before it (roles.py ahead/v1): its roles for every unit instead of
+    # the rules lost 52 net value a home defense (226 pro scenarios), with or without its where; the watch
+    # alone +4 +- 5
     "v029": {"version": "v0.29", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
              "home_scvs": True, "balance": True, "defend_early": 150 * 24, "builder_back": True,
              "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
                        "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True,
                        "answer_options": {"mutas": True}},
              "army": {**_ARMY, "hunt": True, "scan": True, "hold_moves": False, "hold_margin": 0.05},
-             "fight": {**_V09_FIGHT, "provider": "roles", "model": "runs/roles/20261016-195206/model.pt",
+             "fight": {**_V09_FIGHT, "provider": "role_ahead", "model": "runs/roles/20261016-195206/model.pt",
                        "roles": {"post": 3}, "watch_tiles": 12,
                        "before": _V09_FIGHT["before"] + ["detect", "stim"],
                        "rule_options": {"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8},
@@ -472,6 +474,11 @@ OPTIONS = {
     # won 8 (2), lost 2 (2); to 12:00 on three maps won 4 of 144 (0), lost 14 (14); Zerg v2 (72 seeds)
     # won 2 (0), lost 8 (8). In v0.16
     "hunt": lambda m: m["army"].update(hunt=True),
+    # roles.py (with a role model that has a where head): retreat, pull back and reposition by the rules'
+    # skills, not where the model moves them (ablation of v0.29)
+    "nowhere": lambda m: m["fight"].setdefault("roles", {}).update(where=False),
+    # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
+    "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
     # (gary/policy/belief.py, 80th percentile less what was seen in 3 min) outweighs them. On v0.17,
     # replayed pros on three maps lost 12 of 144 (11); it held 637 times. Not adopted
@@ -727,7 +734,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if f["provider"] == "roles" and f.get("model") is None:
             fight = None
             models["fight"] = "roles/rules_v1"   # (the chat says so: as many lines as with a model)
-        elif f["provider"] in ("roles", "role_override"):
+        elif f["provider"] in ("roles", "role_override", "role_ahead"):
             from gary.policy.roles import RoleModel
             fight = fight_model or RoleModel.load(fight_path or model_path(f["model"]))
             models["fight"] = fight.path

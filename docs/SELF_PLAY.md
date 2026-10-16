@@ -177,6 +177,17 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    gaps first reported for them were Gary against an empty opponent.)
    Gary-Z baseline (48 games at e1a3e8e): Gary-T won 20, lost 1 (Gary-Z's first win), 27 undecided;
    army bunched (2-5 tiles, pros 5-29), standing 73-89% (5-65%), at home 84-97% (30-53%).
+   **The response model (Terran, 2026-10-16):** the role model (fire, close in, pull back, retreat,
+   reposition, stand) learned from 600 pro games' units whenever a seen enemy fighter was within 12
+   tiles (ingest/response_dataset.py: 2.6M labels, 1.3M before contact), with a where head (each unit's
+   move over the next half second: 0.6-0.75 tiles off, 0.94-1.25 if it guessed no move). Before
+   contact it names the pros' new roles at 0.5-0.7 recall (retreat, rare, 0.2). In the 226 pro
+   home-defense scenarios not from its games, its roles in place of the hand rules lose 52 net value
+   (with or without its where); the 12-tile watch alone +4 +- 5; the rules in contact and the model
+   before it (v0.29, roles.py ahead/v1) -2 +- 6: a tie. The rules were tuned on those scenarios over
+   twenty versions; imitation on day one was never going to beat them there (Argon). The neural role
+   policy is the league's learner for the Terran's fights (RL with the KL leash sharpens it); which
+   version plays humans is a separate choice. Next: the same for Gary-Z (its fights are v3's script).
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
