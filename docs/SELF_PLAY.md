@@ -82,6 +82,9 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
 
 - **League:** Gary-T and Gary-Z in parallel headless games (low priority, nightly batches here;
   full-game league training is rented compute), each game's outcome and classifier scores kept.
+- **Every RL update keeps a KL term to the imitation policy it started from** (ARCHITECTURE's
+  λ_KL, as AlphaStar): the leash on the learned parts while they train. It can't see the scripted
+  parts, nor drift that compounds over a game; the classifier measures those after the fact.
 - **The first RL target is where credit assignment already works:** fight episodes paired on the
   same positions, with Gary-Z the reacting side instead of the scripted reaction; or the strategy
   selector's per-game table over Gary-Z's plans. Segments from mid-game states (60-120 s branches
