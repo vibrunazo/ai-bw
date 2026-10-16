@@ -297,9 +297,17 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   add-on spots free (the check was skipped without the terrain, which the live client lacks: turrets
   stood where both Comsats go, and no scan when lurkers came), and a pending add-on's building isn't
   kept busy (an SCV queued just before its Comsat order: the game refused the add-on, twice).
-- **Headless (8 seeds, Zerg v3, 14 minutes):** won 3, lost 0 (v0.26 3, 0).
+- **Idle SCVs (the user: "many idle SCVs all over"; 11-17 of 30-39 idle from 8:00 to 12:00):** the
+  scout came home with a move and stood by the minerals for the rest of the game (the mining routine
+  skips the scout; now released once home, shared code); a builder's next order is queued on a
+  mineral field and the mining routine adds the other idle workers on the screen (`builder_back`);
+  and the bunker-load rule sent the same marine every 2 s all game (a drag box loaded 5 marines into
+  4 slots and the one left out was never counted: 694 loads in 8 games, now 63; shared code), taking
+  Gary's hands from everything else. Headless idle SCV time 13% to 9%.
+- **Headless (8 seeds, Zerg v3, 25 minutes):** won 6, lost 0 (v0.26: 7, 0); seed 105 nearly lost
+  after the 8:00 hunt (v0.26 won it): no detectable harm on 8 seeds, which can't tell 6 from 7.
 - **Not addressed:** stim is researched and never used (the roles model has no stim; to be learned
-  from the pros' stims); idle SCVs; marines between main and natural picked off; the AFK feel.
+  from the pros' stims); marines between main and natural picked off; the AFK feel.
 
 ### v0.26 (October 2026): the first human game's losses
 

@@ -426,7 +426,12 @@ class DirectMotor:
         if chosen and p:
             hi.right_click(*p)
             g.loading = (hi.frame + LOADING_FOR, d["x"], d["y"])
-            g.loaded.setdefault(d["bunker"], set()).update(chosen)
+            # every marine the box took goes, not only the ones meant: counted too (5 went for 4 slots,
+            # and the one left out was sent again every 2 s for the rest of the game, seed 108)
+            went = {u["tag"] for u in mine if u["tag"] in set(obs["selection"]) and u["type"] == T.MARINE} | chosen
+            g.loaded.setdefault(d["bunker"], set()).update(went)
+            for tag in went:
+                g.load_sent_at[tag] = hi.frame
             g.leases.take(chosen, t.intent)
             g.say(f"loads {len(chosen)} marine{'s' * (len(chosen) != 1)} into the bunker")
         g.task = None

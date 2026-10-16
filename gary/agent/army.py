@@ -50,6 +50,7 @@ WAYPOINT_FOR = 8 * 24                # the scout gives up on a waypoint of its c
 CIRCLE = 7 * 32                     # the scout circles the enemy main this far from its start location
 SCOUT_CHECK = 3 * 24                # the scout on its way: every 3 s it should be moving, or it's sent
 SCOUT_RESENDS = 3                   # again (this many times, then another SCV)
+SCOUT_HOME = 12 * 32                # px: a scout this close to the main, standing, is home (a worker again)
 MOVE_ORDER = 6
 HUNT_AFTER = 8 * 60 * 24            # hunt: from 8:00, with this many army units and no enemy army seen
 HUNT_ARMY = 20                      # for QUIET, the army goes where enemy buildings were, then to
@@ -345,9 +346,16 @@ class LearnedArmy:
         """Like a pro, send a worker to find the enemy base early (the army model needs to know
         where the enemy is): the enemy start locations in turn, then home once it has seen an
         enemy building. True if Gary acted."""
-        if self.scout_done:
-            return False
         g = self.g
+        if self.scout_done:
+            # home: a worker again, for the mining routine (executor.py skips g.scout: sent home with a
+            # move to the minerals, the scout stood idle there for the rest of the game, 5 minutes in
+            # human game 2, 7 in a headless one)
+            if g.scout is not None and not self.watch:
+                s = next((u for u in mine if u["tag"] == g.scout), None)
+                if s is None or (s["order"] == 3 and math.dist((s["x"], s["y"]), g.main.center) < SCOUT_HOME):
+                    g.scout = None
+            return False
         hi = g.hi
         if g.scout is None:
             workers = sum(1 for u in mine if u["type"] == T.SCV)

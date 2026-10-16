@@ -231,7 +231,7 @@ MANIFESTS: dict[str, dict] = {
     # until then); live placement keeps add-on spots free (turrets had taken both Comsats' places); a pending
     # add-on's building isn't kept busy (an SCV queued just before its Comsat: the game refused it)
     "v027": {"version": "v0.27", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
-             "home_scvs": True, "balance": True, "defend_early": 150 * 24,
+             "home_scvs": True, "balance": True, "defend_early": 150 * 24, "builder_back": True,
              "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
                        "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True,
                        "answer_options": {"mutas": True}},
@@ -475,6 +475,9 @@ OPTIONS = {
     # with nobody holding them, go back to mining (the sweep finds them off screen, pulled or not), and a
     # pull's workers go back to the nearest base Gary owns (before: the nearest base on the map)
     "home_scvs": lambda m: m.update(home_scvs=True),
+    # executor.py: a builder's next order queued on a mineral field, and the mining task's other idle workers
+    # on the screen added before sending (human game 2: 11-17 of 30-39 SCVs idle from 8:00 to 12:00). In v0.27
+    "builder_back": lambda m: m.update(builder_back=True),
     # home_scvs, and executor.py balance: workers sent to mine go to the least saturated safe base (not the
     # nearest), a group of workers moves from a base over 1.8 a patch to a safe one under 1.0 (a new
     # Command Center), and workers out in the field are selected with one ctrl+click
@@ -636,6 +639,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.executor = ScriptedExecutor(g)
         g.rally_plan = m.get("rally")
         g.home_scvs = m.get("home_scvs", False)
+        g.builder_back = m.get("builder_back", False)
         g.balance = m.get("balance", False)
         if m.get("simcity"):
             from gary.agent.simcity import SimCity

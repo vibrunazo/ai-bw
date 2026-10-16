@@ -79,6 +79,7 @@ MAX_HP = {37: 35, 38: 80, 39: 400, 41: 40, 42: 200, 43: 120, 44: 150, 45: 120, 4
 MINERALS = {176, 177, 178}
 MINERAL_LINE_PX = 4 * 32             # pull(mineral_line): zerg this close to a base's minerals are in its mineral line
 THREAT_PX = 10 * 32                  # enemy fighters this close to a Command Center threaten its workers
+LOAD_AGAIN = 20 * 24                 # a marine sent to a bunker isn't sent again for this long
 ZERG_FLYERS = {42, 43, 44, 45, 47, 59, 62}   # overlord, mutalisk, guardian, queen, scourge, cocoon, devourer
 CALM_FRAMES = 24 * 5                 # pulled workers go back to mining after 5 s without a threat
 REPAIR_ORDER = 34
@@ -463,7 +464,10 @@ class LoadRule:
             sent = g.loaded.setdefault(b["tag"], set())
             sent &= {t for t in sent if t not in seen or seen[t].get("order_target") == b["tag"]}
             free = BUNKER_SLOTS - len(sent)
+            # (not one sent in the last LOAD_AGAIN that's still out: the bunker is full, or it's needed
+            # elsewhere; sent again and again, it took Gary's hands every 2 s all game)
             marines = sorted((u for u in mine if u["type"] == MARINE and u["completed"] and u["tag"] not in sent
+                              and hi.frame - g.load_sent_at.get(u["tag"], -LOAD_AGAIN) >= LOAD_AGAIN
                               and math.dist((u["x"], u["y"]), (b["x"], b["y"])) < reach),
                              key=lambda u: math.dist((u["x"], u["y"]), (b["x"], b["y"])))[:free]
             if free <= 0 or not marines:

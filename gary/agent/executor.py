@@ -53,6 +53,7 @@ STANDING_DETOUR = 4 * 32              # a standing builder no farther than this 
 ARRIVING = 4 * 32                     # a parked builder this close to its spot is waited for until it stops
 PICK_TRIES = 3                        # a builder not selected after this many tries: another one
 PATH_CLEAR = 24                       # px: a building kept this far off a mineral path (spot_near avoid)
+MINE_ADD = 5                          # builder_back: idle workers added to a mining task's click
 NEIGHBOR = 2 * 32                     # px: an SCV this close to the parked one may be selected instead
 RESELECT_TRIES = 6                    # a parked builder not selected again after this many: the build fails
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
@@ -628,6 +629,16 @@ class ScriptedExecutor:
 
     def _task_build(self, obs: dict, mine: list[dict], t: Task) -> None:
         g, hi = self.g, self.g.hi
+        if t.stage == "back":
+            # builder_back: as pros, the builder's next order queued (shift) on a mineral field, so it
+            # goes back to mining once the building stands (human game 2: 11-17 of 30-39 SCVs stood idle
+            # from 8:00 to 12:00, builders and repairers done, sent back one by one)
+            base = g.base(t.where) if t.where in ("main", "natural") or hasattr(t.where, "minerals") else g.main
+            fields = [m for m in base.minerals if screen_of(obs, *m)]
+            if fields and obs["selection"] == [t.data["worker"]]:
+                hi.right_click(*screen_of(obs, *min(fields, key=lambda m: math.dist(m, base.center))), queued=True)
+            g.task = None
+            return
         if t.stage == "start":                      # get a worker from the main
             again = next((u for u in mine if u["tag"] == g.retry_with.get(t.unit_type)), None)
             if again is not None and again["order"] not in BUSY_ORDERS and \
@@ -809,7 +820,10 @@ class ScriptedExecutor:
                 g.reserved.append((t.unit_type, *spot))
                 g.reserved_at[(t.unit_type, *spot)] = hi.frame
                 g.builder_of[(t.unit_type, *spot)] = t.data["worker"]
-                g.task = None
+                if getattr(g, "builder_back", False) and t.unit_type != T.REFINERY:
+                    t.stage = "back"            # (a Refinery's builder goes on to gas by itself)
+                else:
+                    g.task = None
 
     def _task_hotkey(self, obs: dict, mine: list[dict], t: Task) -> None:
         g, hi = self.g, self.g.hi
@@ -886,6 +900,14 @@ class ScriptedExecutor:
                 g.ignore_idle_until[tag] = hi.frame + 24 * 20
             g.task = None
             return
+        # builder_back too: the other idle workers on the screen added (shift-click) before sending, up to
+        # MINE_ADD (a box among mining SCVs catches busy ones: then one idle worker a task, never enough)
+        if getattr(g, "builder_back", False) and t.stage == "click":
+            more = [u for u in workers if u["tag"] not in obs["selection"]]
+            if more and t.data.get("added", 0) < MINE_ADD:
+                t.data["added"] = t.data.get("added", 0) + 1
+                hi.click(*hi.aim(obs, more[0]), shift=True)
+                return
         # the closest mineral field to the Command Center of the nearest base Gary owns (a field
         # at a base without a Command Center means a long walk with every load)
         w = workers[0]
