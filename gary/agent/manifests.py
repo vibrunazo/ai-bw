@@ -225,6 +225,22 @@ MANIFESTS: dict[str, dict] = {
                        "rule_options": {"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8},
                                         "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.27: v0.26 with the fixes from human game 2: SCVs repair a mineral-line turret under attack (3, as pros
+    # send several; OPTION repair_turrets). Shared code: against mutalisks the answer's turrets go up first,
+    # in the mineral line nearest the zerg first (the model's own turrets, built away from the minerals, wait
+    # until then); live placement keeps add-on spots free (turrets had taken both Comsats' places); a pending
+    # add-on's building isn't kept busy (an SCV queued just before its Comsat: the game refused it)
+    "v027": {"version": "v0.27", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
+             "home_scvs": True, "balance": True, "defend_early": 150 * 24,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True,
+                       "answer_options": {"mutas": True}},
+             "army": {**_ARMY, "hunt": True, "scan": True},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
+                       "before": _V09_FIGHT["before"] + ["detect"],
+                       "rule_options": {"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8},
+                                        "load": {"always": True}, "repair": {"turrets": 3}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
@@ -490,6 +506,7 @@ OPTIONS = {
     # learned, the user's call: pros pull back just enough to survive, and the nuances are too many to script)
     # Judged by the next games against humans; the headless pool only checks they break nothing. In v0.26
     "muta_answer": lambda m: m["macro"].setdefault("answer_options", {}).update(mutas=True),
+    "repair_turrets": lambda m: m["fight"].setdefault("rule_options", {}).setdefault("repair", {}).update(turrets=3),
     "pull_cap": lambda m: m["fight"].setdefault("rule_options", {}).setdefault("pull", {}).update(ground_only=True, max_enemy=8),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
     # replayed pros (buildings going up) lost 13 of 144 (15; Heartbreak Ridge 7, 9), the same hatch

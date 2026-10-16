@@ -483,10 +483,13 @@ class RepairRule:
 
     name = "repair"
 
-    def __init__(self, g: Gary, n: int = REPAIRERS, surround: bool = False):
+    def __init__(self, g: Gary, n: int = REPAIRERS, surround: bool = False, turrets: int = 0):
         self.g = g
         self.n = n
         self.surround = surround
+        # option turrets: a damaged turret with zerg near gets this many SCVs too (pros send several to
+        # the first mineral-line turrets against mutalisks: the user, human game 2)
+        self.turrets = turrets
         self.next_repair = 0
 
     def step(self, obs: dict, mine: list[dict]) -> bool:
@@ -494,19 +497,28 @@ class RepairRule:
         hi = g.hi
         if hi.frame < self.next_repair:
             return False
-        bunker = next((u for u in mine if u["type"] == T.BUNKER and u["completed"] and u.get("hp_max")
-                       and u["hp"] < u["hp_max"]), None)
-        if not bunker:
-            return False
         fighters = enemy_fighters(obs, g.slot)
-        if not any(math.dist((u["x"], u["y"]), (bunker["x"], bunker["y"])) < REPAIR_THREAT for u in fighters):
+        bunker, n = None, self.n
+        kinds = ((T.BUNKER, self.n), (T.TURRET, self.turrets)) if self.turrets else ((T.BUNKER, self.n),)
+        for kind, want in kinds:
+            for u in mine:
+                if u["type"] != kind or not u["completed"] or not u.get("hp_max") or u["hp"] >= u["hp_max"]:
+                    continue
+                if not any(math.dist((e["x"], e["y"]), (u["x"], u["y"])) < REPAIR_THREAT for e in fighters):
+                    continue
+                busy = sum(1 for s in mine if s["type"] == T.SCV and s.get("order") == REPAIR_ORDER
+                           and s.get("order_target") == u["tag"])
+                if busy < want:
+                    bunker, n = u, want
+                    break
+            if bunker:
+                break
+        if not bunker:
             return False
         repairing = [u for u in mine if u["type"] == T.SCV and u.get("order") == REPAIR_ORDER
                      and u.get("order_target") == bunker["tag"]]
-        if len(repairing) >= self.n:
-            return False
         scvs = sorted((u for u in mine if u["type"] == T.SCV and u["completed"] and u["tag"] not in {r["tag"] for r in repairing}),
-                      key=lambda u: math.dist((u["x"], u["y"]), (bunker["x"], bunker["y"])))[:self.n - len(repairing)]
+                      key=lambda u: math.dist((u["x"], u["y"]), (bunker["x"], bunker["y"])))[:n - len(repairing)]
         if not scvs:
             return False
         self.next_repair = hi.frame + 24 * 3

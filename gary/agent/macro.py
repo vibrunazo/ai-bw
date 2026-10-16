@@ -292,7 +292,7 @@ class LearnedMacro:
         if plan["kind"] == "build":
             data = {**plan.get("data", {}), "decision": (goal["act"], goal["id"])}
             if "near" in goal:                  # a goal that names its base and spot (answers.py turrets)
-                data.update(near=goal["near"], level_at=goal.get("level_at"))
+                data.update(near=goal["near"], level_at=goal.get("level_at"), avoid=goal.get("avoid"))
             g.task = Task("build", goal["id"], goal.get("where", plan["where"]), data=data, started=hi.frame)
         else:
             g.task = Task("command", data=plan, started=hi.frame)
@@ -357,9 +357,17 @@ class LearnedMacro:
         elif self.goal is not None and self.goal["act"] not in (BUILD, EXPAND):
             p = self.plan(self.goal["act"], self.goal["id"], obs, mine, done, me)
             reserve = p["cost"][0] if isinstance(p, dict) and p is not WAIT else 0
+        # ...but not from the building a pending add-on goes on: an SCV queued there just before its
+        # Comsat order, the game refused the add-on, twice (human game 2: no Comsat against lurkers)
+        addon_on = None
+        if self.goal is not None and self.goal["act"] == BUILD and self.goal["id"] in T.ADDON_PARENT:
+            p = self.plan(BUILD, self.goal["id"], obs, mine, done, me)
+            addon_on = p["building"]["tag"] if isinstance(p, dict) and p.get("kind") == "command" else None
         for uid in self.last_unit.values():
             plan = self.plan(TRAIN, uid, obs, mine, done, me)
             if not isinstance(plan, dict) or plan.get("kind") != "command":
+                continue
+            if addon_on is not None and plan.get("building", {}).get("tag") == addon_on:
                 continue
             minerals, gas = plan["cost"]
             if me["minerals"] - g.committed() - reserve < minerals or me["gas"] < gas:

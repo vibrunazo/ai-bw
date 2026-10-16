@@ -38,6 +38,21 @@ What to do, in order:
 2. **A human in the loop.** The Remastered bridge's known gaps fixed (adapters/scr_bridge README; done
    2026-10-15 offline, pinning live), then short sets against a human; that losses list sets the next
    version. This is the product; the rest is proxy.
+   Human game 2 (2026-10-16, runs/live/v026_human2, the user's Zerg won at ~17:00; parity clean).
+   "Gary improved his build a lot. But there were still too many mistakes":
+   - the first lings did little: marines and an SCV pull forced them off (a few units caught off
+     position, more than should be);
+   - turrets came, but not first in the mineral lines and not where the mutas came first: the
+     user went through the natural to the main, natural minerals first; neither had turrets when
+     they arrived, the turrets showed up as they left. Pros repair the first mineral turrets with
+     several SCVs;
+   - idle SCVs all over (at the base, with the army);
+   - medics, but stim never heard: the marine-medic ball with stim, Terran's super power, unused;
+   - lone marines running between main and natural (the rally) get hunted: harass main and
+     natural, then pick off the stragglers on the ramp;
+   - no Comsat when lurkers came: a late turret stood where the main's Comsat goes;
+   - still AFK when lone units are picked off: reacts late, never, or wrong (attention elsewhere,
+     never re-prioritized).
    Human game 1 (2026-10-16, runs/live/v025_human1, the user's Zerg won at 12:17; the bridge matched
    OpenBW over the whole replay, so every failure is Gary's). The user's notes, and Gary's log:
    - 4 lings did far too much: Gary reacts very slowly; a lone SCV walks out to build, gets

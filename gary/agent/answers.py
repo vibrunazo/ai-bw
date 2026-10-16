@@ -48,7 +48,10 @@ LURKER_TURRETS_PER_BASE = 1               # against lurkers, turrets for detecti
 # and the natural in turn; the headless loss above was against bots, a human's mutas count for more
 MUTA_ANSWER = [(BUILD, T.EBAY, 1), (BUILD, T.ACADEMY, 1)]
 MUTA_TURRETS_PER_BASE = 2                 # pros 6.9 by 10:00 over their bases
-TURRET_IN_LINE = 0.5                      # a turret this far from the CC toward its minerals' middle
+TURRET_IN_LINE = 1.3                      # a turret aimed this far from the CC toward its minerals' middle
+                                          # (just past them), off the SCVs' paths (executor.py spot_near
+                                          # avoid): halfway, the mining SCVs stood in its spot and the game
+                                          # refused it again and again (seed 108, OpenBW)
 TURRET_OF_BASE = 10 * 32                  # px: a turret this close to a base's minerals guards it
 
 
@@ -56,6 +59,7 @@ class Answers:
     def __init__(self, g: Gary, mutas: bool = False):
         self.g = g
         self.mutas = mutas
+        self._answering = False                  # (plan() asked by the answer itself, not the model)
         self.seen: dict[int, int] = {}       # zerg type -> frame first seen
         self.plan: str | None = None         # "mutas", "lurkers"
         self.scans = 0
@@ -92,11 +96,36 @@ class Answers:
         return True
 
     def allows(self, act: int, uid: int, mine: list[dict]) -> bool:
-        """What the model asks that the answer rules out: against lurkers, turrets past one a base."""
+        """What the model asks that the answer rules out: against lurkers, turrets past one a base;
+        against mutalisks, the model's own turrets (they go where any building does, away from the
+        minerals) until every mineral line has its own (human game 2: the model's turrets went up in the
+        main's back while the user's mutas killed SCVs in the natural's and main's mineral lines)."""
         if self.plan == "lurkers" and act == BUILD and uid == T.TURRET:
             bases = sum(1 for u in mine if u["type"] == T.CC)
             return self.g.macro.count(mine, T.TURRET) < LURKER_TURRETS_PER_BASE * max(1, bases)
+        if self.plan == "mutas" and self.mutas and act == BUILD and uid == T.TURRET and not self._answering                 and "near" not in (self.g.macro.goal or {}):        # (the answer's own goal, carried out)
+            return not self._lines_short(mine)
         return True
+
+    def _lines(self, mine: list[dict]) -> list[tuple[dict, object, tuple[float, float]]]:
+        """Gary's settled bases: (its Command Center, the base, its minerals' middle), the one nearest
+        the zerg's main first (mutalisks fly straight: the base on their way is hit first)."""
+        g = self.g
+        enemy = getattr(g.army, "enemy_main", None) or (g.enemy_starts[0] if len(g.enemy_starts) == 1 else None)
+        out = []
+        for cc in (u for u in mine if u["type"] == T.CC and u["completed"]):
+            base = g.map.base_near((cc["x"], cc["y"]))
+            if not base.minerals or math.dist(base.center, (cc["x"], cc["y"])) > 6 * 32:
+                continue                         # (a CC away from a base: floating, or not settled)
+            mx = sum(x for x, _ in base.minerals) / len(base.minerals)
+            my = sum(y for _, y in base.minerals) / len(base.minerals)
+            out.append((cc, base, (mx, my)))
+        return sorted(out, key=lambda t: math.dist(t[2], enemy) if enemy else math.dist(t[2], g.main.center))
+
+    def _lines_short(self, mine: list[dict]) -> bool:
+        turrets = [u for u in mine if u["type"] == T.TURRET]
+        return any(sum(1 for t in turrets if math.dist((t["x"], t["y"]), m) < TURRET_OF_BASE) < MUTA_TURRETS_PER_BASE
+                   for _, _, m in self._lines(mine))
 
     def next_goal(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> dict | None:
         """The first part of the answer Gary lacks and can make (or wait for), as a macro goal."""
@@ -117,28 +146,27 @@ class Answers:
         return None
 
     def turret_goal(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> dict | None:
-        """Against mutalisks: a turret in the mineral line of the first base (main first) with fewer
-        than MUTA_TURRETS_PER_BASE, as a goal that names the base and the spot to build near."""
+        """Against mutalisks: a turret in the mineral line of the first base (nearest the zerg first)
+        with fewer than MUTA_TURRETS_PER_BASE, as a goal that names the base and the spot to build near."""
         g, f, mac = self.g, self.g.hi.frame, self.g.macro
         turrets = [u for u in mine if u["type"] == T.TURRET]
-        for cc in sorted((u for u in mine if u["type"] == T.CC and u["completed"]),
-                         key=lambda u: math.dist((u["x"], u["y"]), g.main.center)):
-            base = g.map.base_near((cc["x"], cc["y"]))
-            if not base.minerals or math.dist(base.center, (cc["x"], cc["y"])) > 6 * 32:
-                continue                         # (a CC away from a base: floating, or not settled)
-            mx = sum(x for x, _ in base.minerals) / len(base.minerals)
-            my = sum(y for _, y in base.minerals) / len(base.minerals)
+        for cc, base, (mx, my) in self._lines(mine):
             if sum(1 for t in turrets if math.dist((t["x"], t["y"]), (mx, my)) < TURRET_OF_BASE) >= MUTA_TURRETS_PER_BASE:
                 continue
             key = (BUILD, T.TURRET, base.center)
             if f - self.asked.get(key, -ASK_AGAIN) < ASK_AGAIN:
                 continue
-            plan = mac.plan(BUILD, T.TURRET, obs, mine, done, me)
+            self._answering = True
+            try:
+                plan = mac.plan(BUILD, T.TURRET, obs, mine, done, me)
+            finally:
+                self._answering = False
             if not isinstance(plan, dict) or plan.get("kind") == "wait":
                 return None                      # (no Engineering Bay yet)
             self.asked[key] = f
             near = (int(cc["x"] + (mx - cc["x"]) * TURRET_IN_LINE), int(cc["y"] + (my - cc["y"]) * TURRET_IN_LINE))
             where = "main" if base is g.main else "natural" if base is g.natural else base
-            return {"act": BUILD, "id": T.TURRET, "p": 1.0, "since": f, "where": where, "near": near,
+            paths = [((int(cc["x"]), int(cc["y"])), (int(x), int(y))) for x, y in base.minerals]
+            return {"act": BUILD, "id": T.TURRET, "p": 1.0, "since": f, "where": where, "near": near, "avoid": paths,
                     "level_at": (int(cc["x"]), int(cc["y"])), "name": "Missile Turret (against mutas, in a mineral line)"}
         return None

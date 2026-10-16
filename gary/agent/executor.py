@@ -52,6 +52,7 @@ MOVE = 6
 STANDING_DETOUR = 4 * 32              # a standing builder no farther than this beyond the nearest one
 ARRIVING = 4 * 32                     # a parked builder this close to its spot is waited for until it stops
 PICK_TRIES = 3                        # a builder not selected after this many tries: another one
+PATH_CLEAR = 24                       # px: a building kept this far off a mineral path (spot_near avoid)
 NEIGHBOR = 2 * 32                     # px: an SCV this close to the parked one may be selected instead
 RESELECT_TRIES = 6                    # a parked builder not selected again after this many: the build fails
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
@@ -64,6 +65,14 @@ CREEP_BUILDINGS = {131, 132, 133, 143, 144, 146}   # Hatchery, Lair, Hive, Creep
 CREEP_RX, CREEP_RY = 320, 200         # creep spreads up to this far from one (pixels, an ellipse; OpenBW's
                                       # spread_creep), a tile every few seconds
 
+
+
+def _to_segment(p: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> float:
+    """The distance from p to the segment a-b."""
+    ax, ay = a
+    dx, dy = b[0] - ax, b[1] - ay
+    t = max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / ((dx * dx + dy * dy) or 1)))
+    return math.dist(p, (ax + t * dx, ay + t * dy))
 
 class ScriptedExecutor:
     def __init__(self, g: Gary):
@@ -494,10 +503,12 @@ class ScriptedExecutor:
         return None
 
     def spot_near(self, unit_type: int, near: tuple[int, int], builder: int,
-                  level_at: tuple[int, int] | None = None) -> tuple[int, int] | None:
+                  level_at: tuple[int, int] | None = None, avoid=None) -> tuple[int, int] | None:
         """The free spot closest to a point (e.g. a bunker at the top of the main ramp), on the ground
         level of level_at (e.g. the main: the closest free tile to the top of a ramp can be at its
-        bottom). On a flat map every tile is on that level; if no spot on it fits, any level does."""
+        bottom). On a flat map every tile is on that level; if no spot on it fits, any level does.
+        avoid: segments the building stands clear of (a Command Center to each of its mineral fields:
+        the SCVs' paths)."""
         w, h = SIZE[unit_type]
         cx, cy = near[0] // 32, near[1] // 32
         terrain = self.terrain()
@@ -510,6 +521,9 @@ class ScriptedExecutor:
                         or self._bad(unit_type, tx, ty):
                     continue
                 if same_level and (terrain[1][ty * 4:(ty + h) * 4, tx * 4:(tx + w) * 4] != level).any():
+                    continue
+                if avoid and any(_to_segment((tx * 32 + w * 16, ty * 32 + h * 16), a, b) < w * 16 + PATH_CLEAR
+                                 for a, b in avoid):
                     continue
                 if self.fits(unit_type, tx, ty, builder):
                     return tx, ty
@@ -527,12 +541,15 @@ class ScriptedExecutor:
         map's terrain is map knowledge, so Gary checks it too (where the env can tell it)."""
         if not self.g.hi.game.can_place(self.g.slot, unit_type, tx, ty, builder):
             return False
+        # (these two whether the terrain is known or not: live, without it, they were skipped, and
+        # turrets stood where both Command Centers' Comsats go: no scan against lurkers, human game 2)
+        if self.on_addon_spot(unit_type, tx, ty) or self.creep_coming(unit_type, tx, ty):
+            return False
         terrain = self.terrain()
         if terrain is None:
             return True
         w, h = SIZE[unit_type]
-        return bool(terrain[0][ty:ty + h, tx:tx + w].all()) and not self.creep_coming(unit_type, tx, ty) \
-                and not self.on_addon_spot(unit_type, tx, ty)
+        return bool(terrain[0][ty:ty + h, tx:tx + w].all())
 
     def on_addon_spot(self, unit_type: int, tx: int, ty: int) -> bool:
         """The building would stand where one of Gary's buildings' add-on goes (a Comsat Station by
@@ -744,7 +761,8 @@ class ScriptedExecutor:
                 if not g.look_at(obs, t.where):
                     return
                 spot = self.town_hall_spot(base, t.data["worker"]) if t.unit_type == CC else \
-                    self.spot_near(t.unit_type, t.data["near"], t.data["worker"], t.data.get("level_at")) if "near" in t.data else \
+                    self.spot_near(t.unit_type, t.data["near"], t.data["worker"], t.data.get("level_at"),
+                                   t.data.get("avoid")) if "near" in t.data else \
                     self.spot(t.unit_type, base, t.data["worker"])
                 if not spot:
                     self.fail_build(t)

@@ -285,6 +285,22 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   on 2 Command Centers all game with 1,000-2,000 gas unspent from 14:00, and its army keeps walking
   into the lurkers on the enemy's side.
 
+### v0.27 (October 2026): the second human game's turrets and Comsat
+
+- **What it is:** v0.26 with fixes from human game 2 (the user's Zerg won at ~17:00; parity
+  clean). Against mutalisks the answer's turrets come first, two in each mineral line, the one
+  nearest the zerg first (the user's mutas came through the natural; neither line had a turret when
+  they got there: the model's own turrets, which go where any building does, away from the
+  minerals, went up first). They stand just past the minerals, off the SCVs' paths (between the CC
+  and the minerals, mining SCVs stood in the spot and the game refused it: seed 108 failed 11 of 12,
+  now 0 of 4). SCVs repair a threatened turret, 3 of them (`repair_turrets`). Live placement keeps
+  add-on spots free (the check was skipped without the terrain, which the live client lacks: turrets
+  stood where both Comsats go, and no scan when lurkers came), and a pending add-on's building isn't
+  kept busy (an SCV queued just before its Comsat order: the game refused the add-on, twice).
+- **Headless (8 seeds, Zerg v3, 14 minutes):** won 3, lost 0 (v0.26 3, 0).
+- **Not addressed:** stim is researched and never used (the roles model has no stim; to be learned
+  from the pros' stims); idle SCVs; marines between main and natural picked off; the AFK feel.
+
 ### v0.26 (October 2026): the first human game's losses
 
 - **What it is:** v0.25 with the fixes for what lost its first game against a human (the user's
