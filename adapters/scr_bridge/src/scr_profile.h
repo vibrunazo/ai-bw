@@ -142,20 +142,24 @@ constexpr uint32_t kSpriteElevation = 13;          // VERIFIED u8 (draw depth) [
 constexpr uint32_t kSpriteWidth = 18;              // VERIFIED u8 (bbox approx, README gaps) [PL]
 constexpr uint32_t kSpriteHeight = 19;             // VERIFIED u8 [PL]
 
-// --- Image struct (layout; PINNED by measurement 2026-10-04) ----------------------
-// tools/hunt_click.py --dump walked live sprite/image records and validated them against the
-// GRP files' frame tables (gen_image_dat.py): the chain head is the sprite's first word, each
-// image's type/frame pair parsed consistently, and the body/shadow records' raw bytes pinned
-// x, y and the flags byte (bit values follow OpenBW image_t::flags, like the tile flags did).
-constexpr uint32_t kSpriteImageHead = 0;           // VERIFIED ptr: first CImage (0 = none)
-constexpr uint32_t kImageNext = 0;                 // VERIFIED ptr: next image in the sprite
-constexpr uint32_t kImageType = 8;                 // VERIFIED u16 (images.dat row)
-constexpr uint32_t kImageFrameIndex = 10;          // VERIFIED u16 (frame in the type's GRP)
-constexpr uint32_t kImageX = 12;                   // VERIFIED s8 (offset from sprite position)
-constexpr uint32_t kImageY = 13;                   // VERIFIED s8
-constexpr uint32_t kImageFlags = 18;               // VERIFIED u8
-constexpr uint8_t kImageFlagFlipped = 0x02;
-constexpr uint8_t kImageFlagClickable = 0x20;
+// --- Image struct (layout) ---------------------------------------------------------
+// [BWD] bw_dat (neivv/aise, Apache-2.0) structs.rs, Sprite (SCR variant) and Image. The 2026-10-04
+// "pinned" layout was wrong but for the type: it started the walk at the sprite's first word, which
+// is the previous SPRITE, and read a neighbour sprite's fields as an image's (an SCV's "images" came
+// out a Marine, a critter, an Overlord's death; boxes 16 px off: the first live game's idle SCVs and
+// lost builds, 2026-10-15). INFERRED until hunt_click.py --check passes live.
+constexpr uint32_t kSpriteImageFirst = 0x20;       // ptr: first image (Sprite: ...height u8 @0x13,
+                                                   // position [usize;2] @0x14, main_image @0x1c)
+constexpr uint32_t kSpriteImageLast = 0x24;        // ptr: last image (the walk ends here)
+constexpr uint32_t kImageNext = 0x04;              // ptr: next image in the sprite (prev @0)
+constexpr uint32_t kImageType = 0x08;              // u16 (images.dat row; the one field right before)
+constexpr uint32_t kImageFlags = 0x0c;             // u16 (OpenBW image_t::flags bit values)
+constexpr uint32_t kImageX = 0x0e;                 // s8 (offset from the sprite's position)
+constexpr uint32_t kImageY = 0x0f;                 // s8
+constexpr uint32_t kImageFrameIndex = 0x1a;        // u16 (frame in the type's GRP; frameset @0x18)
+constexpr uint32_t kImageParent = 0x3c;            // ptr: the sprite that owns the image
+constexpr uint16_t kImageFlagFlipped = 0x02;
+constexpr uint16_t kImageFlagClickable = 0x20;
 
 // --- command / unit-id facts (not addresses) ---------------------------------------
 // SC:R extended unit id = index1 | (generation << shift); shift 13 when the unit vector is

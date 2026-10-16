@@ -8,6 +8,7 @@ StarCraft: Remastered client through the bridge. Any version (a manifest, gary/a
 from __future__ import annotations
 
 import argparse
+import time
 
 from gary import commands as C
 from gary.agent.manifests import build_gary, manifest_name, manifest_of
@@ -73,23 +74,28 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
     hi: HumanInterface | None = None
     gary = None
     try:
-        # wait for a game to start and for Gary's Command Center to exist
+        # wait for a game with Gary's Command Center, polling the bridge's status 4 times a second, so
+        # Gary starts within a few frames of the match (step() at the menus waited up to 120 s, its
+        # frame target left over from the last match); a match that isn't Terran is waited out
+        said = None
         while True:
             st = game.status()
             slot = st.get("local_player", -1)
+            state = "menus"
             if st.get("in_game") and slot >= 0:
                 obs = game.observe()
                 mains = [u["type"] for u in obs["units"] if u["owner"] == slot
                          and u["type"] in (CC, C.NEXUS, C.HATCHERY)]
                 if CC in mains:
                     break
-                if mains:   # a game is running, but Gary isn't Terran in it
-                    raise SystemExit(
-                        f"the local player is {'Protoss' if mains[0] == C.NEXUS else 'Zerg'}: "
-                        f"Gary plays Terran. Start a Terran game (melee assigns a random race: "
-                        f"end this one and try again, or use auto_game.py --preset lan-create --race T)")
-            print("waiting for a live game with Gary's Command Center (start one)...")
-            game.step(24)
+                if mains:
+                    state = "Protoss" if mains[0] == C.NEXUS else "Zerg"
+            if state != said:
+                said = state
+                print("waiting for a live game where the local player is Terran (start one)..." if state == "menus" else
+                      f"the match running has the local player as {state}: Gary plays Terran; waiting for the next match",
+                      flush=True)
+            time.sleep(0.25)
         st = game.status()
         mapinfo = MapInfo.from_game(game)
         hi = HumanInterface(game, slot, PROFILES[profile], seed=1)

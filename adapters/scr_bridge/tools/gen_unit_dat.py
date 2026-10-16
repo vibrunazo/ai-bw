@@ -109,7 +109,7 @@ def main() -> None:
         lines.append(f"    {row},")
     # hit points: units.dat stores 24.8 fixed point; gary_env reports the integer part (hp_max)
     hp = [v >> 8 for v in cols["hitpoints"]]
-    lines += ["};", "", "constexpr uint16_t kHitPoints[228] = {"]
+    lines += ["};", "", "constexpr uint32_t kHitPoints[228] = {"]
     for i in range(0, 228, 12):
         lines.append("    " + ", ".join(str(hp[j]) for j in range(i, min(i + 12, 228))) + ",")
     # dimensions: units.dat's rect per type, the extents from the unit's position: left, up, right,

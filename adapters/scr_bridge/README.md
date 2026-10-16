@@ -254,6 +254,14 @@ the same game against the same opponents (including x64 clients over Battle.net)
 - `can_place` is an approximation (buildable tiles + collision + depot distance): the fog rule
   ("unexplored tiles not allowed") and creep/pylon-power rules need the game's own placement
   function (resolve via `samase_scarf` later) to match `gary_env_can_place` exactly.
+- The click model read the wrong image list until 2026-10-15: it started at the sprite's first word
+  (the previous sprite) and read flags, offsets and frame from the wrong bytes, so an SCV's clickable
+  box came out about 16 px off (a Marine's, a critter's, an Overlord's death images unioned). In the
+  first live game Gary played (v0.25 against the computer) that left SCVs idle by the minerals (a click
+  on an SCV selected the mineral behind it, 30 times, or nothing, 90), lost build orders and sent two
+  scouts. Now bw_dat's SCR layout (`scr_profile.h`): the sprite's own images, first to last, each owned
+  by it. `hunt_click.py --check` live: drones and Overlords pass every time (0 bad in 8 runs, the old
+  walk failed 30 of 67); a Hatchery's centre still misses about one sample in four (OpenBW never does).
 - `unit_at`/`box_select` resolve clicks through the sprite's image chain: the union of the
   clickable images' GRP frames (gary_env's model; frame geometry from the game's own GRP files via
   tools/gen_image_dat.py, struct offsets pinned by tools/hunt_click.py against live memory).

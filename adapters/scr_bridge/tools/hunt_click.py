@@ -24,19 +24,19 @@ sys.path.insert(0, str(REPO))
 from gary import commands as C  # noqa: E402
 from gary.scr_env import ScrGame  # noqa: E402
 
-# layout (pinned 2026-10-04 by hunt_click --dump against live memory + game files):
-# CSprite +0x00 -> first CImage (list head); CImage next@0, type u16@0x08, frame u16@0x0a,
-# x s8@0x0c, y s8@0x0d, flags u8@0x12 (0x02 flipped, 0x20 clickable, 0x40 hidden -- OpenBW
-# image_t::flags bit values, same convention as the tile flags). Frame sizes come from the
-# GRP files via gen_image_dat.py (memory holds only the image type + frame index).
-SPR_IMAGE = 0x00        # CSprite -> first CImage*
-IMG_NEXT = 0x00         # CImage -> next image
-IMG_PREV = 0x04
+# layout: bw_dat (neivv/aise) structs.rs, the SCR Sprite and Image (src/scr_profile.h). The 2026-10-04
+# "pinned" layout read the previous sprite as the first image; corrected 2026-10-15. Flag bits are
+# OpenBW image_t::flags (0x02 flipped, 0x20 clickable, 0x40 hidden). Frame sizes come from the GRP
+# files via gen_image_dat.py (memory holds the image type + frame index).
+SPR_IMAGE = 0x20        # Sprite -> first image (bw_dat SCR layout; see src/scr_profile.h)
+IMG_NEXT = 0x04         # Image -> next image
+IMG_PREV = 0x00
 IMG_TYPE = 0x08         # u16 image type (images.dat row)
-IMG_FRAMEINDEX = 0x0A   # u16 frame within the grp
-IMG_X = 0x0C            # s8 offset from sprite position
-IMG_Y = 0x0D            # s8
-IMG_FLAGS = 0x12        # u8
+IMG_FRAMEINDEX = 0x1A   # u16 frame within the grp
+IMG_X = 0x0E            # s8 offset from sprite position
+IMG_Y = 0x0F            # s8
+IMG_FLAGS = 0x0C        # u16 (low byte holds the bits used here)
+IMG_PARENT = 0x3C       # the sprite that owns the image
 FLAG_CLICKABLE = 0x20
 FLAG_FLIPPED = 0x02
 FLAG_Y_FROZEN = 0x04
@@ -81,30 +81,27 @@ def grp_ok(game: ScrGame, addr: int):
     return (frames, w, h, table) if table else None
 
 
-def image_chain(game: ScrGame, sprite: int, head_off: int = IMG_NEXT):
-    """Walk the sprite's intrusive circular image list: head.next = first image; the first
-    image's prev and the last image's next point back at the sprite (the sentinel). Both link
-    directions are followed and unioned: sprites hold many overlay images and the first/last
-    words have been seen either way round."""
+def image_chain(game: ScrGame, sprite: int, head_off: int = SPR_IMAGE):
+    """The sprite's own images, first to last (bw_dat's SCR layout: first image at SPR_IMAGE, last at
+    SPR_IMAGE + 4, each image owned by the sprite at IMG_PARENT). A link that leaves the sprite ends it."""
     out = []
-    seen = set()
-    heads = (0x00, 0x04, 0x24, 0x28) if head_off == IMG_NEXT else (head_off,)
-    for h in heads:
-        for start_off, link_off in ((h, IMG_NEXT), (h + 4, IMG_PREV)):
-            base = peek(game, sprite, start_off + 4)
-            if not base:
-                continue
-            addr = u32(base, start_off)
-            for _ in range(24):
-                if not heap_ptr(addr) or addr == sprite or addr in seen:
-                    break
-                seen.add(addr)
-                data = peek(game, addr, 0x28)
-                if not data:
-                    break
-                out.append((addr, data))
-                addr = u32(data, link_off)
+    head = peek(game, sprite, head_off + 8)
+    if not head:
+        return out
+    addr, last = u32(head, head_off), u32(head, head_off + 4)
+    for _ in range(16):
+        if not heap_ptr(addr):
+            break
+        data = peek(game, addr, 0x40)
+        if not data or u32(data, IMG_PARENT) != sprite:
+            break
+        out.append((addr, data))
+        if addr == last:
+            break
+        addr = u32(data, IMG_NEXT)
     return out
+
+
 def image_rect(game: ScrGame, sprite_pos, img_addr: int, data: bytes):
     """gary_env's clickable rect for one image: map position + grp frame size (files)."""
     v = valid_image(data, IMG_TYPE, IMG_FRAMEINDEX)

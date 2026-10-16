@@ -308,12 +308,13 @@ bool multi_selectable(const UnitView& u) {
 bool clickable_rect(const World& w, const UnitView& u, int* x0, int* y0, int* x1, int* y1) {
     (void)w;
     uint32_t sprite = (uint32_t)u.sprite;
-    uint32_t img = read_at<uint32_t>(sprite + profile::kSpriteImageHead);
+    uint32_t img = read_at<uint32_t>(sprite + profile::kSpriteImageFirst);
+    uint32_t last = read_at<uint32_t>(sprite + profile::kSpriteImageLast);
     bool any = false;
-    // intrusive circular list: the last image's next points back at the sprite (sentinel).
-    for (int n = 0; n < 8 && img && img != sprite; ++n) {
-        uint32_t next = read_at<uint32_t>(img + profile::kImageNext);
-        uint8_t flags = read_at<uint8_t>(img + profile::kImageFlags);
+    // the sprite's own images, first to last (each owned by this sprite: a stale or foreign link ends it)
+    for (int n = 0; n < 16 && img && read_at<uint32_t>(img + profile::kImageParent) == sprite; ++n) {
+        uint32_t next = img == last ? 0 : read_at<uint32_t>(img + profile::kImageNext);
+        uint16_t flags = read_at<uint16_t>(img + profile::kImageFlags);
         uint16_t type = read_at<uint16_t>(img + profile::kImageType);
         // clickability: the runtime flag_clickable bit, exactly gary_env's gate (images.dat
         // is_clickable is copied in at image creation; overlays can differ at runtime).
