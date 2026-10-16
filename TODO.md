@@ -52,7 +52,11 @@ What to do, in order:
      natural, then pick off the stragglers on the ramp;
    - no Comsat when lurkers came: a late turret stood where the main's Comsat goes;
    - still AFK when lone units are picked off: reacts late, never, or wrong (attention elsewhere,
-     never re-prioritized).
+     never re-prioritized). Measured (replay + snapshots): 25 lone units hit (17 SCVs), Gary
+     touched the unit or its spot within 0.9 s (median) in 21, and 19 of the 25 died within 10 s:
+     mostly the wrong reaction, not a late one (learned responses and anticipation, Direction 3).
+     Found overnight and fixed in v0.27: the bunker-load rule re-sent one marine every 2 s all
+     game (it took Gary's hands 20-26 times a minute), and the scout stood idle by the minerals.
    Human game 1 (2026-10-16, runs/live/v025_human1, the user's Zerg won at 12:17; the bridge matched
    OpenBW over the whole replay, so every failure is Gary's). The user's notes, and Gary's log:
    - 4 lings did far too much: Gary reacts very slowly; a lone SCV walks out to build, gets

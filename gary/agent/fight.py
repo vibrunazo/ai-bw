@@ -30,6 +30,7 @@ Rules (scripted reflexes), run before the model ("before") or before it in the a
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 
@@ -80,6 +81,9 @@ MINERALS = {176, 177, 178}
 MINERAL_LINE_PX = 4 * 32             # pull(mineral_line): zerg this close to a base's minerals are in its mineral line
 THREAT_PX = 10 * 32                  # enemy fighters this close to a Command Center threaten its workers
 LOAD_AGAIN = 20 * 24                 # a marine sent to a bunker isn't sent again for this long
+STIM_TECH, STIM_RESEARCH = 0, 1200   # Stim Packs: its tech id, and frames to research it
+STIM_GROUP = 5 * 32                 # px: bio this close to a unit the model picks is stimmed with it
+STIM_HP = 20                        # a marine this hurt isn't stimmed (it costs 10 HP)
 ZERG_FLYERS = {42, 43, 44, 45, 47, 59, 62}   # overlord, mutalisk, guardian, queen, scourge, cocoon, devourer
 CALM_FRAMES = 24 * 5                 # pulled workers go back to mining after 5 s without a threat
 REPAIR_ORDER = 34
@@ -811,5 +815,64 @@ class DetectRule:
         return True
 
 
-RULES = {"block": BlockRule, "pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule,
+
+class StimRule:
+    """Stim when the pros would: every half second in a fight, the marines and firebats the stim model
+    (gary/policy/stim.py, learned from the pros' stims) picks, stimmed together. Not before Stim Packs
+    is done, nor a unit with too little HP to pay for it. (Human game 2: Gary researched stim at 5:40
+    and never used it; the roles model has no stim.) Option model: a train/stim.py checkpoint (default:
+    the latest in runs/stim)."""
+
+    name = "stim"
+
+    def __init__(self, g: Gary, model: str | None = None):
+        from gary.policy.stim import StimModel
+        self.g = g
+        if model is None:
+            found = sorted(Path("runs/stim").glob("stim_*.pkl"))
+            if not found:
+                raise FileNotFoundError("no stim model in runs/stim: python -m train.stim")
+            model = found[-1]
+        self.model = StimModel(model)
+        self.next = 0
+        self.last: dict[int, tuple] = {}         # tag -> what it saw half a second ago (stim.recall)
+
+    def left(self, tag: int) -> int:
+        from gary.policy.stim import STIM_TIME
+        f = self.g.stimmed_at.get(tag)
+        return max(0, STIM_TIME - (self.g.hi.frame - f) // 8) if f is not None else 0
+
+    def step(self, obs: dict, mine: list[dict]) -> bool:
+        from gary.policy.stim import BIO, SAMPLE_EVERY, enemy_fighters, features, in_fight, recall
+        g, hi = self.g, self.g.hi
+        at = g.researched_at.get(STIM_TECH)
+        if hi.frame < self.next or at is None or hi.frame - at < STIM_RESEARCH:
+            return False
+        self.next = hi.frame + SAMPLE_EVERY
+        enemies = enemy_fighters(obs["units"], g.slot)
+        last, self.last = self.last, {u["tag"]: recall(u, enemies) for u in mine if u["type"] in BIO}
+        bio = [u for u in mine if u["type"] in BIO and u["completed"] and u["hp"] > STIM_HP and in_fight(u, enemies)]
+        if not bio:
+            return False
+        X = np.stack([features(u, mine, enemies, self.left(u["tag"]), hi.frame, last.get(u["tag"]), self.left)
+                      for u in bio])
+        picked = [u for u, w in zip(bio, self.model.wants(X)) if w]
+        if not picked:
+            return False
+        # the group around the ones it picked, as a player stims the selection (the model was taught
+        # on units, one at a time: it picked 1 of 4 marines standing together)
+        want = [u["tag"] for u in bio if self.left(u["tag"]) == 0
+                and any(math.dist((u["x"], u["y"]), (q["x"], q["y"])) < STIM_GROUP for q in picked)]
+        if not want:
+            return False
+        for tag in want:
+            g.stimmed_at[tag] = hi.frame
+        picked = [u for u in bio if u["tag"] in set(want)]
+        center = (sum(u["x"] for u in picked) / len(picked), sum(u["y"] for u in picked) / len(picked))
+        intent = command_intent(("stim",), want, center)
+        intent.source = "rule:stim"
+        g.motor.start(intent)
+        return True
+
+RULES = {"stim": StimRule, "block": BlockRule, "pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule,
          "unload": UnloadRule, "detect": DetectRule}

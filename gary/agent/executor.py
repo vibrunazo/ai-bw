@@ -997,6 +997,7 @@ class ScriptedExecutor:
         elif act == RESEARCH:
             if hi.research(uid).accepted:
                 g.researched.add(uid)
+                g.researched_at[uid] = hi.frame
         elif act == UPGRADE:
             if hi.upgrade(uid).accepted:
                 g.upgraded[uid] += 1

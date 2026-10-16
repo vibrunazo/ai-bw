@@ -70,6 +70,8 @@ class Gary:
         self.build_failed: dict[int, int] = {}                  # building type -> frame one failed
         self.producing: dict[int, int] = {}              # building tag -> unit type it last started
         self.researched: set[int] = set()
+        self.researched_at: dict[int, int] = {}          # tech -> frame its research was ordered
+        self.stimmed_at: dict[int, int] = {}             # unit tag -> frame Gary stimmed it
         self.upgraded: Counter = Counter()
         self.gas_workers: dict[int, set[int]] = {}       # refinery tag -> workers on it
         self.ignore_idle_until: dict[int, int] = {}      # workers (or refineries) to leave alone until then

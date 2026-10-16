@@ -306,8 +306,17 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
   Gary's hands from everything else. Headless idle SCV time 13% to 9%.
 - **Headless (8 seeds, Zerg v3, 25 minutes):** won 6, lost 0 (v0.26: 7, 0); seed 105 nearly lost
   after the 8:00 hunt (v0.26 won it): no detectable harm on 8 seeds, which can't tell 6 from 7.
-- **Not addressed:** stim is researched and never used (the roles model has no stim; to be learned
-  from the pros' stims); marines between main and natural picked off; the AFK feel.
+- **Stim, learned (the user: "never heard stim once"; the roles model has no stim):** from 400 pro TvZ
+  games re-simulated in OpenBW (its stim timer, now in gary_env's observation), every half second
+  each marine and firebat in a fight is a sample: what the Terran sees around it (HP, its stim,
+  neighbors and medics, the zerg near it by kind, the fight starting: HP lost, the zerg closing in,
+  more coming, neighbors stimmed) and whether it was stimmed in the next second (1.05M samples, 6.3%
+  stimmed; ingest/stim_dataset.py). Gradient-boosted trees (train/stim.py): test AUC 0.76 on held-out
+  games; at the pros' rate of stims, 24% of its picks are right (6.5% base). fight.py StimRule asks it
+  every half second and stims the group around the units it picks, once Stim Packs is done (Gary
+  remembers its own stims: the live client doesn't report them). On 8 seeds against Zerg v3 to 25
+  minutes: won 7, lost 0, 5-8 marines a stim (without: 6, 0; seed 105, nearly lost, won at 13:00).
+- **Not addressed:** marines between main and natural picked off; the AFK feel.
 
 ### v0.26 (October 2026): the first human game's losses
 

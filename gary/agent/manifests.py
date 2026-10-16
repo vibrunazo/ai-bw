@@ -226,7 +226,8 @@ MANIFESTS: dict[str, dict] = {
                                         "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
     # v0.27: v0.26 with the fixes from human game 2: SCVs repair a mineral-line turret under attack (3, as pros
-    # send several; OPTION repair_turrets). Shared code: against mutalisks the answer's turrets go up first,
+    # send several; OPTION repair_turrets); stim, learned from the pros' stims (OPTION stim); builders queued back
+    # to the minerals (OPTION builder_back). Shared code: against mutalisks the answer's turrets go up first,
     # in the mineral line nearest the zerg first (the model's own turrets, built away from the minerals, wait
     # until then); live placement keeps add-on spots free (turrets had taken both Comsats' places); a pending
     # add-on's building isn't kept busy (an SCV queued just before its Comsat: the game refused it)
@@ -237,7 +238,7 @@ MANIFESTS: dict[str, dict] = {
                        "answer_options": {"mutas": True}},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
-                       "before": _V09_FIGHT["before"] + ["detect"],
+                       "before": _V09_FIGHT["before"] + ["detect", "stim"],
                        "rule_options": {"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8},
                                         "load": {"always": True}, "repair": {"turrets": 3}}},
              "arbiter": "fixed_priority/v1"},
@@ -509,6 +510,9 @@ OPTIONS = {
     # learned, the user's call: pros pull back just enough to survive, and the nuances are too many to script)
     # Judged by the next games against humans; the headless pool only checks they break nothing. In v0.26
     "muta_answer": lambda m: m["macro"].setdefault("answer_options", {}).update(mutas=True),
+    # fight.py StimRule: stims when the pros would (gary/policy/stim.py, learned from 400 of their TvZ games;
+    # human game 2: stim researched, never used)
+    "stim": lambda m: m["fight"].__setitem__("before", m["fight"]["before"] + ["stim"]),
     "repair_turrets": lambda m: m["fight"].setdefault("rule_options", {}).setdefault("repair", {}).update(turrets=3),
     "pull_cap": lambda m: m["fight"].setdefault("rule_options", {}).setdefault("pull", {}).update(ground_only=True, max_enemy=8),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
