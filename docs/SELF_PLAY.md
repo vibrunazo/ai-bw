@@ -171,8 +171,10 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    67% (52% / 42% / 39%); marines stimmed after mutalisks come into view - / 14% / 14% (33% / 40% / 36%);
    moving while reloading 0% throughout (pros 4-10%); seconds to answer harassment 6.7 / 6.1 / 6.2 (pros
    11.8 / 9.1 / 11.5: faster, as the user said a script would find). Gathering at a sighting doesn't
-   separate (pros spread as they move). Against the replayed pros Gary-T is the least pro-like (gap
-   1.06-1.22 from 8 min; v0.28 0.99-1.16), in the league 0.44-0.48, in the human games 0.66-0.84.
+   separate (pros spread as they move). Gap score in the league 0.44-0.48, in the human games 0.66-0.84.
+   (Games against the replayed-pro fixture can't be measured: it creates its units in the engine with
+   no commands, and its replays re-simulate with an idle Zerg. The classifier refuses them; the 1.0-1.2
+   gaps first reported for them were Gary against an empty opponent.)
    Gary-Z baseline (48 games at e1a3e8e): Gary-T won 20, lost 1 (Gary-Z's first win), 27 undecided;
    army bunched (2-5 tiles, pros 5-29), standing 73-89% (5-65%), at home 84-97% (30-53%).
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro

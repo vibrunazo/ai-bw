@@ -57,7 +57,7 @@ def decision_labels(d) -> np.ndarray:
     return out
 
 
-def load(path: Path, decisions: bool = False):
+def load(path: Path, decisions: bool = False, move: bool = False):
     """Train and validation arrays, and the label names (a dataset can name its own: the hand rules'
     decisions, ingest/role_distill.py)."""
     d = np.load(path)
@@ -70,36 +70,63 @@ def load(path: Path, decisions: bool = False):
         names = DECISIONS if decisions else ROLES
         labels = decision_labels(d) if decisions else d["labels"]
     arrays = {"rows": d["rows"], "extra": d["extra"], "labels": labels, "count": d["count"], "time": d["time"]}
-    pick = lambda m: tuple(arrays[k][m] for k in ("rows", "extra", "labels", "count", "time"))
+    keys = ("rows", "extra", "labels", "count", "time")
+    if "move" in d and move:            # (ingest/response_dataset.py: each unit's move over the half second)
+        arrays["move"] = d["move"].astype(np.float32)
+        keys += ("move",)
+    pick = lambda m: tuple(arrays[k][m] for k in keys)
     if "near" in d:                     # (ingest/response_dataset.py: labels before contact scored apart too)
-        pre = np.where(d["near"] >= NEAR, labels, -1).astype(labels.dtype)
-        arrays["labels_pre"] = pre
-        PRE_VAL[:] = [tuple(arrays[k][val] for k in ("rows", "extra", "labels_pre", "count", "time"))]
+        arrays["labels_pre"] = np.where(d["near"] >= NEAR, labels, -1).astype(labels.dtype)
+        PRE_VAL[:] = [tuple(arrays["labels_pre" if k == "labels" else k][val] for k in keys)]
     return pick(~val), pick(val), names
 
 
-def batch(data, idx, device):
-    rows, extra, labels, count, time_s = (a[idx] for a in data)
+def batch(data, idx, device, with_move: bool = False):
+    rows, extra, labels, count, time_s = (a[idx] for a in data[:5])
     n = int(count.max())
     rows, extra, labels = rows[:, :n], extra[:, :n], labels[:, :n]
     pad = np.arange(n)[None, :] >= count[:, None]
-    return tensors(rows, extra, pad, time_s, device), torch.as_tensor(labels.astype(np.int64), device=device)
+    out = tensors(rows, extra, pad, time_s, device), torch.as_tensor(labels.astype(np.int64), device=device)
+    if with_move:
+        return out + (torch.as_tensor(data[5][idx][:, :n], device=device),)
+    return out
 
 
 def evaluate(net, data, device, names=ROLES) -> dict:
     net.eval()
-    pred, true = [], []
+    pred, true, err, still, moved_role = [], [], [], [], []
+    with_move = len(data) > 5 and net.move is not None
     with torch.no_grad():
         for s in range(0, len(data[0]), 512):
-            inputs, labels = batch(data, np.arange(s, min(s + 512, len(data[0]))), device)
-            p = net(*inputs).argmax(-1)
+            got = batch(data, np.arange(s, min(s + 512, len(data[0]))), device, with_move)
+            inputs, labels = got[0], got[1]
+            if with_move:
+                logits, move = net(*inputs, with_move=True)
+                m = (labels >= 0) & ~torch.isnan(got[2]).any(-1)
+                err.append((move[m] - got[2][m]).norm(dim=-1).cpu().numpy())
+                still.append(got[2][m].norm(dim=-1).cpu().numpy())
+                moved_role.append(labels[m].cpu().numpy())
+            else:
+                logits = net(*inputs)
+            p = logits.argmax(-1)
             m = labels >= 0
             pred.append(p[m].cpu().numpy())
             true.append(labels[m].cpu().numpy())
     net.train()
     pred, true = np.concatenate(pred), np.concatenate(true)
+    move_report = {}
+    if err:
+        err, still, moved_role = np.concatenate(err), np.concatenate(still), np.concatenate(moved_role)
+        for r in ("reposition", "pull_back", "retreat", "close_in"):
+            k = names.index(r) if r in names else -1
+            sel = moved_role == k
+            if sel.any():               # (against guessing no move: the move's own length)
+                move_report[r] = {"error_tiles": round(float(np.median(err[sel])), 2),
+                                  "no_move_tiles": round(float(np.median(still[sel])), 2)}
     out = {"units": len(true), "accuracy": round(float((pred == true).mean()), 3),
            "baseline_fire": round(float((true == 0).mean()), 3)}
+    if move_report:
+        out["move"] = move_report
     for k, r in enumerate(names):
         tp = int(((pred == k) & (true == k)).sum())
         out[r] = {"share": round(float((true == k).mean()), 3),
@@ -119,6 +146,7 @@ def main() -> None:
     ap.add_argument("--decisions", action="store_true", help="learn when the role changes (else keep)")
     ap.add_argument("--no-weights", action="store_true", help="plain cross entropy (rare roles not weighted up)")
     ap.add_argument("--extra", type=int, help="read only the first this many per-unit extras (6: without the terrain)")
+    ap.add_argument("--move", action="store_true", help="also learn where each unit moves (the data's move)")
     ap.add_argument("--smooth", type=float, default=0.0,
                     help="label smoothing: every decision keeps some probability (room to explore for RL)")
     priority.add_argument(ap)
@@ -127,7 +155,7 @@ def main() -> None:
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(0)
-    train, val, names = load(Path(args.data), args.decisions)
+    train, val, names = load(Path(args.data), args.decisions, args.move)
     decisions = "keep" in names
     y = train[2][train[2] >= 0]
     share = np.bincount(y, minlength=len(names)) / len(y)
@@ -136,7 +164,8 @@ def main() -> None:
     print(f"train {len(train[0])} snapshots, {len(y)} units; validation {len(val[0])} snapshots; "
           + ", ".join(f"{r} {s:.1%}" for r, s in zip(names, share)), flush=True)
     config = {"net": {"d": args.d, "layers": args.layers, "heads": 4, "n_roles": len(names),
-                      "n_extra": args.extra or int(train[1].shape[-1])}, "data": args.data, "roles": names}
+                      "n_extra": args.extra or int(train[1].shape[-1]), "move": bool(args.move)},
+              "data": args.data, "roles": names}
     net = RoleNet(**config["net"]).to(device)
     opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=0.01)
     rng = np.random.default_rng(0)
@@ -145,10 +174,16 @@ def main() -> None:
         order = rng.permutation(len(train[0]))
         total = 0.0
         for s in range(0, len(order), args.batch):
-            inputs, labels = batch(train, order[s:s + args.batch], device)
-            logits = net(*inputs)
+            got = batch(train, order[s:s + args.batch], device, args.move)
+            inputs, labels = got[0], got[1]
+            if args.move:
+                logits, move = net(*inputs, with_move=True)
+                m = (labels >= 0) & ~torch.isnan(got[2]).any(-1)
+                move_loss = F.smooth_l1_loss(move[m], got[2][m]) if m.any() else move.sum() * 0
+            else:
+                logits, move_loss = net(*inputs), 0.0
             loss = F.cross_entropy(logits.reshape(-1, len(names)), labels.reshape(-1), weight=weights, ignore_index=-1,
-                                   label_smoothing=args.smooth)
+                                   label_smoothing=args.smooth) + move_loss
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -174,7 +209,9 @@ def main() -> None:
         report["val_before_contact"] = pre
         print("before contact (recall/precision): "
               + ", ".join(f"{r} {pre[r]['recall']:.2f}/{pre[r]['precision']:.2f} ({pre[r]['share']:.0%})" for r in names)
-              + f"; accuracy {pre['accuracy']}")
+              + f"; accuracy {pre['accuracy']}" + (f"; moves {pre['move']}" if "move" in pre else ""))
+    if "move" in final:
+        print(f"moves (median error, tiles; and if it guessed no move): {final['move']}")
     (out / "report.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     print(f"saved {out / 'model.pt'}; validation (recall/precision): "
           + ", ".join(f"{r} {final[r]['recall']:.2f}/{final[r]['precision']:.2f}" for r in names)

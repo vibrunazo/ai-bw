@@ -39,7 +39,8 @@ BOX_MARGIN = 20                      # screen pixels around the group's units wh
 SCOUT_KEY = 0
 HK_ARMY = [1, 2]
 COMMANDS = {"MOVE", "ATTACK_MOVE", "ATTACK_UNIT", "GATHER", "OWN_UNIT", "STOP", "HOLD", "STIM", "RETURN_CARGO"}
-ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT", "BRACE", "REGROUP", "POST", "SKIRMISH"}  # roles.py: carried out as commands
+ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT", "BRACE", "REGROUP", "POST", "SKIRMISH",
+         "REPOSITION"}  # roles.py: carried out as commands
 TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL": "unpull", "LOAD": "load", "UNLOAD": "unload",
            "REPAIR": "repair", "REINFORCE": "reinforce", "ARMY_MOVE": "army_order", "ARMY_ATTACK": "army_order",
            "SCOUT": "scout", "ATTACK_WAVE": "attack", "SCAN": "scan"}

@@ -124,7 +124,13 @@ def gary_end(path: str) -> int | None:
     log = Path(path).with_suffix(".log")
     if not log.exists():
         return None
-    times = re.findall(r"^\s*(\d+):(\d\d)\s", log.read_text(encoding="utf-8", errors="replace"), re.M)
+    text = log.read_text(encoding="utf-8", errors="replace")
+    if "Zerg replays " in text:
+        # the replayed-pro fixture (gary/bots/zerg_replayed.py) creates its units in the engine, no
+        # commands: its replays re-simulate with an idle Zerg (3 drones and no army at 8:00), so the
+        # game can't be measured from them
+        raise ValueError(f"{path}: the replayed-pro fixture's games don't re-simulate")
+    times = re.findall(r"^\s*(\d+):(\d\d)\s", text, re.M)
     return max((int(m) * 60 + int(s)) * 24 for m, s in times) if times else None
 
 
@@ -540,7 +546,7 @@ def main() -> None:
     ap.add_argument("--race", choices=("T", "Z"), default="T", help="whose side is judged")
     ap.add_argument("--gary", nargs="+", required=True,
                     help="globs of Gary's replays, each optionally labeled by its opponent: label=glob "
-                         "(league, replayed, human; unlabeled: league)")
+                         "(league, human; unlabeled: league). Not the replayed-pro fixture's: they don't re-simulate")
     ap.add_argument("--pros", type=int, default=PRO_GAMES)
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--frozen", help="also score Gary's games with this earlier model.pkl (did the old tells go?)")

@@ -256,6 +256,22 @@ MANIFESTS: dict[str, dict] = {
                        "rule_options": {"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8},
                                         "load": {"always": True}, "repair": {"turrets": 3}}},
              "arbiter": "fixed_priority/v1"},
+    # v0.29: v0.28 whose fighters answer what they see before contact as the pros do: the role model (decisions:
+    # keep or a new role, with a where head) learned from 600 pro games' units whenever a seen enemy fighter was
+    # within 12 tiles (ingest/response_dataset.py: 1.3M labels before contact); the fight layer watches 12 tiles;
+    # retreat, pull back and reposition go where the model moves them, fire and close in by v0.27's skills
+    "v029": {"version": "v0.29", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
+             "home_scvs": True, "balance": True, "defend_early": 150 * 24, "builder_back": True,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
+                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True,
+                       "answer_options": {"mutas": True}},
+             "army": {**_ARMY, "hunt": True, "scan": True, "hold_moves": False, "hold_margin": 0.05},
+             "fight": {**_V09_FIGHT, "provider": "roles", "model": "runs/roles/20261016-195206/model.pt",
+                       "roles": {"post": 3}, "watch_tiles": 12,
+                       "before": _V09_FIGHT["before"] + ["detect", "stim"],
+                       "rule_options": {"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8},
+                                        "load": {"always": True}, "repair": {"turrets": 3}}},
+             "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",

@@ -100,8 +100,11 @@ class Probe:
         self.prev = positions
 
     def labels(self) -> dict[tuple[int, int], str]:
-        """(unit, slice start frame) -> role over that half second."""
+        """(unit, slice start frame) -> role over that half second (and self.moves: its move then, tiles,
+        mirrored as the snapshots' rows)."""
         out = {}
+        self.moves: dict[tuple[int, int], tuple[float, float]] = {}
+        fx, fy = (-1 if self.flip and self.flip[0] else 1), (-1 if self.flip and self.flip[1] else 1)
         for tag, s in self.samples.items():
             slices = []                    # [f0, kind, x0, y0, x1, y1, threatened]
             k = 0
@@ -144,6 +147,7 @@ class Probe:
             for sl in slices:
                 if sl[1] is not None:
                     out[(tag, sl[0])] = sl[1]
+                    self.moves[(tag, sl[0])] = (fx * (sl[4] - sl[2]) / 32, fy * (sl[5] - sl[3]) / 32)
         return out
 
 

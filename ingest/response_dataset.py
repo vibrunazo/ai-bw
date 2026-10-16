@@ -16,7 +16,8 @@ Between moments the game steps a second at a time; a moment (a seen enemy fighte
 a margin of its fighters or buildings) steps every 2 frames, as the role probe needs.
 
     python -m ingest.response_dataset --games 600
-Output: data/interim/roles/response_T.npz (the role dataset's arrays, plus near)
+Output: data/interim/roles/response_T.npz (the role dataset's arrays, plus near and move: each labeled
+unit's move over the half second, tiles, mirrored as the rows)
 """
 
 from __future__ import annotations
@@ -71,7 +72,8 @@ def _moment(o: dict, slot: int) -> bool:
 
 def _job(job: tuple) -> dict:
     path, end, sha1 = job
-    out = {"sha1": sha1, "error": None, "rows": [], "extra": [], "labels": [], "near": [], "time": [], "tags": []}
+    out = {"sha1": sha1, "error": None, "rows": [], "extra": [], "labels": [], "near": [], "move": [], "time": [],
+           "tags": []}
     try:
         from gary.env import Game
         g = Game.scenario(path)
@@ -107,6 +109,7 @@ def _job(job: tuple) -> dict:
                 out["extra"].append(e)
                 out["labels"].append(y)
                 out["near"].append(np.array([near_of.get((t, f), 1e4) for t in tags], np.float32))
+                out["move"].append(np.array([probe.moves.get((t, f), (np.nan, np.nan)) for t in tags], np.float32))
                 out["time"].append(f * 42 / 1000)
                 out["tags"].append(tags)
     except Exception as e:                         # (a replay that won't run: counted, skipped)
@@ -147,21 +150,22 @@ def main() -> None:
     extra = np.zeros((n, MAX_UNITS, EXTRA), np.float32)
     labels = np.full((n, MAX_UNITS), -1, np.int8)
     near = np.full((n, MAX_UNITS), 1e4, np.float16)
+    move = np.full((n, MAX_UNITS, 2), np.nan, np.float16)
     unit_tags = np.zeros((n, MAX_UNITS), np.int32)
     count = np.zeros(n, np.int16)
     time_s = np.zeros(n, np.float32)
     game = np.zeros(n, np.int32)
     i = 0
     for gi, r in enumerate(results):
-        for rr, e, y, nr, t, tg in zip(r["rows"], r["extra"], r["labels"], r["near"], r["time"], r["tags"]):
+        for rr, e, y, nr, mv, t, tg in zip(r["rows"], r["extra"], r["labels"], r["near"], r["move"], r["time"], r["tags"]):
             k = min(len(rr), MAX_UNITS)
-            rows[i, :k], extra[i, :k], labels[i, :k], near[i, :k] = rr[:k], e[:k], y[:k], nr[:k]
+            rows[i, :k], extra[i, :k], labels[i, :k], near[i, :k], move[i, :k] = rr[:k], e[:k], y[:k], nr[:k], mv[:k]
             count[i], time_s[i], game[i] = k, t, gi
             unit_tags[i, :k] = tg[:k]
             i += 1
     out = Path(args.out) if args.out else data_root() / "interim" / "roles" / "response_T.npz"
     out.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(out, rows=rows, extra=extra, labels=labels, near=near, count=count, time=time_s, game=game,
+    np.savez_compressed(out, rows=rows, extra=extra, labels=labels, near=near, move=move, count=count, time=time_s, game=game,
                         tags=unit_tags, sha1=np.array([r["sha1"] for r in results]))
     y = labels[labels >= 0]
     pre = labels[(labels >= 0) & (near >= NEAR)]

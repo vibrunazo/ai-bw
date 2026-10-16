@@ -116,6 +116,8 @@ HOME = 14 * 32                       # a Command Center this close: the group is
 BUNKER, MARINE = 125, 0
 BUNKER_SLOTS = 4
 MAX_GROUP = 12
+WHERE_LEAD = 4                       # learned where: a destination this many of the pros' half-second moves ahead (2 s)
+WHERE_MIN = 0.25 * 32                # px per half second: a predicted move shorter than this is no move
 SIDEWAYS_PX = 8                      # closer by less than this isn't coming
 LEASH = 5 * 32                       # leash: zerg this close to Gary's buildings may be closed in on
 ANCHOR_OUT = 10 * 32                 # anchor: a unit this far from every Command Center and bunker is out...
@@ -815,6 +817,7 @@ class RoleLearned(RoleRules):
     def __init__(self, g, model, **options):
         super().__init__(g, **options)
         self.model = model
+        self.where: dict[int, tuple[float, float]] = {}   # unit -> where the model moves it (with a where head)
 
     def decide(self, obs: dict, snap) -> Intent | None:
         names = self.model.config.get("roles")
@@ -824,11 +827,18 @@ class RoleLearned(RoleRules):
         if snap is None:
             return None
         rows, tags, center, by_tag = snap
-        probs = self.model.predict(rows, extra, obs["frame"] * 42 / 1000)
+        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000)
         mine, enemy = self._units(snap)
         if not mine or not enemy:
             return None
         index = {t: i for i, t in enumerate(tags)}
+        self.where = {}
+        if moves is not None:               # (the model's moves are mirrored as its rows)
+            fx, fy = (-1 if g.flip[0] else 1), (-1 if g.flip[1] else 1)
+            for u in mine:
+                dx, dy = moves[index[u["tag"]]] * 32
+                if math.hypot(dx, dy) >= WHERE_MIN:
+                    self.where[u["tag"]] = (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)
         logging = g.fight.rl_log is not None
         decided: dict[int, str] = {}
         roles: dict[str, list[dict]] = {}
@@ -846,6 +856,22 @@ class RoleLearned(RoleRules):
         if logging:
             self._log(obs, snap, extra, mine, decided, intent)
         return intent
+
+    def _act(self, roles, mine, enemy, by_tag, home: bool, fresh) -> Intent | None:
+        """With a where head (ingest/response_dataset.py: the pros' units before contact as well as in
+        it), retreat, pull back and reposition go where the model moves them (a lone marine to the
+        buildings, marines into the mineral line as zerglings come: the user's examples), not by the
+        hand skills (whose retreat never walks away at home); fire and close in as the rules do."""
+        if not self.where:
+            return super()._act(roles, mine, enemy, by_tag, home, fresh)
+        for role in ("RETREAT", "PULL_BACK", "REPOSITION"):
+            group = [u for u in roles.get(role, []) if u["tag"] in self.where and fresh(u, role)][:MAX_GROUP]
+            if group:
+                pts = [self.where[u["tag"]] for u in group]
+                return self._intent(role, group, (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)),
+                                    "move")
+        return super()._act({k: v for k, v in roles.items() if k not in ("RETREAT", "PULL_BACK")},
+                            mine, enemy, by_tag, home, fresh)
 
 
 OVERRIDES = ("join", "hold")

@@ -122,7 +122,8 @@ def terrain_features(tags: list[int], positions: dict[int, tuple[float, float]],
 
 
 class RoleNet(nn.Module):
-    def __init__(self, d: int = 128, layers: int = 3, heads: int = 4, n_roles: int = len(ROLES), n_extra: int = 3):
+    def __init__(self, d: int = 128, layers: int = 3, heads: int = 4, n_roles: int = len(ROLES), n_extra: int = 3,
+                 move: bool = False):
         super().__init__()
         self.n_extra = n_extra
         self.type_emb = nn.Embedding(N_TYPES, 48)
@@ -132,13 +133,19 @@ class RoleNet(nn.Module):
         layer = nn.TransformerEncoderLayer(d, heads, 4 * d, dropout=0.1, batch_first=True, norm_first=True)
         self.body = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False)
         self.role = nn.Linear(d, n_roles)
+        # where: each unit's move over the next half second (tiles, mirrored as the rows), as the pros
+        # moved theirs (ingest/response_dataset.py): a role names what, this where (a reposition among
+        # the mineral line's workers, a retreat toward the buildings)
+        self.move = nn.Linear(d, 2) if move else None
 
-    def forward(self, kind, side, order, num, extra, pad):
+    def forward(self, kind, side, order, num, extra, pad, with_move: bool = False):
         """kind, side, order (B, N) long; num (B, N, 9); extra (B, N, EXTRA); pad (B, N) True where
-        there is no unit. Returns role logits (B, N, R)."""
+        there is no unit. Returns role logits (B, N, R); with_move, also the moves (B, N, 2)."""
         h = self.inp(torch.cat([self.type_emb(kind), self.side_emb(side), self.order_emb(order), num,
                                 extra[..., :self.n_extra]], -1))
         h = self.body(h, src_key_padding_mask=pad)
+        if with_move:
+            return self.role(h), self.move(h)
         return self.role(h)
 
 
@@ -173,3 +180,15 @@ class RoleModel:
         logits = self.net(*tensors(rows[None, :n], extra[None, :n], np.zeros((1, n), bool),
                                    np.array([time_s], np.float32), dev))
         return torch.softmax(logits[0], -1).cpu().numpy()
+
+    @torch.no_grad()
+    def predict_move(self, rows: np.ndarray, extra: np.ndarray, time_s: float) -> tuple[np.ndarray, np.ndarray]:
+        """Role probabilities (n, R) and moves (n, 2: tiles over the next half second, mirrored as the
+        rows; unmirror with the snapshot's flip). A model without the where head: moves None."""
+        dev = next(self.net.parameters()).device
+        n = min(len(rows), MAX_UNITS)
+        inputs = tensors(rows[None, :n], extra[None, :n], np.zeros((1, n), bool), np.array([time_s], np.float32), dev)
+        if self.net.move is None:
+            return torch.softmax(self.net(*inputs)[0], -1).cpu().numpy(), None
+        logits, move = self.net(*inputs, with_move=True)
+        return torch.softmax(logits[0], -1).cpu().numpy(), move[0].cpu().numpy()
