@@ -489,6 +489,8 @@ class LearnedMacro:
                 continue
             if obs["now"] - g.ordered_at.get(b["tag"], -10**9) <= blind:
                 continue
+            if g.unselectable.get(b["tag"], -1) > g.hi.frame:
+                continue                        # (its clicks select nothing: executor.py select)
             if addon is not None:
                 a = self.addon_of(b, mine)
                 if a is None or a["type"] != addon or not a["completed"]:

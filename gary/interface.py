@@ -37,7 +37,7 @@ from dataclasses import dataclass, field, replace
 
 from gary import commands as C
 from gary import terran as T
-from gary.env import Game, decode_observation
+from gary.env import Game, GameError, decode_observation
 from gary.policy.fight_memory import command_kind
 
 FRAME_MS = 42  # one frame at Fastest speed
@@ -195,7 +195,9 @@ class HumanInterface:
             if entry[0] <= self.frame - delay:
                 seen = entry
         seen = self._snapshot(seen)
-        me = next(p for p in seen["players"] if p["slot"] == self.slot)
+        me = next((p for p in seen["players"] if p["slot"] == self.slot), None)
+        if me is None:                              # (this player has left the game: eliminated)
+            raise GameError("this player has left the game")
         bit = 1 << self.slot
         inspected = set(self.selection) if len(self.selection) == 1 else set()
         units = []

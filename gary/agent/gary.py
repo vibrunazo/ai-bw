@@ -53,6 +53,8 @@ class Gary:
         # bookkeeping more than one layer reads
         self.rally: tuple[int, int] | None = None        # where new army units gather
         self.hotkeyed: dict[int, int] = {}               # building tag -> hotkey (-1: none)
+        self.select_misses: dict[int, int] = {}          # building tag -> clicks on it that selected nothing
+        self.unselectable: dict[int, int] = {}           # building tag -> frame until which it's left alone
         self.rallied: dict[int, tuple] = {}             # production building tag -> the rally it was given
         self.rally_plan = None                           # "ramp": the rally moves as the pros' (executor rerally)
         self.home_scvs = False                           # workers astray go back to mining (executor _idle)

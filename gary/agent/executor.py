@@ -19,6 +19,8 @@ from gary.mapinfo import Base
 CC, SCV = T.CC, T.SCV
 COST = {unit: minerals for unit, (minerals, _gas) in T.COST.items()}
 SIZE = T.SIZE                                              # tiles
+SELECT_TRIES = 6                      # clicks on a building that select nothing before it's left alone...
+UNSELECTABLE_FOR = 60 * 24            # ...for this long (live, one took 1,335 clicks and froze production)
 HK_CC = [4, 5]                        # one hotkey per Command Center (buildings can't share one)
 HK_RAX = [6, 7, 8, 9]
 STRAY = 12 * 32                              # home_scvs: a worker this far from every Command Center is astray
@@ -908,6 +910,7 @@ class ScriptedExecutor:
         """Get this building selected (hotkey, or look at it and click). True once it is."""
         g, hi = self.g, self.g.hi
         if obs["selection"] == [b["tag"]]:
+            g.select_misses.pop(b["tag"], None)
             return True
         hk = g.hotkeyed.get(b["tag"], -1)
         if hk >= 0:
@@ -915,6 +918,15 @@ class ScriptedExecutor:
             return False
         p = screen_of(obs, b["x"], b["y"])
         if p:
+            # a building its clicks don't select (live: the bridge's box for it missed its centre) is left
+            # alone for a while, the task ended, so the macro takes another or decides again
+            g.select_misses[b["tag"]] = g.select_misses.get(b["tag"], 0) + 1
+            if g.select_misses[b["tag"]] > SELECT_TRIES:
+                g.select_misses.pop(b["tag"], None)
+                g.unselectable[b["tag"]] = hi.frame + UNSELECTABLE_FOR
+                g.say(f"can't select its {T.NAMES.get(b['type'], b['type'])} at ({b['x']}, {b['y']}): left alone for a while")
+                g.task = None
+                return False
             hi.click(*p)
         else:
             hi.camera_minimap(b["x"], b["y"])
