@@ -1,62 +1,97 @@
 # Self-play: the plan (draft for review)
 
 Direction 3 in TODO.md: every piece of ARCHITECTURE.md present and connected, crude where it has to
-be, training together. The first milestone is a learned Zerg Gary that plays full games against the
+be, training together. The first milestone is a learned Zerg Gary that is a real opponent for the
 Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the rest needs.
+(Revised 2026-10-16 after two outside reviews.)
 
 ## What exists
 
 | Piece | State |
 |---|---|
-| Zerg macro model | trained 2026-10-04 on the Zerg side of the 14k TvZ games (runs/macro/TvZ_Z_*), never used |
+| Zerg macro model | trained 2026-10-04 on the Zerg side of the 14k TvZ games (runs/macro/TvZ_Z_*, 50% top-1), never used; predates later dataset changes |
 | Zerg army model | `train/army.py --race Z` runs on the existing dataset (both players' orders are in it); not trained yet |
-| Zerg execution | Zerg v3 (gary/bots/zerg_v3.py) through the same human interface: building jobs (any building, any spot, retried), larva production, tech, lurker morphs, groups and a mutalisk flock with their orders |
+| Zerg execution | Zerg v3 (gary/bots/zerg_v3.py) through the same human interface: building jobs, larva production, tech, lurker morphs, groups, a mutalisk flock that raids the mineral line with the least anti-air |
+| Zerg build styles | taxonomy/discover.py clusters pro builds per race (the Terran macro is steered by its own) |
 | Two players in one game | HumanInterface steps several players on one OpenBW game (one advances it) |
 | Opponent model | the belief model (gary/policy/belief.py) over what the enemy has; not yet over its plan (z) |
-| Trace | trace.jsonl (schema trace/v1): arbiter grants, tasks, intents |
-| Critic | the value network that grades unfinished games (the selector's) |
+| Critic | the value network: reads who is ahead, not yet who will get ahead |
 | Parity | the bridge matches OpenBW (adapters/scr_bridge/tools/parity.py), so headless lessons hold live |
 
-## The crudest Zerg Gary (v0)
+## Gary-Z v0
 
-1. **Macro:** Zerg v3's decisions (`_plan`, `_want`, `_tech`) replaced by the Zerg macro model's,
-   as the Terran's are: each decision (a drone, an overlord, a hatchery, the pool, a Lair, a Spire,
-   lurker aspect, ...) mapped onto v3's execution (a larva, a job, a morph). Caps from the pros'
-   counts, as the Terran macro has.
-2. **Army:** the Zerg army model (trained first) chooses where groups go, and v3's group and flock
-   orders carry it out.
-3. **Fights:** v3's scripted micro for v0. The first learned piece after that is Zerg fight roles
-   from the pros' Zerg units (ingest/role_dataset.py labels marines; the same labels for zerglings
-   and mutalisks: fire, close in, pull back, retreat). That's where kiting comes from: a Zerg that
-   hits a lone SCV and pulls back, the thing the user beat Gary with.
-4. **Done when:** 50 headless games Gary-T vs Gary-Z on the pro maps with no crash and no stall,
-   and Gary-Z's economy within the pros' range (drones at 6:00 and 10:00, hatcheries, tech timings).
+1. **The vocabulary check (first, 30 minutes):** the Zerg macro model's most frequent decisions, each
+   with an execution path in v3 (creep colonies and sunkens at chosen spots, scourge, queens,
+   defilers, overlord speed, macro hatcheries, the third and fourth bases). Retrain the macro model
+   with the current script before relying on it.
+2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
+   is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
+   3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
+   larva, a job, a morph). Larvae aren't kept busy by habit (the Terran's keep_busy would spend
+   them all on the last unit); an overlord before a supply block is an execution guard. Buildings
+   placed by a general creep-spot search, not v3's fixed offsets. The z it rolled is a free, true
+   label for Gary-T's opponent model.
+3. **Army:** the Zerg army model (trained after the check) chooses where groups go; v3's group
+   orders carry it out. The mutalisk raid stays a motor skill (the mineral line with the least
+   anti-air, the retreat), started when the army model sends the flock at a base, not replaced by
+   grid attack-moves.
+4. **Fights:** v3's scripted micro.
+5. **Accepted as an opponent, not as a bot that runs:** against v0.27 on three maps, 48 seeds:
+   - no crash or stall, its economy in the pros' range (drones at 6:00 and 10:00, hatcheries, tech);
+   - more games decided than the v3 pool's third;
+   - its plans spread over time like the pros' do;
+   - the same seed replays identically with two learned players in the game (branching and paired
+     tests, the project's main instrument, depend on it).
 
-## Then the loop
+## Before any RL
 
-- **League:** Gary-T and Gary-Z play each other in parallel headless games (low priority, nightly
-  batches on this machine; full-game league training is rented compute). Each game's trace and
-  outcome are kept.
-- **One learned piece updated from outcomes:** a head of one model (a fight-role or army decision),
-  trained by RL on the league's games with the critic grading unfinished ones and a KL term to the
-  imitation policy, so it can't drift away from how pros play.
-- **Anchors outside the loop:** the pros' distributions (TODO Direction 4) and human games. A league
-  of two crude imitators can settle into passive, undecided games; the anchors catch that.
-- **Anticipation (TODO):** a forecast of each enemy group's position 2-5 s ahead, learned from the
-  pro games, an input to both sides' army and fight decisions.
+- **The humanlikeness scoreboard,** a prerequisite of the league, not a later addition: per game the
+  share of deaths alone, orders per fighting minute, army position by minute, idle SCV share, build
+  timings, against the pros' distributions; printed next to results and on the monitor.
+- **Anticipation as target inference:** which asset each enemy group reaches in the next 15-20 s
+  (the main's minerals, the natural's, the army, a building, none), learned from the pro games.
+  Judged first as a classifier on held-out pro games, then as the trigger of a learned response
+  (marines back to the threatened mineral line; no builder walked into the lings that killed the
+  last). The user's examples: zerglings turning toward the mineral line, mutalisks routing natural
+  then main. (Human game 2: in the 3 s after a lone unit was hit, Gary's hands went to the fight
+  more than usual, macro less; the bunker-load loop took 18%, fixed in v0.27. The arbiter isn't what
+  made it feel AFK; the response is.)
+- **Zerg fight roles,** the pros' zerglings and mutalisks labeled as the marines are (fire, close
+  in, pull back, retreat). Kiting is a hypothesis, not a promise: Terran roles hit the rules'
+  ceiling three times. Its drill: 4 zerglings against 2 SCVs and a marine, SCV kills counted, the
+  pros' replays as the yardstick.
+
+## The loop
+
+- **League:** Gary-T and Gary-Z in parallel headless games (low priority, nightly batches here;
+  full-game league training is rented compute), each game's outcome and scoreboard kept.
+- **The first RL target is where credit assignment already works:** fight episodes paired on the
+  same positions, with Gary-Z the reacting side instead of the scripted reaction; or the strategy
+  selector's per-game table over Gary-Z's plans. Segments from mid-game states (60-120 s branches
+  from raids and pressure) before whole games. Army decisions learned from whole-game outcomes
+  last, and only once the critic predicts more than who is ahead now: graded by today's critic,
+  timeouts would teach hoarding the army at home. A segment's own reward (workers killed, bases
+  kept, army traded) is a candidate to check against paired outcomes, not a given.
+- **Anchors outside the loop:** the scoreboard and human games. A league of two crude imitators can
+  settle into passive games; the anchors catch it.
+- **Human games as an instrument:** two games a version, the same notes template, and the user's
+  three 1-5 ratings after each (humanlike, strong, fun): the only measure of the humanlikeness goal.
+- **The trace schema** when its first reader (the narrator) needs it, not before.
 
 ## Order of work
 
-1. Zerg army model trained; Gary-Z v0 (macro + army learned, v3's execution and micro).
-2. 50-game Gary-T vs Gary-Z check; fix what stalls.
-3. Zerg fight roles learned (kiting).
-4. League harness: batches, traces, outcomes, the scoreboard.
-5. First RL update of one piece from league outcomes, judged against the anchors and human games.
+1. The vocabulary check; the Zerg macro model retrained; Zerg style steering; the creep-spot search.
+2. The Zerg army model; Gary-Z v0 (macro and army learned, v3's execution, raid skill, micro).
+3. Acceptance: 48 seeds on three maps against v0.27 (decided share, plan spread, determinism).
+4. The humanlikeness scoreboard.
+5. Target inference from the pro games, then its learned response, on both sides.
+6. Zerg fight roles and the kiting drill.
+7. League harness; the first RL update on paired fight episodes or the selector, judged by the
+   anchors and human games.
 
 ## Risks
 
-- Two crude imitators may mostly produce passive games. Mitigation: the anchors, and time limits
-  with the critic grading.
-- Compute is shared: segments from mid-game states and nightly batches first.
-- Zerg v3's execution was written for its own plans: some decisions the model makes (a third
-  hatchery's spot, morphs at odd times) will need new execution.
+- Two crude imitators may mostly produce passive games: the acceptance test's decided share and
+  the anchors.
+- Compute is shared: segments and nightly batches first.
+- v3's execution was written for its own plans: the vocabulary check finds the gaps before game 40.

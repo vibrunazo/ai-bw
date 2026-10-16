@@ -86,13 +86,13 @@ What to do, in order:
      games), on Zerg v3's execution code;
    - the opponent model's belief over the enemy's z, and a strategy layer conditioned on it;
    - anticipation (human game 1, the user: "like playing against someone AFK"; Gary acts on what is,
-     never on what is coming): a model of where each enemy group will be in 2-5 s and what it is
-     going for (a mineral line, the natural, the army), learned from the 14k pro TvZ games
-     (supervised: their positions seconds later), an input to the army and fight decisions;
+     never on what is coming), as target inference: which asset each enemy group reaches in the
+     next 15-20 s (a mineral line, the natural, the army, a building, none), learned from the pro
+     games, judged as a classifier first, then as the trigger of a learned response;
    - how much to commit to defense, and acting first instead of waiting: learned from outcomes in
      the league (RL against a Zerg that kites and punishes waiting), not scripted (the user's call:
      pros pull back just enough to survive, not a marine more);
-   - a trace schema;
+   - a trace schema, once its first reader (the narrator) needs it;
    - a league loop that updates at least one learned piece from outcomes, with the critic grading
      unfinished games and the pro data as an anchor (KL to the imitation policy).
    Risks: two crude imitation agents may mostly produce passive, undecided games; keep anchors outside
