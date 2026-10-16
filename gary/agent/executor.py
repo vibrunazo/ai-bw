@@ -52,6 +52,7 @@ MOVE = 6
 STANDING_DETOUR = 4 * 32              # a standing builder no farther than this beyond the nearest one
 ARRIVING = 4 * 32                     # a parked builder this close to its spot is waited for until it stops
 PICK_TRIES = 3                        # a builder not selected after this many tries: another one
+NEIGHBOR = 2 * 32                     # px: an SCV this close to the parked one may be selected instead
 RESELECT_TRIES = 6                    # a parked builder not selected again after this many: the build fails
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
 TRAVEL_FOR = 24 * 40                  # ...and one walking to another base, after this at most
@@ -671,21 +672,27 @@ class ScriptedExecutor:
             if obs["selection"] == [w["tag"]]:
                 t.stage = t.data.pop("resume")
                 t.data.pop("looked", None)               # (the spot may be off screen again: look again)
+                t.data.pop("clicked", None)
                 t.data["reselects"] = 0
                 return
-            if len(obs["selection"]) == 1 and t.data.get("clicked"):   # a neighbor in a stack: use it
+            # a neighbor in a stack, that this stage's click selected: use it. Only if the click changed
+            # the selection and the SCV stands by Gary's: a drag box that caught nothing leaves the old
+            # selection, and live a parked build took the SCV just sent to mine that way, while its
+            # own SCV stood on the spot and blocked it (LAN game 1)
+            if len(obs["selection"]) == 1 and "clicked" in t.data and obs["selection"] != t.data["clicked"]:
                 got = next((u for u in mine if u["tag"] == obs["selection"][0]), None)
-                if got and self.free_worker(obs, got):
+                if got and self.free_worker(obs, got) and math.dist((got["x"], got["y"]), (w["x"], w["y"])) < NEIGHBOR:
                     t.data["worker"] = got["tag"]
                     t.stage = t.data.pop("resume")
                     t.data.pop("looked", None)
+                    t.data.pop("clicked", None)
                     t.data["reselects"] = 0
                     return
             p = screen_of(obs, w["x"], w["y"])
             if not p:
                 hi.camera_minimap(w["x"], w["y"])
                 return
-            t.data["clicked"] = True
+            t.data["clicked"] = list(obs["selection"])   # (what was selected before this click)
             t.data["reselects"] = t.data.get("reselects", 0) + 1
             if t.data["reselects"] > RESELECT_TRIES:
                 self.fail_build(t)                   # (the macro layer decides again)

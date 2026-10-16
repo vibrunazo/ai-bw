@@ -76,13 +76,15 @@ bool unit_view(uint32_t ptr, UnitView* u) {
     u->flags = read_at<uint32_t>(ptr + profile::kUnitFlags);
     u->completed = (u->flags & profile::kStatusCompleted) != 0;
     u->hp = (int)read_at<uint32_t>(ptr + profile::kUnitHp) >> 8;
-    u->shields = (int)read_at<uint32_t>(ptr + profile::kUnitShields) >> 8;
+    // shields and a resource amount only where the type has them, as OpenBW reports (the fields are
+    // other things on other units: an SCV's resource word read 58888, every mineral 100 shields)
+    u->shields = (u->type < 228 && kHasShield[u->type]) ? (int)read_at<uint32_t>(ptr + profile::kUnitShields) >> 8 : 0;
     u->x = read_at<uint16_t>(ptr + profile::kUnitPosition);
     u->y = read_at<uint16_t>(ptr + profile::kUnitPosition + 2);
     uint32_t sprite = (uint32_t)u->sprite;
     u->visible_to = read_at<uint8_t>(sprite + profile::kSpriteVisibility);
     u->elevation = read_at<uint8_t>(sprite + profile::kSpriteElevation);
-    u->resources = read_at<uint16_t>(ptr + profile::kUnitResources);
+    u->resources = (u->type < 228 && kResource[u->type]) ? read_at<uint16_t>(ptr + profile::kUnitResources) : 0;
     u->energy = read_at<uint16_t>(ptr + profile::kUnitEnergy) >> 8;
     u->cooldown = read_at<uint8_t>(ptr + profile::kUnitGroundCooldown);
     u->tx = read_at<uint16_t>(ptr + profile::kUnitOrderTargetPos);

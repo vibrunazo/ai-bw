@@ -93,6 +93,7 @@ def main() -> None:
         "// Placement box in tiles, [w, h] per unit type (0 = not placeable).",
         "// kHitPoints: the type's hit points (units.dat's 24.8 value, integer part: gary_env's hp_max).",
         "// kDimensions: left, up, right, down extents from the unit's position (OpenBW dimensions).",
+        "// kHasShield, kResource: the types OpenBW reports shields and a resource amount for.",
         "// kMultiSelectable: the type half of gary_env/OpenBW unit_can_be_multi_selected (a drag",
         "// box puts multi-selectable units first; buildings -- lifted or not -- go last).",
         "#include <cstdint>",
@@ -118,6 +119,15 @@ def main() -> None:
     lines += ["};", "", "constexpr uint8_t kDimensions[228][4] = {"]
     for i in range(228):
         lines.append(f"    {{{dims[4 * i]}, {dims[4 * i + 1]}, {dims[4 * i + 2]}, {dims[4 * i + 3]}}},  // {i}")
+    # what OpenBW's observe reports only for some types: shields (units.dat has_shield) and a resource
+    # amount (flags 0x2000, OpenBW unit_type_t::flag_resource: minerals, geysers, refineries)
+    shield = cols["has_shield"]
+    lines += ["};", "", "constexpr uint8_t kHasShield[228] = {"]
+    for i in range(0, 228, 12):
+        lines.append("    " + ", ".join("1" if shield[j] else "0" for j in range(i, min(i + 12, 228))) + ",")
+    lines += ["};", "", "constexpr uint8_t kResource[228] = {"]
+    for i in range(0, 228, 12):
+        lines.append("    " + ", ".join("1" if flags[j] & 0x2000 else "0" for j in range(i, min(i + 12, 228))) + ",")
     lines += ["};", "", "}  // namespace garyscr", ""]
     out.write_text("\n".join(lines), encoding="utf-8")
     print(f"wrote {out}")

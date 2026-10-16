@@ -222,6 +222,17 @@ any resolution; they are real-input clicks and move the mouse):
 6. To end a match early: `--seq end` (Menu → End Mission → Quit Mission, twice). The client
    writes `Maps\Replays\LastReplay.rep` under its user folder.
 
+**Gary vs an idle LAN client** (a replay OpenBW can re-simulate, for `tools/parity.py`):
+
+1. `tools/lan_park.py` (no client running): the host (with the bridge) at the LAN Create screen, the
+   guest at the LAN games list.
+2. Host: `--pid H --seq fighting-spirit` (or pick it: the folder scroll varies), `--target game_type`,
+   `--target game_type_melee`, `--target ok` (creates the lobby).
+3. Guest: `--pid G --target ok` joins the listed game; `--pid G --seq lan-guest-zerg`.
+4. Host: `--pid H --race T --row home`. Start Gary with `--snapshots FILE`, then `--pid H --start`
+   (it reports "did not start" while Gary holds the bridge's one pipe: read Gary's log instead).
+5. After Gary's minutes: `--pid H --seq end`, copy LastReplay.rep, run `tools/parity.py FILE REPLAY`.
+
 Pass `--pid N` when two clients run. Only text labels are buttons in BW menus; never click
 (0.755, 0.894) at the single-player menu (its Cancel quits the game).
 
@@ -261,8 +272,15 @@ the same game against the same opponents (including x64 clients over Battle.net)
    count, 9793). The shields auto-hunt found **`kUnitShields = 0x60`** uniquely across 21
    protoss units; the check re-verifies on any game where the (random) computer race is Protoss.
    End the match with `tools/end_match.py` to have the client write the replay.
-4. **Cross-backend (the real test):** run the same scripted bot on OpenBW (`gary/env.py`) and on
-   SC:R and decision-diff the traces (the harness planned for §7.2 desync checks).
+4. **Cross-backend (the real test):** `tools/parity.py`. Gary plays a LAN game against an idle second
+   client with `gary.play --live --snapshots FILE` (what the bridge showed it, each second); OpenBW
+   re-simulates the replay (no computer AI in it, so it can) and every unit's every field is compared
+   at the same frames, units matched by tag (SC:R's extended-table ids translated as
+   `resim/scr_replay.h` does). LAN game 1 (2026-10-16, Fighting Spirit, 15 min): identical for
+   9:20 (13,461 frames: positions, orders, hit points, completion, energy, cooldown, carrying,
+   order targets, visibility) except `shields` and `resources`, read on types that have none (fixed:
+   `kHasShield`, `kResource`). Then a marine squad's attack-move ends 6 px apart and the games drift
+   (OpenBW's movement, not the bridge). Every build the real game refused, OpenBW refused too.
 
 ## Known gaps (v0)
 

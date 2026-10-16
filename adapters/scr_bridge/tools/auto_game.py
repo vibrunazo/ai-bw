@@ -83,6 +83,13 @@ CLICKS: dict[str, tuple[float, float]] = {
     "slot3_closed": (0.187, 0.782),
     "slot4": (0.326, 0.790),
     "slot4_closed": (0.187, 0.822),
+    # LAN Create screen (lan_park.py's host stops there): the same map list, plus a game type
+    "game_type": (0.522, 0.560),          # its dropdown (Top vs Bottom by default)
+    "game_type_melee": (0.358, 0.624),
+    "season_10_fighting_spirit_row": (0.315, 0.412),  # Season 10 scrolled to the top
+    # LAN lobby, Melee: player rows 0.040 apart (the host's at 0.113: LOBBY_RACE_DROPDOWN, --race)
+    "lobby_row2_race": (0.389, 0.148),    # the joined player's race, on its own client
+    "lobby_row2_race_zerg": (0.362, 0.175),
     # in a match: the game menu (the console's Menu button, or F10)
     "game_menu": (0.651, 0.828),
     "end_mission": (0.494, 0.524),
@@ -98,6 +105,8 @@ SEQUENCES: dict[str, list[tuple[str, float]]] = {
     # the Create screen -> local player Terran vs one Zerg computer (Gary's live-test setup)
     "tvz": [("my_race", 1), ("my_race_terran", 1), ("slot3", 1), ("slot3_closed", 1),
             ("slot4", 1), ("slot4_closed", 1), ("slot2_race", 1), ("slot2_race_zerg", 2)],
+    # LAN guest in the lobby (Melee, second row) -> Zerg
+    "lan-guest-zerg": [("lobby_row2_race", 1), ("lobby_row2_race_zerg", 1)],
     # in a match -> back at the menus; the client writes Maps/Replays/LastReplay.rep
     "end": [("game_menu", 2), ("end_mission", 2), ("quit_mission", 3), ("quit_mission", 4)],
 }

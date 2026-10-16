@@ -42,9 +42,11 @@ What to do, in order:
    - marines and medics trickle up the enemy ramp one by one, and the 8:00 hunt throws the army
      away (games 3 and 5: 14 marines to 5);
    - the computer's early zergling rush lost game 2;
-   - turrets: the game refused 13 turret builds at 13 spots in a row in game 5 (7:04-8:01, the
-     Engineering Bay done, the money kept), and in game 4; the cause is unknown: log the builder,
-     the spot and the game's error text when one fails;
+   - refused builds: the game refused 13 turrets at 13 spots in game 5. In LAN game 1 (replayed in
+     OpenBW, identical to the live game) a depot and a Starport were refused because Gary's own
+     parked SCV stood on the spot while the build went to another SCV (an empty drag box kept the
+     old selection; fixed in executor.py reselect). Headless still has ~2 a game (depots, turrets):
+     trace them the same way (Game.scenario on the replay);
    - minerals float on two bases (game 5: 1,207 at 14:00), and turrets only in the main (game 1).
 3. **A self-play skeleton** (the user's priority): every piece of ARCHITECTURE.md present and
    connected, crude where it has to be, training together:

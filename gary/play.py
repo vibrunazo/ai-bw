@@ -8,6 +8,7 @@ StarCraft: Remastered client through the bridge. Any version (a manifest, gary/a
 from __future__ import annotations
 
 import argparse
+import json
 import time
 
 from gary import commands as C
@@ -61,18 +62,20 @@ def play(map_path: str, minutes: float, seed: int | None, save: str, make_bot, n
         print(f"saved {save} and {pov} (and Gary's trace)")
 
 
-def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot) -> None:
+def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot,
+              snapshots: str | None = None) -> None:
     """Play in a live StarCraft: Remastered client through the bridge (adapters/scr_bridge).
 
     Gary plays the client's local player (the bridge only accepts that slot), so it must be
     Terran. act() latency is calibrated from the adapter's reported latency_frames so the
     human interface lands actions when they really take effect. The client writes its own
-    replay on match end.
+    replay on match end. snapshots: a file for what the bridge showed Gary each second.
     """
     from gary.scr_env import ScrGame
     game = ScrGame.connect(pipe)
     hi: HumanInterface | None = None
     gary = None
+    snaps = None
     try:
         # wait for a game with Gary's Command Center, polling the bridge's status 4 times a second, so
         # Gary starts within a few frames of the match (step() at the menus waited up to 120 s, its
@@ -104,15 +107,26 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
         gary = make_bot(hi, mapinfo)
         end = hi.frame + int(minutes * 60 * 24)
         minute = hi.frame // 1440
+        snaps = open(snapshots, "w", encoding="utf-8") if snapshots else None
+        next_snap = 0
         while hi.frame < end:
             gary.act()
             hi.step(2)                       # waits for the live game to advance (its clock can jump)
+            if snaps and hi.frame >= next_snap:
+                # what the bridge showed Gary, once a second, for parity with OpenBW re-simulating the
+                # replay (adapters/scr_bridge/tools/parity.py)
+                obs = hi.history[-1][1]
+                snaps.write(json.dumps({"frame": obs["frame"], "players": obs["players"], "units": obs["units"]},
+                                       separators=(",", ":")) + "\n")
+                next_snap = hi.frame + 24
             if hi.frame // 1440 > minute:
                 minute = hi.frame // 1440
                 report(hi, game)
     except GameError as e:
         print(f"game over / bridge lost: {e}")
     finally:
+        if snaps:
+            snaps.close()
         if pov and hi is not None:
             try:
                 hi.save_pov(pov)
@@ -140,12 +154,14 @@ def main() -> None:
     ap.add_argument("--pipe", default=r"\\.\pipe\gary_scr", help="bridge named pipe (with --live)")
     ap.add_argument("--profile", default="pro", choices=sorted(PROFILES))
     ap.add_argument("--pov", help="where to save the point-of-view log (live)")
+    ap.add_argument("--snapshots", help="live: save what the bridge showed Gary each second (for tools/parity.py)")
     args = ap.parse_args()
     make = lambda hi, mapinfo: build_gary(hi, mapinfo, args.gary, args.style, verbose=not args.quiet,
                                           fight_path=args.fight_model)
     version = manifest_of(args.gary)["version"]
     if args.live:
-        play_live(args.pipe, args.minutes, args.profile, args.pov or f"gary_{args.gary}_live.pov.jsonl", make)
+        play_live(args.pipe, args.minutes, args.profile, args.pov or f"gary_{args.gary}_live.pov.jsonl", make,
+                  args.snapshots)
     else:
         if not args.map:
             ap.error("--map is required unless --live")
