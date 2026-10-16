@@ -175,10 +175,14 @@ class ZergV2(ZergV1):
             if self.idle_tries[u["tag"]] > IDLE_TRIES:          # can't get it alone: leave it be a while
                 self.idle_tries[u["tag"]] = 0
                 self.walking[u["tag"]] = hi.frame + 20 * 24
-            x, y = screen_of(obs, u["x"], u["y"])
-            hi.box(max(0, x - 12), max(0, y - 12), x + 12, y + 12)
+            self._grab_idle(obs, u)
             return True
         return False
+
+    def _grab_idle(self, obs, u) -> None:
+        """Select an idle drone and its neighbors: a small box around it."""
+        x, y = screen_of(obs, u["x"], u["y"])
+        self.hi.box(max(0, x - 12), max(0, y - 12), x + 12, y + 12)
 
     def _build_order(self, obs, mine, me, hatches, pool, extractor, drones) -> bool:
         """The buildings, gas, speed and rallies (True: it acted)."""

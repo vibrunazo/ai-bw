@@ -51,6 +51,7 @@ HOLD_BELOW = -0.02              # an attack the fight estimate expects to lose m
 # where they hatched), each as so many zerglings (a group forms at v1's wave count)
 GROUND = {Z.ZERGLING: 1.0, Z.HYDRALISK: 2.5, Z.ULTRALISK: 8.0, Z.DEFILER: 2.0, Z.QUEEN: 2.0}
 RALLY_FRONT_AT = 5 * 60 * 24     # hatcheries rally to the army's meeting point from then on
+PACE_MAX = 10 * 24               # the longest wait for the next decision
 STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)
 PLANS_FILE = "TvZ_Z_plan.json"  # data/interim/taxonomy: the plans' names and how often pros play them
 
@@ -109,7 +110,8 @@ class GaryZ(ZergV3):
         self.army_model = ArmyModel.load(latest_model("army"))
         self.army_tracker = ArmyTracker(self.army_model.spec, hi.slot, mapinfo.size, self.home)
         self.sizes = dict(GROUND)
-        self.next_order: dict[int, int] = {}
+        self.next_ask, self.army_goal = 0, None  # the whole army's destination, asked every ARMY_EVERY
+        self.sent_to: dict[int, tuple] = {}      # group -> the destination it was last sent to
         self.rally_of: dict[int, bool] = {}     # hatchery -> rallied to the front (True) or its minerals
         self.goal: dict | None = None
         self.parked: dict | None = None        # a decision waiting for its money, kept for it meanwhile
@@ -289,31 +291,58 @@ class GaryZ(ZergV3):
     def _go(self, mine) -> bool:
         return False                               # (no scripted all-in: the army model decides when to attack)
 
-    def _group(self, n: int, obs: dict, lings: dict, enemy: list[dict]) -> bool:
-        """Group n goes where the army model says, every ARMY_EVERY: its most likely cell (the one the
-        group is in: it stays), moving or attacking; an attack the fight estimate expects to lose is held
-        (the group stays). (True: it acted.)"""
+    def _grab_group(self, obs: dict, fresh: list[dict]) -> None:
+        """A new group: a drag box over the fighters at the meeting point, every type (v1's ctrl+click
+        took one type only: in a mixed army the hydralisks never joined a group; Argon's catch)."""
+        mid = (sum(u["x"] for u in fresh) / len(fresh), sum(u["y"] for u in fresh) / len(fresh))
+        near = sorted(fresh, key=lambda u: math.dist((u["x"], u["y"]), mid))[:12]
+        self._box(obs, near)
+
+    def _grab_idle(self, obs, u) -> None:
+        """An idle drone away from every hatchery (at the meeting point, among the army): a ctrl+click on
+        it takes every drone on the screen and no army (the user's way: a box took zerglings with it and
+        v2's routine gave up on the drone). By a hatchery, v2's small box."""
+        homes = [(h["x"], h["y"]) for h in obs["units"] if h["owner"] == self.hi.slot and h["type"] in Z.TOWN_HALLS]
+        if homes and min(math.dist((u["x"], u["y"]), h) for h in homes) > 8 * 32:
+            self.hi.ctrl_click(*screen_of(obs, u["x"], u["y"]))
+        else:
+            super()._grab_idle(obs, u)
+
+    def _army_goal(self, obs: dict, lings: dict):
+        """One destination for the whole army, asked every ARMY_EVERY with every grouped fighter as the
+        group: each group asking alone sent 12 zerglings at a time into Gary's army (Argon's catch).
+        (cell, attack), or None to stay (an attack the fight estimate expects to lose is held)."""
         hi = self.hi
-        if self.phase.get(n) == "to_staging":           # (a new group: to the staging point first, as v1's)
-            return self._order(n, obs, "move", self.staging, "staging")
-        if hi.frame < self.next_order.get(n, 0):
-            return False
-        self.next_order[n] = hi.frame + ARMY_EVERY
-        members = [lings[t] for t in self.groups[n] if t in lings]
+        if hi.frame < self.next_ask:
+            return self.army_goal
+        self.next_ask = hi.frame + ARMY_EVERY
+        members = [lings[t] for n in self.groups for t in self.groups[n] if t in lings]
         if not members:
-            return False
+            self.army_goal = None
+            return None
         grid, glob = self.army_tracker.inputs(obs, members)
         where, kind = self.army_model.predict(grid, glob)
-        cell = int(where[0].argmax())
-        attack = bool(kind[0, 1] > 0.5)
-        mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
-        here = self.army_tracker.cell(*mid)
-        if cell == here:
-            return False                                # (stay)
+        cell, attack = int(where[0].argmax()), bool(kind[0, 1] > 0.5)
         if attack and self.army_model.fight(grid, glob, cell, True) < HOLD_BELOW:
-            return False                                # (an attack it expects to lose: held, the group stays)
-        point = self.army_tracker.center(cell)
-        return self._order(n, obs, "attack" if attack else "move", point, "model")
+            self.army_goal = None
+        else:
+            self.army_goal = (cell, attack)
+        return self.army_goal
+
+    def _group(self, n: int, obs: dict, lings: dict, enemy: list[dict]) -> bool:
+        """Group n goes where the army goes (_army_goal), unless it's there or on its way. (True: it acted.)"""
+        if self.phase.get(n) == "to_staging":           # (a new group: to the staging point first, as v1's)
+            return self._order(n, obs, "move", self.staging, "staging")
+        goal = self._army_goal(obs, lings)
+        members = [lings[t] for t in self.groups[n] if t in lings]
+        if goal is None or not members:
+            return False
+        cell, attack = goal
+        mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
+        if self.army_tracker.cell(*mid) == cell or self.sent_to.get(n) == (cell, attack):
+            return False
+        self.sent_to[n] = (cell, attack)
+        return self._order(n, obs, "attack" if attack else "move", self.army_tracker.center(cell), "model")
 
     def army(self, obs: dict, mine: list[dict]) -> bool:
         self.army_tracker.remember(obs)
@@ -388,7 +417,11 @@ class GaryZ(ZergV3):
             return
         self.next_query = hi.frame + QUERY_EVERY
         x = self.tracker.features(obs, self._in_production(mine))
-        probs, _ = self.model.probs(x)
+        probs, secs = self.model.probs(x)
+        # the pros' tempo: the model also predicts the seconds until their next decision; the next roll
+        # comes then, not every half second (rolled every 0.5 s, a decision at a few percent came as
+        # often as the drones: 100 creep colonies a minute across 8 games)
+        self.next_query = hi.frame + int(min(PACE_MAX, max(QUERY_EVERY, float(secs[0]) * 24)))
         # the dice, as the Terran's macro: the model's odds rolled (a weighted shuffle), then the first
         # decision Gary-Z can carry out; the favorite alone is a drone nearly every time, and the Lair,
         # zergling speed or an army never came (the first game: 2 zerglings and no Lair by 8:00)
@@ -439,8 +472,12 @@ class GaryZ(ZergV3):
         make it from, and the pros' cap for this time isn't reached."""
         done = self._done_types(mine)
         cap = self.model.cap(uid, obs["frame"]) if act in (MORPH, BUILD, BMORPH, EXPAND) else None
-        if cap is not None and sum(1 for u in mine if u["type"] == uid) >= cap:
+        if cap is not None and self._count(mine, uid) >= cap:
             return False
+        if uid == Z.CREEP:                              # (and all colonies within the pros' caps of all three)
+            caps = [self.model.cap(t, obs["frame"]) for t in (Z.CREEP, Z.SUNKEN, Z.SPORE)]
+            if all(c is not None for c in caps) and self._count(mine, Z.CREEP, every=True) >= sum(caps):
+                return False
         if act == MORPH:
             if uid in Z.FROM_LARVA:
                 if not any(u["type"] == Z.LARVA for u in mine):
@@ -479,6 +516,14 @@ class GaryZ(ZergV3):
             return level <= levels and all(Z.has(done, r) for r in Z.UPGRADE_NEEDS.get(uid, [])) \
                 and (need is None or Z.has(done, need)) and self._idle_building(mine, where) is not None
         return False
+
+    def _count(self, mine: list[dict], uid: int, every: bool = False) -> int:
+        """How many Gary-Z has of uid for the pros' cap: those standing and those on their way (jobs);
+        every: with what they became (a creep colony's sunken or spore; a hatchery's Lair or Hive, always).
+        Without the jobs the cap never came: the model's few-percent creep colony, rolled every half
+        second while larvae were short, was decided 100 times a minute across 8 games."""
+        became = {Z.HATCHERY: Z.TOWN_HALLS}.get(uid, {Z.CREEP, Z.SUNKEN, Z.SPORE} if every and uid == Z.CREEP else {uid})
+        return sum(1 for u in mine if u["type"] in became) + sum(1 for j in self.jobs.values() if j.unit_type == uid)
 
     def _idle_building(self, mine: list[dict], kind: int) -> dict | None:
         """A finished building of this kind (a Lair or Hive counts as a Hatchery...) not busy."""

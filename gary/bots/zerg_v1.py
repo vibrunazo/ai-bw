@@ -135,9 +135,7 @@ class ZergV1(ZergRush):
                     if self.form_tries >= 2:               # leave the hands to the macro for a while
                         self.form_after, self.form_tries = hi.frame + 3 * 24, 0
                         return False
-                # a ctrl+click on one: every zergling on the screen, nothing else (12 at most)
-                u = min(fresh, key=lambda u: math.dist((u["x"], u["y"]), _mid(fresh)))
-                hi.ctrl_click(*screen_of(obs, u["x"], u["y"]))
+                self._grab_group(obs, fresh)
                 self.stage = "forming"
                 return True
         enemy = [u for u in obs["units"] if u["owner"] not in (hi.slot, 11) and u["type"] in POWER]
@@ -227,6 +225,11 @@ class ZergV1(ZergRush):
                 target = _mid(scvs) if scvs else self.minerals
                 return self._order(n, obs, "attack", target, "attack")
         return False
+
+    def _grab_group(self, obs: dict, fresh: list[dict]) -> None:
+        """Select a new group: a ctrl+click on one, every zergling on the screen, nothing else (12 at most)."""
+        u = min(fresh, key=lambda u: math.dist((u["x"], u["y"]), _mid(fresh)))
+        self.hi.ctrl_click(*screen_of(obs, u["x"], u["y"]))
 
     def _size(self, units) -> float:
         """The units as so many zerglings (a count, for zerglings alone)."""

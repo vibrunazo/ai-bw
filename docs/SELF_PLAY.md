@@ -98,6 +98,18 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    minutes late (pros 2:52); the same seed twice gives the same game. So it runs as an opponent and
    ends games, but it never wins: weaker than Zerg v3 (its fights are v3's scripted micro). Next: Zerg
    fight roles (and the kiting drill), the lever for its strength, and the humanlikeness classifier.
+   **Argon's review (2026-10-16):** three execution bugs, fixed: a new group was a ctrl+click (one type:
+   hydralisks never joined; now a drag box over every fighter); each group asked the army model alone
+   (12 zerglings at a time into Gary's army; now one destination for the whole army); drones at the
+   front meeting point were boxed with the army (now a ctrl+click on a drone away from the hatcheries).
+   Those alone didn't help (8 seeds, army supply 9/4/0 at 8/10/12): the logs showed 93-103 Creep
+   Colony decisions a minute across the 8 games. The decisions were rolled every half second, so one
+   at a few percent came as often as the drones. Now the next roll waits the seconds the model
+   predicts until the pros' next decision (its timing head, at most 10 s), and the cap counts pending
+   jobs and creep, sunken and spore colonies together: 98 Creep Colony decisions in 8 games (from 411),
+   drones 18/28 at 6/8 min (pros 23/27), army supply 4/10/5/6 at 6/8/10/12 (pros 4/20/27 at 6/8/10),
+   Gary-T won 0 of 8 (2 before). The army model still gives 1-5 orders a game: groups seldom form
+   before Gary-T's push (8:30-10:00), and the army dies defending at home. Fights are the lever.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
