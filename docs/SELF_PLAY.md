@@ -77,7 +77,12 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    4:00-5:00). Then every larva shortage became a creep colony (the first decision possible taken):
    it now waits for a larva, as the Terran's macro waits for a busy building, and no two buildings
    share a spot. 8 seeds: drones 16/24/20, army 4/10/12/16 at 6/8/10/12, 3-4 hatcheries. Half the
-   pros' army at 8:00-10:00 still; Gary-T wears it down by 12:00.
+   pros' army at 8:00-10:00 still; Gary-T wears it down by 12:00. While larvae are short, other
+   decisions the model gives 5% or more still go (Argon: waiting on every larva held a macro hatchery
+   back). Against the pros at 6:00/8:00, Gary-Z's hatcheries (3/3, pros 3/3), free larvae (2/2, 3/4)
+   and bank (244/202, 248/262) match: the macro holds to 8:00; the 10:00 float is a losing game (2
+   hatcheries left). The army gap is the fights (v3's scripted army): next the acceptance test and the
+   Zerg army model.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

@@ -345,12 +345,17 @@ class GaryZ(ZergV3):
         order = [k for _, k in sorted(((self.rng.random() ** (1 / p), k) for k, p in enumerate(probs[0])
                                         if p >= DICE_FLOOR), reverse=True)]
         larva = any(u["type"] == Z.LARVA for u in mine)
+        waiting = False
         for k in order:
             act, uid = self.model.spec.decisions[k]
             if not larva and act == MORPH and uid in Z.FROM_LARVA and Z.can_make(uid, self._done_types(mine), self.researched)                     and (uid == Z.OVERLORD or me["supply_used"] + Z.SUPPLY.get(uid, 1) <= me["supply_max"]):
-                return          # (no larva free yet: wait for the next, as the Terran's macro waits for a busy
-                                # building; taking the first thing possible instead made a creep colony of
-                                # every larva shortage, 44-66% of the decisions from 3:00 to 8:00, rolled at 1-5%)
+                waiting = True  # (no larva free yet: that one waits for the next, as the Terran's macro waits for
+                continue        # a busy building)
+            if waiting and probs[0, k] < MIN_P:
+                continue        # (meanwhile only what the model really wants, MIN_P or more: taking the first thing
+                                # possible made a creep colony of every larva shortage, 44-66% of the decisions
+                                # from 3:00 to 8:00, rolled at 1-5%; waiting for every one held a macro hatchery
+                                # back with 800 minerals floating: Argon's catch)
             if act < 0 or not self._can(act, uid, obs, mine, me):
                 continue
             g = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": self._name(act, uid)}
