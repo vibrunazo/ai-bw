@@ -98,11 +98,10 @@ What to do, in order:
    Risks: two crude imitation agents may mostly produce passive, undecided games; keep anchors outside
    the loop (pro distributions, human games). Compute is shared: segments from mid-game states (T2a)
    and nightly batches first; full-game league training is rented compute.
-4. **Humanlikeness on the scoreboard.** The distances to pro distributions computed by hand in
-   `eval/losses.py` and `eval/army_orders.py` become standing metrics in every run and on the
-   monitor: deaths alone, orders per fighting minute, where the army stands each minute, build
-   timings against pros. Use them alongside results, not instead of them (they can be gamed too).
-   Folds into 3 (the KL and discriminator terms).
+4. **Humanlikeness, measured:** a classifier telling a Gary game from a pro game per minute, from
+   one player's decision-level features (docs/SELF_PLAY.md "Before any RL"), with a frozen copy and
+   the raw pro-distance table so progress can't hide; built before the league harness, a metric on
+   every version and human game, not a reward until stable. No subjective ratings.
 5. **Explainability.** A narrator over the existing records (decision log, trace, the analyses written
    by hand): cheap once the trace schema exists, one of the goals, and no other bot has it.
 
