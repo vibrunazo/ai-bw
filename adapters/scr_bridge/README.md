@@ -276,11 +276,13 @@ the same game against the same opponents (including x64 clients over Battle.net)
    client with `gary.play --live --snapshots FILE` (what the bridge showed it, each second); OpenBW
    re-simulates the replay (no computer AI in it, so it can) and every unit's every field is compared
    at the same frames, units matched by tag (SC:R's extended-table ids translated as
-   `resim/scr_replay.h` does). LAN game 1 (2026-10-16, Fighting Spirit, 15 min): identical for
-   9:20 (13,461 frames: positions, orders, hit points, completion, energy, cooldown, carrying,
-   order targets, visibility) except `shields` and `resources`, read on types that have none (fixed:
-   `kHasShield`, `kResource`). Then a marine squad's attack-move ends 6 px apart and the games drift
-   (OpenBW's movement, not the bridge). Every build the real game refused, OpenBW refused too.
+   `resim/scr_replay.h` does). The replay ends when the game does for its writer: Gary killed the
+   idle Zerg at ~9:00 and the replays stop there, while Gary played on. LAN game 1 (2026-10-16,
+   Fighting Spirit): identical over the whole replay (13,451 frames: positions, orders, hit points,
+   completion, energy, cooldown, carrying, order targets, visibility, money, supply) except
+   `shields` and `resources`, read on types that have none (fixed: `kHasShield`, `kResource`). LAN
+   game 2, with the fix: no mismatch at all in 13,668 frames. Every build the real game refused,
+   OpenBW refused too (Gary's own placement, not the bridge).
 
 ## Known gaps (v0)
 

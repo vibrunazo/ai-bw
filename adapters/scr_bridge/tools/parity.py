@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -55,6 +56,13 @@ def main() -> None:
     args = ap.parse_args()
 
     snaps = [json.loads(l) for l in Path(args.snapshots).read_text(encoding="utf-8").splitlines() if l.strip()]
+    # the replay ends when the game does for its writer (a player defeated: both LAN games ended at
+    # ~9:30, when Gary killed the idle Zerg, while Gary played on): later snapshots have nothing to match
+    head = json.loads(subprocess.run([str(REPO / "tools" / "bin" / "screp.exe"), args.replay], capture_output=True,
+                                     text=True, encoding="utf-8", errors="replace").stdout)["Header"]
+    end = head["Frames"]
+    dropped = sum(1 for s in snaps if s["frame"] + args.shift >= end)
+    snaps = [s for s in snaps if s["frame"] + args.shift < end]
     game = Game.scenario(args.replay)
     sys.path.insert(0, str(REPO / "resim"))
     import scr_format
@@ -112,7 +120,8 @@ def main() -> None:
     finally:
         game.close()
 
-    print(f"{len(snaps)} snapshots, frames {snaps[0]['frame']}-{snaps[-1]['frame']} (shift {args.shift})")
+    print(f"{len(snaps)} snapshots, frames {snaps[0]['frame']}-{snaps[-1]['frame']} (shift {args.shift}); the replay "
+          f"ends at frame {end}: {dropped} later snapshots not compared")
     print("\nunits in one game only (owner, type: snapshots):")
     for (owner, t), n in (only_live + only_sim).most_common(12):
         print(f"  player {owner} {t}: live only {only_live[(owner, t)]}, OpenBW only {only_sim[(owner, t)]}")
