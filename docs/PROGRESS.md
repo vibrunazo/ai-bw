@@ -128,8 +128,10 @@ plan and the full log).
 - **Night n3, with clusters:** more fights, more pairs; the gate kept all five candidates (each A/B
   within noise, all five above zero, their games more pro-like each round). The final model against
   the imitation model on fresh seeds: +0.059 +- 0.054 net value a fight (not settled), Gary-Z's gap
-  score 0.40-0.46 against 0.51-0.55 after 8 minutes; the retreat share in field fights a little up
-  (0.24 against 0.21), the sign to watch. Gary-Z still wins no game.
+  score 0.40-0.46 against 0.51-0.55 after 8 minutes. A second batch of fresh seeds: pooled over 373
+  paired fights +0.020 +- 0.046, no gain; the retreat share equal. Three nights, 432 games: no
+  measurable gain from fight-role RL, no learned retreat. The gate is now stricter. Gary-Z still wins
+  no game.
 - **Next:** a stricter gate (the A/B evidence pooled, a standard error above zero; the retreat share
   gated too), Gary-Z's fights, the env's rare crash inside a branch (1 game in 144), and the Zerg value
   model (train/value.py learns a Zerg side).

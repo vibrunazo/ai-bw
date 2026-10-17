@@ -279,6 +279,15 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    against 0.53 / 0.51 / 0.55 (0.35 against 0.29 at 5-7), the retreat share in field fights 0.24 against
    0.21. A small gain at most, and more pro-like late. Next: a stricter gate (the A/B mean a standard
    error above zero, pooled over rounds), the retreat share as a gate too, and the env's crash.
+   A second batch (seeds 5101+): A/B -0.017 +- 0.073. Pooled over both, 373 paired fights: +0.020 +-
+   0.046, nothing; the retreat share in field fights equal (0.241, 0.243); its games' gap a little lower
+   (0.44-0.54 against 0.48-0.56). Three nights of fight-role RL on paired episodes, 432 games and ~4,000
+   pairs: no measurable gain in fights, no learned retreat, the gap a little better at most. The gate is
+   now stricter (eval/league_loop.py: the A/B mean a standard error above zero, no creeping retreat);
+   none of n3's candidates would pass it. What this says: a 20 s fight outcome from Gary-Z's units'
+   role decisions carries too little signal at this scale, or the roles' effect is swamped by what the
+   rules and the army around them do. Before more nights: what decides Gary-Z's fights (where its
+   army engages, not its units' roles), and a value-based outcome with less noise.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
