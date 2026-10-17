@@ -541,6 +541,10 @@ def auc_by_minute(y, p, minute) -> dict[int, float]:
     return out
 
 
+BY_LABEL = ("army_home", "army_field", "army_enemy", "army_standing", "army_alone", "orders_per_fighter", "army_supply",
+            "workers")                       # (the features shown per label when several are compared)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--race", choices=("T", "Z"), default="T", help="whose side is judged")
@@ -684,13 +688,24 @@ def main() -> None:
         lines.append(f"| {names[k]} | " + " | ".join(
             f"{med(Xg, k, a, b)} / {med(Xp, k, a, b)}" + ("" if np.isnan(v) else f" ({v:.2f})")
             for (a, b), v in zip(BUCKETS, seps[k])) + " |")
+    labs = sorted(set(labels.tolist()))
+    if len(labs) > 1:                        # (one row per label: rounds or versions side by side)
+        lines += ["", "## By label: the army's placement and orders (medians, each label / the pros)", "",
+                  "| feature | label | " + " | ".join(f"{a}-{b} min" for a, b in BUCKETS) + " |",
+                  "|---|---|" + "---|" * len(BUCKETS)]
+        for k in [k for k in range(len(names)) if names[k] in BY_LABEL]:
+            for lab in labs:
+                lines.append(f"| {names[k]} | {lab} | " + " | ".join(
+                    f"{med(Xg[labels == lab], k, a, b)} / {med(Xp, k, a, b)}" for a, b in BUCKETS) + " |")
     lines += ["", "Medians per minute range; every feature, with means, in table.json."]
     table = {names[k]: {f"{a}-{b}": {"gary_median": med(Xg, k, a, b), "pro_median": med(Xp, k, a, b),
                                      "gary_mean": float(np.nanmean(Xg[(Xg[:, 0] >= a) & (Xg[:, 0] <= b), k]))
                                      if ((Xg[:, 0] >= a) & (Xg[:, 0] <= b)).any() else None,
                                      "pro_mean": float(np.nanmean(Xp[(Xp[:, 0] >= a) & (Xp[:, 0] <= b), k]))
                                      if ((Xp[:, 0] >= a) & (Xp[:, 0] <= b)).any() else None}
-                         for a, b in BUCKETS} | {"importance": float(imp[k]), "apart": seps.get(k)}
+                         for a, b in BUCKETS} | {"importance": float(imp[k]), "apart": seps.get(k),
+                                                 "by_label": {lab: {f"{a}-{b}": med(Xg[labels == lab], k, a, b)
+                                                                    for a, b in BUCKETS} for lab in labs}}
              for k in range(len(names))}
     (out / "table.json").write_text(json.dumps(table, indent=1))
     (out / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
