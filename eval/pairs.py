@@ -360,11 +360,13 @@ def _copy(objs: dict) -> dict:
 
 
 def _play(game, objs: dict, frames: int) -> None:
-    """The match loop's body (play_match) for this many frames, the decision log off."""
+    """The match loop's body (play_match) for this many frames, the decision log off (its arrays, and the
+    game's records: an arm's decisions aren't the game's)."""
     import contextlib
     import io
     from gary.decision_log import LOG
     path, LOG.path = LOG.path, None
+    kept = (len(LOG.records), dict(LOG.owner), dict(LOG.held))
     quiet = contextlib.redirect_stdout(io.StringIO())        # (the arms' own log lines aren't the game's)
     quiet.__enter__()
     try:
@@ -381,3 +383,5 @@ def _play(game, objs: dict, frames: int) -> None:
     finally:
         quiet.__exit__(None, None, None)
         LOG.path = path
+        del LOG.records[kept[0]:]
+        LOG.owner, LOG.held = kept[1], kept[2]

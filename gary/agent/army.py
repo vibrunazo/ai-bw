@@ -115,6 +115,7 @@ class LearnedArmy:
         self.draw = draw
         self.rng = np.random.default_rng(g.hi.slot * 7919 + int(getattr(g, "seed", 0) or 0))
         self.record: list | None = None        # a paired episode's arm: its drawn decisions, kept here
+        self._seen: dict = {}                  # what the last question saw, in brief (the game's records)
         self.then_rng = None                   # a paired episode's arm: the shared dice after its first decision
         # option (with draw): the attack-or-hold model (train/engage.py: an army model whose kind head is
         # engage/hold, learned from the pros' orders, then RL on paired branches): it draws whether the
@@ -226,11 +227,15 @@ class LearnedArmy:
         # cells, "elsewhere" can be likelier than "here" even when "here" is the likeliest cell)
         away = np.array([cell_dist(c, here) >= MOVE_CELLS for c in range(GRID * GRID)])
         p_away = float(where[0, away].sum())
+        seen = {"units": len(group), "at": self._cell_name(here), "p_away": p_away, "p_attack": float(kind[0, 1]),
+                "tokens": self.move_tokens}
+        self._seen = seen
         if self.draw:
             # (stay unless most of the odds lie away, as without draw: the model gives where a pro sends a
             # group when ordering it, not where it should be every 2 s; drawn every ask, the army roamed:
             # at home 25-29% of 8-10 min against the pros' 60%)
             if p_away < MOVE_P:
+                self._record(where, "stay", None, f"rule: stays unless {MOVE_P:.0%} of the odds lie away")
                 return None
             # (paced at the pros' rate of army moves of 2+ cells: they make 1-6 a minute, rising with the
             # game; Gary-T's army layer made 9-19, and its army roamed, at home 20-29% of 8-10 min against
@@ -239,11 +244,13 @@ class LearnedArmy:
             self.move_tokens = min(2.0, self.move_tokens + (hi.frame - self.tokens_at) * PRO_MOVES.get(m, 6.0) / 1440)
             self.tokens_at = hi.frame
             if self.move_tokens < 1.0:
+                self._record(where, "stay", None, f"rule: paced at the pros' {PRO_MOVES.get(m, 6.0):g} moves a minute")
                 return None
             where = np.where(away[None], where, 0.0)
             return self._drawn(obs, mine, group, grid, glob, where, kind, here)
         if p_away < MOVE_P:
             self.proposed.pop(here, None)
+            self._record(where, "stay", None, "favorite: most odds here")
             return None                                           # stay
         best = int(np.where(away, where[0], -1).argmax())          # where, if moving
         # move or attack-move as the model says, but never walk (rather than fight) into where
@@ -302,6 +309,9 @@ class LearnedArmy:
             item = dict(frame=hi.frame, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16), cell=best,
                         attack=drawn_attack, logp=logp, outcome=outcome)
             (self.record.append(item) if self.record is not None else LOG.add("army_t", **item))
+            self._record(where, f"{'attack' if drawn_attack else 'move'} to {self._cell_name(best)}", float(np.exp(logp)),
+                         "draw", {"stay": "stays: the cell drawn is near", "repeat": "not again: just ordered there",
+                                  "held": "held: the fight estimate", "go": "sent"}[outcome])
         if cell_dist(best, here) < MOVE_CELLS:
             log("stay")
             return None
@@ -335,6 +345,7 @@ class LearnedArmy:
         g, hi = self.g, self.g.hi
         _, ek = self.engage.predict(grid, glob)
         pe = float(ek[0, 1])
+        forced = self.force_engage is not None
         if self.force_engage is not None:
             eng, self.force_engage = bool(self.force_engage), None
         else:
@@ -355,6 +366,10 @@ class LearnedArmy:
         item = dict(frame=hi.frame, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16), engage=eng,
                     logp=float(np.log((pe if eng else 1 - pe) + 1e-9)))
         (self.record.append(item) if self.record is not None else LOG.add("engage_t", **item))
+        LOG.decision("T", "engage", hi.frame, f"{'engage' if eng else 'hold'}: to {self._cell_name(best)}",
+                     pe if eng else 1 - pe, [["engage", round(pe, 3)], ["hold", round(1 - pe, 3)]], self._seen,
+                     "draw" if self.force_engage is None and not forced else "forced (a paired arm)",
+                     then="stays: the cell drawn is near" if cell_dist(best, here) < MOVE_CELLS else "sent")
         if cell_dist(best, here) < MOVE_CELLS:
             return None
         self.move_tokens -= 1.0
@@ -364,10 +379,22 @@ class LearnedArmy:
             return None
         x, y = self.tracker.center(best)
         self.ordered[here] = (best, attack, hi.frame)
+        self._record(where, f"{'attack' if attack else 'move'} to {self._cell_name(best)}", float(where[0, best]),
+                     "favorite", "sent")
         g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
                              {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": float(p[best]),
                               "fight": 0.0, "done": [], "boxes": 0}, "army"))
         return "army"
+
+    def _cell_name(self, cell: int) -> str:
+        x, y = self.tracker.center(cell)
+        return f"({x // 32},{y // 32})"
+
+    def _record(self, where, choice: str, p: float | None, by: str, then: str | None = None) -> None:
+        """An army decision in the game's records (gary/decision_log.py): the likeliest cells, what was
+        chosen and by whom (the draw, a rule), what came of it."""
+        from gary.decision_log import LOG, top
+        LOG.decision("T", "army", self.g.hi.frame, choice, p, top(self._cell_name, where[0], 3), self._seen, by, then=then)
 
     def _hidden_army(self, obs: dict, mine: list[dict], dest: int) -> float | None:
         """With the belief model, for a destination away from Gary's bases: the enemy army supply x2

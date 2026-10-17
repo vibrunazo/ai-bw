@@ -37,6 +37,7 @@ import math
 
 from gary import commands as C
 from gary.bots.zerg_rush import LING, WAVE, ZergRush
+from gary.decision_log import LOG
 from gary.interface import screen_of
 
 GROUPS = range(1, 9)
@@ -263,6 +264,7 @@ class ZergV1(ZergRush):
     def log(self, text: str) -> None:
         t = self.hi.frame // 24
         print(f"{t // 60:2d}:{t % 60:02d} Zerg {text}", flush=True)
+        LOG.note(self.hi.side, self.hi.frame, text)          # (the game's records, gary/decision_log.py)
 
 
 class ZergV1Aggressive(ZergV1):

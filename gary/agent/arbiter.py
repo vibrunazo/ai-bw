@@ -40,6 +40,7 @@ import math
 import random
 
 from gary import terran as T
+from gary.decision_log import LOG
 from gary.agent.fight import FIGHT_TASKS, INTERRUPTIBLE
 from gary.agent.gary import Gary, Task
 
@@ -66,12 +67,17 @@ class FixedPriority:
         self._trace(before, who)
 
     def _act(self) -> str | None:
-        """One turn; who got the hands (or acted without a task), or None."""
+        """One turn; who got the hands (or acted without a task), or None. (LOG.owner: who is acting, stamped
+        on the orders it gives: the game's records, gary/decision_log.py.)"""
         g = self.g
         hi = g.hi
+        mode = posture_mode(g.posture)
         g.posture.update()
+        if posture_mode(g.posture) != mode:
+            self._posture_record(mode)
         if g.fight is not None:
             if g.macro_turn and g.task is None and not hi.pending:
+                LOG.owner["T"] = "macro"
                 g.macro_turn = False             # fights don't starve production: this turn goes
                 obs = hi.observe()               # to buildings and production, not to chores
                 mine = [u for u in obs["units"] if u["owner"] == g.slot]   # (refilling gas, mining)
@@ -88,6 +94,7 @@ class FixedPriority:
                 mine = [u for u in obs["units"] if u["owner"] == g.slot]
                 task = g.task
                 g.task, g.task_aside = None, task        # (a rule can let its own task finish: block.py)
+                LOG.owner["T"] = "fight"
                 who = g.fight.block(obs, mine)
                 if who:
                     self.interrupted = task
@@ -111,11 +118,14 @@ class FixedPriority:
         ex.release_reservations(mine)
         if g.task is None and self.suspended is not None:     # v2: the build a fight put aside
             g.task, self.suspended = self.suspended, None
+            LOG.owner["T"] = getattr(g.task, "by", "macro")
             g.run_task(obs, mine)
             return "macro:resumed"
+        LOG.owner["T"] = "executor:parked"
         if ex.resume_parked(obs, mine):
             return "executor:parked"
         if g.task:
+            LOG.owner["T"] = getattr(g.task, "by", "?")
             g.run_task(obs, mine)
             return None
         for who, chore in (("executor:resume", lambda: ex.resume_construction(mine)),
@@ -125,11 +135,13 @@ class FixedPriority:
                            ("executor:rerally", lambda: ex.rerally(obs, mine, done)),
                            ("executor:transfer", lambda: ex.transfer(obs, mine)),
                            ("executor:gas", lambda: ex.refill_gas(obs, done))):
+            LOG.owner["T"] = who
             if chore():
                 return who
         who = self._army(obs, mine, done)
         if who:
             return who
+        LOG.owner["T"] = "macro"
         g.macro.step(obs, mine, done, me)
         return "macro"
 
@@ -144,13 +156,32 @@ class FixedPriority:
         if g.block_units:                # closing a choke (block.py)
             done = [u for u in done if u["tag"] not in g.block_units]
         if g.fight is not None:
+            LOG.owner["T"] = "fight"
             who = g.fight.decide(obs, mine)
             if who:
                 return who
             if g.fight.center is not None:   # the army layer leaves units in a fight alone
                 cx, cy = g.fight.center
                 done = [u for u in done if math.dist((u["x"], u["y"]), (cx, cy)) > 12 * 32]
+        LOG.owner["T"] = "army"
         return g.army.step(obs, mine, done)
+
+    def _posture_record(self, before: str) -> None:
+        """The posture's mode changed: a decision in the game's records, with the facts it decided on (those
+        the learned plan reads, gary/policy/plan.py) and the rule that fired (what it said) or the model."""
+        g = self.g
+        now = g.hi.frame
+        try:
+            from gary.policy.plan import facts
+            seen = facts(g.posture, g.hi.observe())
+        except (AttributeError, TypeError):
+            seen = None
+        model = getattr(g.posture, "model", None)
+        said = next((r["text"] for r in reversed(LOG.records[-8:]) if r["kind"] == "note" and r["f"] == now
+                     and r["side"] == "T"), None)
+        p = g.posture.decisions[-1]["p"] if model is not None and getattr(g.posture, "decisions", None) else None
+        LOG.decision("T", "posture", now, posture_mode(g.posture), p, inputs=seen,
+                     by="model" if model is not None else f"rule: {said}" if said else "rule", then=f"from {before}")
 
     # --- the trace -------------------------------------------------------------------------------
 
@@ -166,6 +197,7 @@ class FixedPriority:
                 task.by = who or "?"
                 g.event("arbiter", granted_to=task.by, task=task.kind,
                         interrupted=self.interrupted.kind if self.interrupted is not None else None)
+            LOG.hands("T", now, f"{task.by} ({task.kind})" if task is not None else "free")
         busy = task.kind if task is not None else None
         self._wait("macro", g.macro is not None and g.macro.goal is not None and busy is not None
                    and busy not in ("build", "command"), busy, now,
@@ -186,6 +218,14 @@ class FixedPriority:
             if now - since >= WAIT_MIN:
                 self.g.event("wait", layer=layer, frames=now - since, hands_on=sorted(on),
                              wanted=self.wanted.get(layer))
+
+
+def posture_mode(posture) -> str:
+    """The posture's mode in a word: normal, rush, hold or flood (as the learned plan's)."""
+    if getattr(posture, "mode", None) and getattr(posture, "model", None) is not None:
+        return posture.mode
+    return "flood" if getattr(posture, "flood", False) and not getattr(posture, "rush", False) else \
+        "rush" if getattr(posture, "rush", False) else "hold" if getattr(posture, "hold", False) else "normal"
 
 
 HK_CC = 4

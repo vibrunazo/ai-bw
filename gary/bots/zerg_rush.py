@@ -220,6 +220,10 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
         # Gary with its pro-speed hands; the dummy keeps b_rank hands (the benchmark stays the same)
         his = {r: HumanInterface(game, s, PROFILES["pro" if r == "T" or opponent in PRO_HANDS else "b_rank"], seed=s)
                for r, s in slot_of.items()}
+        from gary.decision_log import LOG                  # (the game's records: both sides', saved with it)
+        LOG.clear_records()
+        for r, hi in his.items():
+            hi.side = r
         gary = make_terran(his["T"], mapinfo)
         if opponent == "replayed":
             from gary.bots.zerg_replayed import ZergReplayed
@@ -289,6 +293,8 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
             his["Z"].save_pov(pov[:-len(".pov.jsonl")] + ".zpov.jsonl")
         if hasattr(gary, "save_trace") and pov.endswith(".pov.jsonl"):
             gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
+        if pov.endswith(".pov.jsonl"):                # (every layer's decisions and orders: eval/why.py reads them)
+            LOG.save_records(pov[:-len(".pov.jsonl")] + ".records.jsonl")
         print(f"{result}; saved {save} and {pov}")
 
 

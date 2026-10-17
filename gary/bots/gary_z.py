@@ -32,7 +32,7 @@ from gary import commands as C
 from gary import terran as T
 from gary import zerg as Z
 from gary.bots import zerg_v3 as V3
-from gary.decision_log import LOG
+from gary.decision_log import LOG, top
 from gary.bots.zerg_v3 import Job, ZergV3
 from gary.interface import screen_of
 from gary.policy.army import ArmyModel, ArmyTracker
@@ -185,6 +185,7 @@ class GaryZ(ZergV3):
         self._timing(mine)
         # gas as it's spent: v3 put 3 drones on every extractor from the start whatever the plan, and the
         # gas piled up (1,204 at 6:00) while the minerals ran short
+        floating = self.gas_floating
         if me["gas"] > GAS_FLOAT and me["gas"] > me["minerals"]:
             self.gas_floating = True
         elif me["gas"] < GAS_LOW:
@@ -193,6 +194,11 @@ class GaryZ(ZergV3):
         # and floating at 400 kept Gary-Z from ever having it: no mutalisks at 8-10 min, pros 6-8)
         if any(u["type"] == Z.SPIRE for u in mine) and sum(1 for u in mine if u["type"] == Z.MUTALISK) < MUTA_FLOCK_SAVE:
             self.gas_floating = False
+        if self.gas_floating != floating:
+            LOG.decision("Z", "gas", hi.frame, "gas drones to minerals" if self.gas_floating else "gas drones back",
+                         inputs={"m": me["minerals"], "gas": me["gas"]},
+                         by=f"rule: gas over {GAS_FLOAT} and over the minerals" if self.gas_floating else
+                         f"rule: gas under {GAS_LOW}, or a Spire saving for the flock")
         hatches = [u for u in mine if u["type"] in Z.TOWN_HALLS]
         pool = next((u for u in mine if u["type"] == Z.POOL), None)
         drones = [u for u in mine if u["type"] == Z.DRONE and u["completed"]]
@@ -206,7 +212,9 @@ class GaryZ(ZergV3):
         sides = list(SIDES)
         k = sides.index(self.turn)
         for name in sides[k:] + sides[:k]:
+            LOG.owner["Z"] = name                               # (its orders stamped with it: decision_log.py)
             if getattr(self, "_side_" + name)(obs, mine, me, hatches, pool, drones):
+                LOG.hands("Z", hi.frame, name)
                 self.streak = self.streak + 1 if name == self.turn else 1
                 self.turn = name
                 if self.streak >= STREAK:
@@ -258,6 +266,8 @@ class GaryZ(ZergV3):
         if self._overlord_due(me, hatches) and (self.goal is None or self.goal["id"] != Z.OVERLORD):
             if self._larva_morph(obs, mine, Z.OVERLORD):        # (an execution guard, as v3's)
                 self.overlords_at.append(hi.frame)
+                LOG.decision("Z", "macro", hi.frame, "Overlord", inputs=self._seen(obs, mine, me),
+                             by="rule: an overlord before a supply block")
             return bool(hi.pending)
         self._decide(obs, mine, me)
         if self.goal is not None:
@@ -443,6 +453,7 @@ class GaryZ(ZergV3):
         attack = self.rng.random() < float(kind[0, 1])
         held = attack and self.army_model.fight(grid, glob, cell, True) < HOLD_BELOW
         self.army_goal[n] = None if held else (cell, attack)
+        self._army_record(f"group {n}", members, where, kind, cell, attack, "held: the fight estimate" if held else None)
         LOG.add("army_z", frame=hi.frame, group=n, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16),
                 cell=cell, attack=attack, held=held,
                 logp=float(np.log(where[0, cell] + 1e-9) + np.log(kind[0, int(attack)] + 1e-9)))
@@ -531,6 +542,9 @@ class GaryZ(ZergV3):
             if _cell_dist(self.army_tracker.cell(*mid), self.army_tracker.cell(*to)) >= 2:
                 self.army_job = {"tags": [u["tag"] for u in members], "point": (int(to[0]), int(to[1])),
                                  "kind": "move", "selecting": False, "tries": 0}
+                LOG.decision("Z", "army", hi.frame, f"move to ({int(to[0]) // 32},{int(to[1]) // 32})",
+                             inputs={"units": len(members), "main": len(main)},
+                             by=f"rule: a cluster under {JOIN_BELOW:.0%} of the main one joins it")
                 return self._army_job_step(obs, mine)
             return False
         grid, glob = self.army_tracker.inputs(obs, members)
@@ -542,11 +556,25 @@ class GaryZ(ZergV3):
                 cell=cell, attack=attack, held=held,
                 logp=float(np.log(where[0, cell] + 1e-9) + np.log(kind[0, int(attack)] + 1e-9)))
         mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
-        if held or _cell_dist(cell, self.army_tracker.cell(*mid)) < 2:
+        stays = _cell_dist(cell, self.army_tracker.cell(*mid)) < 2
+        self._army_record(f"cluster {k}", members, where, kind, cell, attack,
+                          "held: the fight estimate" if held else "stays: the cell drawn is where it is" if stays else None)
+        if held or stays:
             return False                                   # (held, or the drawn cell is where they are)
         self.army_job = {"tags": [u["tag"] for u in members], "point": self.army_tracker.center(cell),
                          "kind": "attack" if attack else "move", "selecting": False, "tries": 0}
         return self._army_job_step(obs, mine)
+
+    def _army_record(self, who: str, members: list[dict], where, kind, cell: int, attack: bool, then) -> None:
+        """An army decision in the game's records: the cells likeliest, the one drawn, move or attack."""
+        def name(c):
+            x, y = self.army_tracker.center(c)
+            return f"({x // 32},{y // 32})"
+        mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
+        LOG.decision("Z", "army", self.hi.frame, f"{'attack' if attack else 'move'} to {name(cell)}",
+                     float(where[0, cell]) * float(kind[0, int(attack)]), top(name, where[0], 3),
+                     {"who": who, "units": len(members), "at": f"({int(mid[0]) // 32},{int(mid[1]) // 32})",
+                      "p_attack": float(kind[0, 1])}, "draw", then=then or "sent")
 
     def _clusters(self, fighters: list[dict]) -> list[list[dict]]:
         """Fighters split by where they stand: up to CLUSTERS, biggest first; units within 2 grid cells
@@ -660,9 +688,12 @@ class GaryZ(ZergV3):
             g = getattr(self, which)
             if g is not None and hi.frame - g["since"] > GOAL_TIMEOUT:
                 self.log(f"gives up on {g['name']}")
+                LOG.order("Z", hi.frame, g["name"], "dropped", f"{which}: not carried out in {GOAL_TIMEOUT // 24} s")
                 setattr(self, which, None)
         if self.goal is None and self.parked is not None and self._affordable(self.parked, me):
             self.goal, self.parked = self.parked, None          # (its money is there: it goes first)
+            LOG.decision("Z", "macro", hi.frame, self.goal["name"], self.goal["p"], inputs=self._seen(obs, mine, me),
+                         by="parked", then="unparked: its money is there")
             return
         if self.goal is not None or hi.frame < self.next_query:
             return
@@ -680,38 +711,66 @@ class GaryZ(ZergV3):
                                         if p >= DICE_FLOOR), reverse=True)]
         larva = any(u["type"] == Z.LARVA for u in mine)
         waiting = False
+        # (the record: the model's top odds, what it saw, and each option drawn ahead of the choice and why
+        # it was set aside; gary/decision_log.py)
+        name = lambda k: self._name(*self.model.spec.decisions[k])
+        over: list[list] = []
+
+        def record(choice, p, then=None):
+            LOG.decision("Z", "macro", hi.frame, choice, p, top(name, probs[0]), self._seen(obs, mine, me), "dice",
+                         over[:8], then)
         for k in order:
             act, uid = self.model.spec.decisions[k]
-            if not larva and act == MORPH and uid in Z.FROM_LARVA and Z.can_make(uid, self._done_types(mine), self.researched)                     and (uid == Z.OVERLORD or me["supply_used"] + Z.SUPPLY.get(uid, 1) <= me["supply_max"]):
+            if not larva and act == MORPH and uid in Z.FROM_LARVA and Z.can_make(uid, self._done_types(mine), self.researched) \
+                    and (uid == Z.OVERLORD or me["supply_used"] + Z.SUPPLY.get(uid, 1) <= me["supply_max"]):
                 waiting = True  # (no larva free yet: that one waits for the next, as the Terran's macro waits for
-                continue        # a busy building)
+                over.append([name(k), "no larva free: waits for one"])     # a busy building)
+                continue
             if act == BUILD and uid in TECH_PATH and probs[0, k] < TECH_MIN_P:
+                over.append([name(k), f"rule: a tech path under {TECH_MIN_P:.0%}"])
                 continue        # (a tech path opened only on the model's real odds: drawn at 1-6% across dozens of
                                 # rolls, a Hydralisk Den came in 21 of 24 spire-first games, then Lurker Aspect, and
                                 # the model, reading that history as a lurker player's, gave mutalisks 0.8% where
                                 # without the history it gave 16%: 12 of 24 games made none)
             if waiting and probs[0, k] < MIN_P:
+                over.append([name(k), f"rule: under {MIN_P:.0%} while a larva is awaited"])
                 continue        # (meanwhile only what the model really wants, MIN_P or more: taking the first thing
                                 # possible made a creep colony of every larva shortage, 44-66% of the decisions
                                 # from 3:00 to 8:00, rolled at 1-5%; waiting for every one held a macro hatchery
                                 # back with 800 minerals floating: Argon's catch)
             if act < 0 or not self._can(act, uid, obs, mine, me):
+                over.append([name(k), "can't now (what it needs, the pros' cap, nothing to make it from)"])
                 continue
             g = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": self._name(act, uid)}
             larva = act == MORPH and uid in Z.FROM_LARVA
             if self._affordable(g, me):
                 self.goal = g
                 self.log(f"next: {g['name']} ({g['p']:.0%})")
+                record(g["name"], g["p"])
                 if larva:                       # (pros spend larvae in bursts, a hatchery's at once: the timing
                     self.next_query = hi.frame + QUERY_EVERY    # head's gap is between bursts; paced by it,
                 return                                          # the larvae piled up, 2,000 minerals at 10:00)
             if not larva and self.parked is None:
                 self.parked = g
                 self.log(f"next: {g['name']} ({g['p']:.0%}), parked for its money")
+                record(g["name"], g["p"], "parked for its money")
+                over.append([g["name"], "parked for its money"])
                 continue                                     # (and a larva meanwhile, if one is affordable)
             if self.parked is not None and not larva:
+                over.append([g["name"], "one already parked: meanwhile only larvae"])
                 continue                                     # (one parked at a time; meanwhile only larvae)
-            return                                           # (a larva the money doesn't cover yet: wait)
+            record(None, None, f"waits: {g['name']} needs money")   # (a larva the money doesn't cover yet: wait)
+            return
+        record(None, None, "nothing it can do now")
+
+    def _seen(self, obs: dict, mine: list[dict], me: dict) -> dict:
+        """What the macro saw, in brief, for its records."""
+        def n(*types):
+            return sum(1 for u in mine if u["type"] in types)
+        return {"m": me["minerals"], "gas": me["gas"], "supply": f"{me['supply_used']}/{me['supply_max']}",
+                "larvae": n(Z.LARVA), "drones": n(Z.DRONE), "hatcheries": n(*Z.TOWN_HALLS),
+                "army": n(*Z.ARMY), "parked": self.parked["name"] if self.parked else None,
+                "gas_floating": self.gas_floating}
 
     def _name(self, act: int, uid: int) -> str:
         if act == RESEARCH:
@@ -914,6 +973,7 @@ class GaryZ(ZergV3):
             tile = self._building_spot(uid, mine)
         if tile is None:
             self.log(f"no spot for {self._name(act, uid)}")
+            LOG.order("Z", self.hi.frame, self._name(act, uid), "dropped", "no spot for it", by="job")
             self.goal = None
             return
         self.jobs[step] = Job(step, unit, tuple(tile), since=self.hi.frame)

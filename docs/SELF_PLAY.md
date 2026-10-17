@@ -475,7 +475,11 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
 - **Human games** stay a source of failure lists and replays (objective, scored by the classifier
   too). Whether Gary is worth playing against is P6's blind tests with target players, not ratings
   from us.
-- **The trace schema** when its first reader (the narrator) needs it, not before.
+- **Decision records** (built before the next RL loop, ARCHITECTURE section 8): every layer's decisions of a
+  game, both sides, with what each saw, its top alternatives, the choice, who chose and what intervened,
+  and each order's fate, saved next to the replay; `python -m eval.why <game> --minute M` reads a window
+  of it. A round's first failing game is read, not re-simulated. The narrator only once the records are
+  complete.
 
 ## Order of work
 

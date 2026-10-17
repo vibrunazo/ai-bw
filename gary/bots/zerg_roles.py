@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import math
 import random
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
 
 from gary import commands as C
 from gary import zerg as Z
-from gary.decision_log import LOG
+from gary.decision_log import LOG, top
 from gary.interface import screen_of
 
 ASK_EVERY = 12                  # frames: a role every half second, as the model learned them
@@ -158,6 +159,13 @@ class ZergRoles:
                 dx, dy = moves[i] * 32
                 if math.hypot(dx, dy) >= WHERE_MIN:
                     groups.setdefault(role, []).append((u, (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)))
+        # (the record: the roles drawn this snapshot, the model's mean odds over its units, the orders to give)
+        drawn = Counter(self.names[k] for _, k, _ in self.rec["index"].values())
+        if drawn:
+            LOG.decision(hi.side, "roles", hi.frame, ", ".join(f"{r.lower()} {c}" for r, c in drawn.most_common()),
+                         top=top(lambda k: self.names[k].lower(), probs[[i for i, _, _ in self.rec["index"].values()]].mean(0)),
+                         inputs={"units": len(self.rec["index"]), "enemy": len(enemy)}, by="draw",
+                         then="orders: " + (", ".join(f"{r.lower()} {len(g)}" for r, g in groups.items()) or "none"))
         # every non-empty group queued, most urgent first, one order a turn (the first alone went before:
         # one zergling drawing retreat cost the rest their orders, and draws were logged as done)
         for role in URGENT:
@@ -219,6 +227,8 @@ class ZergRoles:
             return True
         p["tries"] += 1
         if p["tries"] > TRIES:
+            LOG.order(hi.side, hi.frame, f"{p['role'].lower()} ({len(units)} units)", "dropped",
+                      f"its units weren't selected in {TRIES} tries", by="roles")
             self.pending = None
             return False
         mid = (sum(u["x"] for u in units) / len(units), sum(u["y"] for u in units) / len(units))

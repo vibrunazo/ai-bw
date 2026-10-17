@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from gary import commands as C
 from gary.bots.zerg_rush import DRONE, HATCH, LING, MINING, OVERLORD, POOL
 from gary.bots.zerg_v2 import EXTRACTOR, HATCHERIES, IDLE_ORDERS, ZergV2
+from gary.decision_log import LOG
 from gary.interface import screen_of
 
 LAIR, SPIRE, MUTA = 132, 141, 43
@@ -605,15 +606,23 @@ class ZergV3(ZergV2):
         w, h = SIZE[job.unit_type]
         return job.tile[0] * 32 + w * 16, job.tile[1] * 32 + h * 16
 
+    def _fate(self, job: Job, fate: str, why: str) -> None:
+        """A building job's fate, in the game's records (gary/decision_log.py)."""
+        LOG.order(self.hi.side, self.hi.frame, f"{job.step.split('_')[0]} at {job.tile}", fate, why, by="job")
+
     def _work(self, job: Job, obs, mine, me, drones) -> bool:
         """One step of a job (True: it used this turn's hands)."""
         hi = self.hi
         if self._up(job, mine):
             self.built.add(job.step)
             del self.jobs[job.step]
+            # (never placed: another of its kind stands within 3 tiles of its spot, and counts as it)
+            self._fate(job, "done", "it stands") if job.tries else \
+                self._fate(job, "dropped", "never placed: one of its kind within 3 tiles counted as it")
             return False
         if job.tries >= JOB_TRIES:
             self.log(f"{job.step} given up")
+            self._fate(job, "dropped", f"{JOB_TRIES} tries, nothing went up")
             self.built.add(job.step)
             del self.jobs[job.step]
             return False
@@ -621,6 +630,7 @@ class ZergV3(ZergV2):
         if job.drone is not None and drone is None:
             if job.state == "placed" and any(u["tag"] == job.drone for u in mine):
                 return False                       # (it became the building: not counted as a drone)
+            self._fate(job, "retried", "its drone is gone (died, or not a drone any more): another")
             job.drone, job.state = None, "pick"
         spot = self._spot(job)
         if job.state == "pick":
@@ -644,6 +654,7 @@ class ZergV3(ZergV2):
                 at = screen_of(obs, drone["x"], drone["y"])
                 job.clicks += 1
                 if at is None or job.clicks > PLACE_CLICKS:   # (it won't be selected: another drone)
+                    self._fate(job, "retried", "its drone wouldn't be selected at the spot: another")
                     job.drone, job.state, job.clicks = None, "pick", 0
                     job.tries += 1
                     return False
@@ -653,8 +664,10 @@ class ZergV3(ZergV2):
             if not hi.game.can_place(hi.slot, job.unit_type, *job.tile, drone["tag"]):
                 near = self._free_near(job, drone["tag"])
                 if near is None:
+                    self._fate(job, "retried", "the game won't place it there, and nowhere near")
                     job.tries += 1
                     return False
+                self._fate(job, "retried", f"the game won't place it there: moved to {near}")
                 job.tile = near
                 spot = self._spot(job)
             tx, ty = job.tile
@@ -667,8 +680,10 @@ class ZergV3(ZergV2):
             return True
         if job.state == "placed":
             if drone is not None and drone["order"] in IDLE_ORDERS and hi.frame - job.since > PLACED_WAIT:
+                self._fate(job, "retried", "placed, nothing went up (the click's scatter, or a unit on the spot)")
                 job.state = "place"                # (nothing went up: the click's scatter, or a unit on it)
             elif drone is not None and drone["order"] in (MINING,) + tuple(range(79, 92)):
+                self._fate(job, "retried", "placed, its drone went back to mining")
                 job.state = "walk"
             return False
         return False

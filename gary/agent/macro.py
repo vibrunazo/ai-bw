@@ -28,6 +28,7 @@ import numpy as np
 from gary import terran as T
 from gary.agent.executor import COST
 from gary.agent.gary import Gary, Task
+from gary.decision_log import LOG, top
 from gary.policy.macro import ACT_NAMES, MacroModel, MacroTracker
 
 TRAIN, BUILD, RESEARCH, UPGRADE, EXPAND = 0, 3, 4, 5, 6
@@ -107,6 +108,8 @@ class LearnedMacro:
                 if self.goal is None:
                     return
                 g.say(f"next: {self.goal['name']} ({build.label})")
+                LOG.decision("T", "macro", g.hi.frame, self.goal["name"], inputs=self._seen(obs, mine, me),
+                             by=f"posture's build: {build.label}")
         if self.natural_bunker and self._natural_bunker(mine, me):
             return
         if self.answers is not None:
@@ -116,6 +119,8 @@ class LearnedMacro:
             if self.goal is None and (goal := self.answers.next_goal(obs, mine, done, me)) is not None:
                 self.goal = goal
                 g.say(f"next: {goal['name']}")
+                LOG.decision("T", "macro", g.hi.frame, goal["name"], inputs=self._seen(obs, mine, me),
+                             by="rule: an answer to the zerg's plan (answers.py)")
         self._learned(obs, mine, done, me)
 
     def _natural_bunker(self, mine: list[dict], me: dict) -> bool:
@@ -176,8 +181,11 @@ class LearnedMacro:
         if hi.frame >= self.rax_by and not rax and (self.goal is None or self.goal["id"] != T.RAX):
             self.goal = {"act": BUILD, "id": T.RAX, "p": 1.0, "since": hi.frame, "name": "Barracks"}
             g.say(f"next: Barracks (none by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d})")
+            LOG.decision("T", "macro", hi.frame, "Barracks", inputs=self._seen(obs, mine, me),
+                         by=f"rule: a Barracks by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d}")
         if self.goal and hi.frame - self.goal["since"] > GOAL_TIMEOUT:
             g.say(f"gives up on {self.goal['name']}")
+            LOG.order("T", hi.frame, self.goal["name"], "dropped", f"not carried out in {GOAL_TIMEOUT // 24} s", by="macro")
             self.goal = None
         halls = sum(1 for u in mine if u["type"] == T.CC)
         if halls > self.halls:
@@ -194,6 +202,15 @@ class LearnedMacro:
             x = self.tracker.features(obs, self.in_production(mine))
             probs, _ = self.model.probs(x)
             pick = waiting = None
+            # (the record: the model's top odds, what it saw, the options ahead of the choice and why they were
+            # passed over; gary/decision_log.py)
+            name = lambda k: describe(*self.model.spec.decisions[k])
+            over: list[list] = []
+
+            def record(k, by, then=None):
+                LOG.decision("T", "macro", hi.frame, None if k is None else name(k),
+                             None if k is None else float(probs[0, k]), top(name, probs[0]),
+                             self._seen(obs, mine, me), by, over[:8], then)
             if self.decoder == "sample":
                 # training (docs/CONTROL.md step 7): a draw at the temperature among the decisions Gary
                 # can carry out now or soon (a busy building), logged with what it was drawn from
@@ -207,6 +224,7 @@ class LearnedMacro:
                 act, uid = self.model.spec.decisions[k]
                 self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(act, uid)}
                 g.say(f"next: {self.goal['name']} ({self.goal['p']:.0%}, drawn)")
+                record(k, f"sample (temperature {self.temperature:g})")
                 return
             if self.decoder == "dice":
                 # roll the model's odds rather than always take the favorite: a weighted shuffle,
@@ -228,6 +246,7 @@ class LearnedMacro:
                 act, uid = self.model.spec.decisions[k_exp]
                 self.goal = {"act": act, "id": uid, "p": float(probs[0, k_exp]), "since": hi.frame, "name": describe(act, uid)}
                 g.say(f"next: expand ({self.expand_odds:.2f} expansions' odds since the last)")
+                record(k_exp, f"rule: expansion odds summed to {self.expand_odds:.2f} since the last")
                 return
             if self.force is not None and hi.frame >= self.force[0]:
                 # a branch (train/macro_rl.py): another decision at this moment of the same game
@@ -237,6 +256,7 @@ class LearnedMacro:
                     act, uid = self.model.spec.decisions[k]
                     self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(act, uid)}
                     g.say(f"next: {self.goal['name']} ({self.goal['p']:.0%}, forced)")
+                    record(k, "forced (a branch)")
                     return
             if self.log:
                 cands = [int(c) for c in order if probs[0, c] >= floor
@@ -248,16 +268,24 @@ class LearnedMacro:
                     break
                 plan = self.plan(*self.model.spec.decisions[k], obs, mine, done, me)
                 if plan is WAIT:
+                    over.append([name(k), "its building is busy: waits for it" if waiting is None else "busy building"])
                     waiting = waiting if waiting is not None else k
                 elif plan is not None:
                     # something doable now, unless the likelier decision is worth waiting for
                     # (a pro saves for the expansion rather than spend on whatever is possible)
                     if waiting is None or probs[0, k] >= 0.5 * probs[0, waiting] or me["minerals"] > 400:
                         pick = k
+                    else:
+                        over.append([name(k), f"under half the odds of {name(waiting)}, which it waits for"])
                     break
+                else:
+                    over.append([name(k), "can't now"])
             k = pick if pick is not None else waiting
             if self.log:
                 logged["k"] = None if k is None else int(k)
+            record(k, "dice" if self.decoder == "dice" else "favorite",
+                   "waits for its building" if k is not None and pick is None else None if k is not None else
+                   "nothing it can do now")
             if k is None:
                 return
             act, uid = self.model.spec.decisions[k]
@@ -268,6 +296,7 @@ class LearnedMacro:
         goal = self.goal
         plan = self.plan(goal["act"], goal["id"], obs, mine, done, me)   # still possible?
         if plan is None:
+            LOG.order("T", hi.frame, goal["name"], "dropped", "no longer possible", by="macro")
             self.goal = None
             return
         if plan is WAIT:                    # e.g. the building is still busy: wait for it
@@ -301,6 +330,14 @@ class LearnedMacro:
         self.tracker.note_decision(goal["act"], goal["id"], obs["frame"])
         self.decisions.append((hi.frame, goal["name"], goal["p"]))
         self.goal = None
+
+    def _seen(self, obs: dict, mine: list[dict], me: dict) -> dict:
+        """What the macro saw, in brief, for its records."""
+        g = self.g
+        return {"m": me["minerals"], "gas": me["gas"], "supply": f"{me['supply_used']}/{me['supply_max']}",
+                "scvs": sum(1 for u in mine if u["type"] == T.SCV), "bases": sum(1 for u in mine if u["type"] == T.CC),
+                "army": sum(1 for u in mine if u["type"] in g.army_types), "posture": getattr(g.posture, "build", None),
+                "parked": T.NAMES.get(g.parked.unit_type) if g.parked is not None else None}
 
     def saturation(self, mine: list[dict]) -> int:
         """SCVs enough for Gary's bases (with a Command Center, finished or not): 2 per mineral field,
@@ -463,6 +500,9 @@ class LearnedMacro:
             self.tracker.unnote_decision(act, uid)
             self.failed_until[(act, uid)] = self.g.hi.frame + 24 * 10
             self.g.say(f"couldn't build {describe(act, uid)}")
+            LOG.order("T", self.g.hi.frame, describe(act, uid), "dropped",
+                      f"couldn't be built ({t.data.get('failed', 'see the executor')}): not decided again for 10 s",
+                      by="executor")
 
     # --- what Gary has -------------------------------------------------------------------------
 

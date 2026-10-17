@@ -37,6 +37,8 @@ from dataclasses import dataclass, field, replace
 
 from gary import commands as C
 from gary import terran as T
+from gary import zerg as Z
+from gary.decision_log import LOG
 from gary.env import Game, GameError, decode_observation
 from gary.policy.fight_memory import command_kind
 
@@ -95,6 +97,7 @@ class _Pending:
     send_at: int              # frame on which the hand/key finishes and the command is emitted
     kind: str
     args: dict = field(default_factory=dict)
+    by: str = "?"             # who had the hands when it was given (decision_log.py LOG.owner)
 
 
 class HumanInterface:
@@ -130,6 +133,8 @@ class HumanInterface:
         self.history: deque[list] = deque([[self.frame, obs]], maxlen=HISTORY)
         self._observe_raw = getattr(game, "observe_raw", None)   # the live bridge has no raw form
         self.stats = {"actions": 0, "rejected_by_interface": 0, "rejected_by_game": 0}
+        self.side = "?"                       # "T" or "Z": whose orders, in the game's records (decision_log.py)
+        self._sent_ok = True
         # act() latency: frames from emitting a command (game.act) to its effect in the game.
         # OpenBW applies commands in the same step (0). A live SC:R client queues them into its
         # turn queue and lands them latency_frames later (the bridge reports this in status()),
@@ -262,9 +267,10 @@ class HumanInterface:
 
     # --- helpers -------------------------------------------------------------------------
 
-    def _spend(self) -> ActionResult | None:
+    def _spend(self, kind: str = "") -> ActionResult | None:
         if self.tokens < 1:
             self.stats["rejected_by_interface"] += 1
+            self._refused(kind, "apm")
             return ActionResult(False, "apm")
         self.tokens -= 1
         self.stats["actions"] += 1
@@ -282,11 +288,17 @@ class HumanInterface:
     def _on_screen(self, sx: int, sy: int) -> bool:
         return 0 <= sx < self.p.viewport[0] and 0 <= sy < self.p.viewport[1]
 
+    def _refused(self, kind: str, reason: str) -> None:
+        """An order the hands didn't give (no APM left, the point off screen), in the game's records."""
+        if kind in ORDER_KINDS:
+            LOG.order(self.side, self.frame, kind.replace("_", " "), "refused", f"interface: {reason}")
+
     def _schedule_click(self, sx: int, sy: int, target_w: float, kind: str, **args) -> ActionResult:
         if not self._on_screen(sx, sy):
             self.stats["rejected_by_interface"] += 1
+            self._refused(kind, "off screen")
             return ActionResult(False, "offscreen")
-        if (r := self._spend()):
+        if (r := self._spend(kind)):
             return r
         dist = math.dist(self.cursor, (sx, sy))
         travel_ms = self.p.fitts_a_ms + self.p.fitts_b_ms * math.log2(dist / max(target_w, 1) + 1)
@@ -299,14 +311,14 @@ class HumanInterface:
         self.hand_free_at = land
         self._mouse_moves.append((start, land, self.cursor, (lx, ly)))
         self.cursor = (sx, sy)
-        self.pending.append(_Pending(land, kind, {"sx": lx, "sy": ly, **args}))
+        self.pending.append(_Pending(land, kind, {"sx": lx, "sy": ly, **args}, LOG.owner.get(self.side, "?")))
         return self._game_result(land)
 
     def _schedule_key(self, kind: str, **args) -> ActionResult:
-        if (r := self._spend()):
+        if (r := self._spend(kind)):
             return r
         land = self.frame + 1
-        self.pending.append(_Pending(land, kind, args))
+        self.pending.append(_Pending(land, kind, args, LOG.owner.get(self.side, "?")))
         return self._game_result(land)
 
     def _remember(self, cmd: str, order: int, x: int, y: int, target: int) -> None:
@@ -319,6 +331,7 @@ class HumanInterface:
         counts as sent (like a player, the interface assumes its click worked) and its result
         arrives later through _record_result."""
         ok = self.game.act(self.slot, command)
+        self._sent_ok = ok is not False
         if ok is False:
             self._record_result(command, False)
         return ok is not False
@@ -327,6 +340,7 @@ class HumanInterface:
         if not ok:
             self._log_pov(act=f"\u2717 rejected: {COMMAND_NAMES.get(command[0], hex(command[0]))}")
             self.stats["rejected_by_game"] += 1
+            LOG.order(self.side, self.frame, COMMAND_NAMES.get(command[0], hex(command[0])), "refused", "by the game")
             key = f"rejected_by_game_{command[0]:#04x}"
             self.stats[key] = self.stats.get(key, 0) + 1
 
@@ -425,13 +439,14 @@ class HumanInterface:
     def minimap_right_click(self, map_x: int, map_y: int, queued: bool = False) -> ActionResult:
         """Right click on the minimap: anywhere on the map, but imprecise (queued: shift held, after
         the selection's current orders: a waypoint)."""
-        if (r := self._spend()):
+        if (r := self._spend("minimap_right_click")):
             return r
         land = max(self.frame, self.hand_free_at) + round(self.p.fitts_a_ms / FRAME_MS) + 1
         s = self.p.minimap_scatter_px
         self.hand_free_at = land
         x, y = self._on_map(map_x + self.rng.gauss(0, s), map_y + self.rng.gauss(0, s))
-        self.pending.append(_Pending(land, "minimap_right_click", {"x": x, "y": y, "queued": queued}))
+        self.pending.append(_Pending(land, "minimap_right_click", {"x": x, "y": y, "queued": queued},
+                                     LOG.owner.get(self.side, "?")))
         return self._game_result(land)
 
     def _on_map(self, x: float, y: float) -> tuple[int, int]:
@@ -442,13 +457,14 @@ class HumanInterface:
 
     def minimap_command(self, order: int, map_x: int, map_y: int) -> ActionResult:
         """A targeted order (e.g. attack-move: A, then click) on the minimap."""
-        if (r := self._spend()):
+        if (r := self._spend("minimap_order")):
             return r
         land = max(self.frame, self.hand_free_at) + round((self.p.fitts_a_ms + self.p.key_ms) / FRAME_MS) + 1
         s = self.p.minimap_scatter_px
         self.hand_free_at = land
         x, y = self._on_map(map_x + self.rng.gauss(0, s), map_y + self.rng.gauss(0, s))
-        self.pending.append(_Pending(land, "minimap_order", {"order": order, "x": x, "y": y}))
+        self.pending.append(_Pending(land, "minimap_order", {"order": order, "x": x, "y": y},
+                                     LOG.owner.get(self.side, "?")))
         return self._game_result(land)
 
     def train(self, unit_type: int) -> ActionResult:
@@ -593,6 +609,7 @@ class HumanInterface:
                  "minimap_right_click": "right", "minimap_order": "left"}.get(a.kind)
         act = None                       # what happened, in words, for the POV log
         cmd = None                       # a command to the selection: kind, map point, target (POV log)
+        self._sent_ok = True
         if a.kind == "camera":
             self._center_camera(a.args["x"], a.args["y"])
             act = "minimap click (camera)"
@@ -687,11 +704,11 @@ class HumanInterface:
             self._send(C.morph_building(a.args["unit_type"]))
             self.last_macro_frame = self.frame
         elif a.kind == "research":
-            act = f"research {T.TECH_NAMES.get(a.args['tech'], a.args['tech'])}"
+            act = f"research {T.TECH_NAMES.get(a.args['tech']) or Z.TECH_NAMES.get(a.args['tech'], a.args['tech'])}"
             self._send(C.research(a.args["tech"]))
             self.last_macro_frame = self.frame
         elif a.kind == "upgrade":
-            act = f"upgrade {T.UPGRADE_NAMES.get(a.args['upgrade_id'], a.args['upgrade_id'])}"
+            act = f"upgrade {T.UPGRADE_NAMES.get(a.args['upgrade_id']) or Z.UPGRADE_NAMES.get(a.args['upgrade_id'], a.args['upgrade_id'])}"
             self._send(C.upgrade(a.args["upgrade_id"]))
             self.last_macro_frame = self.frame
         elif a.kind == "build":
@@ -750,11 +767,17 @@ class HumanInterface:
             mx, my, mw, mh = self.p.minimap_rect
             at = (mx + a.args["x"] * mw / self.map_size[0], my + a.args["y"] * mh / self.map_size[1])
         self._log_pov(click, act, at, cmd)
+        if a.kind in ORDER_KINDS and self._sent_ok:       # (a refusal on the spot is recorded as one)
+            LOG.order(self.side, self.frame, f"{act} ({len(self.selection)} selected)", "sent", by=a.by)
 
     def _own_tags(self) -> set[int]:
         last = self._snapshot(self.history[-1])
         return {u["tag"] for u in last["units"] if u["owner"] == self.slot}
 
+# the actions that are orders to units (the rest select, look or set hotkeys): their fates are recorded
+ORDER_KINDS = {"train", "morph", "morph_building", "research", "upgrade", "build", "right_click",
+               "minimap_right_click", "minimap_order", "order_click", "stop", "hold", "burrow", "unburrow",
+               "stim", "unload_all", "return_cargo"}
 RESOURCES = {176, 177, 178, 188, 110, 157, 149}      # mineral fields, geyser, refineries / extractor
 OTHER_NAMES = {176: "Mineral Field", 177: "Mineral Field", 178: "Mineral Field", 188: "Vespene Geyser",
                35: "Larva", 36: "Egg", 37: "Zergling", 41: "Drone", 42: "Overlord", 131: "Hatchery"}
@@ -764,7 +787,7 @@ COMMAND_NAMES = {0x09: "select", 0x0A: "shift-select", 0x0C: "build", 0x14: "rig
 
 
 def unit_name(unit_type: int) -> str:
-    return T.NAMES.get(unit_type) or OTHER_NAMES.get(unit_type) or f"unit {unit_type}"
+    return T.NAMES.get(unit_type) or Z.NAMES.get(unit_type) or OTHER_NAMES.get(unit_type) or f"unit {unit_type}"
 
 
 def screen_of(obs: dict, x: int, y: int) -> tuple[int, int] | None:

@@ -14,6 +14,7 @@ import time
 from gary import commands as C
 from gary.agent.manifests import build_gary, manifest_name, manifest_of
 from gary.env import LIVE_COMMAND_DELAY, Game, GameError
+from gary.decision_log import LOG
 from gary.interface import PROFILES, HumanInterface
 from gary.mapinfo import MapInfo
 
@@ -48,6 +49,7 @@ def play(map_path: str, minutes: float, seed: int | None, save: str, make_bot, n
     with Game.new(map_path, ["T", "Z"], [name, "Idle (Z)"], seed=seed, command_delay=command_delay) as game:
         mapinfo = MapInfo.from_game(game)
         hi = HumanInterface(game, terran_slot(game), PROFILES["pro"], seed=1)
+        hi.side = "T"
         gary = make_bot(hi, mapinfo)
         end = int(minutes * 60 * 24)
         while hi.frame < end:
@@ -59,7 +61,8 @@ def play(map_path: str, minutes: float, seed: int | None, save: str, make_bot, n
         pov = save[:-4] + ".pov.jsonl" if save.endswith(".rep") else save + ".pov.jsonl"
         hi.save_pov(pov)
         gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
-        print(f"saved {save} and {pov} (and Gary's trace)")
+        LOG.save_records(pov[:-len(".pov.jsonl")] + ".records.jsonl")
+        print(f"saved {save} and {pov} (and Gary's trace and records)")
 
 
 def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot,
@@ -102,6 +105,7 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
         st = game.status()
         mapinfo = MapInfo.from_game(game)
         hi = HumanInterface(game, slot, PROFILES[profile], seed=1)
+        hi.side = "T"
         print(f"playing slot {slot} | act() latency calibrated to {hi.act_latency_frames} frames "
               f"(adapter reported latency_frames={st.get('latency_frames')})", flush=True)
         gary = make_bot(hi, mapinfo)
@@ -132,6 +136,7 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
                 hi.save_pov(pov)
                 if gary is not None and pov.endswith(".pov.jsonl"):
                     gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
+                    LOG.save_records(pov[:-len(".pov.jsonl")] + ".records.jsonl")
                 print(f"saved {pov}")
             except Exception as e:
                 print(f"could not save pov: {e}")

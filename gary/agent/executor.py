@@ -13,6 +13,7 @@ import math
 
 from gary import terran as T
 from gary.agent.gary import LOC_NATURAL, Gary, Task
+from gary.decision_log import LOG
 from gary.interface import screen_of
 from gary.mapinfo import Base
 
@@ -122,17 +123,25 @@ class ScriptedExecutor:
                 g.build_failed[ut] = g.hi.frame
                 if me is not None and me["minerals"] < T.COST[ut][0]:
                     g.say(f"its {T.NAMES.get(ut, ut)} failed for money: again")
+                    LOG.order("T", g.hi.frame, f"{T.NAMES.get(ut, ut)} at {(tx, ty)}", "retried", "failed for money",
+                              by="executor")
                 elif g.hi.frame - g.failed_at.get(r, -10 ** 9) < BAD_FOR:
                     g.bad_spots[r] = g.hi.frame              # (twice: somewhere else)
                     g.say(f"couldn't place its {T.NAMES.get(ut, ut)} there twice: elsewhere")
+                    LOG.order("T", g.hi.frame, f"{T.NAMES.get(ut, ut)} at {(tx, ty)}", "retried",
+                              "the game wouldn't place it there twice: elsewhere", by="executor")
                 else:
                     # the game's pathfinder can leave an SCV stuck short of the spot (the order then
                     # fails): the same SCV again from where it stands, a new order clears that
                     g.failed_at[r] = g.hi.frame
                     g.retry_with[ut] = builder["tag"]
                     g.say(f"its {T.NAMES.get(ut, ut)} didn't start: again, with the same SCV")
+                    LOG.order("T", g.hi.frame, f"{T.NAMES.get(ut, ut)} at {(tx, ty)}", "retried",
+                              "its SCV stopped and nothing started: again, the same SCV", by="executor")
             elif not built and age < 24 * 40:
                 g.say(f"its {T.NAMES.get(ut, ut)} order was lost: again")
+                LOG.order("T", g.hi.frame, f"{T.NAMES.get(ut, ut)} at {(tx, ty)}", "retried",
+                          "no SCV on its way to it: the order was lost", by="executor")
             g.reserved_at.pop(r, None)
             g.builder_of.pop(r, None)
         g.reserved = keep
@@ -400,7 +409,7 @@ class ScriptedExecutor:
             return False
         if not any(u["tag"] == t.data["worker"] for u in mine):
             g.parked = None
-            self.fail_build(t)
+            self.fail_build(t, "its SCV is gone")
             return False
         if t.data.get("resume") == "wait_arrival":           # walking to another base: until it's there
             w = next(u for u in mine if u["tag"] == t.data["worker"])
@@ -609,7 +618,7 @@ class ScriptedExecutor:
             if t.kind == "hotkey_building":
                 g.hotkeyed[t.data["tag"]] = -1        # live without a hotkey for this one
             if t.kind == "build":
-                return self.fail_build(t)
+                return self.fail_build(t, "stuck for 40 s")
             g.task = None
             return
         {"build": self._task_build, "hotkey_building": self._task_hotkey, "mine": self._task_mine,
@@ -617,12 +626,15 @@ class ScriptedExecutor:
 
     def _run_command(self, obs: dict, mine: list[dict], t: Task) -> None:
         if self.g.hi.frame - t.started > COMMAND_TIMEOUT:
+            LOG.order("T", self.g.hi.frame, t.kind, "dropped", f"not done in {COMMAND_TIMEOUT // 24} s", by="executor")
             self.g.task = None
             return
         (self._task_command if t.kind == "command" else self._task_gas)(obs, mine, t)
 
-    def fail_build(self, t: Task) -> None:
-        """A building Gary decided on couldn't be placed: the macro layer hears of it."""
+    def fail_build(self, t: Task, why: str = "") -> None:
+        """A building Gary decided on couldn't be placed: the macro layer hears of it (and why: the game's
+        records, gary/decision_log.py)."""
+        t.data["failed"] = why
         if self.g.macro is not None:
             self.g.macro.build_failed(t)
         self.g.task = None
@@ -686,7 +698,7 @@ class ScriptedExecutor:
                 t.data["from"] = "natural"
                 return
             if not w:
-                self.fail_build(t)
+                self.fail_build(t, "no free SCV")
                 return
             t.data["worker"] = w["tag"]
             tries[w["tag"]] = tries.get(w["tag"], 0) + 1
@@ -695,7 +707,7 @@ class ScriptedExecutor:
         if t.stage == "reselect":                    # a fight put the build aside: the same worker again
             w = next((u for u in mine if u["tag"] == t.data["worker"]), None)
             if not w or w["tag"] in g.pulled | g.block_units:
-                self.fail_build(t)
+                self.fail_build(t, "its SCV was pulled or is gone")
                 return
             if obs["selection"] == [w["tag"]]:
                 t.stage = t.data.pop("resume")
@@ -723,7 +735,7 @@ class ScriptedExecutor:
             t.data["clicked"] = list(obs["selection"])   # (what was selected before this click)
             t.data["reselects"] = t.data.get("reselects", 0) + 1
             if t.data["reselects"] > RESELECT_TRIES:
-                self.fail_build(t)                   # (the macro layer decides again)
+                self.fail_build(t, "its SCV wouldn't be selected again")                   # (the macro layer decides again)
                 return
             self.select_worker(obs, w)
             return
@@ -741,7 +753,7 @@ class ScriptedExecutor:
         if t.stage == "wait_arrival":
             w = next((u for u in mine if u["tag"] == t.data["worker"]), None)
             if not w:
-                self.fail_build(t)
+                self.fail_build(t, "its SCV is gone")
                 return
             center = g.base(t.where).center
             if math.dist((w["x"], w["y"]), center) > 6 * 32:
@@ -753,7 +765,7 @@ class ScriptedExecutor:
                     t.data["resent_at"] = hi.frame
                     t.data["resent"] = t.data.get("resent", 0) + 1
                     if t.data["resent"] > RESEND_TRIES:
-                        self.fail_build(t)
+                        self.fail_build(t, "its SCV wouldn't walk to the base")
                         return
                     hi.minimap_right_click(*center)
                 elif not going:
@@ -776,7 +788,7 @@ class ScriptedExecutor:
                                    t.data.get("avoid")) if "near" in t.data else \
                     self.spot(t.unit_type, base, t.data["worker"])
                 if not spot:
-                    self.fail_build(t)
+                    self.fail_build(t, "no spot for it")
                     return
                 t.data["spot"] = spot
             spot = t.data["spot"]
@@ -784,7 +796,7 @@ class ScriptedExecutor:
             p = screen_of(obs, spot[0] * 32 + 16, spot[1] * 32 + 16)
             if not p:                                   # the spot is off screen: look there first
                 if t.data.get("looked"):
-                    self.fail_build(t)
+                    self.fail_build(t, "its spot is off screen after a look")
                     return
                 t.data["looked"] = True
                 hi.camera_minimap(spot[0] * 32 + w * 16, spot[1] * 32 + h * 16)
@@ -985,6 +997,7 @@ class ScriptedExecutor:
         g, hi, d = self.g, self.g.hi, t.data
         b = next((u for u in mine if u["tag"] == d["building"]["tag"]), None)
         if b is None:
+            LOG.order("T", hi.frame, f"{d['act']}:{d['id']}", "dropped", "its building is gone", by="executor")
             g.task = None
             return
         if not self.select(obs, b):

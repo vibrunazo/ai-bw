@@ -921,8 +921,15 @@ class RoleAhead(RoleRules):
                 dx, dy = moves[i] * 32
                 if role in ("RETREAT", "PULL_BACK", "REPOSITION") and math.hypot(dx, dy) >= WHERE_MIN and fresh(u, role):
                     groups.setdefault(role, []).append((u, (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)))
-        from gary.decision_log import LOG
+        from gary.decision_log import LOG, top
         from gary.policy.roles import MAX_UNITS
+        if self.choice:                     # (the game's records: the roles chosen, the model's mean odds)
+            from collections import Counter
+            chosen = Counter(names[k] for k in self.choice.values())
+            LOG.decision("T", "roles", g.hi.frame, ", ".join(f"{r} {c}" for r, c in chosen.most_common()),
+                         top=top(lambda k: names[k], probs[[index[t] for t in self.choice]].mean(0)),
+                         inputs={"units": len(self.choice), "enemy": len(enemy)}, by="draw" if self.draw else "favorite",
+                         then="orders: " + (", ".join(f"{r.lower()} {len(v)}" for r, v in groups.items()) or "none"))
         if LOG.on and self.draw:            # (each before-contact unit's drawn decision and its log-probability)
             drawn = np.full(MAX_UNITS, -1, np.int8)
             logp = np.zeros(MAX_UNITS, np.float32)

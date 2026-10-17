@@ -191,8 +191,25 @@ plan and the full log).
   its gap score lower at every minute range. Gary-Z, under less pressure, drones closer to the pros
   (22 at 8 minutes, pros 25) and has 22 army supply at 12 minutes (13 before, pros 33); still no win:
   its gas now banks unspent and minerals are short.
-- **Next:** Gary-Z's minerals and mutalisks (gas banked, larvae capped); then the attack-or-hold loop;
-  a human game with the current Gary-T.
+- **Gary-Z's mutalisks were a decoder after all:** in c5 the Spire finished in most games, yet 12 of 24
+  decided no mutalisk with 600-800 gas banked. Drawing from the full odds at every decision, Gary-Z took a
+  Hydralisk Den at 1-6% in 21 of 24 games, and the macro model, reading that history as a lurker
+  player's, gave mutalisks 0.8% (16% with the history cleared). A building that opens a tech path now
+  needs 10%+ odds. Same seeds (c6): Dens in 9 games (21), spire games deciding mutalisks 19 of 21 (11 of
+  23), up to 59 a game; Gary-T won 11 of 24 (5), Gary-Z none.
+- **Decision records (before the next RL loop):** every why-question so far (the sunkens, the roaming
+  army, the dropped orders) cost a script re-simulating replays. Now every layer's decisions of a game,
+  both sides, are saved next to its replay (`<game>.records.jsonl`): what each saw, its top alternatives,
+  the choice, who chose and what intervened, each order's fate (sent, refused, retried, dropped, done),
+  and who had the hands; `python -m eval.why <game> --minute M` prints a window in time order. The game
+  is unchanged by them (seed 3005 replays to the same log). Watching Gary-Z's screen from 4 to 10
+  minutes first, the first thing wrong was four Creep Colonies decided in 20 s at 3-6% odds while it had
+  19 drones (pros 22 at 6 minutes). The records answered it in one query: after a parked decision (Lurker
+  Aspect, waiting for money) Gary-Z treated its larvae as taken, so Drones were set aside as "no larva
+  free" with 5 larvae standing and only options over 5% stayed; and three of the four colonies were
+  never built, the job counting a colony 2 tiles away as its own.
+- **Next:** that larva bug fixed and a round on the same seeds; then the attack-or-hold loop, its
+  first failing round read from the records; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 

@@ -147,6 +147,8 @@ class Gary:
     # --- what every layer uses --------------------------------------------------------------
 
     def say(self, text: str) -> None:
+        from gary.decision_log import LOG
+        LOG.note("T", self.hi.frame, text)                  # (the game's records, read with eval/why.py)
         if self.verbose:
             s = self.hi.frame // 24
             print(f"  {s // 60}:{s % 60:02d} Gary {text}", flush=True)

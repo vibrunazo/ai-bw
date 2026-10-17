@@ -844,6 +844,18 @@ The adherence pseudo-reward compares the bot's build order with *z* (supply/time
 | "What did you think I was doing?" | `belief` history, compared with ground truth after the game |
 | "Would you have done X if…?" | Counterfactual rerun: same frame, edited facts or beliefs, compare intent distributions |
 
+The record layer under this (built, for debugging; no narrator on it yet): every layer's decisions of a
+game, both sides, in one shape, as `gary/decision_log.py` records saved next to the replay
+(`<game>.records.jsonl`). A decision: what the layer saw (in brief), its top alternatives with their
+probabilities, the choice and who made it (the model, a draw, a rule, the posture), and what intervened
+(each option set aside before the choice, and why: a rule, the money, a busy building, a parked
+decision). An order: its fate at the hands (sent; refused by the interface for APM or off screen, or by
+the game) and above them (retried, dropped, done, and why), stamped with who had the hands. And who had
+the hands, whenever that changes (Gary-T's arbiter; Gary-Z's turns). `python -m eval.why <game> --minute
+M` prints one window of it in time order: a why-question about a game is a query, not a script that
+re-simulates it. A narrator comes only once the records are complete enough that it couldn't invent a
+reason they don't hold.
+
 Rules:
 - Narrator answers must cite trace event IDs.
 - Counterfactual consistency is tracked as a metric: if an explanation names fact F as the reason, removing F should change the choice.
