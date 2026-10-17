@@ -84,7 +84,8 @@ def main() -> None:
                "--incumbent", state["incumbent"], "--layer", args.layer] + \
               (["--candidate", state["candidate"]] if state["candidate"] else [])
         t0 = time.time()
-        subprocess.run(cmd, cwd=REPO, check=True)
+        if not (REPO / "runs" / "league" / rnd / "round.json").exists():    # (a resumed run: played already)
+            subprocess.run(cmd, cwd=REPO, check=True)
         table = json.loads((REPO / "runs" / "league" / rnd / "round.json").read_text())
         pairs = table.get("pairs", {})
         entry = {"round": k, "seeds": [first, first + args.seeds - 1], "incumbent": state["incumbent"],

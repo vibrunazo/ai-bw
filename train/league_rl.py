@@ -216,6 +216,7 @@ def load_pairs(rounds: list[str]):
         d = np.load(f, allow_pickle=False)
         if "dec/pair" not in d.files:
             continue
+        d = {k: d[k] for k in d.files}           # (read once: an npz re-reads an array on every access)
         reward, model = d["reward"], d["model"]
         same = model[:, 0] == model[:, 1]
         a = reward - reward.mean(1, keepdims=True)
@@ -296,6 +297,7 @@ def load_army_pairs(rounds: list[str]):
         d = np.load(f)
         if "dec/grid" not in d.files:
             continue
+        d = {k: d[k] for k in d.files}           # (read once: an npz re-reads an array on every access)
         reward, model = d["reward"], d["model"]
         same = model[:, 0] == model[:, 1]
         a = reward - reward.mean(1, keepdims=True)
