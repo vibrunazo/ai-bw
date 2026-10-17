@@ -7,8 +7,10 @@ A round (fresh seeds every round: never judged on the seeds it trained on):
   play     eval/league.py --pairs: the incumbent fight-role model plays even seeds, the candidate odd
            seeds; at fights, paired arms (incumbent drawing twice: training; incumbent against the
            candidate, the same dice: A/B)
-  gate     the candidate is kept only if the A/B pairs favor it (mean above zero, AB_MIN pairs or more)
-           and Gary-Z's gap score in its own games is no worse than in the incumbent's (GAP_TOLERANCE);
+  gate     the candidate is kept only if the A/B pairs favor it (mean a standard error above zero,
+           AB_MIN pairs or more), it doesn't retreat more in field fights (RETREAT_SLACK, unless the gain
+           is two standard errors), and Gary-Z's gap score in its own games is no worse than in the
+           incumbent's (GAP_TOLERANCE);
            else the incumbent stays (the candidate's checkpoint kept, not used)
   train    a new candidate from this round's training pairs, from the incumbent, KL-leashed to the
            imitation model
@@ -34,6 +36,7 @@ REPO = Path(__file__).resolve().parents[1]
 IMITATION = REPO / "runs" / "roles" / "20261016-212927" / "model.pt"    # the Zerg role model from the pros
 AB_MIN = 20
 GAP_TOLERANCE = 0.02
+RETREAT_SLACK = 0.03
 
 
 def band_mean(gap) -> float | None:
@@ -82,10 +85,18 @@ def main() -> None:
                  "gap": table["gap"], "pairs": pairs, "minutes_wall": round((time.time() - t0) / 60, 1)}
         # the gate
         if state["candidate"]:
-            ab_ok = (pairs.get("pairs_ab", 0) >= AB_MIN and (pairs.get("ab_mean") or 0) > 0)
+            # the A/B mean a standard error above zero (night n3 kept five candidates on means above zero,
+            # each within noise); and no more retreating in field fights than the incumbent by RETREAT_SLACK
+            # unless the gain is two standard errors (running out of a field fight scores zero: the
+            # retreat share crept 0.27 -> 0.33 over n3's rounds)
+            mean, se = pairs.get("ab_mean") or 0.0, pairs.get("ab_se") or float("inf")
+            arms = pairs.get("arms", {})
+            fa = lambda who: (arms.get(who) or {}).get("field_away") or 0.0
+            retreat_ok = fa("candidate") <= fa("incumbent") + RETREAT_SLACK or mean > 2 * se
+            ab_ok = pairs.get("pairs_ab", 0) >= AB_MIN and mean > se and retreat_ok
             gc, gi = band_mean(table["gap"].get("Z_candidate")), band_mean(table["gap"].get("Z_incumbent"))
             gap_ok = gc is not None and gi is not None and gc <= gi + GAP_TOLERANCE
-            entry["gate"] = {"ab_ok": ab_ok, "gap_ok": gap_ok, "gap_candidate": gc, "gap_incumbent": gi,
+            entry["gate"] = {"ab_ok": ab_ok, "retreat_ok": retreat_ok, "gap_ok": gap_ok, "gap_candidate": gc, "gap_incumbent": gi,
                              "kept": ab_ok and gap_ok}
             if ab_ok and gap_ok:
                 state["incumbent"] = state["candidate"]
