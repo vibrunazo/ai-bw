@@ -224,6 +224,12 @@ class LearnedArmy:
         away = np.array([cell_dist(c, here) >= MOVE_CELLS for c in range(GRID * GRID)])
         p_away = float(where[0, away].sum())
         if self.draw:
+            # (stay unless most of the odds lie away, as without draw: the model gives where a pro sends a
+            # group when ordering it, not where it should be every 2 s; drawn every ask, the army roamed:
+            # at home 25-29% of 8-10 min against the pros' 60%)
+            if p_away < MOVE_P:
+                return None
+            where = np.where(away[None], where, 0.0)
             return self._drawn(obs, mine, group, grid, glob, where, kind, here)
         if p_away < MOVE_P:
             self.proposed.pop(here, None)

@@ -78,7 +78,9 @@ def main() -> None:
     trunk = [p for n, p in net.named_parameters() if not n.startswith("kind.")]
     opt = torch.optim.AdamW([{"params": head, "lr": args.lr}, {"params": trunk, "lr": args.lr / 10}], weight_decay=1e-4)
     gt, xt, yt = torch.from_numpy(grid), torch.from_numpy(glob), torch.from_numpy(y)
-    w = torch.tensor([1.0, float((1 - y.mean()) / max(1e-6, y.mean()))], dtype=torch.float32, device=device) ** 0.5
+    # (unweighted: the model is drawn from in play, so its odds must be the pros' rate; the rarer class
+    # weighted up made its mean 0.30 against the pros' 0.20, and Gary-T's army went in too often)
+    w = torch.ones(2, dtype=torch.float32, device=device)
 
     def evaluate():
         net.eval()

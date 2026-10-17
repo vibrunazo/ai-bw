@@ -68,7 +68,7 @@ def main() -> None:
     from train.league_rl import train_army_pairs, train_engage_pairs, train_pairs
     imitation = {"roles_z": IMITATION,
                  "army_t": sorted((REPO / "runs" / "army").glob("TvZ_T_*/model.pt"))[-1],
-                 "engage_t": sorted((REPO / "runs" / "engage").glob("TvZ_T_*/model.pt"))[0]}[args.layer]
+                 "engage_t": sorted((REPO / "runs" / "engage").glob("TvZ_T_*/model.pt"))[-1]}[args.layer]
     side = "Z" if args.layer == "roles_z" else "T"
     train = {"roles_z": train_pairs, "army_t": train_army_pairs, "engage_t": train_engage_pairs}[args.layer]
     folder = REPO / "runs" / "league_loop" / args.name

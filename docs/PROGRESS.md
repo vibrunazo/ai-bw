@@ -177,8 +177,13 @@ plan and the full log).
   into the enemy: held-out AUC 0.80. In play (option `engage`) it draws attack or hold and the army
   model picks the destination on that side; RL on paired branches forcing attack in one arm and hold in
   the other at one decision, the contrast measured at three times the chaos.
-- **Next:** the engage RL loop; which of the macro model's inputs make Gary-Z's states unlike the pros';
-  a human game with the current Gary-T.
+- **Placement check before the engage loop:** Gary-T's army is at home 20-29% of 8-10 minutes against the
+  pros' 60% (older than drawing; partly hunting a passive Gary-Z). Calibrated, engage still goes in too
+  often: its odds are per pro order, and Gary asks far more often than pros order; the army layer needs
+  a when-to-order estimate. RL against a Gary-Z that never wins would learn to exploit it: the engage
+  loop waits.
+- **Next:** which of the macro model's inputs make Gary-Z's states unlike the pros' (toward a Gary-Z that
+  wins); a when-to-order estimate for the army layer; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 

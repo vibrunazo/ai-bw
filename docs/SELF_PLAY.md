@@ -365,6 +365,17 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    fight-estimate hold (going in is this decision's). Paired branches (layer engage_t) force the first
    decision attack in one arm and hold in the other (the contrast measured at 3x the chaos), the rest on
    shared dice; PPO on that head alone, KL-leashed to the supervised start; gate at two standard errors.
+   **Before the engage loop, a placement check (c3's seeds):** Gary-T's army at 8-10 min is at home 0.29
+   with drawn decisions (pros 0.60), at a Zerg base 0.07-0.09 (0.04), standing 0.22 (0.39): the old
+   "stands still 78%" was v0.27's; the low home share is older than drawing (v0.27: 0.30 against 0.63),
+   partly the opponent (against a passive Gary-Z it hunts from 8:00). Staying unless most of the odds lie
+   away (as without draw) didn't change it (0.29). The engage model was first trained with the rarer
+   class weighted up, its mean 0.30 against the pros' 0.20: retrained unweighted (0.19, AUC 0.80). Even
+   calibrated, engage goes in more (at home 0.20, standing 0.11): the model gives the odds of attacking
+   when a pro orders, and Gary asks every few seconds per cluster, far more often than pros order, so
+   per minute it attacks more. The army layer needs a when-to-order estimate (the macro model has one)
+   to draw at the pros' rate. And RL on it against Gary-Z (which never wins, rarely attacks) would mostly
+   learn that attacking Gary-Z pays: the engage loop waits for a Gary-Z that wins games.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
