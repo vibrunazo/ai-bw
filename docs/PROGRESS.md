@@ -230,9 +230,18 @@ plan and the full log).
   the RL problem in plain sight: the one decision trained (the forced attack or hold) is redrawn by the
   arm itself 15 s later, and the arms end within a point of each other (two training pairs: a lead,
   not a result).
-- **Next:** the attack-or-hold loop's first round, read pair by pair (does the forced decision survive
-  the window? if not, the branch has to hold it, or the reward is noise); a human game with the current
-  Gary-T.
+- **The attack-or-hold round read pair by pair (e1, 24 games, 188 training pairs, every replay check
+  identical):** the forced decision (attack in one arm, hold in the other: the one RL trains on) was sent
+  in every pair, 7.5 s after the branch (median). But each arm then decides 5.5 times more in its 90 s,
+  engaging 37% and 36% of the time alike: the forced attack is reversed by a later hold in 94% of pairs
+  (median 26 s), the forced hold in 85% (34 s). The arms' outcomes differ by -0.33 +- 0.43 (sd 5.65; an
+  arm's own sd 7.74): no effect to learn from. eval/army_effect.py measured three times the chaos
+  because there the whole army's choice held for the window. So the single branched decision isn't what
+  decides a window; the cadence is (Gary-T asks every ~15 s, pros order 1-6 a minute). Before RL: the
+  attack-or-hold choice held as a commitment until the pros would decide again (the keep class), then
+  pairs on the commitment.
+- **Next:** that commitment; a round read the same way (does the outcome difference rise above the
+  noise?); a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
