@@ -69,6 +69,8 @@ class ZergRoles:
         self.prev: dict[int, tuple[float, float]] = {}
         self.next_ask = 0
         self.pending: dict | None = None
+        self.queue: list[dict] = []          # this snapshot's other role groups, carried out in turn
+        self.rec: dict | None = None         # this snapshot's decisions as carried out (logged once done)
         self.told: dict[int, tuple[str, int]] = {}
         self.acted = 0                       # orders given (the log's count)
         # its own dice (deterministic per game): a paired episode draws its arms' fight decisions anew
@@ -90,6 +92,10 @@ class ZergRoles:
         """Gary-Z's fight turn (True: it acted)."""
         if self.pending is not None:
             return self._carry_out(obs)
+        if self.queue:                       # (every role group of the snapshot gets its order, one a turn)
+            self.pending = self.queue.pop(0)
+            return self._carry_out(obs)
+        self._emit()
         hi = self.bot.hi
         if hi.frame < self.next_ask:
             return False
@@ -125,38 +131,35 @@ class ZergRoles:
         fx, fy = (-1 if self.flip[0] else 1), (-1 if self.flip[1] else 1)
         groups: dict[str, list] = {}
         # each unit's decision drawn from the model's odds (keep, or a new role), not the likeliest: what
-        # RL learns from is a drawn decision and its probability (the league logs every snapshot's)
+        # RL learns from is a drawn decision and its probability. Logged as carried out (Fable's catch):
+        # a decision that needs no order (keep, stand, other; fire for a unit already attacking; the same
+        # role again within REPEAT) at once, a role group's when its order goes; one never carried out
+        # (a group whose selection failed, a move too short) masked
         n = len(probs)
-        drawn = np.full(MAX_UNITS, -1, np.int8)
-        logp = np.zeros(MAX_UNITS, np.float32)
-        for i, t in enumerate(tags[:n]):
+        pad = lambda a: np.concatenate([a[:MAX_UNITS], np.zeros((max(0, MAX_UNITS - len(a)),) + a.shape[1:], a.dtype)])
+        self.rec = {"frame": hi.frame, "rows": pad(rows.astype(np.int16)), "extra": pad(extra.astype(np.float16)),
+                    "count": min(n, MAX_UNITS), "time": obs["frame"] * 42 / 1000,
+                    "drawn": np.full(MAX_UNITS, -1, np.int8), "logp": np.zeros(MAX_UNITS, np.float32), "index": {}}
+        for i, t in enumerate(tags[:min(n, MAX_UNITS)]):
             u = by_tag.get(t)
             if u is None or u["owner"] != slot or u["type"] not in FIGHTERS or not u["completed"]:
                 continue
             k = self.rng.choices(range(probs.shape[1]), weights=probs[i].tolist())[0]
-            drawn[i], logp[i] = k, np.log(probs[i, k] + 1e-9)
+            lp = float(np.log(probs[i, k] + 1e-9))
+            self.rec["index"][t] = (i, k, lp)
             role = self.names[k]
-            if role not in URGENT:
-                continue
             last = self.told.get(t)
-            if last and last[0] == role and hi.frame - last[1] < REPEAT:
+            if role not in URGENT or (last and last[0] == role and hi.frame - last[1] < REPEAT)                     or (role in ("FIRE", "CLOSE_IN") and u["order"] in ATTACKING):
+                self.rec["drawn"][i], self.rec["logp"][i] = k, lp       # (carried out: nothing to order)
                 continue
             if role in ("FIRE", "CLOSE_IN"):
-                if u["order"] in ATTACKING:
-                    continue
                 groups.setdefault(role, []).append((u, None))
             elif moves is not None:
                 dx, dy = moves[i] * 32
                 if math.hypot(dx, dy) >= WHERE_MIN:
                     groups.setdefault(role, []).append((u, (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)))
-        if (LOG.on or self.record is not None) and (drawn >= 0).any():
-            pad = lambda a: np.concatenate([a[:MAX_UNITS], np.zeros((max(0, MAX_UNITS - len(a)),) + a.shape[1:], a.dtype)])
-            item = dict(frame=hi.frame, rows=pad(rows.astype(np.int16)), extra=pad(extra.astype(np.float16)),
-                        count=min(n, MAX_UNITS), time=obs["frame"] * 42 / 1000, drawn=drawn, logp=logp)
-            if self.record is not None:
-                self.record.append(item)
-            else:
-                LOG.add("roles_z", **item)
+        # every non-empty group queued, most urgent first, one order a turn (the first alone went before:
+        # one zergling drawing retreat cost the rest their orders, and draws were logged as done)
         for role in URGENT:
             group = groups.get(role, [])[:MAX_GROUP]
             if not group:
@@ -169,10 +172,24 @@ class ZergRoles:
             else:
                 pts = [p for _, p in group]
                 point, kind = (int(sum(x for x, _ in pts) / len(pts)), int(sum(y for _, y in pts) / len(pts))), "move"
-            self.pending = {"role": role, "tags": [u["tag"] for u in units], "point": point, "kind": kind,
-                            "tries": 0, "selecting": False}
+            self.queue.append({"role": role, "tags": [u["tag"] for u in units], "point": point, "kind": kind,
+                               "tries": 0, "selecting": False})
+        if self.queue:
+            self.pending = self.queue.pop(0)
             return self._carry_out(obs)
+        self._emit()
         return False
+
+    def _emit(self) -> None:
+        """The snapshot's decisions, as carried out, to the log (or a paired episode's arm)."""
+        rec, self.rec = self.rec, None
+        if rec is None or not (rec["drawn"] >= 0).any() or not (LOG.on or self.record is not None):
+            return
+        item = {k: v for k, v in rec.items() if k != "index"}
+        if self.record is not None:
+            self.record.append(item)
+        else:
+            LOG.add("roles_z", **item)
 
     def _carry_out(self, obs: dict) -> bool:
         p = self.pending
@@ -192,6 +209,9 @@ class ZergRoles:
                 hi.order_click(C.ORDER_ATTACK_MOVE, *on) if on else hi.minimap_command(C.ORDER_ATTACK_MOVE, x, y)
             for t in sel:
                 self.told[t] = (p["role"], hi.frame)
+                if self.rec is not None and t in self.rec["index"]:      # (carried out: logged)
+                    i, k, lp = self.rec["index"][t]
+                    self.rec["drawn"][i], self.rec["logp"][i] = k, lp
             self.acted += 1
             if self.acted % 25 == 1:
                 self.bot.log(f"fight roles: {p['role'].lower()} ({len(sel)} units), {self.acted} orders so far")

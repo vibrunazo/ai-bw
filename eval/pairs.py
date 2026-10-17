@@ -36,6 +36,7 @@ CHECK = 2 * 24                  # frames between looks for a fight
 SIGHT = 12 * 32                 # px: Gary-Z's fighters seeing enemy fighters this near: a fight
 FIGHT = 12 * 32                 # px: the fight's units, around its middle
 AWAY = 4 * 32                   # px: a fighter this much farther from the enemy at the end: it went away
+CHECK_EVERY = 4                 # every this many branch points, arm 0 is played again and must end the same
 
 
 def _value(t: int) -> float:
@@ -93,6 +94,9 @@ class Brancher:
         self.next = 0
         self.pairs: list[dict] = []
         self.kind_turn = 0
+        # a nondeterministic crash in a deterministic system is memory corruption, and corruption that
+        # doesn't crash gives silently wrong outcomes (Fable): a sample of branches replayed every game
+        self.checks_ok = self.checks_bad = 0
 
     @property
     def on(self) -> bool:
@@ -132,7 +136,7 @@ class Brancher:
         dice = [self.rng.random() for _ in range(2)]
         if ab:
             dice = [dice[0], dice[0]]                         # (the same dice: the models differ)
-        arms = []
+        arms, end0 = [], None
         for arm in range(2):
             game.restore()
             c = _copy(objs)
@@ -142,10 +146,22 @@ class Brancher:
             roles.rng = random.Random(dice[arm])
             roles.record = []
             _play(game, c, WINDOW)
-            out = fight_outcome(start, snap(game.observe()), z)
+            roles._emit()                                     # (the arm's last snapshot, as carried out)
+            end = snap(game.observe())
+            end0 = end if arm == 0 else end0
+            out = fight_outcome(start, end, z)
             arms.append({"reward": out[0] if out else 0.0, **(out[1] if out else {"away": 0.0, "moved": 0.0,
                          "field": True, "units": 0}), "model": str(getattr(roles.model, "path", "?")),
                          "decisions": roles.record})
+        if self.kind_turn % CHECK_EVERY == 1:               # (arm 0 again: the same end, or the branches lie)
+            game.restore()
+            c = _copy(objs)
+            c["zerg"].fight_roles.rng = random.Random(dice[0])
+            _play(game, c, WINDOW)
+            if snap(game.observe()) == end0:
+                self.checks_ok += 1
+            else:
+                self.checks_bad += 1
         game.restore()
         self.pairs.append({"frame": f, "ab": ab, "arms": arms})
 
@@ -166,6 +182,7 @@ class Brancher:
                     for k in ("rows", "extra", "count", "time", "drawn", "logp"):
                         dec[k].append(d[k])
         arrays = {k: np.array(v) for k, v in out.items()}
+        arrays["checks"] = np.array([self.checks_ok, self.checks_bad])
         if dec["pair"]:
             arrays.update({f"dec/{k}": np.stack([np.asarray(x) for x in v]) for k, v in dec.items()})
         np.savez_compressed(self.path, **arrays)
@@ -175,11 +192,13 @@ def summarize(files: list[str], incumbent: str | None, candidate: str | None) ->
     """A round's pairs: how many; the A/B evidence (the candidate's arm less the incumbent's, same
     position, same dice: mean and standard error); and per model the arms' retreat share in field
     fights and in fights with stakes, and the mean move (the check against learned retreat)."""
-    ab, train, arms = [], 0, {}
+    ab, train, arms, checks = [], 0, {}, [0, 0]
     norm = lambda p: str(Path(p).resolve()) if p else None
     inc, cand = norm(incumbent), norm(candidate)
     for f in files:
         d = np.load(f)
+        if "checks" in d.files:
+            checks = [checks[0] + int(d["checks"][0]), checks[1] + int(d["checks"][1])]
         for i in range(len(d["frame"])):
             m0, m1 = norm(str(d["model"][i, 0])), norm(str(d["model"][i, 1]))
             r = d["reward"][i]
@@ -194,7 +213,7 @@ def summarize(files: list[str], incumbent: str | None, candidate: str | None) ->
                 a["moved"].append(float(d["moved"][i, j]))
                 a["reward"].append(float(r[j]))
     mean = lambda v: float(np.mean(v)) if v else None
-    return {"pairs_training": train, "pairs_ab": len(ab),
+    return {"pairs_training": train, "pairs_ab": len(ab), "checks_ok": checks[0], "checks_bad": checks[1],
             "ab_mean": mean(ab), "ab_se": float(np.std(ab, ddof=1) / np.sqrt(len(ab))) if len(ab) > 1 else None,
             "arms": {k: {kk: mean(vv) for kk, vv in v.items()} | {"n": len(v["reward"])} for k, v in arms.items()}}
 

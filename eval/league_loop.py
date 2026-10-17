@@ -83,8 +83,12 @@ def main() -> None:
         entry = {"round": k, "seeds": [first, first + args.seeds - 1], "incumbent": state["incumbent"],
                  "candidate": state["candidate"], "results": table["results"], "decided": table["decided"],
                  "gap": table["gap"], "pairs": pairs, "minutes_wall": round((time.time() - t0) / 60, 1)}
+        # the branch check: a sampled branch that didn't replay the same voids the round's pairs (memory
+        # corruption gives wrong outcomes without crashing): no gate decision, no training from them
+        void = pairs.get("checks_bad", 0) > 0
+        entry["void"] = void
         # the gate
-        if state["candidate"]:
+        if state["candidate"] and not void:
             # the A/B mean a standard error above zero (night n3 kept five candidates on means above zero,
             # each within noise); and no more retreating in field fights than the incumbent by RETREAT_SLACK
             # unless the gain is two standard errors (running out of a field fight scores zero: the
@@ -104,9 +108,10 @@ def main() -> None:
         # the next candidate
         # (every round's training pairs since the incumbent last changed: one round's ~140 pairs moved a
         # candidate 0.003 from the incumbent, below what the A/B pairs can tell, night n1)
-        state.setdefault("since_adopted", []).append(rnd)
+        if not void:
+            state.setdefault("since_adopted", []).append(rnd)
         report = train_pairs(state["since_adopted"], Path(state["incumbent"]), IMITATION, folder / f"r{k}_candidate",
-                             lr=args.lr, epochs=args.epochs, kl=args.kl)
+                             lr=args.lr, epochs=args.epochs, kl=args.kl) if state["since_adopted"] else {"decisions": 0}
         entry["train"] = report
         state["candidate"] = str(folder / f"r{k}_candidate" / "model.pt") if report.get("decisions") else None
         state["history"].append(entry)
