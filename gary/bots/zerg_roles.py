@@ -4,7 +4,7 @@ v3's scripted micro. The league's learner for the Zerg's fights: imitation first
 
 Every ASK_EVERY, with a seen enemy fighter within WATCH of its units, the fight as Gary-Z sees it (the
 snapshot the Terran's fight models use, mirrored to its own corner) goes to the model, which says for
-each unit keep, or its new role and where it moves over the next half second. The most urgent group
+each unit keep, or its new role and where it moves over the next half second (drawn from its odds). The most urgent group
 of units whose role changed is carried out with Gary-Z's hands, as a player does: a look, a click on
 one and shift+clicks on the rest (12 at most), then the order.
 
@@ -23,6 +23,7 @@ import numpy as np
 
 from gary import commands as C
 from gary import zerg as Z
+from gary.bots.decision_log import LOG
 from gary.interface import screen_of
 
 ASK_EVERY = 12                  # frames: a role every half second, as the model learned them
@@ -111,11 +112,18 @@ class ZergRoles:
             return False
         fx, fy = (-1 if self.flip[0] else 1), (-1 if self.flip[1] else 1)
         groups: dict[str, list] = {}
-        for i, t in enumerate(tags[:len(probs)]):
+        # each unit's decision drawn from the model's odds (keep, or a new role), not the likeliest: what
+        # RL learns from is a drawn decision and its probability (the league logs every snapshot's)
+        n = len(probs)
+        drawn = np.full(MAX_UNITS, -1, np.int8)
+        logp = np.zeros(MAX_UNITS, np.float32)
+        for i, t in enumerate(tags[:n]):
             u = by_tag.get(t)
             if u is None or u["owner"] != slot or u["type"] not in FIGHTERS or not u["completed"]:
                 continue
-            role = self.names[int(probs[i].argmax())]
+            k = self.bot.rng.choices(range(probs.shape[1]), weights=probs[i].tolist())[0]
+            drawn[i], logp[i] = k, np.log(probs[i, k] + 1e-9)
+            role = self.names[k]
             if role not in URGENT:
                 continue
             last = self.told.get(t)
@@ -129,6 +137,10 @@ class ZergRoles:
                 dx, dy = moves[i] * 32
                 if math.hypot(dx, dy) >= WHERE_MIN:
                     groups.setdefault(role, []).append((u, (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)))
+        if LOG.on and (drawn >= 0).any():
+            pad = lambda a: np.concatenate([a[:MAX_UNITS], np.zeros((max(0, MAX_UNITS - len(a)),) + a.shape[1:], a.dtype)])
+            LOG.add("roles", frame=hi.frame, rows=pad(rows.astype(np.int16)), extra=pad(extra.astype(np.float16)),
+                    count=min(n, MAX_UNITS), time=obs["frame"] * 42 / 1000, drawn=drawn, logp=logp)
         for role in URGENT:
             group = groups.get(role, [])[:MAX_GROUP]
             if not group:

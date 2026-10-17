@@ -25,10 +25,13 @@ import random
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
+
 from gary import commands as C
 from gary import terran as T
 from gary import zerg as Z
 from gary.bots import zerg_v3 as V3
+from gary.bots.decision_log import LOG
 from gary.bots.zerg_v3 import Job, ZergV3
 from gary.interface import screen_of
 from gary.policy.army import ArmyModel, ArmyTracker
@@ -124,7 +127,8 @@ class GaryZ(ZergV3):
         roles = latest_zerg_model()
         self.fight_roles = ZergRoles(self, roles) if roles is not None else None
         self.sizes = dict(GROUND)
-        self.next_ask, self.army_goal = 0, None  # the whole army's destination, asked every ARMY_EVERY
+        self.next_ask: dict[int, int] = {}       # group -> when its destination is drawn again
+        self.army_goal: dict[int, tuple | None] = {}   # group -> its drawn destination
         self.sent_to: dict[int, tuple] = {}
         self.straggle_after, self.straggle_tries = 0, 0
         self.task_key, self.task_since = None, 0      # group -> the destination it was last sent to
@@ -396,34 +400,36 @@ class GaryZ(ZergV3):
         else:
             super()._grab_idle(obs, u)
 
-    def _army_goal(self, obs: dict, lings: dict):
-        """One destination for the whole army, asked every ARMY_EVERY with every grouped fighter as the
-        group: each group asking alone sent 12 zerglings at a time into Gary's army (Argon's catch).
-        (cell, attack), or None to stay (an attack the fight estimate expects to lose is held)."""
+    def _army_goal(self, n: int, obs: dict, members: list[dict]):
+        """Group n's destination, drawn every ARMY_EVERY from the army model's odds for that group (its
+        cell and move or attack): (cell, attack), or None to stay (an attack the fight estimate expects to
+        lose is held). Drawn, not the likeliest: the likeliest sent every group to one cell, nearly
+        always home (the army bunched at home 79-89% of the time, pros 35-46%), and a drawn decision with
+        its probability is what RL learns the army layer from (the league logs it)."""
         hi = self.hi
-        if hi.frame < self.next_ask:
-            return self.army_goal
-        self.next_ask = hi.frame + ARMY_EVERY
-        members = [lings[t] for n in self.groups for t in self.groups[n] if t in lings]
-        if not members:
-            self.army_goal = None
-            return None
+        if hi.frame < self.next_ask.get(n, 0):
+            return self.army_goal.get(n)
+        self.next_ask[n] = hi.frame + ARMY_EVERY
         grid, glob = self.army_tracker.inputs(obs, members)
         where, kind = self.army_model.predict(grid, glob)
-        cell, attack = int(where[0].argmax()), bool(kind[0, 1] > 0.5)
-        if attack and self.army_model.fight(grid, glob, cell, True) < HOLD_BELOW:
-            self.army_goal = None
-        else:
-            self.army_goal = (cell, attack)
-        return self.army_goal
+        cell = self.rng.choices(range(where.shape[1]), weights=where[0].tolist())[0]
+        attack = self.rng.random() < float(kind[0, 1])
+        held = attack and self.army_model.fight(grid, glob, cell, True) < HOLD_BELOW
+        self.army_goal[n] = None if held else (cell, attack)
+        LOG.add("army", frame=hi.frame, group=n, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16),
+                cell=cell, attack=attack, held=held,
+                logp=float(np.log(where[0, cell] + 1e-9) + np.log(kind[0, int(attack)] + 1e-9)))
+        return self.army_goal[n]
 
     def _group(self, n: int, obs: dict, lings: dict, enemy: list[dict]) -> bool:
-        """Group n goes where the army goes (_army_goal), unless it's there or on its way. (True: it acted.)"""
+        """Group n goes where its drawn goal is (_army_goal), unless it's there or on its way. (True: it acted.)"""
         if self.phase.get(n) == "to_staging":           # (a new group: to the staging point first, as v1's)
             return self._order(n, obs, "move", self.staging, "staging")
-        goal = self._army_goal(obs, lings)
         members = [lings[t] for t in self.groups[n] if t in lings]
-        if goal is None or not members:
+        if not members:
+            return False
+        goal = self._army_goal(n, obs, members)
+        if goal is None:
             return False
         cell, attack = goal
         mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
