@@ -28,7 +28,9 @@ HALLS = {"T": {106}, "Z": {131, 132, 133}}
 def series(job: tuple):
     """(features (T, F), the enemy's real army supply x2 (T,), frames) for one game, the race's side."""
     rep, race, model_path = job
+    from eval.humanlike import gary_end
     from gary.env import Game
+    end = gary_end(rep) or 20 * 1440        # (OpenBW plays on past a replay's last command: its real end)
     from gary.policy.belief import ARMY_SUPPLY, BeliefModel, features_series
     model = BeliefModel.load(model_path)
     enemy = model.enemy
@@ -36,7 +38,7 @@ def series(job: tuple):
     seen, own, eco, enemy_counts, frames = [], [], [], [], []
     try:
         slot = None
-        while True:
+        while g.frame + 24 <= end:
             try:
                 g.step(24)
             except Exception:
