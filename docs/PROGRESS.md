@@ -113,9 +113,20 @@ plan and the full log).
   updated models against round r2, same seeds: no change past noise (Gary-T won 9 and 8, lost 0; mean
   outcomes and gap scores within their spread), as expected of one small step on 24 games. The loop
   runs end to end: play, log, score, update, play.
-- **Next:** many rounds instead of one (nightly batches), and lower variance per decision: paired fight
-  episodes (one position branched with different decisions) for the fight roles, the value net's
-  estimate for the army layers.
+- **The first nights (`eval/league_loop.py`, `eval/pairs.py`):** one RL target, Gary-Z's fight roles,
+  on paired fight episodes (a fight saved and played twice from the same moment, both bots live); the
+  army layers frozen at imitation. Each round: fresh seeds, a candidate trained from the pairs (KL-leashed
+  to imitation) and kept only if its A/B pairs beat the incumbent and its games aren't less pro-like.
+  Checked before the runs: the same seed replays identically, an arm replays identically from a saved
+  moment, the main game is unchanged by the branches. Twelve rounds, 288 games: no candidate kept (the
+  A/B pairs within noise; bigger steps drifted from the pros, which the gap test caught); no learned
+  retreat. So, Gary-Z's army layer: most of its ground army was never in a group the army model moved,
+  and v3's lurker routine starved the rest for minutes. Fixed: the army model moves the whole army by
+  clusters. Gary-Z's army now spends 47% of 5-7 minutes at home (78% before, pros 38%), its gap score
+  falls to 0.34 there (0.45), the decided share rises to 38% (17%); it's more pro-like but not stronger
+  (Gary-T won 9 of 24, 4 before). A Zerg belief model, frozen (pro games only).
+- **Next:** Gary-Z's fights (they lose more now that its army goes out), the fight-role nights again
+  with clusters (more fights, more pairs), and the Zerg value model (train/value.py learns a Zerg side).
 
 ### Next: the belief model (started)
 

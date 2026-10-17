@@ -249,6 +249,22 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    Night n2: training pairs pooled since the incumbent last changed (n1's included), that bigger step.
    The Zerg belief model (pro games, frozen): army-supply error 5.9 on held-out pros (game-time average
    8.0, seen in the last 3 min 10.0).
+   **Night n2 (6 rounds, pooled pairs, a bigger step):** candidates 0.03-0.04 KL from imitation; A/B
+   +0.10 +- 0.06 in round 1, then within +-0.02 of zero; in 4 rounds of 5 the candidate's own games
+   scored a worse gap than the incumbent's (0.47-0.52 against 0.43-0.48): the gate's gap test caught
+   RL drifting away from the pros. Nothing kept; the retreat share stayed flat. Twelve rounds moved
+   neither the decided share nor Gary-Z's gap: so, as Fable said, Gary-Z's army layer.
+   **Gary-Z's army layer (probes):** most of its ground army was never in a v1 hotkey group (52 of 245
+   fighter-looks at 6-8 min in one game, none in another), so the army model never moved it; and v3's
+   lurker routine, with no retry limit, took every army turn from 9:00 to 14:00 (2,100 turns). Now the
+   lurker routine takes 8 turns in a row at most, then rests 3 s; and the army model moves the whole
+   ground army by clusters (as the Terran's army layer), each cluster's drawn destination carried out a
+   dozen at a time. 24 games on the same fresh seeds, groups / clusters / pros: at home at 5-7 min
+   0.78 / 0.47 / 0.38, at 8-10 min 0.63 / 0.50 / 0.35; in the field 0.20 / 0.47 / 0.52; spread 6 / 12 /
+   11 tiles; lone units moving away 0.03 / 0.10 / 0.18; Gary-Z's gap 0.45 / 0.34 at 5-7 min (later
+   equal); decided 17% / 38%, but Gary-T won 4 / 9: an army that goes out fights more and loses more.
+   More pro-like, not stronger: its fights are the weak point. Clusters are Gary-Z's default now.
+   The belief model on league games: army-supply error 11.7 (median 4.1) against 5.9 on held-out pros.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

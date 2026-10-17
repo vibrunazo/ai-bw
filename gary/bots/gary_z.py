@@ -135,8 +135,10 @@ class GaryZ(ZergV3):
         self.army_goal: dict[int, tuple | None] = {}   # group -> its drawn destination
         self.sent_to: dict[int, tuple] = {}
         self.straggle_after, self.straggle_tries = 0, 0
-        # the army by clusters instead of v1's hotkey groups (an option while it's measured)
-        self.cluster_army = os.environ.get("GARY_Z_ARMY") == "clusters"
+        # the army by clusters, not v1's hotkey groups (GARY_Z_ARMY=groups for those): 24 games on the same
+        # seeds, at home 47% at 5-7 min (groups 78%, pros 38%), in the field 47% (20%, 52%), Gary-Z's gap
+        # score 0.34 (0.45), decided 38% (17%), lone units moving away 10% (3%, pros 18%)
+        self.cluster_army = os.environ.get("GARY_Z_ARMY", "clusters") == "clusters"
         self.army_job: dict | None = None
         self.cluster_ask: dict[int, int] = {}
         self.cluster_turn = 0
