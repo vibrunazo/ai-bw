@@ -186,7 +186,7 @@ def main() -> None:
     for j, qq in enumerate(QUANTILES):
         r[f"belief model, {int(qq * 100)}th percentile"] = score(f"belief model ({int(qq * 100)}th pct)", quant[:, j], true_sup, fte)
 
-    out = REPO_ROOT / "runs" / "belief" / f"Tv{enemy}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
+    out = REPO_ROOT / "runs" / "belief" / f"TvZ_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"   # (the matchup, then whose side)
     out.mkdir(parents=True, exist_ok=True)
     torch.save({"state": net.state_dict(), "n_in": Xtr.shape[1], "n_out": Ytr.shape[1] + len(QUANTILES),
                 "quantiles": QUANTILES, "sup_scale": SUP_SCALE, "race": args.race,
