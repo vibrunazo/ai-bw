@@ -36,6 +36,7 @@ from gary.decision_log import LOG, top
 from gary.bots.zerg_v3 import Job, ZergV3
 from gary.interface import screen_of
 from gary.policy.army import ArmyModel, ArmyTracker
+from gary.policy.attribution import explain_army, explain_macro
 from gary.policy.macro import MacroModel, MacroTracker
 
 MORPH, BMORPH, BUILD, RESEARCH, UPGRADE, EXPAND = 1, 2, 3, 4, 5, 6
@@ -454,7 +455,8 @@ class GaryZ(ZergV3):
         attack = self.rng.random() < float(kind[0, 1])
         held = attack and self.army_model.fight(grid, glob, cell, True) < HOLD_BELOW
         self.army_goal[n] = None if held else (cell, attack)
-        self._army_record(f"group {n}", members, where, kind, cell, attack, "held: the fight estimate" if held else None)
+        self._army_record(f"group {n}", members, where, kind, cell, attack, "held: the fight estimate" if held else None,
+                          grid, glob)
         LOG.add("army_z", frame=hi.frame, group=n, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16),
                 cell=cell, attack=attack, held=held,
                 logp=float(np.log(where[0, cell] + 1e-9) + np.log(kind[0, int(attack)] + 1e-9)))
@@ -559,14 +561,15 @@ class GaryZ(ZergV3):
         mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
         stays = _cell_dist(cell, self.army_tracker.cell(*mid)) < 2
         self._army_record(f"cluster {k}", members, where, kind, cell, attack,
-                          "held: the fight estimate" if held else "stays: the cell drawn is where it is" if stays else None)
+                          "held: the fight estimate" if held else "stays: the cell drawn is where it is" if stays else None,
+                          grid, glob)
         if held or stays:
             return False                                   # (held, or the drawn cell is where they are)
         self.army_job = {"tags": [u["tag"] for u in members], "point": self.army_tracker.center(cell),
                          "kind": "attack" if attack else "move", "selecting": False, "tries": 0}
         return self._army_job_step(obs, mine)
 
-    def _army_record(self, who: str, members: list[dict], where, kind, cell: int, attack: bool, then) -> None:
+    def _army_record(self, who: str, members: list[dict], where, kind, cell: int, attack: bool, then, grid, glob) -> None:
         """An army decision in the game's records: the cells likeliest, the one drawn, move or attack."""
         def name(c):
             x, y = self.army_tracker.center(c)
@@ -575,7 +578,8 @@ class GaryZ(ZergV3):
         LOG.decision("Z", "army", self.hi.frame, f"{'attack' if attack else 'move'} to {name(cell)}",
                      float(where[0, cell]) * float(kind[0, int(attack)]), top(name, where[0], 3),
                      {"who": who, "units": len(members), "at": f"({int(mid[0]) // 32},{int(mid[1]) // 32})",
-                      "p_attack": float(kind[0, 1])}, "draw", then=then or "sent")
+                      "p_attack": float(kind[0, 1])}, "draw", then=then or "sent",
+                     why=explain_army(self.army_model, grid, glob, lambda w, kd: w[:, cell] * kd[:, int(attack)]))
 
     # (a minimap click's scatter can put a drone's move on the map's edge row, where it never arrives: walking
     # 4 minutes, swung between 35 and 14 tiles off, an expansion's drone kept the next ones from being decided
@@ -739,9 +743,9 @@ class GaryZ(ZergV3):
         name = lambda k: self._name(*self.model.spec.decisions[k])
         over: list[list] = []
 
-        def record(choice, p, then=None):
+        def record(choice, p, then=None, k=None):
             LOG.decision("Z", "macro", hi.frame, choice, p, top(name, probs[0]), self._seen(obs, mine, me), "dice",
-                         over[:8], then)
+                         over[:8], then, why=explain_macro(self.model, x, k) if k is not None else None)
         for k in order:
             act, uid = self.model.spec.decisions[k]
             if not larva and act == MORPH and uid in Z.FROM_LARVA and Z.can_make(uid, self._done_types(mine), self.researched) \
@@ -773,14 +777,14 @@ class GaryZ(ZergV3):
             if self._affordable(g, me):
                 self.goal = g
                 self.log(f"next: {g['name']} ({g['p']:.0%})")
-                record(g["name"], g["p"])
+                record(g["name"], g["p"], k=k)
                 if from_larva:                       # (pros spend larvae in bursts, a hatchery's at once: the timing
                     self.next_query = hi.frame + QUERY_EVERY    # head's gap is between bursts; paced by it,
                 return                                          # the larvae piled up, 2,000 minerals at 10:00)
             if not from_larva and self.parked is None:
                 self.parked = g
                 self.log(f"next: {g['name']} ({g['p']:.0%}), parked for its money")
-                record(g["name"], g["p"], "parked for its money")
+                record(g["name"], g["p"], "parked for its money", k=k)
                 over.append([g["name"], "parked for its money"])
                 continue                                     # (and a larva meanwhile, if one is affordable)
             if self.parked is not None and not from_larva:

@@ -221,9 +221,18 @@ plan and the full log).
   trains on), records and the RL arrays share no decision id, a decision's record has no candidate-vs-
   incumbent odds and no input attribution (which inputs moved its odds), and some layers (Gary-T's fight
   rules, v3's mutalisk and lurker routines) leave only notes.
-- **Next:** arm records (each arm's decisions, the ids the RL arrays use, both models' odds) and input
-  attribution for the learned layers; then the attack-or-hold loop, its first failing round read from
-  the records; a human game with the current Gary-T.
+- **Arm records and input attribution:** each paired arm's records are kept (`eval/why.py --pairs` lists
+  a game's pairs with the first decision where the arms differ, `--pair N` shows both arms), each learned
+  decision linked to its row in the RL arrays and, in an A/B arm, with the other model's odds of the same
+  choice. A learned decision also records what its odds rest on (each group of what it saw of the enemy,
+  its money, history and plan zeroed in turn): Gary-Z's 7% creep colonies rest on the Terran army it has
+  seen most (7% -> 4% without), as the offline probe found. A first engage game with pairs already shows
+  the RL problem in plain sight: the one decision trained (the forced attack or hold) is redrawn by the
+  arm itself 15 s later, and the arms end within a point of each other (two training pairs: a lead,
+  not a result).
+- **Next:** the attack-or-hold loop's first round, read pair by pair (does the forced decision survive
+  the window? if not, the branch has to hold it, or the reward is noise); a human game with the current
+  Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 

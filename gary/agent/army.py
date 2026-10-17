@@ -34,6 +34,7 @@ import numpy as np
 from gary import terran as T
 from gary.agent.gary import Gary
 from gary.agent.intents import Intent
+from gary.policy.attribution import explain_army
 from gary.policy.army import GRID, ArmyModel, ArmyTracker, is_building, supply_x2
 from gary.policy.belief import ARMY_SUPPLY
 
@@ -293,7 +294,8 @@ class LearnedArmy:
                          f"held: the belief model, {hidden / 2:.0f} supply more zerg army likely than seen")
             return None
         self.held.pop(here, None)
-        self._record(where, choice, float(where[0, best]), "favorite", "sent")
+        self._record(where, choice, float(where[0, best]), "favorite", "sent",
+                     why=explain_army(self.model, grid, glob, lambda w, k: w[:, best] * k[:, int(attack)]))
         x, y = self.tracker.center(best)
         self.ordered[here] = (best, attack, hi.frame)
         g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
@@ -325,7 +327,8 @@ class LearnedArmy:
             self._record(where, f"{'attack' if drawn_attack else 'move'} to {self._cell_name(best)}", float(np.exp(logp)),
                          "draw", {"stay": "stays: the cell drawn is near", "repeat": "not again: just ordered there",
                                   "held": "held: the fight estimate", "go": "sent"}[outcome],
-                         rl=self._rl_row("army_t"), p_other=other)
+                         rl=self._rl_row("army_t"), p_other=other,
+                         why=explain_army(self.model, grid, glob, lambda w, k: w[:, best] * k[:, int(drawn_attack)]))
         if cell_dist(best, here) < MOVE_CELLS:
             log("stay")
             return None
@@ -387,7 +390,8 @@ class LearnedArmy:
                      pe if eng else 1 - pe, [["engage", round(pe, 3)], ["hold", round(1 - pe, 3)]], self._seen,
                      "forced (a paired arm)" if forced else "draw",
                      then="stays: the cell drawn is near" if cell_dist(best, here) < MOVE_CELLS else "sent",
-                     rl=self._rl_row("engage_t"), p_other=other)
+                     rl=self._rl_row("engage_t"), p_other=other,
+                     why=explain_army(self.engage, grid, glob, lambda w, k: k[:, int(eng)]))
         if cell_dist(best, here) < MOVE_CELLS:
             return None
         self.move_tokens -= 1.0
@@ -407,12 +411,12 @@ class LearnedArmy:
         return f"({x // 32},{y // 32})"
 
     def _record(self, where, choice: str, p: float | None, by: str, then: str | None = None, rl: int | None = None,
-                p_other: float | None = None) -> None:
+                p_other: float | None = None, why: list | None = None) -> None:
         """An army decision in the game's records (gary/decision_log.py): the likeliest cells, what was
         chosen and by whom (the draw, a rule), what came of it."""
         from gary.decision_log import LOG, top
         LOG.decision("T", "army", self.g.hi.frame, choice, p, top(self._cell_name, where[0], 3), self._seen, by, then=then,
-                     rl=rl, p_other=p_other)
+                     rl=rl, p_other=p_other, why=why)
 
     def _rl_row(self, layer: str) -> int | None:
         """The row of the decision just logged among the layer's RL decisions (a paired arm's, or the game's)."""

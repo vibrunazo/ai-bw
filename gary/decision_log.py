@@ -16,7 +16,9 @@ a query over it rather than a script that re-simulates it. One JSON line each:
             posture); over, what intervened: the likelier or drawn options set aside before the choice, and
             why (a rule, the money, a busy building, the posture); then, what came of it right away (parked,
             held...); rl, its row among the layer's RL decisions (the arrays above, or a paired arm's in
-            eval/pairs.py); p_other, the same choice's odds under the other model of an A/B pair
+            eval/pairs.py); p_other, the same choice's odds under the other model of an A/B pair; why,
+            for a learned layer, the input groups that move the choice's odds most, each as [group, the
+            odds with it zeroed] (gary/policy/attribution.py)
   order     {f, side, what, fate, why, by}: an order's fate: sent (to the game), refused (by the
             interface: apm, off screen; or by the game), retried, dropped, done; by, who had the hands
   hands     {f, side, owner}: who has the hands from now (Gary-T's arbiter; Gary-Z's turns)
@@ -76,7 +78,7 @@ class DecisionLog:
 
     def decision(self, side: str, layer: str, frame: int, choice, p: float | None = None, top: list | None = None,
                  inputs: dict | None = None, by: str = "model", over: list | None = None, then: str | None = None,
-                 rl: int | None = None, p_other: float | None = None) -> dict:
+                 rl: int | None = None, p_other: float | None = None, why: list | None = None) -> dict:
         r = {"f": int(frame), "kind": "decision", "side": side, "layer": layer, "choice": choice, "by": by}
         if p is not None:
             r["p"] = round(float(p), 3)
@@ -92,6 +94,8 @@ class DecisionLog:
             r["over"] = over
         if then:
             r["then"] = then
+        if why:
+            r["why"] = why
         self.records.append(r)
         return r
 

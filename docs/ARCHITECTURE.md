@@ -851,7 +851,12 @@ probabilities, the choice and who made it (the model, a draw, a rule, the postur
 (each option set aside before the choice, and why: a rule, the money, a busy building, a parked
 decision). An order: its fate at the hands (sent; refused by the interface for APM or off screen, or by
 the game) and above them (retried, dropped, done, and why), stamped with who had the hands. And who had
-the hands, whenever that changes (Gary-T's arbiter; Gary-Z's turns). `python -m eval.why <game> --minute
+the hands, whenever that changes (Gary-T's arbiter; Gary-Z's turns). A learned layer's decision also
+carries what its odds rest on: each group of what it saw of the enemy, its money, its history and its plan
+zeroed in turn, the chosen option's odds again (`gary/policy/attribution.py`; its own units, supply and the
+time aren't zeroed: "no drones, so a drone" is true and useless). Paired branches keep each arm's records,
+linked to the rows RL trains on and with the other model's odds of the same choice (`eval/why.py --pairs`,
+`--pair N`: the first decision where the arms differ). `python -m eval.why <game> --minute
 M` prints one window of it in time order: a why-question about a game is a query, not a script that
 re-simulates it. A narrator comes only once the records are complete enough that it couldn't invent a
 reason they don't hold.

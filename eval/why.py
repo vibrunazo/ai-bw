@@ -11,7 +11,9 @@ The game: a .rep or .records.jsonl, or a folder searched (recursively, the newes
 records (<anything>seed<seed>.records.jsonl or <anything><seed>.records.jsonl).
 
 Each line: the time, the side and who had its hands, then
-  a decision   layer: choice (p) by who; what it saw; the top alternatives; what was set aside and why; then
+  a decision   layer: choice (p) by who; what it saw; the top alternatives; for a learned layer, the input
+               groups its odds rest on (each zeroed in turn: the odds without it); what was set aside and
+               why; then
   an order     order: what, its fate (sent, refused, retried, dropped, waiting, done) and why, given by whom
   a note       what a layer said in the game's log (--notes off to hide)
 --orders: "fates" (the default: every order that wasn't simply sent, and the production orders sent),
@@ -75,6 +77,8 @@ def line(r: dict) -> str:
             out += "\n" + " " * 26 + "saw " + ", ".join(f"{k} {v}" for k, v in r["in"].items() if v is not None)
         if r.get("top"):
             out += "\n" + " " * 26 + "top " + ", ".join(f"{n} {pct(p)}" for n, p in r["top"])
+        if r.get("why"):
+            out += "\n" + " " * 26 + "rests on " + ", ".join(f"{g} ({pct(r['p'])} -> {pct(q)} without)" for g, q in r["why"])
         for n, why in r.get("over", []):
             out += "\n" + " " * 26 + f"set aside {n}: {why}"
         return out

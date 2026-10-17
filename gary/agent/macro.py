@@ -29,6 +29,7 @@ from gary import terran as T
 from gary.agent.executor import COST
 from gary.agent.gary import Gary, Task
 from gary.decision_log import LOG, top
+from gary.policy.attribution import explain_macro
 from gary.policy.macro import ACT_NAMES, MacroModel, MacroTracker
 
 TRAIN, BUILD, RESEARCH, UPGRADE, EXPAND = 0, 3, 4, 5, 6
@@ -210,7 +211,8 @@ class LearnedMacro:
             def record(k, by, then=None):
                 LOG.decision("T", "macro", hi.frame, None if k is None else name(k),
                              None if k is None else float(probs[0, k]), top(name, probs[0]),
-                             self._seen(obs, mine, me), by, over[:8], then)
+                             self._seen(obs, mine, me), by, over[:8], then,
+                             why=explain_macro(self.model, x, k) if k is not None else None)
             if self.decoder == "sample":
                 # training (docs/CONTROL.md step 7): a draw at the temperature among the decisions Gary
                 # can carry out now or soon (a busy building), logged with what it was drawn from
