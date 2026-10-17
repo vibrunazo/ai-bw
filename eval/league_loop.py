@@ -51,6 +51,11 @@ def main() -> None:
     ap.add_argument("--base", type=int, default=1001, help="the first round's first seed")
     ap.add_argument("--minutes", type=float, default=20)
     ap.add_argument("--parallel", type=int, default=4)
+    ap.add_argument("--pool", nargs="*", default=[], help="earlier rounds (league round names) whose training "
+                    "pairs join this run's while the incumbent is unchanged")
+    ap.add_argument("--lr", type=float, default=3e-5)
+    ap.add_argument("--epochs", type=int, default=4)
+    ap.add_argument("--kl", type=float, default=0.1)
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
@@ -59,7 +64,8 @@ def main() -> None:
     folder.mkdir(parents=True, exist_ok=True)
     state_path = folder / "state.json"
     state = json.loads(state_path.read_text()) if state_path.exists() else \
-        {"round": 0, "incumbent": str(IMITATION), "candidate": None, "imitation": str(IMITATION), "history": []}
+        {"round": 0, "incumbent": str(IMITATION), "candidate": None, "imitation": str(IMITATION), "history": [],
+         "since_adopted": list(args.pool)}
     for _ in monitor.track(range(args.rounds), args.rounds, "rounds"):
         k = state["round"]
         rnd = f"{args.name}_r{k}"
@@ -83,8 +89,13 @@ def main() -> None:
                              "kept": ab_ok and gap_ok}
             if ab_ok and gap_ok:
                 state["incumbent"] = state["candidate"]
+                state["since_adopted"] = []                   # (the pairs before were another model's)
         # the next candidate
-        report = train_pairs([rnd], Path(state["incumbent"]), IMITATION, folder / f"r{k}_candidate")
+        # (every round's training pairs since the incumbent last changed: one round's ~140 pairs moved a
+        # candidate 0.003 from the incumbent, below what the A/B pairs can tell, night n1)
+        state.setdefault("since_adopted", []).append(rnd)
+        report = train_pairs(state["since_adopted"], Path(state["incumbent"]), IMITATION, folder / f"r{k}_candidate",
+                             lr=args.lr, epochs=args.epochs, kl=args.kl)
         entry["train"] = report
         state["candidate"] = str(folder / f"r{k}_candidate" / "model.pt") if report.get("decisions") else None
         state["history"].append(entry)
