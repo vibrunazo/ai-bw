@@ -376,6 +376,14 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    per minute it attacks more. The army layer needs a when-to-order estimate (the macro model has one)
    to draw at the pros' rate. And RL on it against Gary-Z (which never wins, rarely attacks) would mostly
    learn that attacking Gary-Z pays: the engage loop waits for a Gary-Z that wins games.
+   **Gary-Z's macro audit, which inputs (counterfactuals in 6 games: the same states with one input
+   changed):** the Mutalisk odds aren't low in general (23% at 6-8 min on these seeds; the 3% before was
+   six games of other plans) and Gary-Z had seen no turret before 10:00 (removing them changes
+   nothing). The Terran army it sees is what drives its static defense: removed from its inputs, at 8-10
+   min Creep Colony 7% -> 2%, Sunken 13% -> 9%, Zergling 20% -> 14%, Drone 22% -> 31% (Mutalisk 17% ->
+   20%), the same at 6-8 and 10-12 min. The model answers visible bio pressure as pros do; the pressure
+   is Gary-T's army roaming (at home 20-29% of 8-10 min, pros 60%; at Zerg bases twice the pros' share).
+   The sides' humanlikeness is coupled: Gary-Z's economy starts with Gary-T's army layer.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

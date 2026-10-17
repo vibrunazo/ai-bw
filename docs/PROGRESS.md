@@ -182,8 +182,12 @@ plan and the full log).
   often: its odds are per pro order, and Gary asks far more often than pros order; the army layer needs
   a when-to-order estimate. RL against a Gary-Z that never wins would learn to exploit it: the engage
   loop waits.
-- **Next:** which of the macro model's inputs make Gary-Z's states unlike the pros' (toward a Gary-Z that
-  wins); a when-to-order estimate for the army layer; a human game with the current Gary-T.
+- **What drives Gary-Z's static defense:** the Terran army it sees. With it removed from the macro model's
+  inputs, creep colonies fall from 7% to 2% of its odds at 8-10 minutes and drones rise from 22% to
+  31%: the model answers visible pressure as pros do, and the pressure is Gary-T's army roaming (at home
+  20-29% against the pros' 60%). The sides' humanlikeness is coupled.
+- **Next:** Gary-T's army at home as pros keep it (why it roams: hunts, drawn destinations; a
+  when-to-order estimate), then Gary-Z's economy again; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
