@@ -208,8 +208,22 @@ plan and the full log).
   Aspect, waiting for money) Gary-Z treated its larvae as taken, so Drones were set aside as "no larva
   free" with 5 larvae standing and only options over 5% stayed; and three of the four colonies were
   never built, the job counting a colony 2 tiles away as its own.
-- **Next:** that larva bug fixed and a round on the same seeds; then the attack-or-hold loop, its
-  first failing round read from the records; a human game with the current Gary-T.
+- **Two rounds read from the records (c7, c8, c6's seeds):** with the larva bug fixed (c7) Gary-Z drones
+  past the pros (27.5 at 8 minutes, pros 25; c5 22) and decides a third fewer creep colonies, but its
+  army doesn't grow: at 11:00 one game had 1,758 minerals, 39 drones, 3 hatcheries and no larvae. Its
+  records showed why in one query: the next expansion's drone had walked since 8:00 toward a point on
+  the map's edge row it never reached, and the job never gave up, so no other expansion was decided (the
+  Heartbreak edge bases: decided 7 times in 8 games, never built). Gary-Z's jobs now send a drone again
+  after 45 s of walking, and drop an expansion whose drones twice never arrive (c8: 8 dropped). Minerals
+  at 12 minutes 648 -> 378, army units 11 -> 14 (22 at 15), its gap score 0.34 -> 0.30; Gary-T won 9 and
+  8 of 24, Gary-Z still none, 3 hatcheries at 12 minutes.
+- **The records aren't complete for RL yet:** paired-branch arms are left out (and they are what RL
+  trains on), records and the RL arrays share no decision id, a decision's record has no candidate-vs-
+  incumbent odds and no input attribution (which inputs moved its odds), and some layers (Gary-T's fight
+  rules, v3's mutalisk and lurker routines) leave only notes.
+- **Next:** arm records (each arm's decisions, the ids the RL arrays use, both models' odds) and input
+  attribution for the learned layers; then the attack-or-hold loop, its first failing round read from
+  the records; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
