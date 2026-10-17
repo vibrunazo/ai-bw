@@ -163,8 +163,14 @@ plan and the full log).
   decision of the window drawn apart: one candidate kept (A/B +0.50 +- 0.41), three rejected; about +-5
   per pair, the credit spread over dozens of decisions. Next loop: one decision branched, the rest with
   shared dice.
-- **Next:** army RL with one decision branched (loop a2); one last night of fight-role RL with the fixed
-  logging, then that line closes; Gary-Z's economy and army size; a human game with the current Gary-T.
+- **Loop a2, one army decision branched:** two candidates kept on a standard error, but the final model
+  against the imitation one on two fresh batches: -0.18 +- 0.30 (262 pairs), no gain. At this scale
+  (a few hundred decisions a round, +-5 noise a pair) the army layer doesn't learn either; the effect
+  measurement's contrast (the whole army attacking or holding) is far bigger than the model's own
+  alternatives.
+- **Next:** one last night of fight-role RL with the fixed logging, then that line closes; for the army,
+  a learned decision with a big contrast (attack or hold, the destination from imitation) or a critic
+  to cut the noise; Gary-Z's economy and army size; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 

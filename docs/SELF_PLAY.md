@@ -335,6 +335,17 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    149 GB. Killed; a2 rewound to its clean round 0 and resumed. The same pressure likely explains a1's
    training crash ("Unable to allocate 1.70 MiB") and night n3's one access violation inside a branch
    (more likely a failed allocation in the native env than a save/restore fault).
+   **Loop a2 (one army decision branched, 5 rounds, fresh seeds 9001+):** no errors, branch checks 271 of
+   271. Kept: round 1's candidate (A/B +1.06 +- 0.45) and round 4's (+0.49 +- 0.41, its games' gap 0.44
+   against 0.49); rejected +0.09 +- 0.45 and -1.06 +- 0.50. Per pair still about +-5: one decision apart,
+   the rest of the 90 s diverges anyway. The final model against the imitation army model, two fresh
+   batches (48 games, 262 A/B pairs): -0.18 +- 0.30, nothing; its games' gap a little lower at places
+   (0.34 against 0.43 at 5-7 min in one batch), within noise. Kept on a standard error, twice, and noise
+   both times. At this scale (120-270 decisions a round, one a pair, +-5 noise each) the army layer
+   doesn't learn either: the effect measurement's contrast (the whole army attacking or holding) is far
+   bigger than the model's own alternatives, which are mostly nearby cells. What that leaves: many more
+   pairs (the compute isn't here), or decisions with big contrasts (attack or hold as the learned choice,
+   the destination kept from imitation), or a critic to cut the noise per decision.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
