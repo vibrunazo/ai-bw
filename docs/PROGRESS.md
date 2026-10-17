@@ -132,9 +132,20 @@ plan and the full log).
   paired fights +0.020 +- 0.046, no gain; the retreat share equal. Three nights, 432 games: no
   measurable gain from fight-role RL, no learned retreat. The gate is now stricter. Gary-Z still wins
   no game.
-- **Next:** a stricter gate (the A/B evidence pooled, a standard error above zero; the retreat share
-  gated too), Gary-Z's fights, the env's rare crash inside a branch (1 game in 144), and the Zerg value
-  model (train/value.py learns a Zerg side).
+- **Fixes from Fable's review:** the Zerg roles had ordered only the most urgent role group each half
+  second and logged every unit's draw as done (the nights trained on roles that never happened): now
+  every group is queued and only executed decisions are logged. Each league game replays a sample of
+  its branches, and a round whose sample disagrees is voided (memory corruption gives wrong outcomes
+  without crashing).
+- **Why Gary-Z loses (`eval/zerg_losses.py`, against 60 pro Zergs):** its fighters die in the field
+  at odds of 1 to 3 (pros about even), with 15% of its army there (pros 27%): clusters trickle in alone;
+  its army is half the pros' and nearly all zerglings, no mutalisks at 8-10 minutes (pros 6-8, killing 9
+  SCVs a game), and it barely attacks. The roles were never the bottleneck.
+- **Next:** how much one army decision is worth against the game's chaos (`eval/army_effect.py`:
+  attack against hold, branched, both bots live; measured on Gary-T's army, since Gary-Z's rarely
+  reaches 6 supply), which decides army RL with the raw score or a critic first; Gary-Z's army size
+  and mutalisks, and its clusters fighting together; one last night of fight-role RL with the fixed
+  logging; a human game with the current Gary-T.
 
 ### Next: the belief model (started)
 
