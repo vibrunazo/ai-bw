@@ -236,6 +236,19 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    the decided share and Gary-Z's gap score should move; if they don't after a few nights, the fix is
    Gary-Z's army layer, not more RL. Side job: the Zerg belief model from pro games, frozen (the Zerg
    value model needs train/value.py to learn a Zerg side first: it trains on Gary-T's games).
+   **Night n1 (6 rounds, 144 games, seeds 1001+):** 276 then ~140 training pairs and ~150 A/B pairs a
+   round. Every candidate gated out: A/B (candidate less incumbent, net value per fight /100) +0.06 +-
+   0.06, -0.04 +- 0.05, -0.01 +- 0.06, -0.02 +- 0.06, -0.01 +- 0.05; round 1's passed the pairs but not the
+   gap. Each candidate sat 0.002-0.004 KL from the imitation model: one round's pairs moved it less than
+   the A/B pairs can tell (about +-5 minerals of value a fight). Gary-T won 7-8 of 24 each round, Gary-Z
+   none; decided 29-33%; Gary-Z's gap score flat (0.44-0.48 over 5-20 min). The retreat share in field
+   fights stayed 0.20-0.37 with no trend (the check against learned retreat: clean). On all of n1's
+   pairs, an update with a bigger step (lr 3e-4, 8 epochs, KL weight 0.01) moves the model 0.033 from
+   imitation, and the change in the drawn decisions' log-probability correlates 0.42 with their
+   advantage (the update follows the pairs; whether it holds on fresh games is the gate's question).
+   Night n2: training pairs pooled since the incumbent last changed (n1's included), that bigger step.
+   The Zerg belief model (pro games, frozen): army-supply error 5.9 on held-out pros (game-time average
+   8.0, seen in the last 3 min 10.0).
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
