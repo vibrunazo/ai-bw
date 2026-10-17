@@ -188,6 +188,15 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    twenty versions; imitation on day one was never going to beat them there (Argon). The neural role
    policy is the league's learner for the Terran's fights (RL with the KL leash sharpens it); which
    version plays humans is a separate choice. Next: the same for Gary-Z (its fights are v3's script).
+   **Gary-Z's fight roles (2026-10-16):** the same pipeline on 600 pro Zerg games (2.1M labels, 0.8M
+   before contact: stand 40%, fire 24%, reposition 15%, close in 9%, retreat 7%); the model names the
+   pros' changes before contact at ~0.6 recall, moves 0.8-1.1 tiles off (no move 1.3-1.9).
+   gary/bots/zerg_roles.py carries out its decisions with Gary-Z's hands. 24 games against v0.27, the
+   baseline's seeds: Gary-T won 10, lost 1 (11, 0); the army's rows unchanged (standing 0.67-0.82,
+   spread 4-9 tiles, at home 0.79-0.89, never moving while reloading; pros 0.33-0.62, 11-29, 0.35-0.46,
+   0.09-0.47). A few orders a minute in fights can't move an army that stands bunched at home: that
+   is the army layer above. The trainable pieces now exist on both sides (macro, army, fight roles);
+   next is the league that trains them.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
