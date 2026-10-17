@@ -577,6 +577,11 @@ def main() -> None:
     Xg, gg, gkeys = matrix(gary, names)
     labels = np.array([label_of[gkeys[k]] for k in gg])
     Xp, gp, _ = matrix(pros, names)
+    # features with no value on this side at all (marines stimmed, for the Zerg) are dropped: the trees
+    # can't bin a column that is all NaN (sklearn: "window shape cannot be larger than input array")
+    usable = ~(np.isnan(Xg).all(0) & np.isnan(Xp).all(0))
+    names = [n for n, u in zip(names, usable) if u]
+    Xg, Xp = Xg[:, usable], Xp[:, usable]
     score = {lab: gap_score(Xg[labels == lab], Xp) for lab in sorted(set(labels.tolist()))}
     score["all"] = gap_score(Xg, Xp)
     X = np.vstack([Xg, Xp])
