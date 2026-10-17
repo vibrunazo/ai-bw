@@ -37,6 +37,11 @@ SIGHT = 12 * 32                 # px: Gary-Z's fighters seeing enemy fighters th
 FIGHT = 12 * 32                 # px: the fight's units, around its middle
 AWAY = 4 * 32                   # px: a fighter this much farther from the enemy at the end: it went away
 CHECK_EVERY = 4                 # every this many branch points, arm 0 is played again and must end the same
+ARMY_WINDOW = 90 * 24           # army mode (GARY_PAIRS_LAYER=army_t): an arm plays this long...
+ARMY_EVERY = 60 * 24            # ...at most this often...
+ARMY_FROM = 5 * 60 * 24         # ...from then on...
+ARMY_MIN_X2 = 32                # ...with the Terran's army this big (16 supply): its decision moves the game
+                                # three times as much as the chaos over 90 s (eval/army_effect.py)
 
 
 def _value(t: int) -> float:
@@ -87,7 +92,9 @@ class Brancher:
 
     def __init__(self, game, slot_of: dict, seed: int):
         self.path = os.environ.get("GARY_PAIRS")
+        self.layer = os.environ.get("GARY_PAIRS_LAYER", "roles_z")
         self.candidate_path = os.environ.get("GARY_PAIRS_CANDIDATE")
+        self.slot_t = slot_of["T"]
         self.candidate = None
         self.slot_z = slot_of["Z"]
         self.rng = random.Random(seed * 104729 + 3)
@@ -104,6 +111,8 @@ class Brancher:
 
     def maybe(self, game, objs: dict) -> None:
         """At a fight (no more often than EVERY), a pair of arms; objs: the bots and hands, by name."""
+        if self.layer == "army_t":
+            return self._maybe_army(game, objs)
         f = game.frame
         if f < self.next:
             return
@@ -165,9 +174,70 @@ class Brancher:
         game.restore()
         self.pairs.append({"frame": f, "ab": ab, "arms": arms})
 
+    def _maybe_army(self, game, objs: dict) -> None:
+        """Army mode: at a moment the Terran's army is big enough, two arms of ARMY_WINDOW in which its army
+        layer draws its decisions with different dice (training) or another model (A/B); the outcome is
+        the whole map's net value on the Terran's side."""
+        from gary.env import GameError
+        from gary.policy.army import supply_x2
+        f = game.frame
+        if f < max(self.next, ARMY_FROM):
+            return
+        self.next = f + CHECK
+        gary = objs["gary"]
+        army = getattr(gary, "army", None)
+        if army is None or not getattr(army, "draw", False):
+            return
+        o = game.observe()
+        mine = [u for u in o["units"] if u["owner"] == self.slot_t and u["type"] in gary.army_types and u["completed"]]
+        if sum(supply_x2(u["type"]) for u in mine) < ARMY_MIN_X2:
+            return
+        try:
+            game.save()
+        except GameError:
+            return
+        self.next = f + ARMY_EVERY
+        start = snap(o)
+        if self.candidate_path and self.candidate is None:
+            from gary.policy.army import ArmyModel
+            self.candidate = ArmyModel.load(self.candidate_path)
+        ab = self.candidate is not None and self.kind_turn % 2 == 0
+        self.kind_turn += 1
+        dice = [int(self.rng.random() * 2 ** 31) for _ in range(2)]
+        if ab:
+            dice = [dice[0], dice[0]]
+        arms, end0 = [], None
+        for arm in range(2):
+            game.restore()
+            c = _copy(objs)
+            layer = c["gary"].army
+            if ab and arm == 1:
+                layer.model = self.candidate
+            layer.rng = np.random.default_rng(dice[arm])
+            layer.record = []
+            _play(game, c, ARMY_WINDOW)
+            end = snap(game.observe())
+            end0 = end if arm == 0 else end0
+            from eval.army_effect import _net
+            arms.append({"reward": -_net(start, end, self.slot_z), "away": 0.0, "moved": 0.0, "field": False,
+                         "units": len(mine), "model": str(getattr(layer.model, "path", "?")), "decisions": layer.record})
+        if self.kind_turn % CHECK_EVERY == 1:
+            game.restore()
+            c = _copy(objs)
+            c["gary"].army.rng = np.random.default_rng(dice[0])
+            _play(game, c, ARMY_WINDOW)
+            if snap(game.observe()) == end0:
+                self.checks_ok += 1
+            else:
+                self.checks_bad += 1
+        game.restore()
+        self.pairs.append({"frame": f, "ab": ab, "arms": arms})
+
     def save(self) -> None:
         if not self.path or not self.pairs:
             return
+        if self.layer == "army_t":
+            return self._save_army()
         out = {"frame": [], "ab": [], "reward": [], "away": [], "moved": [], "field": [], "units": [], "model": []}
         dec = {"pair": [], "arm": [], "rows": [], "extra": [], "count": [], "time": [], "drawn": [], "logp": []}
         for i, p in enumerate(self.pairs):
@@ -180,6 +250,27 @@ class Brancher:
                     dec["pair"].append(i)
                     dec["arm"].append(j)
                     for k in ("rows", "extra", "count", "time", "drawn", "logp"):
+                        dec[k].append(d[k])
+        arrays = {k: np.array(v) for k, v in out.items()}
+        arrays["checks"] = np.array([self.checks_ok, self.checks_bad])
+        if dec["pair"]:
+            arrays.update({f"dec/{k}": np.stack([np.asarray(x) for x in v]) for k, v in dec.items()})
+        np.savez_compressed(self.path, **arrays)
+
+
+    def _save_army(self) -> None:
+        out = {"frame": [], "ab": [], "reward": [], "away": [], "moved": [], "field": [], "units": [], "model": []}
+        dec = {"pair": [], "arm": [], "grid": [], "glob": [], "cell": [], "attack": [], "logp": []}
+        for i, p in enumerate(self.pairs):
+            out["frame"].append(p["frame"])
+            out["ab"].append(p["ab"])
+            for k in ("reward", "away", "moved", "field", "units", "model"):
+                out[k].append([arm[k] for arm in p["arms"]])
+            for j, arm in enumerate(p["arms"]):
+                for d in arm["decisions"]:
+                    dec["pair"].append(i)
+                    dec["arm"].append(j)
+                    for k in ("grid", "glob", "cell", "attack", "logp"):
                         dec[k].append(d[k])
         arrays = {k: np.array(v) for k, v in out.items()}
         arrays["checks"] = np.array([self.checks_ok, self.checks_bad])

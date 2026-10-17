@@ -56,18 +56,24 @@ def main() -> None:
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--pool", nargs="*", default=[], help="earlier rounds (league round names) whose training "
                     "pairs join this run's while the incumbent is unchanged")
+    ap.add_argument("--layer", default="roles_z", choices=("roles_z", "army_t"),
+                    help="the RL target: Gary-Z's fight roles, or Gary-T's army layer (paired 90 s branches)")
     ap.add_argument("--lr", type=float, default=3e-5)
     ap.add_argument("--epochs", type=int, default=4)
     ap.add_argument("--kl", type=float, default=0.1)
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
-    from train.league_rl import train_pairs
+    from train.league_rl import train_army_pairs, train_pairs
+    imitation = IMITATION if args.layer == "roles_z" else \
+        sorted((REPO / "runs" / "army").glob("TvZ_T_*/model.pt"))[-1]
+    side = "Z" if args.layer == "roles_z" else "T"
+    train = train_pairs if args.layer == "roles_z" else train_army_pairs
     folder = REPO / "runs" / "league_loop" / args.name
     folder.mkdir(parents=True, exist_ok=True)
     state_path = folder / "state.json"
     state = json.loads(state_path.read_text()) if state_path.exists() else \
-        {"round": 0, "incumbent": str(IMITATION), "candidate": None, "imitation": str(IMITATION), "history": [],
+        {"round": 0, "incumbent": str(imitation), "candidate": None, "imitation": str(imitation), "history": [],
          "since_adopted": list(args.pool)}
     for _ in monitor.track(range(args.rounds), args.rounds, "rounds"):
         k = state["round"]
@@ -75,7 +81,8 @@ def main() -> None:
         first = args.base + k * args.seeds
         cmd = [sys.executable, "-m", "eval.league", "--round", rnd, "--vs", args.vs, "--seeds", str(args.seeds),
                "--first", str(first), "--minutes", str(args.minutes), "--parallel", str(args.parallel), "--pairs",
-               "--incumbent", state["incumbent"]] + (["--candidate", state["candidate"]] if state["candidate"] else [])
+               "--incumbent", state["incumbent"], "--layer", args.layer] + \
+              (["--candidate", state["candidate"]] if state["candidate"] else [])
         t0 = time.time()
         subprocess.run(cmd, cwd=REPO, check=True)
         table = json.loads((REPO / "runs" / "league" / rnd / "round.json").read_text())
@@ -98,7 +105,7 @@ def main() -> None:
             fa = lambda who: (arms.get(who) or {}).get("field_away") or 0.0
             retreat_ok = fa("candidate") <= fa("incumbent") + RETREAT_SLACK or mean > 2 * se
             ab_ok = pairs.get("pairs_ab", 0) >= AB_MIN and mean > se and retreat_ok
-            gc, gi = band_mean(table["gap"].get("Z_candidate")), band_mean(table["gap"].get("Z_incumbent"))
+            gc, gi = band_mean(table["gap"].get(f"{side}_candidate")), band_mean(table["gap"].get(f"{side}_incumbent"))
             gap_ok = gc is not None and gi is not None and gc <= gi + GAP_TOLERANCE
             entry["gate"] = {"ab_ok": ab_ok, "retreat_ok": retreat_ok, "gap_ok": gap_ok, "gap_candidate": gc, "gap_incumbent": gi,
                              "kept": ab_ok and gap_ok}
@@ -110,8 +117,8 @@ def main() -> None:
         # candidate 0.003 from the incumbent, below what the A/B pairs can tell, night n1)
         if not void:
             state.setdefault("since_adopted", []).append(rnd)
-        report = train_pairs(state["since_adopted"], Path(state["incumbent"]), IMITATION, folder / f"r{k}_candidate",
-                             lr=args.lr, epochs=args.epochs, kl=args.kl) if state["since_adopted"] else {"decisions": 0}
+        report = train(state["since_adopted"], Path(state["incumbent"]), Path(imitation), folder / f"r{k}_candidate",
+                       lr=args.lr, epochs=args.epochs, kl=args.kl) if state["since_adopted"] else {"decisions": 0}
         entry["train"] = report
         state["candidate"] = str(folder / f"r{k}_candidate" / "model.pt") if report.get("decisions") else None
         state["history"].append(entry)

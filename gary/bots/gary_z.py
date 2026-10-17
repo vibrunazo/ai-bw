@@ -45,8 +45,9 @@ USED_LARVA = 2 * 24             # a larva just morphed shows as a larva a moment
 IN_FLIGHT = 24                  # money just spent shows in the bank a moment later: counted as spent
 GOAL_TIMEOUT = 30 * 24          # a decision not carried out in 30 s is dropped
 QUERY_EVERY = 12
-GAS_FLOAT, GAS_LOW = 400, 150   # gas above this (and above the minerals): its drones go back to minerals;
-                                # below the other, the extractors are filled again
+GAS_FLOAT, GAS_LOW = 400, 300   # gas above this (and above the minerals): its drones go back to minerals;
+                                # below this, back to gas (150 trapped it: no gas mined from 4:00 to 8:00
+                                # with ~160 banked, too little for mutalisks; pros bank 350-450 then)
 RALLY_IN_LINE = 0.6              # the rally: this far from the hatchery toward its minerals' middle
 POST_OUT = 10 * 32               # px: the outer watch post, this far outside Gary's natural toward the middle
 POST_AGAIN = 60 * 24            # a post whose overlord was lost is manned again after this

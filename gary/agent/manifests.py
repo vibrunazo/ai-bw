@@ -9,6 +9,8 @@ layer you're testing; everything else stays the same Gary.
 
 from __future__ import annotations
 
+import os
+
 import copy
 from pathlib import Path
 
@@ -723,7 +725,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)
         else:
-            army = load("army", str(model_path(m["army"]["model"])))
+            pinned = os.environ.get("GARY_TARMY_MODEL") if m["army"].get("draw") else None   # (the league loop's)
+            army = load("army", pinned or str(model_path(m["army"]["model"])))
             models["army"] = getattr(army, "path", "?")
             belief = None
             if m["army"].get("belief") or m["army"].get("hunt_belief"):
