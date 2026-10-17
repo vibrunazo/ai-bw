@@ -4,8 +4,7 @@ trains on them.
 
 A round: the Terran version against Gary-Z on the three pool maps, seeds from --first. Per game, in
 runs/league/<round>/<map>/: the replay, Gary's log, and Gary-Z's decision log (gary/bots/
-decision_log.py: its army layer's drawn destinations and its fight roles' drawn decisions, each with
-inputs and log-probability). Then the round's table, round.json:
+decision_log.py: both sides' learned layers' drawn decisions, each with inputs and log-probability). Then the round's table, round.json:
 
   results      Gary-T won / lost / undecided, by map
   gap          each side's gap score against the pros (eval/humanlike.py: mean standardized gap per
@@ -102,7 +101,7 @@ def main() -> None:
     table = {"round": args.round, "terran": args.vs, "minutes": args.minutes, "games": games,
              "results": dict(Counter(g["result"] for g in games)),
              "by_map": {m: dict(Counter(g["result"] for g in games if g["map"] == m)) for m in MAPS},
-             "decisions": {k: sum(g["decisions"].get(k, 0) for g in games) for k in ("army", "roles")},
+             "decisions": {k: sum(g["decisions"].get(k, 0) for g in games) for k in ("army_t", "roles_t", "army_z", "roles_z")},
              "gap": {"T": gaps(done, "T", args.parallel), "Z": gaps(done, "Z", args.parallel)}}
     (out / "round.json").write_text(json.dumps(table, indent=1), encoding="utf-8")
     print(f"round {args.round}: {len(games)} games, Gary-T {table['results']}; by map {table['by_map']}")

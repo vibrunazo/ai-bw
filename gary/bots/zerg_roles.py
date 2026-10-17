@@ -23,7 +23,7 @@ import numpy as np
 
 from gary import commands as C
 from gary import zerg as Z
-from gary.bots.decision_log import LOG
+from gary.decision_log import LOG
 from gary.interface import screen_of
 
 ASK_EVERY = 12                  # frames: a role every half second, as the model learned them
@@ -39,8 +39,12 @@ FIGHTERS = Z.ARMY - {Z.LURKER}  # (lurkers: v3's lurker routine burrows them)
 
 
 def latest_zerg_model() -> Path | None:
-    """The newest role model trained on the Zerg's response dataset (runs/roles/*/model.pt)."""
+    """The newest Zerg role model: updated by the league's RL (runs/roles_rl/Z_*), else the newest
+    trained on the Zerg's response dataset (runs/roles/*/model.pt)."""
     from gary.policy.roles import RoleModel
+    rl = sorted(Path("runs/roles_rl").glob("Z_*/model.pt"))
+    if rl:
+        return rl[-1]
     for p in sorted(Path("runs/roles").glob("*/model.pt"), reverse=True):
         try:
             if str(RoleModel.load(p).config.get("data", "")).endswith("response_Z.npz"):
@@ -139,7 +143,7 @@ class ZergRoles:
                     groups.setdefault(role, []).append((u, (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)))
         if LOG.on and (drawn >= 0).any():
             pad = lambda a: np.concatenate([a[:MAX_UNITS], np.zeros((max(0, MAX_UNITS - len(a)),) + a.shape[1:], a.dtype)])
-            LOG.add("roles", frame=hi.frame, rows=pad(rows.astype(np.int16)), extra=pad(extra.astype(np.float16)),
+            LOG.add("roles_z", frame=hi.frame, rows=pad(rows.astype(np.int16)), extra=pad(extra.astype(np.float16)),
                     count=min(n, MAX_UNITS), time=obs["frame"] * 42 / 1000, drawn=drawn, logp=logp)
         for role in URGENT:
             group = groups.get(role, [])[:MAX_GROUP]

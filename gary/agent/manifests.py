@@ -374,6 +374,7 @@ MODEL_PATHS = {"roles/latest": latest_role_model, "macro/latest": latest_macro_m
                "fight/latest": latest_fight_model, "fight_cmd/latest": lambda: latest_command_model(False),
                "fight_cmd/latest_memory": lambda: latest_command_model(True), "fight_cmd_rl/v08": latest_rl_fight_model,
                "belief/latest": lambda: _newest("belief"), "plan/latest": lambda: _newest("plan"),
+               "army_rl/latest": lambda: _newest("army_rl"),
                "macro_rl/latest": lambda: sorted((REPO_ROOT / "runs" / "macro_rl").glob("*/model.pt"))[-1]}
 
 
@@ -477,6 +478,11 @@ OPTIONS = {
     # roles.py (with a role model that has a where head): retreat, pull back and reposition by the rules'
     # skills, not where the model moves them (ablation of v0.29)
     "nowhere": lambda m: m["fight"].setdefault("roles", {}).update(where=False),
+    # army.py: destinations and move/attack drawn from the army model's odds, logged for the league's RL
+    # (Gary-Z's likeliest-cell army stood at home 79% at 8-10 min; drawn 56%, pros 35%)
+    "draw": lambda m: m["army"].update(draw=True),
+    # the army model updated by the league's RL (train/league_rl.py --layer army_t), drawing as it learned
+    "army_rl": lambda m: m["army"].update(model="army_rl/latest", draw=True),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
@@ -728,7 +734,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                  belief_total=m["army"].get("belief_total", False), watch=m["army"].get("watch", False),
                                  home_guard=m["army"].get("home_guard", False),
                                  belief_hold=bool(m["army"].get("belief")), hunt_belief=m["army"].get("hunt_belief", False),
-                                 hold_moves=m["army"].get("hold_moves", True), hold_margin=m["army"].get("hold_margin"))
+                                 hold_moves=m["army"].get("hold_moves", True), hold_margin=m["army"].get("hold_margin"),
+                                 draw=m["army"].get("draw", False))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:

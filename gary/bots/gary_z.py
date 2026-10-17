@@ -31,7 +31,7 @@ from gary import commands as C
 from gary import terran as T
 from gary import zerg as Z
 from gary.bots import zerg_v3 as V3
-from gary.bots.decision_log import LOG
+from gary.decision_log import LOG
 from gary.bots.zerg_v3 import Job, ZergV3
 from gary.interface import screen_of
 from gary.policy.army import ArmyModel, ArmyTracker
@@ -416,7 +416,7 @@ class GaryZ(ZergV3):
         attack = self.rng.random() < float(kind[0, 1])
         held = attack and self.army_model.fight(grid, glob, cell, True) < HOLD_BELOW
         self.army_goal[n] = None if held else (cell, attack)
-        LOG.add("army", frame=hi.frame, group=n, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16),
+        LOG.add("army_z", frame=hi.frame, group=n, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16),
                 cell=cell, attack=attack, held=held,
                 logp=float(np.log(where[0, cell] + 1e-9) + np.log(kind[0, int(attack)] + 1e-9)))
         return self.army_goal[n]

@@ -916,6 +916,20 @@ class RoleAhead(RoleRules):
                 dx, dy = moves[i] * 32
                 if role in ("RETREAT", "PULL_BACK", "REPOSITION") and math.hypot(dx, dy) >= WHERE_MIN and fresh(u, role):
                     groups.setdefault(role, []).append((u, (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)))
+        from gary.decision_log import LOG
+        from gary.policy.roles import MAX_UNITS
+        if LOG.on:                          # (each before-contact unit's likeliest decision and its log-probability)
+            drawn = np.full(MAX_UNITS, -1, np.int8)
+            logp = np.zeros(MAX_UNITS, np.float32)
+            for u in mine:
+                i = index[u["tag"]]
+                if i < MAX_UNITS and min(math.dist((u["x"], u["y"]), (e["x"], e["y"])) for e in enemy) >= AHEAD_FROM:
+                    k = int(probs[i].argmax())
+                    drawn[i], logp[i] = k, np.log(probs[i, k] + 1e-9)
+            if (drawn >= 0).any():
+                pad = lambda a: np.concatenate([a[:MAX_UNITS], np.zeros((max(0, MAX_UNITS - len(a)),) + a.shape[1:], a.dtype)])
+                LOG.add("roles_t", frame=g.hi.frame, rows=pad(np.asarray(rows, np.int16)), extra=pad(np.asarray(extra, np.float16)),
+                        count=min(len(rows), MAX_UNITS), time=obs["frame"] * 42 / 1000, drawn=drawn, logp=logp)
         for role in ("RETREAT", "PULL_BACK", "REPOSITION"):
             group = groups.get(role, [])[:MAX_GROUP]
             if group:

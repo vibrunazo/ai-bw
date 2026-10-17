@@ -104,8 +104,14 @@ class LearnedArmy:
 
     def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False, belief=None,
                  belief_total: bool = False, watch: bool = False, home_guard: bool = False, belief_hold: bool = True,
-                 hunt_belief: bool = False, hold_moves: bool = True, hold_margin: float | None = None):
+                 hunt_belief: bool = False, hold_moves: bool = True, hold_margin: float | None = None,
+                 draw: bool = False):
         self.g = g
+        # option: draw the destination and move/attack from the model's odds (the league's learner: RL
+        # learns from drawn decisions and their probabilities, logged), instead of the likeliest cell
+        # away when most of the odds lie away, said twice (Gary-Z's likeliest-cell army stood at home)
+        self.draw = draw
+        self.rng = np.random.default_rng(g.hi.slot * 7919 + int(getattr(g, "seed", 0) or 0))
         # option: whether the fight estimate may hold a plain move (positioning), and by how much going must
         # look worse than staying (and lose outright) to hold. v0.27's 1 and 2 points held about 90% of its
         # army's decisions at 5-6 min, 92% of them within 2 points: noise for an estimate correlating 0.40
@@ -209,6 +215,8 @@ class LearnedArmy:
         # cells, "elsewhere" can be likelier than "here" even when "here" is the likeliest cell)
         away = np.array([cell_dist(c, here) >= MOVE_CELLS for c in range(GRID * GRID)])
         p_away = float(where[0, away].sum())
+        if self.draw:
+            return self._drawn(obs, mine, group, grid, glob, where, kind, here)
         if p_away < MOVE_P:
             self.proposed.pop(here, None)
             return None                                           # stay
@@ -249,6 +257,41 @@ class LearnedArmy:
         self.ordered[here] = (best, attack, hi.frame)
         g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
                              {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": p_away,
+                              "fight": go, "done": [], "boxes": 0}, "army"))
+        return "army"
+
+    def _drawn(self, obs, mine, group, grid, glob, where, kind, here) -> str | None:
+        """draw: a destination and move/attack drawn from the model's odds; a cell near here is staying.
+        The hold (the fight estimate) and the repeat guard as without draw. Logged ("army_t")."""
+        from gary.decision_log import LOG
+        g, hi = self.g, self.g.hi
+        p = where[0].astype(np.float64)
+        best = int(self.rng.choice(len(p), p=p / p.sum()))
+        drawn_attack = bool(self.rng.random() < float(kind[0, 1]))
+        logp = float(np.log(p[best] + 1e-9) + np.log(kind[0, int(drawn_attack)] + 1e-9))
+        log = lambda outcome: LOG.add("army_t", frame=hi.frame, grid=grid[0].astype(np.float16),
+                                      glob=glob[0].astype(np.float16), cell=best, attack=drawn_attack, logp=logp,
+                                      outcome=outcome)
+        if cell_dist(best, here) < MOVE_CELLS:
+            log("stay")
+            return None
+        near_enemy = self.tracker.seen_buildings.reshape(GRID, GRID)[
+            max(0, best // GRID - 2):best // GRID + 3, max(0, best % GRID - 2):best % GRID + 3].any()
+        attack = drawn_attack or bool(near_enemy)
+        last = self.ordered.get(here)
+        if last and cell_dist(last[0], best) <= 1 and last[1] == attack and hi.frame - last[2] < REORDER_AFTER:
+            log("repeat")
+            return None
+        go = self.model.fight(grid, glob, best, attack)
+        stay = self.model.fight(grid, glob, here, False)
+        if go < max(self.fight_min, stay - self.fight_margin) and (attack or self.hold_moves):
+            log("held")
+            return None
+        log("go")
+        x, y = self.tracker.center(best)
+        self.ordered[here] = (best, attack, hi.frame)
+        g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
+                             {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": float(p[best]),
                               "fight": go, "done": [], "boxes": 0}, "army"))
         return "army"
 
