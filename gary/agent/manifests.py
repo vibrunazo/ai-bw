@@ -376,8 +376,18 @@ MODEL_PATHS = {"roles/latest": latest_role_model, "macro/latest": latest_macro_m
                "fight/latest": latest_fight_model, "fight_cmd/latest": lambda: latest_command_model(False),
                "fight_cmd/latest_memory": lambda: latest_command_model(True), "fight_cmd_rl/v08": latest_rl_fight_model,
                "belief/latest": lambda: _newest("belief"), "plan/latest": lambda: _newest("plan"),
-               "army_rl/latest": lambda: _newest("army_rl"),
+               "army_rl/latest": lambda: _newest("army_rl"), "engage/latest": lambda: _newest("engage"),
                "macro_rl/latest": lambda: sorted((REPO_ROOT / "runs" / "macro_rl").glob("*/model.pt"))[-1]}
+
+
+def _engage_model(m: dict):
+    """The attack-or-hold model for the army layer (option engage; GARY_TENGAGE_MODEL pins it: the
+    league loop's incumbent or candidate)."""
+    ref = m["army"].get("engage")
+    if not ref:
+        return None
+    from gary.policy.army import ArmyModel
+    return ArmyModel.load(os.environ.get("GARY_TENGAGE_MODEL") or model_path(ref))
 
 
 def _learned_posture(g, m: dict, models: dict):
@@ -486,6 +496,9 @@ OPTIONS = {
                        m["fight"].setdefault("roles", {}).update(draw=True) if m["fight"].get("provider") == "role_ahead" else None),
     # the army model updated by the league's RL (train/league_rl.py --layer army_t), drawing as it learned
     "army_rl": lambda m: m["army"].update(model="army_rl/latest", draw=True),
+    # army.py: attack or hold drawn by the engage model (train/engage.py, from the pros' orders: held-out AUC
+    # 0.80), destinations from the army model on that side; the league's learner for the army's initiative
+    "engage": lambda m: m["army"].update(draw=True, engage="engage/latest"),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
@@ -739,7 +752,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                  home_guard=m["army"].get("home_guard", False),
                                  belief_hold=bool(m["army"].get("belief")), hunt_belief=m["army"].get("hunt_belief", False),
                                  hold_moves=m["army"].get("hold_moves", True), hold_margin=m["army"].get("hold_margin"),
-                                 draw=m["army"].get("draw", False))
+                                 draw=m["army"].get("draw", False), engage=_engage_model(m))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:

@@ -361,6 +361,78 @@ def train_army_pairs(rounds: list[str], start: Path, imitation: Path, out: Path,
     return report
 
 
+def load_engage_pairs(rounds: list[str]):
+    """The engage mode's training pairs: the first decision attack in one arm and hold in the other, the
+    rest of the 90 s on shared dice; each arm's decision with its outcome less the pair's mean."""
+    files = [f for r in rounds for f in sorted(glob.glob(str(REPO / "runs" / "league" / r / "*" / "*.pairs.npz")))]
+    dec = {k: [] for k in ("grid", "glob", "engage", "logp")}
+    adv = []
+    for f in files:
+        d = np.load(f)
+        if "dec/engage" not in d.files:
+            continue
+        d = {k: d[k] for k in d.files}
+        reward, model = d["reward"], d["model"]
+        same = model[:, 0] == model[:, 1]
+        a = reward - reward.mean(1, keepdims=True)
+        for i in range(len(d["dec/pair"])):
+            pi, arm = int(d["dec/pair"][i]), int(d["dec/arm"][i])
+            if not same[pi] or reward[pi, 0] == reward[pi, 1]:
+                continue
+            for k in dec:
+                dec[k].append(d[f"dec/{k}"][i])
+            adv.append(a[pi, arm])
+    return {k: np.stack(v) for k, v in dec.items()} if adv else {}, np.array(adv, np.float32), len(files)
+
+
+def train_engage_pairs(rounds: list[str], start: Path, imitation: Path, out: Path, lr: float = 3e-5, epochs: int = 4,
+                       batch: int = 256, clip: float = 0.2, kl: float = 0.1) -> dict:
+    """One PPO update of the engage model's attack-or-hold head from the rounds' engage pairs, KL-leashed
+    to its supervised start (train/engage.py). The new model and report.json in out."""
+    from gary.policy.army import ArmyModel
+    data, adv, n_files = load_engage_pairs(rounds)
+    if not len(adv):
+        return {"decisions": 0}
+    adv = (adv / (adv.std() + 1e-6)).astype(np.float32)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    torch.manual_seed(0)
+    model = ArmyModel.load(start, device)
+    net, ref = model.net.eval(), ArmyModel.load(imitation, device).net.eval()
+    opt = torch.optim.AdamW(net.kind.parameters(), lr=lr)      # (the head alone: the trunk stays the pros')
+    n, stats = len(adv), []
+    for epoch in range(epochs):
+        order = np.random.default_rng(epoch).permutation(n)
+        for s0 in range(0, n, batch):
+            idx = order[s0:s0 + batch]
+            grid = torch.as_tensor(data["grid"][idx].astype(np.float32), device=device).view(len(idx), -1, 16, 16)
+            glob_ = torch.as_tensor(data["glob"][idx].astype(np.float32), device=device)
+            eng = torch.as_tensor(data["engage"][idx].astype(np.int64), device=device)
+            old = torch.as_tensor(data["logp"][idx].astype(np.float32), device=device)
+            _, kind, _ = net(grid, glob_)
+            with torch.no_grad():
+                _, kind0, _ = ref(grid, glob_)
+            lk, l0 = F.log_softmax(kind, -1), F.log_softmax(kind0, -1)
+            new = lk.gather(1, eng[:, None])[:, 0]
+            a = torch.as_tensor(adv[idx], device=device)
+            ratio = torch.exp(new - old)
+            pg = -torch.min(ratio * a, ratio.clamp(1 - clip, 1 + clip) * a).mean()
+            klv = (l0.exp() * (l0 - lk)).sum(-1).mean()
+            loss = pg + kl * klv
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+            stats.append((pg.item(), klv.item()))
+    out.mkdir(parents=True, exist_ok=True)
+    model.net.eval().cpu()
+    model.config = {**model.config, "rl": {"rounds": rounds, "from": str(start), "imitation": str(imitation),
+                                           "kl": kl, "lr": lr, "epochs": epochs, "decisions": int(n)}}
+    model.save(out / "model.pt")
+    report = {"rounds": rounds, "from": str(start), "imitation": str(imitation), "decisions": int(n), "files": n_files,
+              "pg_first": stats[0][0], "pg_last": stats[-1][0], "kl_to_imitation": stats[-1][1]}
+    (out / "report.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+    return report
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--round", required=True)

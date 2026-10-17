@@ -56,7 +56,7 @@ def main() -> None:
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--pool", nargs="*", default=[], help="earlier rounds (league round names) whose training "
                     "pairs join this run's while the incumbent is unchanged")
-    ap.add_argument("--layer", default="roles_z", choices=("roles_z", "army_t"),
+    ap.add_argument("--layer", default="roles_z", choices=("roles_z", "army_t", "engage_t"),
                     help="the RL target: Gary-Z's fight roles, or Gary-T's army layer (paired 90 s branches)")
     ap.add_argument("--gate-se", type=float, default=2.0, help="the A/B mean must be this many standard errors above zero")
     ap.add_argument("--lr", type=float, default=3e-5)
@@ -65,11 +65,12 @@ def main() -> None:
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
-    from train.league_rl import train_army_pairs, train_pairs
-    imitation = IMITATION if args.layer == "roles_z" else \
-        sorted((REPO / "runs" / "army").glob("TvZ_T_*/model.pt"))[-1]
+    from train.league_rl import train_army_pairs, train_engage_pairs, train_pairs
+    imitation = {"roles_z": IMITATION,
+                 "army_t": sorted((REPO / "runs" / "army").glob("TvZ_T_*/model.pt"))[-1],
+                 "engage_t": sorted((REPO / "runs" / "engage").glob("TvZ_T_*/model.pt"))[0]}[args.layer]
     side = "Z" if args.layer == "roles_z" else "T"
-    train = train_pairs if args.layer == "roles_z" else train_army_pairs
+    train = {"roles_z": train_pairs, "army_t": train_army_pairs, "engage_t": train_engage_pairs}[args.layer]
     folder = REPO / "runs" / "league_loop" / args.name
     folder.mkdir(parents=True, exist_ok=True)
     state_path = folder / "state.json"

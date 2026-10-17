@@ -111,7 +111,7 @@ class Brancher:
 
     def maybe(self, game, objs: dict) -> None:
         """At a fight (no more often than EVERY), a pair of arms; objs: the bots and hands, by name."""
-        if self.layer == "army_t":
+        if self.layer in ("army_t", "engage_t"):
             return self._maybe_army(game, objs)
         f = game.frame
         if f < self.next:
@@ -186,7 +186,7 @@ class Brancher:
         self.next = f + CHECK
         gary = objs["gary"]
         army = getattr(gary, "army", None)
-        if army is None or not getattr(army, "draw", False):
+        if army is None or not getattr(army, "draw", False) or (self.layer == "engage_t" and army.engage is None):
             return
         o = game.observe()
         mine = [u for u in o["units"] if u["owner"] == self.slot_t and u["type"] in gary.army_types and u["completed"]]
@@ -201,6 +201,8 @@ class Brancher:
         if self.candidate_path and self.candidate is None:
             from gary.policy.army import ArmyModel
             self.candidate = ArmyModel.load(self.candidate_path)
+            if self.layer == "engage_t":
+                self.candidate.path = self.candidate_path
         ab = self.candidate is not None and self.kind_turn % 2 == 0
         self.kind_turn += 1
         # one decision branched: each arm's first army decision drawn with its own dice, the rest with
@@ -215,22 +217,30 @@ class Brancher:
             c = _copy(objs)
             layer = c["gary"].army
             if ab and arm == 1:
-                layer.model = self.candidate
+                if self.layer == "engage_t":
+                    layer.engage = self.candidate
+                else:
+                    layer.model = self.candidate
             layer.rng = np.random.default_rng(dice[arm])
             layer.then_rng = np.random.default_rng(dice[2])
+            if self.layer == "engage_t" and not ab:
+                layer.force_engage = arm == 0              # (training: the first decision attack in one arm, hold in the other)
             layer.record = []
             _play(game, c, ARMY_WINDOW)
             end = snap(game.observe())
             end0 = end if arm == 0 else end0
             from eval.army_effect import _net
             arms.append({"reward": -_net(start, end, self.slot_z), "away": 0.0, "moved": 0.0, "field": False,
-                         "units": len(mine), "model": str(getattr(layer.model, "path", "?")),
+                         "units": len(mine),
+                         "model": str(getattr(layer.engage if self.layer == "engage_t" else layer.model, "path", "?")),
                          "decisions": layer.record[:1]})
         if self.kind_turn % CHECK_EVERY == 1:
             game.restore()
             c = _copy(objs)
             c["gary"].army.rng = np.random.default_rng(dice[0])
             c["gary"].army.then_rng = np.random.default_rng(dice[2])
+            if self.layer == "engage_t" and not ab:
+                c["gary"].army.force_engage = True
             _play(game, c, ARMY_WINDOW)
             if snap(game.observe()) == end0:
                 self.checks_ok += 1
@@ -242,7 +252,7 @@ class Brancher:
     def save(self) -> None:
         if not self.path or not self.pairs:
             return
-        if self.layer == "army_t":
+        if self.layer in ("army_t", "engage_t"):
             return self._save_army()
         out = {"frame": [], "ab": [], "reward": [], "away": [], "moved": [], "field": [], "units": [], "model": []}
         dec = {"pair": [], "arm": [], "rows": [], "extra": [], "count": [], "time": [], "drawn": [], "logp": []}
@@ -266,7 +276,8 @@ class Brancher:
 
     def _save_army(self) -> None:
         out = {"frame": [], "ab": [], "reward": [], "away": [], "moved": [], "field": [], "units": [], "model": []}
-        dec = {"pair": [], "arm": [], "grid": [], "glob": [], "cell": [], "attack": [], "logp": []}
+        keys = ("grid", "glob", "engage", "logp") if self.layer == "engage_t" else ("grid", "glob", "cell", "attack", "logp")
+        dec = {"pair": [], "arm": [], **{k: [] for k in keys}}
         for i, p in enumerate(self.pairs):
             out["frame"].append(p["frame"])
             out["ab"].append(p["ab"])
@@ -276,7 +287,7 @@ class Brancher:
                 for d in arm["decisions"]:
                     dec["pair"].append(i)
                     dec["arm"].append(j)
-                    for k in ("grid", "glob", "cell", "attack", "logp"):
+                    for k in keys:
                         dec[k].append(d[k])
         arrays = {k: np.array(v) for k, v in out.items()}
         arrays["checks"] = np.array([self.checks_ok, self.checks_bad])

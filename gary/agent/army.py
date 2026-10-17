@@ -105,7 +105,7 @@ class LearnedArmy:
     def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False, belief=None,
                  belief_total: bool = False, watch: bool = False, home_guard: bool = False, belief_hold: bool = True,
                  hunt_belief: bool = False, hold_moves: bool = True, hold_margin: float | None = None,
-                 draw: bool = False):
+                 draw: bool = False, engage=None):
         self.g = g
         # option: draw the destination and move/attack from the model's odds (the league's learner: RL
         # learns from drawn decisions and their probabilities, logged), instead of the likeliest cell
@@ -114,6 +114,12 @@ class LearnedArmy:
         self.rng = np.random.default_rng(g.hi.slot * 7919 + int(getattr(g, "seed", 0) or 0))
         self.record: list | None = None        # a paired episode's arm: its drawn decisions, kept here
         self.then_rng = None                   # a paired episode's arm: the shared dice after its first decision
+        # option (with draw): the attack-or-hold model (train/engage.py: an army model whose kind head is
+        # engage/hold, learned from the pros' orders, then RL on paired branches): it draws whether the
+        # group goes into the enemy, and the destination is drawn from the army model's odds among the
+        # cells next to known enemy presence, or among the others (the destinations stay imitation)
+        self.engage = engage
+        self.force_engage: bool | None = None  # a paired episode's arm: its first decision's engage forced
         # option: whether the fight estimate may hold a plain move (positioning), and by how much going must
         # look worse than staying (and lose outright) to hold. v0.27's 1 and 2 points held about 90% of its
         # army's decisions at 5-6 min, 92% of them within 2 points: noise for an estimate correlating 0.40
@@ -268,6 +274,8 @@ class LearnedArmy:
         from gary.decision_log import LOG
         g, hi = self.g, self.g.hi
         p = where[0].astype(np.float64)
+        if self.engage is not None:
+            return self._engage_drawn(obs, mine, group, grid, glob, p, kind, here)
         best = int(self.rng.choice(len(p), p=p / p.sum()))
         drawn_attack = bool(self.rng.random() < float(kind[0, 1]))
         if self.then_rng is not None:          # (an arm's first decision drawn its own way, the rest shared)
@@ -298,6 +306,48 @@ class LearnedArmy:
         g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
                              {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": float(p[best]),
                               "fight": go, "done": [], "boxes": 0}, "army"))
+        return "army"
+
+    def _engage_drawn(self, obs, mine, group, grid, glob, p, kind, here) -> str | None:
+        """The engage option: attack or hold drawn from the engage model (or forced, a paired arm's first
+        decision), the destination from the army model's odds among the cells next to enemy presence the
+        player knows (attack) or the others (hold: a move, or staying). No fight-estimate hold: whether to
+        go in is this decision's. Logged ("engage_t": the inputs, engage, its log-probability)."""
+        from gary.decision_log import LOG
+        g, hi = self.g, self.g.hi
+        _, ek = self.engage.predict(grid, glob)
+        pe = float(ek[0, 1])
+        if self.force_engage is not None:
+            eng, self.force_engage = bool(self.force_engage), None
+        else:
+            eng = bool(self.rng.random() < pe)
+        m = np.asarray(grid[0]).reshape(-1, GRID, GRID)
+        enemy = (m[3] > 0) | (m[6] > 0) | (m[7] > 0)
+        near = enemy.copy()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                near |= np.roll(np.roll(enemy, dy, 0), dx, 1)
+        mask = near.reshape(-1) if eng else ~near.reshape(-1)
+        q = p * mask
+        if q.sum() <= 0:
+            q = p
+        best = int(self.rng.choice(len(q), p=q / q.sum()))
+        if self.then_rng is not None:
+            self.rng, self.then_rng = self.then_rng, None
+        item = dict(frame=hi.frame, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16), engage=eng,
+                    logp=float(np.log((pe if eng else 1 - pe) + 1e-9)))
+        (self.record.append(item) if self.record is not None else LOG.add("engage_t", **item))
+        if cell_dist(best, here) < MOVE_CELLS:
+            return None
+        attack = eng or bool(self.rng.random() < float(kind[0, 1]))
+        last = self.ordered.get(here)
+        if last and cell_dist(last[0], best) <= 1 and last[1] == attack and hi.frame - last[2] < REORDER_AFTER:
+            return None
+        x, y = self.tracker.center(best)
+        self.ordered[here] = (best, attack, hi.frame)
+        g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
+                             {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": float(p[best]),
+                              "fight": 0.0, "done": [], "boxes": 0}, "army"))
         return "army"
 
     def _hidden_army(self, obs: dict, mine: list[dict], dest: int) -> float | None:
