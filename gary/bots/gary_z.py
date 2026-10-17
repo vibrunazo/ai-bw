@@ -140,6 +140,7 @@ class GaryZ(ZergV3):
         self.army_goal: dict[int, tuple | None] = {}   # group -> its drawn destination
         self.sent_to: dict[int, tuple] = {}
         self.straggle_after, self.straggle_tries = 0, 0
+        self.unreached: set[tuple[int, int]] = set()   # bases its drones never reached: not expanded to again
         # the army by clusters, not v1's hotkey groups (GARY_Z_ARMY=groups for those): 24 games on the same
         # seeds, at home 47% at 5-7 min (groups 78%, pros 38%), in the field 47% (20%, 52%), Gary-Z's gap
         # score 0.34 (0.45), decided 38% (17%), lone units moving away 10% (3%, pros 18%)
@@ -576,6 +577,22 @@ class GaryZ(ZergV3):
                      {"who": who, "units": len(members), "at": f"({int(mid[0]) // 32},{int(mid[1]) // 32})",
                       "p_attack": float(kind[0, 1])}, "draw", then=then or "sent")
 
+    # (a minimap click's scatter can put a drone's move on the map's edge row, where it never arrives: walking
+    # 4 minutes, swung between 35 and 14 tiles off, an expansion's drone kept the next ones from being decided
+    # with 1,700 minerals banked: eval/why.py, c7 seed 3005 on Heartbreak Ridge)
+    walk_timeout = 45 * 24
+
+    def _walk_failed(self, job: Job) -> None:
+        """Walked past walk_timeout: picked and sent again; an expansion whose drones twice never arrived is
+        dropped and its base left for the game (on Heartbreak Ridge the bases at the map's top and bottom edge,
+        decided 7 times in c7's 8 games there, were never reached)."""
+        if job.step.startswith("expand") and job.tries >= 2:
+            self.unreached.add(self.map.base_near(self._spot(job)).center)
+            self._fate(job, "dropped", f"its drones never arrived ({job.tries} walks): that base left for this game")
+            self.jobs.pop(job.step, None)
+            return
+        self._fate(job, "retried", f"still walking after {self.walk_timeout // 24} s: picked and sent again")
+
     def _up(self, job: Job, mine) -> bool:
         """v3's check, for a job that placed its building: one never placed isn't up because another of
         its kind stands within 3 tiles of its spot (three of four creep colonies decided in 20 s ended so,
@@ -744,8 +761,9 @@ class GaryZ(ZergV3):
                                 # possible made a creep colony of every larva shortage, 44-66% of the decisions
                                 # from 3:00 to 8:00, rolled at 1-5%; waiting for every one held a macro hatchery
                                 # back with 800 minerals floating: Argon's catch)
-            if act < 0 or not self._can(act, uid, obs, mine, me):
-                over.append([name(k), "can't now (what it needs, the pros' cap, nothing to make it from)"])
+            why = "not a decision" if act < 0 else self._cant(act, uid, obs, mine, me)
+            if why:
+                over.append([name(k), f"can't now: {why}"])
                 continue
             g = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": self._name(act, uid)}
             # (this decision's own: the larvae's flag above stays. Overwritten here once, a parked Lurker Aspect
@@ -793,55 +811,66 @@ class GaryZ(ZergV3):
     def _done_types(self, mine: list[dict]) -> set[int]:
         return {u["type"] for u in mine if u["completed"]}
 
-    def _can(self, act: int, uid: int, obs: dict, mine: list[dict], me: dict) -> bool:
-        """Gary-Z could carry this out now, money aside: what it needs exists, there's something to
-        make it from, and the pros' cap for this time isn't reached."""
+    def _cant(self, act: int, uid: int, obs: dict, mine: list[dict], me: dict) -> str | None:
+        """Why Gary-Z can't carry this out now, money aside (None: it can): what it needs is missing,
+        there's nothing to make it from, or the pros' cap for this time is reached. In words, for its
+        records."""
         done = self._done_types(mine)
         cap = self.model.cap(uid, obs["frame"]) if act in (MORPH, BUILD, BMORPH, EXPAND) else None
         if cap is not None and self._count(mine, uid) >= cap:
-            return False
+            return f"the pros' cap for this minute ({cap})"
         if uid == Z.CREEP:                              # (and all colonies within the pros' caps of all three)
             caps = [self.model.cap(t, obs["frame"]) for t in (Z.CREEP, Z.SUNKEN, Z.SPORE)]
             if all(c is not None for c in caps) and self._count(mine, Z.CREEP, every=True) >= sum(caps):
-                return False
+                return f"the pros' cap of colonies for this minute ({sum(caps)})"
+        need = None if Z.can_make(uid, done, self.researched) else "what it needs isn't there"
         if act == MORPH:
             if uid in Z.FROM_LARVA:
                 if not any(u["type"] == Z.LARVA for u in mine):
-                    return False
+                    return "no larva"
                 if uid != Z.OVERLORD and me["supply_used"] + Z.SUPPLY.get(uid, 1) > me["supply_max"]:
-                    return False
-                return Z.can_make(uid, done, self.researched)
+                    return "supply"
+                return need
             parent = Z.UNIT_MORPH.get(uid)
-            return parent is not None and any(u["type"] == parent and u["completed"] for u in mine) \
-                and Z.can_make(uid, done, self.researched)
+            if parent is None or not any(u["type"] == parent and u["completed"] for u in mine):
+                return "nothing to morph it from"
+            return need
         if act == BMORPH:
             parent = Z.BUILDING_MORPH.get(uid)
-            return parent is not None and Z.can_make(uid, done, self.researched) \
-                and any(u["type"] == parent and u["completed"] and u.get("queue", 0) == 0 for u in mine)
+            if parent is None or not any(u["type"] == parent and u["completed"] and u.get("queue", 0) == 0 for u in mine):
+                return "no idle building to morph"
+            return need
         if act == BUILD:
-            if uid not in Z.DRONE_BUILDS or not Z.can_make(uid, done, self.researched):
-                return False
+            if uid not in Z.DRONE_BUILDS or need:
+                return need or "not a drone's building"
             if any(j.unit_type == uid for j in self.jobs.values()):
-                return False                            # (one of a kind on its way at a time)
+                return "one already on its way"         # (one of a kind on its way at a time)
             if uid == Z.EXTRACTOR:
-                return self._free_geyser(mine) is not None
-            return any(u["type"] == Z.DRONE for u in mine)
+                return None if self._free_geyser(mine) is not None else "no free geyser"
+            return None if any(u["type"] == Z.DRONE for u in mine) else "no drone"
         if act == EXPAND:
-            return not any(j.step.startswith("expand") for j in self.jobs.values()) and self._next_base(obs, mine) is not None
+            if any(j.step.startswith("expand") for j in self.jobs.values()):
+                return "an expansion already on its way"
+            return None if self._next_base(obs, mine) is not None else "no free base"
         if act == RESEARCH:
             where, _ = Z.RESEARCH.get(uid, (None, None))
-            return where is not None and uid not in self.researched \
-                and all(Z.has(done, r) for r in Z.RESEARCH_NEEDS.get(uid, [])) \
-                and self._idle_building(mine, where) is not None
+            if where is None or uid in self.researched:
+                return "done already"
+            if not all(Z.has(done, r) for r in Z.RESEARCH_NEEDS.get(uid, [])):
+                return "what it needs isn't there"
+            return None if self._idle_building(mine, where) is not None else "no idle building for it"
         if act == UPGRADE:
             if uid not in Z.UPGRADE:
-                return False
+                return "unknown upgrade"
             where, _, levels = Z.UPGRADE[uid]
             level = self.upgraded.get(uid, 0) + 1
             need = Z.UPGRADE_LEVEL_NEEDS.get(level) if levels > 1 else None
-            return level <= levels and all(Z.has(done, r) for r in Z.UPGRADE_NEEDS.get(uid, [])) \
-                and (need is None or Z.has(done, need)) and self._idle_building(mine, where) is not None
-        return False
+            if level > levels:
+                return "done already"
+            if not all(Z.has(done, r) for r in Z.UPGRADE_NEEDS.get(uid, [])) or (need is not None and not Z.has(done, need)):
+                return "what it needs isn't there"
+            return None if self._idle_building(mine, where) is not None else "no idle building for it"
+        return "not a decision Gary-Z carries out"
 
     def _count(self, mine: list[dict], uid: int, every: bool = False) -> int:
         """How many Gary-Z has of uid for the pros' cap: those standing and those on their way (jobs);
@@ -1029,7 +1058,7 @@ class GaryZ(ZergV3):
         owned = self._owned_bases(mine)
         enemy = [(u["x"], u["y"]) for u in obs["units"] if u["owner"] not in (self.hi.slot, 11)
                  and 106 <= u["type"] <= 175]
-        free = [b for b in self.map.bases if b not in owned and b.minerals
+        free = [b for b in self.map.bases if b not in owned and b.minerals and b.center not in self.unreached
                 and not any(math.dist(b.center, e) < 10 * 32 for e in enemy)
                 and not any(j.unit_type == Z.HATCHERY and math.dist(self._spot(j), b.center) < 6 * 32 for j in self.jobs.values())]
         if self.nat_base not in owned and self.nat_base in free:

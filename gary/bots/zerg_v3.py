@@ -105,6 +105,7 @@ PLACED_WAIT = 4 * 24            # placed and not there after this, the drone sta
 PICK_TRIES = 4                  # clicks to get a drone alone before trying another
 PLACE_CLICKS = 6                # clicks on the drone at its spot before starting over with another
 JOB_TRIES = 8                   # placements before a building is given up
+JOB_NOTE = 30 * 24              # a job's state recorded this often while it takes (gary/decision_log.py)
 
 
 @dataclass
@@ -119,10 +120,13 @@ class Job:
     tries: int = 0
     picks: int = 0
     clicks: int = 0             # at the spot: clicks to select its drone so far
+    born: int = -1              # the frame it was first worked on, and when its state was last recorded
+    noted: int = 0
 
 
 class ZergV3(ZergV2):
     sizes = {LING: 1.0}                  # (Zerg v1's groups: zerglings; the mutalisks are a flock of their own)
+    walk_timeout: int | None = None      # a job's drone walking longer is picked again (Gary-Z's; v3 waits on)
 
     def __init__(self, hi, mapinfo, seed: int = 0):
         super().__init__(hi, mapinfo)
@@ -627,6 +631,12 @@ class ZergV3(ZergV2):
             del self.jobs[job.step]
             return False
         drone = next((u for u in drones if u["tag"] == job.drone), None)
+        if job.born < 0:
+            job.born = job.noted = hi.frame
+        if hi.frame - job.noted >= JOB_NOTE:            # (a job that takes long: where it stands, in the records)
+            job.noted = hi.frame
+            at = f", its drone {math.dist((drone['x'], drone['y']), self._spot(job)) / 32:.0f} tiles away, order "                  f"{drone['order']}" if drone is not None else ", no drone"
+            self._fate(job, "waiting", f"{job.state} for {(hi.frame - job.born) // 24} s{at}, {job.tries} tries")
         if job.drone is not None and drone is None:
             if job.state == "placed" and any(u["tag"] == job.drone for u in mine):
                 return False                       # (it became the building: not counted as a drone)
@@ -644,6 +654,10 @@ class ZergV3(ZergV2):
                 return self._work(job, obs, mine, me, drones)
             if (drone["order"] in IDLE_ORDERS or drone["order"] == MINING) and hi.frame - job.since > 2 * 24:
                 return self._walk(job, obs, drone)     # (it stopped short, or went mining: again)
+            if self.walk_timeout is not None and hi.frame - job.since > self.walk_timeout:
+                job.drone, job.state = None, "pick"
+                job.tries += 1
+                self._walk_failed(job)
             return False
         if job.state == "place":
             if me["minerals"] < COST[job.unit_type] or me["gas"] < GAS_COST.get(job.unit_type, 0):
@@ -717,6 +731,9 @@ class ZergV3(ZergV2):
         job.picks += 1
         hi.click(*at)
         return True
+
+    def _walk_failed(self, job: Job) -> None:
+        """A job's drone walked past walk_timeout without arriving (Gary-Z's; v3 has none)."""
 
     def _walk(self, job: Job, obs, drone) -> bool:
         """The selected drone walks to the spot (a minimap order: the camera stays)."""
