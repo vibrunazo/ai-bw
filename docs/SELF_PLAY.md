@@ -265,6 +265,20 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    equal); decided 17% / 38%, but Gary-T won 4 / 9: an army that goes out fights more and loses more.
    More pro-like, not stronger: its fights are the weak point. Clusters are Gary-Z's default now.
    The belief model on league games: army-supply error 11.7 (median 4.1) against 5.9 on held-out pros.
+   **Night n3 (6 rounds, Gary-Z by clusters, lr 1e-4, KL weight 0.03):** more fights, more pairs (369
+   training pairs in round 0, ~180 + ~190 A/B a round after). All five candidates kept: A/B +0.017,
+   +0.044, +0.045, +0.014, +0.018 (each +-0.04-0.05: within noise one by one, all five the same sign),
+   the candidate's games less far from the pros each time (0.40-0.48 against 0.43-0.53); KL to imitation
+   0.016 -> 0.049. The decided share didn't move (12-33%); Gary-Z won nothing. The retreat share in field
+   fights crept up, 0.27 -> 0.33, the last three candidates above their incumbents: the warning sign to
+   watch (outcomes counted within 12 tiles: running out of a field fight scores zero). One game in 144
+   ended in an access violation inside a branch arm (the native env after a restore; the league counts
+   it an error; not chased yet). The gate keeps any A/B mean above zero: lenient.
+   **n3's final model against the imitation model, fresh seeds 5001+ (24 games):** A/B +0.059 +- 0.054
+   (about one standard error: not settled), its games' gap 0.42 / 0.46 / 0.40 at 8-10 / 11-14 / 15-20 min
+   against 0.53 / 0.51 / 0.55 (0.35 against 0.29 at 5-7), the retreat share in field fights 0.24 against
+   0.21. A small gain at most, and more pro-like late. Next: a stricter gate (the A/B mean a standard
+   error above zero, pooled over rounds), the retreat share as a gate too, and the env's crash.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

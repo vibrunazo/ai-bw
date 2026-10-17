@@ -125,8 +125,14 @@ plan and the full log).
   clusters. Gary-Z's army now spends 47% of 5-7 minutes at home (78% before, pros 38%), its gap score
   falls to 0.34 there (0.45), the decided share rises to 38% (17%); it's more pro-like but not stronger
   (Gary-T won 9 of 24, 4 before). A Zerg belief model, frozen (pro games only).
-- **Next:** Gary-Z's fights (they lose more now that its army goes out), the fight-role nights again
-  with clusters (more fights, more pairs), and the Zerg value model (train/value.py learns a Zerg side).
+- **Night n3, with clusters:** more fights, more pairs; the gate kept all five candidates (each A/B
+  within noise, all five above zero, their games more pro-like each round). The final model against
+  the imitation model on fresh seeds: +0.059 +- 0.054 net value a fight (not settled), Gary-Z's gap
+  score 0.40-0.46 against 0.51-0.55 after 8 minutes; the retreat share in field fights a little up
+  (0.24 against 0.21), the sign to watch. Gary-Z still wins no game.
+- **Next:** a stricter gate (the A/B evidence pooled, a standard error above zero; the retreat share
+  gated too), Gary-Z's fights, the env's rare crash inside a branch (1 game in 144), and the Zerg value
+  model (train/value.py learns a Zerg side).
 
 ### Next: the belief model (started)
 
