@@ -94,8 +94,21 @@ plan and the full log).
   it, with a where head (each unit's move): the hand rules in contact, the model before it. On 226 pro
   home defenses: a tie with v0.28 (-2 +- 6 net value); its roles everywhere lost 52 (the rules were
   tuned on those scenarios for twenty versions). The neural role policy is the league's learner.
-- **Next:** the same role model for Gary-Z's fights (in progress), then target inference, the
-  league, and the first RL update on fight episodes with a KL leash to imitation.
+- **Gary-Z's fight roles:** the same role model, learned from 600 pro Zerg games (0.8M labels before
+  contact), carried out with Gary-Z's hands (`gary/bots/zerg_roles.py`) in place of v3's scripted
+  micro. Results and army rows unchanged (24 games): a few orders a minute in fights can't move an
+  army that stands bunched at home; that was the army layer above.
+- **The league (`eval/league.py`):** rounds of Gary-T against Gary-Z in parallel headless games; per
+  game the result, both sides' gap scores and the learned layers' decision log (inputs, the drawn
+  decision, its log-probability: what RL learns from). Gary-Z's army layer now draws each group's
+  destination from the army model's odds; it had taken the likeliest cell for every group, nearly
+  always home. Round r1 (v0.29, 24 games, 20 minutes): Gary-T won 6, lost 0, 18 undecided; Gary-Z's
+  army at 8-10 minutes at home 56% (79% before; pros 35%), spread 15 tiles (6; 21), standing 43%
+  (67%; 42%), 6.6 orders per fighter (4.2; 6.4). Fight episodes train the fight roles; the army layer
+  learns from the league's outcomes.
+- **Next:** the Terran's learned decisions logged too (its army layer still takes the likeliest cell),
+  the first RL update on fight episodes with a KL leash to imitation, and an outcome signal for the
+  army layer (segments and the value net).
 
 ### Next: the belief model (started)
 
