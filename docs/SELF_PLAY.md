@@ -205,6 +205,18 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    (21%; 54%), spread 15 tiles (6; 21), standing 43% (67%; 42%), 6.6 orders per fighter (4.2; 6.4).
    The gap score barely moves (0.46 at 8-10 min, 0.50): an average over 50 features dilutes a few big
    ones. The fight episodes train the fight roles; the army layer learns from the league's outcomes.
+   **The first RL update (2026-10-17, train/league_rl.py):** round r2 (v0.29 drawing its army
+   decisions, against Gary-Z; 24 games: Gary-T won 8, lost 0) logged 9,218 Terran army, 1,807 Zerg army
+   and 7,049 Zerg fight-role decisions. Each was scored from the replay (fight roles: the fight's net
+   value over 45 s; army: the side's army-supply share 45 s later less now), and each layer took one
+   PPO step with a KL leash to its imitation model (KL after: 0.004-0.008). Round r3 on the same seeds
+   with the updated models: Gary-T won 9, lost 0; mean outcome per decision, game-averaged: Zerg fight
+   roles -0.86 +- 0.28 (r2 -1.13 +- 0.33), Zerg army -0.026 +- 0.013 (-0.023), Terran army -0.008 +- 0.004
+   (-0.003); gap scores T 0.38/0.38/0.39/0.50/0.50 (0.38/0.40/0.48/0.48/0.51), Z 0.67/0.40/0.44/0.55/0.66
+   (0.67/0.41/0.45/0.52/0.56). No change past noise, as expected of one small step judged on 24 games:
+   the loop runs end to end (play, log, score, update, play). Learning needs many rounds, and lower
+   variance: paired fight episodes (the same position branched with different decisions) for the
+   roles, the value net's estimate in place of 45 s of raw outcome for the army.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

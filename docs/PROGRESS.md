@@ -106,9 +106,16 @@ plan and the full log).
   army at 8-10 minutes at home 56% (79% before; pros 35%), spread 15 tiles (6; 21), standing 43%
   (67%; 42%), 6.6 orders per fighter (4.2; 6.4). Fight episodes train the fight roles; the army layer
   learns from the league's outcomes.
-- **Next:** the Terran's learned decisions logged too (its army layer still takes the likeliest cell),
-  the first RL update on fight episodes with a KL leash to imitation, and an outcome signal for the
-  army layer (segments and the value net).
+- **The first RL update (`train/league_rl.py`):** both sides' learned layers log their decisions in
+  league games (the Terran's army now draws too, option `draw`); each decision is scored from the
+  replay (fight roles: the fight's net value over 45 s; army layers: the side's army-supply share 45 s
+  later), and each layer takes one PPO step with a KL leash to its imitation model. Round r3 with the
+  updated models against round r2, same seeds: no change past noise (Gary-T won 9 and 8, lost 0; mean
+  outcomes and gap scores within their spread), as expected of one small step on 24 games. The loop
+  runs end to end: play, log, score, update, play.
+- **Next:** many rounds instead of one (nightly batches), and lower variance per decision: paired fight
+  episodes (one position branched with different decisions) for the fight roles, the value net's
+  estimate for the army layers.
 
 ### Next: the belief model (started)
 
