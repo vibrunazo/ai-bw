@@ -68,6 +68,8 @@ SIDES = ("army", "macro", "helpers")   # who shares the hands, in turn
 MINERAL_ORDERS = {85, 86, 87, 90}   # MoveToMinerals, WaitForMinerals, MiningMinerals, ReturnMinerals
 LURK_STREAK = 8                 # v3's lurker routine: this many turns in a row at most...
 LURK_BACKOFF = 3 * 24           # ...then it waits this long
+MUTA_FLOCK_SAVE = 6             # gas saved (no floating) while a Spire stands and fewer mutalisks than this
+JOIN_BELOW = 0.5                # a cluster under this share of the main one's size joins it
 CLUSTERS = 3                    # the army by clusters: this many at most, each asked in turn
 MAX_SELECT = 12                 # units a selection takes
 STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)
@@ -184,6 +186,10 @@ class GaryZ(ZergV3):
         if me["gas"] > GAS_FLOAT and me["gas"] > me["minerals"]:
             self.gas_floating = True
         elif me["gas"] < GAS_LOW:
+            self.gas_floating = False
+        # (none while a Spire stands and the flock isn't made: pros save ~700 gas for the first mutalisks,
+        # and floating at 400 kept Gary-Z from ever having it: no mutalisks at 8-10 min, pros 6-8)
+        if any(u["type"] == Z.SPIRE for u in mine) and sum(1 for u in mine if u["type"] == Z.MUTALISK) < MUTA_FLOCK_SAVE:
             self.gas_floating = False
         hatches = [u for u in mine if u["type"] in Z.TOWN_HALLS]
         pool = next((u for u in mine if u["type"] == Z.POOL), None)
@@ -512,6 +518,19 @@ class GaryZ(ZergV3):
         self.cluster_ask[k] = hi.frame + ARMY_EVERY
         self.cluster_turn += 1
         members = clusters[k]
+        # a cluster much smaller than the main one joins it rather than going its own way: each drawing
+        # its own destination, they fought apart (Gary-Z's fighters died with 15% of its army there, the
+        # pros' 27%; at odds of 1 to 3, the pros' about even: eval/zerg_losses.py)
+        size = lambda c: sum(self.sizes.get(u["type"], 1) for u in c)
+        main = clusters[0]
+        if k > 0 and size(members) < JOIN_BELOW * size(main):
+            mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
+            to = (sum(u["x"] for u in main) / len(main), sum(u["y"] for u in main) / len(main))
+            if _cell_dist(self.army_tracker.cell(*mid), self.army_tracker.cell(*to)) >= 2:
+                self.army_job = {"tags": [u["tag"] for u in members], "point": (int(to[0]), int(to[1])),
+                                 "kind": "move", "selecting": False, "tries": 0}
+                return self._army_job_step(obs, mine)
+            return False
         grid, glob = self.army_tracker.inputs(obs, members)
         where, kind = self.army_model.predict(grid, glob)
         cell = self.rng.choices(range(where.shape[1]), weights=where[0].tolist())[0]

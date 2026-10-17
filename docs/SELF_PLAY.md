@@ -309,6 +309,18 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    was sd 130 against chaos's 512. So army RL on paired branches can start with the score as the outcome,
    no critic first. (Attack-or-hold with the rest frozen is a starker choice than the army model's
    cells: real decisions will be smaller; still well above what the macro saw.)
+   **Gary-Z's army, three rounds on the same seeds (c1 clusters; c2 + gas; c3 + joining + gas saved):**
+   its drones went back to gas only below 150, so it mined none from 4:00 to 8:00 with ~160 banked:
+   now below 300 (c2: gas at 8-10 min 250-400, was 80-130), and no floating while a Spire stands and
+   fewer than 6 mutalisks (pros save ~700 for the first flock). A cluster under half the main one's size
+   joins it rather than drawing its own way. Mutalisks: about half the games now make 10-20 (6-10 alive
+   at 9-10 min); the medians stay 0, and they kill 0.3 SCVs a game (pros 9) against Gary-T's 9-11
+   turrets (pros about 6): v3's scripted raids don't get through. Fights: field odds 0.38 (0.33),
+   army share at a death 16% (15%), outnumbered 74% (77%); Gary-T won 9 / 7 / 9 of 24 (c1 / c2 / c3);
+   Gary-Z's gap 0.34-0.45 over 5-20 min. Small moves: Gary-Z's army stays half the pros' (13 supply at
+   10-12 min, pros 26-33), its minerals short when the Spire finishes (50-130), the macro model giving
+   mutalisks 6-20% after it. Gary-Z winning is still out of reach; the army RL (where signal exists)
+   goes ahead on Gary-T.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
