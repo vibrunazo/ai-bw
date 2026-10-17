@@ -291,6 +291,14 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    The env's crash (1 game in 144, an access violation in a branch arm at 8:07): the same game's settings
    played again ran past it, so it isn't a deterministic bug of the game: more likely a memory fault in
    the native save/restore; the league records the game as an error and goes on.
+   **Why Gary-Z loses (2026-10-17, eval/zerg_losses.py; 24 games of round c1 against 60 pro Zergs):** 64%
+   of its fighters die in the field (pros 53%), at median local odds 0.33 Zerg supply to Terran (pros
+   0.71), with 15% of its army there (pros 27%), outnumbered 1.5:1 or worse 77% of the time (pros 47%):
+   clusters trickle into fights alone. Its army is half the pros' (7 / 13 / 13 supply at 8 / 10 / 12 min;
+   pros 18 / 26 / 33) and nearly all zerglings: no mutalisks at 8-10 min (pros 7.5 / 6), SCVs killed with
+   its mutalisks near 0.1 a game (pros 9.0); a quarter of its army at a Terran base 0.06 minutes a game
+   (pros 1.4), Terran buildings killed 0.1 a game (pros 6.1). So: the army's size and makeup (gas,
+   mutalisks: the macro), clusters fighting apart, and no attacks. The roles were never the bottleneck.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
