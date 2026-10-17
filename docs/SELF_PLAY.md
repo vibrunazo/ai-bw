@@ -288,6 +288,9 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    role decisions carries too little signal at this scale, or the roles' effect is swamped by what the
    rules and the army around them do. Before more nights: what decides Gary-Z's fights (where its
    army engages, not its units' roles), and a value-based outcome with less noise.
+   The env's crash (1 game in 144, an access violation in a branch arm at 8:07): the same game's settings
+   played again ran past it, so it isn't a deterministic bug of the game: more likely a memory fault in
+   the native save/restore; the league records the game as an error and goes on.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
