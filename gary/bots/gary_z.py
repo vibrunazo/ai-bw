@@ -40,6 +40,8 @@ from gary.policy.macro import MacroModel, MacroTracker
 
 MORPH, BMORPH, BUILD, RESEARCH, UPGRADE, EXPAND = 1, 2, 3, 4, 5, 6
 MIN_P = 0.05                    # never a decision the model gives less than this (as the Terran's macro)
+TECH_MIN_P = 0.10               # a building that opens a tech path: never on odds under this
+TECH_PATH = {Z.DEN, Z.SPIRE, Z.QUEENS_NEST, Z.DEFILER_MOUND, Z.ULTRA_CAVERN}
 DICE_FLOOR = 0.01               # the dice decoder: decisions under this odds aren't rolled
 USED_LARVA = 2 * 24             # a larva just morphed shows as a larva a moment longer: not used again
 IN_FLIGHT = 24                  # money just spent shows in the bank a moment later: counted as spent
@@ -683,6 +685,11 @@ class GaryZ(ZergV3):
             if not larva and act == MORPH and uid in Z.FROM_LARVA and Z.can_make(uid, self._done_types(mine), self.researched)                     and (uid == Z.OVERLORD or me["supply_used"] + Z.SUPPLY.get(uid, 1) <= me["supply_max"]):
                 waiting = True  # (no larva free yet: that one waits for the next, as the Terran's macro waits for
                 continue        # a busy building)
+            if act == BUILD and uid in TECH_PATH and probs[0, k] < TECH_MIN_P:
+                continue        # (a tech path opened only on the model's real odds: drawn at 1-6% across dozens of
+                                # rolls, a Hydralisk Den came in 21 of 24 spire-first games, then Lurker Aspect, and
+                                # the model, reading that history as a lurker player's, gave mutalisks 0.8% where
+                                # without the history it gave 16%: 12 of 24 games made none)
             if waiting and probs[0, k] < MIN_P:
                 continue        # (meanwhile only what the model really wants, MIN_P or more: taking the first thing
                                 # possible made a creep colony of every larva shortage, 44-66% of the decisions

@@ -393,6 +393,15 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    army supply 13 / 22 at 12 min (c3 / c5; pros 33), SCVs killed by its mutalisks 0.3 / 0.6 a game; still
    no win. Its gas now banks unspent (620-770 at 8-10 min; the median still makes no mutalisks) and its
    larvae sit at the cap 26% of 8 min (pros 10%) with 90-150 minerals: minerals are now the limit.
+   **Why mutalisks stayed rare: a decoder after all (Fable's suspicion, the other way round):** in c5 the Spire
+   finished in most games, yet 12 of 24 decided no mutalisk with 600-800 gas banked. In such a game the
+   model gave mutalisks 0.8% after the Spire; with its own decision history cleared, 15.8%: the history
+   had a Hydralisk Den and Lurker Aspect in it. Drawing from the full odds at every decision, Gary-Z took
+   a Den at 1-6% odds in 21 of 24 games (19 of 22 Den decisions were under 10%), and the model, reading
+   the history as a lurker player's, left the mutalisk path. Pros commit to one. Now a building that
+   opens a tech path (Den, Spire, Queen's Nest, Defiler Mound, Ultralisk Cavern) needs 10%+ odds. c3's
+   seeds again (c6): Dens in 9 games (21), spire-plan games deciding mutalisks 19 of 21 (11 of 23), up
+   to 59 a game. Gary-T won 11 (c5: 5); Gary-Z still none.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

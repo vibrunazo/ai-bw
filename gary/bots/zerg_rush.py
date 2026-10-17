@@ -285,6 +285,8 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
         effect.save()
         pov = save[:-4] + ".pov.jsonl" if save.endswith(".rep") else save + ".pov.jsonl"
         his["T"].save_pov(pov)
+        if opponent == "garyz":                     # (the Zerg's screen too: its POV beside the Terran's)
+            his["Z"].save_pov(pov[:-len(".pov.jsonl")] + ".zpov.jsonl")
         if hasattr(gary, "save_trace") and pov.endswith(".pov.jsonl"):
             gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
         print(f"{result}; saved {save} and {pov}")
