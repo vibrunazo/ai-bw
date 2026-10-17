@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
 from collections import Counter
 from pathlib import Path
@@ -64,6 +65,10 @@ STRAY_AGAIN = 10 * 24
 TASK_TIMEOUT = 10 * 24          # a v2 task (a drone to gas or to a building) given up after this
 SIDES = ("army", "macro", "helpers")   # who shares the hands, in turn
 MINERAL_ORDERS = {85, 86, 87, 90}   # MoveToMinerals, WaitForMinerals, MiningMinerals, ReturnMinerals
+LURK_STREAK = 8                 # v3's lurker routine: this many turns in a row at most...
+LURK_BACKOFF = 3 * 24           # ...then it waits this long
+CLUSTERS = 3                    # the army by clusters: this many at most, each asked in turn
+MAX_SELECT = 12                 # units a selection takes
 STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)
 PLANS_FILE = "TvZ_Z_plan.json"  # data/interim/taxonomy: the plans' names and how often pros play them
 
@@ -75,6 +80,10 @@ for _t, (_m, _g) in Z.COST.items():
         V3.GAS_COST.setdefault(_t, _g)
 for _t, _s in Z.SIZE.items():
     V3.SIZE.setdefault(_t, _s)
+
+
+def _cell_dist(a: int, b: int) -> int:
+    return max(abs(a // 16 - b // 16), abs(a % 16 - b % 16))
 
 
 def latest_model(kind: str = "macro") -> Path:
@@ -126,6 +135,13 @@ class GaryZ(ZergV3):
         self.army_goal: dict[int, tuple | None] = {}   # group -> its drawn destination
         self.sent_to: dict[int, tuple] = {}
         self.straggle_after, self.straggle_tries = 0, 0
+        # the army by clusters instead of v1's hotkey groups (an option while it's measured)
+        self.cluster_army = os.environ.get("GARY_Z_ARMY") == "clusters"
+        self.army_job: dict | None = None
+        self.cluster_ask: dict[int, int] = {}
+        self.cluster_turn = 0
+        self.army_sent = self.army_dropped = 0   # (cluster orders given, and dropped unselected)
+        self.lurk_streak, self.lurk_backoff = 0, 0
         self.task_key, self.task_since = None, 0      # group -> the destination it was last sent to
         self.rally_of: dict[int, bool] = {}     # hatchery -> rallied to the front (True) or its minerals
         self.goal: dict | None = None
@@ -452,7 +468,118 @@ class GaryZ(ZergV3):
             return True
         if any(u["type"] == Z.LURKER for u in mine) and self._lurkers(obs, mine):
             return True
+        if self.cluster_army:
+            return self._clusters_army(obs, mine)
         return super(ZergV3, self).army(obs, mine) or self._stragglers(obs, mine)
+
+    def _lurkers(self, obs, mine) -> bool:
+        """v3's lurker routine, with a limit: LURK_STREAK turns in a row, then it waits LURK_BACKOFF. It
+        has no retry limit (a lurker it can't select, a burrow that doesn't take: pressed again every
+        turn) and took every army turn of a probe game from 9:00 to 14:00, 2,100 of them: the rest of the
+        army was never asked."""
+        hi = self.hi
+        if hi.frame < self.lurk_backoff:
+            return False
+        out = super()._lurkers(obs, mine)
+        self.lurk_streak = self.lurk_streak + 1 if out else 0
+        if self.lurk_streak >= LURK_STREAK:
+            self.lurk_backoff, self.lurk_streak = hi.frame + LURK_BACKOFF, 0
+        return out
+
+    # --- the army by clusters (GARY_Z_ARMY=clusters) ---------------------------------------------
+
+    def _clusters_army(self, obs: dict, mine: list[dict]) -> bool:
+        """The whole ground army by the army model: its fighters clustered by where they stand (up to
+        CLUSTERS, biggest first), each cluster in turn asked every ARMY_EVERY and sent where its drawn
+        destination is, a dozen units at a time (a look, a click and shift+clicks, a minimap order). v1's
+        hotkey groups left most of the army out (at 6-8 min 52 of 245 fighter-looks grouped in one probe
+        game, none in another): units that hatched elsewhere, survived a defense or lost their group
+        stood where they were, and the army model never moved them. (True: it acted.)"""
+        hi = self.hi
+        if self.army_job is not None:
+            return self._army_job_step(obs, mine)
+        fighters = [u for u in mine if u["type"] in self.sizes and u["completed"]]
+        if not fighters:
+            return False
+        clusters = self._clusters(fighters)
+        k = self.cluster_turn % len(clusters)
+        if hi.frame < self.cluster_ask.get(k, 0):
+            self.cluster_turn += 1
+            return False
+        self.cluster_ask[k] = hi.frame + ARMY_EVERY
+        self.cluster_turn += 1
+        members = clusters[k]
+        grid, glob = self.army_tracker.inputs(obs, members)
+        where, kind = self.army_model.predict(grid, glob)
+        cell = self.rng.choices(range(where.shape[1]), weights=where[0].tolist())[0]
+        attack = self.rng.random() < float(kind[0, 1])
+        held = attack and self.army_model.fight(grid, glob, cell, True) < HOLD_BELOW
+        LOG.add("army_z", frame=hi.frame, group=k, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16),
+                cell=cell, attack=attack, held=held,
+                logp=float(np.log(where[0, cell] + 1e-9) + np.log(kind[0, int(attack)] + 1e-9)))
+        mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
+        if held or _cell_dist(cell, self.army_tracker.cell(*mid)) < 2:
+            return False                                   # (held, or the drawn cell is where they are)
+        self.army_job = {"tags": [u["tag"] for u in members], "point": self.army_tracker.center(cell),
+                         "kind": "attack" if attack else "move", "selecting": False, "tries": 0}
+        return self._army_job_step(obs, mine)
+
+    def _clusters(self, fighters: list[dict]) -> list[list[dict]]:
+        """Fighters split by where they stand: up to CLUSTERS, biggest first; units within 2 grid cells
+        of a cluster's busiest cell join it (as the Terran's army layer clusters)."""
+        left, out = list(fighters), []
+        while left and len(out) < CLUSTERS:
+            cells = [self.army_tracker.cell(u["x"], u["y"]) for u in left]
+            center = max(set(cells), key=cells.count)
+            near = [u for u, c in zip(left, cells) if _cell_dist(c, center) <= 2]
+            out.append(near)
+            left = [u for u in left if u not in near]
+        return out
+
+    def _army_job_step(self, obs: dict, mine: list[dict]) -> bool:
+        """The cluster order under way: the next dozen selected, then ordered, until all have it."""
+        hi = self.hi
+        job = self.army_job
+        alive = {u["tag"]: u for u in mine}
+        units = [alive[t] for t in job["tags"] if t in alive]
+        if not units:
+            self.army_job = None
+            return False
+        batch = units[:MAX_SELECT]
+        sel = set(obs["selection"])
+        fighters = {u["tag"] for u in mine if u["type"] in self.sizes}
+        # a selection that is the army's own fighters and holds some of the order's units goes: a click on
+        # one in a hundred bunched zerglings took the wrong one, and the order was dropped after 3 tries
+        if job["selecting"] and sel and sel <= fighters and sel & set(job["tags"]):
+            x, y = int(job["point"][0]), int(job["point"][1])
+            if job["kind"] == "move":
+                hi.minimap_right_click(x, y)
+            else:
+                hi.minimap_command(C.ORDER_ATTACK_MOVE, x, y)
+            job["tags"] = [t for t in job["tags"] if t not in sel]
+            job["selecting"], job["tries"] = False, 0
+            self.army_sent += 1
+            if not job["tags"]:
+                self.army_job = None
+            return True
+        job["tries"] += 1
+        if job["tries"] > 3:                               # (they won't be selected: the rest dropped)
+            self.army_job = None
+            self.army_dropped += 1
+            return False
+        mid = (sum(u["x"] for u in batch) / len(batch), sum(u["y"] for u in batch) / len(batch))
+        if self._look(obs, mid):
+            return True
+        shown = [u for u in batch if screen_of(obs, u["x"], u["y"])]
+        if not shown:
+            job["tags"] = [t for t in job["tags"] if t not in {u["tag"] for u in batch}]
+            return True
+        # a ctrl+click on one of the batch's commonest type: every one of that type on the screen (12 at most)
+        main = Counter(u["type"] for u in shown).most_common(1)[0][0]
+        u = next(u for u in shown if u["type"] == main)
+        hi.ctrl_click(*screen_of(obs, u["x"], u["y"]))
+        job["selecting"] = True
+        return True
 
     # --- deciding --------------------------------------------------------------------------------
 
