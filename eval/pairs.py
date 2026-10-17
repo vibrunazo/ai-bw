@@ -142,6 +142,7 @@ class Brancher:
             self.candidate = RoleModel.load(self.candidate_path)
         ab = self.candidate is not None and self.kind_turn % 2 == 0
         self.kind_turn += 1
+        self.incumbent_roles = zerg.fight_roles.model
         dice = [self.rng.random() for _ in range(2)]
         if ab:
             dice = [dice[0], dice[0]]                         # (the same dice: the models differ)
@@ -154,14 +155,16 @@ class Brancher:
                 roles.model = self.candidate
             roles.rng = random.Random(dice[arm])
             roles.record = []
-            _play(game, c, WINDOW)
+            if self.candidate is not None:            # (the other model's odds of each choice, recorded)
+                roles.shadow = self.incumbent_roles if ab and arm == 1 else self.candidate
+            recs = _play(game, c, WINDOW)
             roles._emit()                                     # (the arm's last snapshot, as carried out)
             end = snap(game.observe())
             end0 = end if arm == 0 else end0
             out = fight_outcome(start, end, z)
             arms.append({"reward": out[0] if out else 0.0, **(out[1] if out else {"away": 0.0, "moved": 0.0,
                          "field": True, "units": 0}), "model": str(getattr(roles.model, "path", "?")),
-                         "decisions": roles.record})
+                         "decisions": roles.record, "records": recs})
         if self.kind_turn % CHECK_EVERY == 1:               # (arm 0 again: the same end, or the branches lie)
             game.restore()
             c = _copy(objs)
@@ -226,14 +229,17 @@ class Brancher:
             if self.layer == "engage_t" and not ab:
                 layer.force_engage = arm == 0              # (training: the first decision attack in one arm, hold in the other)
             layer.record = []
-            _play(game, c, ARMY_WINDOW)
+            if self.candidate is not None:               # (the other model's odds of each choice, recorded)
+                mine_model = gary.army.engage if self.layer == "engage_t" else gary.army.model
+                layer.shadow = mine_model if ab and arm == 1 else self.candidate
+            recs = _play(game, c, ARMY_WINDOW)
             end = snap(game.observe())
             end0 = end if arm == 0 else end0
             from eval.army_effect import _net
             arms.append({"reward": -_net(start, end, self.slot_z), "away": 0.0, "moved": 0.0, "field": False,
                          "units": len(mine),
                          "model": str(getattr(layer.engage if self.layer == "engage_t" else layer.model, "path", "?")),
-                         "decisions": layer.record[:1]})
+                         "decisions": layer.record[:1], "records": recs})
         if self.kind_turn % CHECK_EVERY == 1:
             game.restore()
             c = _copy(objs)
@@ -252,6 +258,7 @@ class Brancher:
     def save(self) -> None:
         if not self.path or not self.pairs:
             return
+        self._save_records()
         if self.layer in ("army_t", "engage_t"):
             return self._save_army()
         out = {"frame": [], "ab": [], "reward": [], "away": [], "moved": [], "field": [], "units": [], "model": []}
@@ -273,6 +280,21 @@ class Brancher:
             arrays.update({f"dec/{k}": np.stack([np.asarray(x) for x in v]) for k, v in dec.items()})
         np.savez_compressed(self.path, **arrays)
 
+
+    def _save_records(self) -> None:
+        """Each pair's arms' records beside the pairs (<game>.pairs.records.jsonl, gary/decision_log.py):
+        a pair line, then its arms' records tagged {pair, arm}; eval/why.py --pair reads them."""
+        import json
+        path = self.path[:-len(".npz")] + ".records.jsonl" if self.path.endswith(".npz") else self.path + ".records.jsonl"
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"schema": "pair_records/v1"}) + "\n")
+            for i, p in enumerate(self.pairs):
+                f.write(json.dumps({"kind": "pair", "pair": i, "f": p["frame"], "layer": self.layer, "ab": p["ab"],
+                                    "rewards": [round(float(a["reward"]), 1) for a in p["arms"]],
+                                    "models": [a["model"] for a in p["arms"]]}) + "\n")
+                for j, a in enumerate(p["arms"]):
+                    for r in a.get("records", []):
+                        f.write(json.dumps({**r, "pair": i, "arm": j}) + "\n")
 
     def _save_army(self) -> None:
         out = {"frame": [], "ab": [], "reward": [], "away": [], "moved": [], "field": [], "units": [], "model": []}
@@ -359,9 +381,9 @@ def _copy(objs: dict) -> dict:
                 cls.__deepcopy__ = old
 
 
-def _play(game, objs: dict, frames: int) -> None:
+def _play(game, objs: dict, frames: int) -> list[dict]:
     """The match loop's body (play_match) for this many frames, the decision log off (its arrays, and the
-    game's records: an arm's decisions aren't the game's)."""
+    game's records: an arm's decisions aren't the game's). Returns the arm's own records."""
     import contextlib
     import io
     from gary.decision_log import LOG
@@ -383,5 +405,7 @@ def _play(game, objs: dict, frames: int) -> None:
     finally:
         quiet.__exit__(None, None, None)
         LOG.path = path
+        arm = LOG.records[kept[0]:]
         del LOG.records[kept[0]:]
         LOG.owner, LOG.held = kept[1], kept[2]
+    return arm

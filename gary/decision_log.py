@@ -12,13 +12,19 @@ same decisions and every other layer's, in one readable shape, so that a why-que
 a query over it rather than a script that re-simulates it. One JSON line each:
 
   decision  {f, side, layer, choice, p, top: [[option, p]...], in: {what it saw}, by, over: [[option,
-            why passed over]...], then}: by is who chose (the model, a draw, a rule, the posture); over,
-            what intervened: the likelier or drawn options set aside before the choice, and why (a rule,
-            the money, a busy building, the posture); then, what came of it right away (parked, held...)
+            why passed over]...], then, rl, p_other}: by is who chose (the model, a draw, a rule, the
+            posture); over, what intervened: the likelier or drawn options set aside before the choice, and
+            why (a rule, the money, a busy building, the posture); then, what came of it right away (parked,
+            held...); rl, its row among the layer's RL decisions (the arrays above, or a paired arm's in
+            eval/pairs.py); p_other, the same choice's odds under the other model of an A/B pair
   order     {f, side, what, fate, why, by}: an order's fate: sent (to the game), refused (by the
             interface: apm, off screen; or by the game), retried, dropped, done; by, who had the hands
   hands     {f, side, owner}: who has the hands from now (Gary-T's arbiter; Gary-Z's turns)
   note      {f, side, text}: what a layer said in the game's log (a rule firing, a group sent)
+
+A paired branch's arms (eval/pairs.py) keep their own records, saved beside the pairs as
+<game>.pairs.records.jsonl: a "pair" line ({pair, f, layer, ab, rewards, models}) then each arm's
+records, tagged {pair, arm}. eval/why.py --pair N shows both arms side by side.
 """
 
 from __future__ import annotations
@@ -69,10 +75,15 @@ class DecisionLog:
     # --- records ---------------------------------------------------------------------------------
 
     def decision(self, side: str, layer: str, frame: int, choice, p: float | None = None, top: list | None = None,
-                 inputs: dict | None = None, by: str = "model", over: list | None = None, then: str | None = None) -> None:
+                 inputs: dict | None = None, by: str = "model", over: list | None = None, then: str | None = None,
+                 rl: int | None = None, p_other: float | None = None) -> dict:
         r = {"f": int(frame), "kind": "decision", "side": side, "layer": layer, "choice": choice, "by": by}
         if p is not None:
             r["p"] = round(float(p), 3)
+        if p_other is not None:
+            r["p_other"] = round(float(p_other), 3)
+        if rl is not None:
+            r["rl"] = int(rl)
         if top:
             r["top"] = top
         if inputs:
@@ -82,6 +93,7 @@ class DecisionLog:
         if then:
             r["then"] = then
         self.records.append(r)
+        return r
 
     def order(self, side: str, frame: int, what: str, fate: str, why: str = "", by: str | None = None) -> None:
         r = {"f": int(frame), "kind": "order", "side": side, "what": what, "fate": fate}

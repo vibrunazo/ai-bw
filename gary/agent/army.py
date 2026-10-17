@@ -116,6 +116,7 @@ class LearnedArmy:
         self.rng = np.random.default_rng(g.hi.slot * 7919 + int(getattr(g, "seed", 0) or 0))
         self.record: list | None = None        # a paired episode's arm: its drawn decisions, kept here
         self._seen: dict = {}                  # what the last question saw, in brief (the game's records)
+        self.shadow = None                     # an A/B pair's other model: its odds of each choice, recorded
         self.then_rng = None                   # a paired episode's arm: the shared dice after its first decision
         # option (with draw): the attack-or-hold model (train/engage.py: an army model whose kind head is
         # engage/hold, learned from the pros' orders, then RL on paired branches): it draws whether the
@@ -260,11 +261,14 @@ class LearnedArmy:
         near_enemy = self.tracker.seen_buildings.reshape(GRID, GRID)[
             max(0, best // GRID - 2):best // GRID + 3, max(0, best % GRID - 2):best % GRID + 3].any()
         attack = attack or bool(near_enemy)
+        choice = f"{'attack' if attack else 'move'} to {self._cell_name(best)}"
         proposed, self.proposed[here] = self.proposed.get(here), best
         if proposed is None or cell_dist(proposed, best) > 1:
+            self._record(where, choice, float(where[0, best]), "favorite", "waits: until the model says it twice")
             return None                                           # wait until it says so twice
         last = self.ordered.get(here)
         if last and cell_dist(last[0], best) <= 1 and last[1] == attack and hi.frame - last[2] < REORDER_AFTER:
+            self._record(where, choice, float(where[0, best]), "favorite", "not again: just ordered there")
             return None
         # will it go well? the model's fight estimate for going there vs staying put
         go = self.model.fight(grid, glob, best, attack)
@@ -274,6 +278,8 @@ class LearnedArmy:
                 g.say(f"army ({len(group)} units) holds: going to {self.tracker.center(best)} "
                       f"looks like {go:+.0%} army share, staying {stay:+.0%}")
             self.held[here] = best
+            self._record(where, choice, float(where[0, best]), "favorite",
+                         f"held: the fight estimate ({go:+.0%} going, {stay:+.0%} staying)")
             return None
         hidden = self._hidden_army(obs, mine, best)
         if hidden is not None and hidden > sum(supply_x2(u["type"]) for u in group):
@@ -283,8 +289,11 @@ class LearnedArmy:
                 g.say(f"army ({len(group)} units) holds: going to {self.tracker.center(best)}, the zerg likely "
                       f"has {hidden / 2:.0f} supply more army than seen")
             self.held[here] = best
+            self._record(where, choice, float(where[0, best]), "favorite",
+                         f"held: the belief model, {hidden / 2:.0f} supply more zerg army likely than seen")
             return None
         self.held.pop(here, None)
+        self._record(where, choice, float(where[0, best]), "favorite", "sent")
         x, y = self.tracker.center(best)
         self.ordered[here] = (best, attack, hi.frame)
         g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
@@ -309,9 +318,14 @@ class LearnedArmy:
             item = dict(frame=hi.frame, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16), cell=best,
                         attack=drawn_attack, logp=logp, outcome=outcome)
             (self.record.append(item) if self.record is not None else LOG.add("army_t", **item))
+            other = None
+            if self.shadow is not None:
+                sw, sk = self.shadow.predict(grid, glob)
+                other = float(sw[0, best]) * float(sk[0, int(drawn_attack)])
             self._record(where, f"{'attack' if drawn_attack else 'move'} to {self._cell_name(best)}", float(np.exp(logp)),
                          "draw", {"stay": "stays: the cell drawn is near", "repeat": "not again: just ordered there",
-                                  "held": "held: the fight estimate", "go": "sent"}[outcome])
+                                  "held": "held: the fight estimate", "go": "sent"}[outcome],
+                         rl=self._rl_row("army_t"), p_other=other)
         if cell_dist(best, here) < MOVE_CELLS:
             log("stay")
             return None
@@ -366,10 +380,14 @@ class LearnedArmy:
         item = dict(frame=hi.frame, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16), engage=eng,
                     logp=float(np.log((pe if eng else 1 - pe) + 1e-9)))
         (self.record.append(item) if self.record is not None else LOG.add("engage_t", **item))
+        other = None
+        if self.shadow is not None:
+            other = float(self.shadow.predict(grid, glob)[1][0, int(eng)])
         LOG.decision("T", "engage", hi.frame, f"{'engage' if eng else 'hold'}: to {self._cell_name(best)}",
                      pe if eng else 1 - pe, [["engage", round(pe, 3)], ["hold", round(1 - pe, 3)]], self._seen,
-                     "draw" if self.force_engage is None and not forced else "forced (a paired arm)",
-                     then="stays: the cell drawn is near" if cell_dist(best, here) < MOVE_CELLS else "sent")
+                     "forced (a paired arm)" if forced else "draw",
+                     then="stays: the cell drawn is near" if cell_dist(best, here) < MOVE_CELLS else "sent",
+                     rl=self._rl_row("engage_t"), p_other=other)
         if cell_dist(best, here) < MOVE_CELLS:
             return None
         self.move_tokens -= 1.0
@@ -379,8 +397,6 @@ class LearnedArmy:
             return None
         x, y = self.tracker.center(best)
         self.ordered[here] = (best, attack, hi.frame)
-        self._record(where, f"{'attack' if attack else 'move'} to {self._cell_name(best)}", float(where[0, best]),
-                     "favorite", "sent")
         g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
                              {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": float(p[best]),
                               "fight": 0.0, "done": [], "boxes": 0}, "army"))
@@ -390,11 +406,20 @@ class LearnedArmy:
         x, y = self.tracker.center(cell)
         return f"({x // 32},{y // 32})"
 
-    def _record(self, where, choice: str, p: float | None, by: str, then: str | None = None) -> None:
+    def _record(self, where, choice: str, p: float | None, by: str, then: str | None = None, rl: int | None = None,
+                p_other: float | None = None) -> None:
         """An army decision in the game's records (gary/decision_log.py): the likeliest cells, what was
         chosen and by whom (the draw, a rule), what came of it."""
         from gary.decision_log import LOG, top
-        LOG.decision("T", "army", self.g.hi.frame, choice, p, top(self._cell_name, where[0], 3), self._seen, by, then=then)
+        LOG.decision("T", "army", self.g.hi.frame, choice, p, top(self._cell_name, where[0], 3), self._seen, by, then=then,
+                     rl=rl, p_other=p_other)
+
+    def _rl_row(self, layer: str) -> int | None:
+        """The row of the decision just logged among the layer's RL decisions (a paired arm's, or the game's)."""
+        from gary.decision_log import LOG
+        if self.record is not None:
+            return len(self.record) - 1
+        return len(LOG.items[layer]) - 1 if LOG.on else None
 
     def _hidden_army(self, obs: dict, mine: list[dict], dest: int) -> float | None:
         """With the belief model, for a destination away from Gary's bases: the enemy army supply x2

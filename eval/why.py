@@ -4,16 +4,23 @@ had the hands: a query over the game's records (gary/decision_log.py), not a re-
     python -m eval.why runs/league/c6 --seed 3005 --minute 5            (minute 5:00-6:00)
     python -m eval.why runs/watch/gz3005.rep --minute 5 --to 5.5 --side Z
     python -m eval.why runs/watch/gz3005.records.jsonl --minute 5 --layer macro --orders all
+    python -m eval.why runs/league_loop/e1/r0 --seed 3005 --pairs        (the game's paired branches)
+    python -m eval.why runs/league_loop/e1/r0 --seed 3005 --pair 2       (one pair's arms side by side)
 
 The game: a .rep or .records.jsonl, or a folder searched (recursively, the newest first) for the seed's
 records (<anything>seed<seed>.records.jsonl or <anything><seed>.records.jsonl).
 
 Each line: the time, the side and who had its hands, then
   a decision   layer: choice (p) by who; what it saw; the top alternatives; what was set aside and why; then
-  an order     order: what, its fate (sent, refused, retried, dropped, done) and why, given by whom
+  an order     order: what, its fate (sent, refused, retried, dropped, waiting, done) and why, given by whom
   a note       what a layer said in the game's log (--notes off to hide)
 --orders: "fates" (the default: every order that wasn't simply sent, and the production orders sent),
 "all" (every order, repeats folded), "none". Last, the window's counts per layer and per order fate.
+
+Paired branches (eval/pairs.py, the RL's own episodes; <game>.pairs.records.jsonl): --pairs lists them
+(when, the arms' models and outcomes, the first decision where the arms differ); --pair N shows both
+arms' records interleaved (A0, A1), each decision with its row among the RL arrays ([rl #n]) and, in an
+A/B pair, the other model's odds of the same choice.
 """
 
 from __future__ import annotations
@@ -38,8 +45,8 @@ def find(where: str, seed: int | None) -> Path:
         sys.exit(f"no records next to {p} (games played before the records existed have none)")
     if seed is None:
         sys.exit("a folder needs --seed")
-    found = [r for r in p.rglob("*.records.jsonl")
-             if r.name.endswith((f"seed{seed}.records.jsonl", f"_{seed}.records.jsonl", f"{seed}.records.jsonl"))]
+    found = [r for r in p.rglob("*.records.jsonl") if not r.name.endswith(".pairs.records.jsonl")
+             and r.name.endswith((f"seed{seed}.records.jsonl", f"_{seed}.records.jsonl", f"{seed}.records.jsonl"))]
     if not found:
         sys.exit(f"no records for seed {seed} under {p}")
     return max(found, key=lambda r: r.stat().st_mtime)
@@ -58,7 +65,9 @@ def line(r: dict) -> str:
     if r["kind"] == "decision":
         out = f"{r['layer']}: {r['choice'] if r['choice'] is not None else '(none)'}"
         if "p" in r:
-            out += f" ({pct(r['p'])})"
+            out += f" ({pct(r['p'])}" + (f", other model {pct(r['p_other'])}" if "p_other" in r else "") + ")"
+        if r.get("rl") is not None:
+            out += f" [rl #{r['rl']}]"
         out += f" by {r['by']}"
         if r.get("then"):
             out += f" -> {r['then']}"
@@ -77,13 +86,119 @@ def line(r: dict) -> str:
     return f"note: {r['text']}"
 
 
+def show(rows: list[dict], f0: int, f1: int, args, tag=lambda r: r["side"]) -> None:
+    """The records in [f0, f1) in time order, filtered by args; tag(r) names whose line it is."""
+    hands: dict[tuple, str] = {}
+    counts, fates = Counter(), Counter()
+    last, last_key, repeat = None, None, 0
+
+    def flush():
+        nonlocal last, last_key, repeat
+        if last is not None:
+            print(last + (f"  (x{repeat})" if repeat > 1 else ""))
+        last, last_key, repeat = None, None, 0
+    for r in rows:
+        if r["f"] >= f1:
+            break
+        who = (r.get("arm"), r["side"])
+        if r["kind"] == "hands":
+            hands[who] = r["owner"]
+            continue
+        if r["f"] < f0 or (args.side and r["side"] != args.side):
+            continue
+        if r["kind"] == "decision":
+            counts[f"{tag(r)} {r['layer']}"] += 1
+            if args.layer and r["layer"] not in args.layer:
+                continue
+        elif r["kind"] == "order":
+            fates[f"{tag(r)} {r['fate']}"] += 1
+            if args.orders == "none" or args.layer:
+                continue
+            if args.orders == "fates" and r["fate"] == "sent" and not r["what"].startswith(PRODUCTION):
+                continue
+        elif r["kind"] == "note":
+            if args.notes == "off" or args.layer:
+                continue
+        else:
+            continue
+        key = (tag(r), line(r))
+        if r["kind"] == "order" and key == last_key:
+            repeat += 1                                    # (the same order again: folded)
+            continue
+        flush()
+        last = f"{clock(r['f']):>7} {tag(r)} [{hands.get(who, '?')[:16]:<16}] " + line(r)
+        last_key, repeat = key, 1
+    flush()
+    print("\ndecisions: " + ", ".join(f"{k} {n}" for k, n in sorted(counts.items())))
+    print("orders: " + ", ".join(f"{k} {n}" for k, n in sorted(fates.items())))
+
+
+def diverge(arms: dict[int, list[dict]]) -> tuple | None:
+    """The first decision where the arms differ (layer and choice, in order): (index, A0's, A1's)."""
+    a = [r for r in arms.get(0, []) if r["kind"] == "decision"]
+    b = [r for r in arms.get(1, []) if r["kind"] == "decision"]
+    for i in range(min(len(a), len(b))):
+        if (a[i]["layer"], a[i]["choice"]) != (b[i]["layer"], b[i]["choice"]):
+            return i, a[i], b[i]
+    if len(a) != len(b):
+        i = min(len(a), len(b))
+        return i, a[i] if i < len(a) else None, b[i] if i < len(b) else None
+    return None
+
+
+def pairs(path: Path, args) -> None:
+    """The game's paired branches: listed (--pairs), or one pair's arms side by side (--pair N)."""
+    p = path.with_name(path.name.replace(".records.jsonl", ".pairs.records.jsonl"))
+    if not p.exists():
+        sys.exit(f"no pair records at {p} (a game without paired branches, or played before they were kept)")
+    rows = [json.loads(s) for s in p.read_text(encoding="utf-8").splitlines()[1:]]
+    heads = {r["pair"]: r for r in rows if r["kind"] == "pair"}
+    arms: dict[int, dict[int, list]] = {}
+    for r in rows:
+        if r["kind"] != "pair":
+            arms.setdefault(r["pair"], {}).setdefault(r["arm"], []).append(r)
+    short = lambda m: Path(m).parent.name or m
+
+    def choice(j, x):
+        return f"A{j} {x['choice']} ({pct(x.get('p'))})" if x else f"A{j} (none)"
+    if args.pair is None:
+        print(f"{p}: {len(heads)} pairs")
+        for i, h in heads.items():
+            d = diverge(arms.get(i, {}))
+            kind = "A/B " + " vs ".join(short(m) for m in h["models"]) if h["ab"] else "training"
+            out = f"#{i} {clock(h['f'])} {h['layer']} {kind}: outcomes {h['rewards'][0]:+.0f} / {h['rewards'][1]:+.0f}"
+            if d is None:
+                out += "; the arms' decisions never differ"
+            else:
+                at = d[1] or d[2]
+                out += f"; differ first at {clock(at['f'])} ({at['layer']}): {choice(0, d[1])} | {choice(1, d[2])}"
+            print(out)
+        return
+    h = heads.get(args.pair)
+    if h is None:
+        sys.exit(f"no pair #{args.pair}; --pairs lists them")
+    print(f"{p} pair #{args.pair}: {h['layer']}, {'A/B' if h['ab'] else 'training'}, from {clock(h['f'])}")
+    for j, m in enumerate(h["models"]):
+        print(f"  A{j}: {m}  outcome {h['rewards'][j]:+.1f}")
+    d = diverge(arms.get(args.pair, {}))
+    if d is not None:
+        at = d[1] or d[2]
+        print(f"  first difference: decision {d[0]}, {clock(at['f'])}: {choice(0, d[1])} | {choice(1, d[2])}")
+    merged = sorted((r for a in arms.get(args.pair, {}).values() for r in a), key=lambda r: (r["f"], r["arm"]))
+    end = max((r["f"] for r in merged), default=h["f"]) + 1
+    print()
+    show(merged, h["f"], end, args, tag=lambda r: f"A{r['arm']} {r['side']}")
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("game", help="a .rep or .records.jsonl, or a folder (with --seed)")
     ap.add_argument("--seed", type=int)
-    ap.add_argument("--minute", type=float, required=True, help="from this minute (5 or 5.5)")
+    ap.add_argument("--minute", type=float, help="from this minute (5 or 5.5)")
     ap.add_argument("--to", type=float, help="to this minute (default: a minute on)")
+    ap.add_argument("--pairs", action="store_true", help="the game's paired branches, listed")
+    ap.add_argument("--pair", type=int, help="one paired branch's arms, side by side")
     ap.add_argument("--side", choices=["T", "Z"])
     ap.add_argument("--layer", action="append", help="only these layers' decisions (macro, army, engage, roles, "
                                                      "posture, gas); repeatable")
@@ -91,48 +206,14 @@ def main() -> None:
     ap.add_argument("--notes", choices=["on", "off"], default="on")
     args = ap.parse_args()
     path = find(args.game, args.seed)
+    if args.pairs or args.pair is not None:
+        return pairs(path, args)
+    if args.minute is None:
+        sys.exit("--minute (or --pairs, --pair N)")
     rows = [json.loads(s) for s in path.read_text(encoding="utf-8").splitlines()[1:]]
     f0, f1 = int(args.minute * 1440), int((args.to if args.to is not None else args.minute + 1) * 1440)
     print(f"{path}: {clock(f0)}-{clock(f1)}")
-    hands: dict[str, str] = {}
-    counts, fates = Counter(), Counter()
-    last, repeat = None, 0
-
-    def flush():
-        nonlocal last, repeat
-        if last is not None:
-            print(last + (f"  (x{repeat})" if repeat > 1 else ""))
-        last, repeat = None, 0
-    for r in rows:
-        if r["f"] >= f1:
-            break
-        if r["kind"] == "hands":
-            hands[r["side"]] = r["owner"]
-            continue
-        if r["f"] < f0 or (args.side and r["side"] != args.side):
-            continue
-        if r["kind"] == "decision":
-            counts[f"{r['side']} {r['layer']}"] += 1
-            if args.layer and r["layer"] not in args.layer:
-                continue
-        elif r["kind"] == "order":
-            fates[f"{r['side']} {r['fate']}"] += 1
-            if args.orders == "none" or args.layer:
-                continue
-            if args.orders == "fates" and r["fate"] == "sent" and not r["what"].startswith(PRODUCTION):
-                continue
-        elif r["kind"] == "note" and (args.notes == "off" or args.layer):
-            continue
-        head = f"{clock(r['f']):>7} {r['side']} [{hands.get(r['side'], '?')[:16]:<16}] "
-        text = head + line(r)
-        if r["kind"] == "order" and last is not None and last.split("] ", 1)[-1] == text.split("] ", 1)[-1]:
-            repeat += 1                                    # (the same order again: folded)
-            continue
-        flush()
-        last, repeat = text, 1
-    flush()
-    print("\ndecisions: " + ", ".join(f"{k} {n}" for k, n in sorted(counts.items())))
-    print("orders: " + ", ".join(f"{k} {n}" for k, n in sorted(fates.items())))
+    show(rows, f0, f1, args)
 
 
 if __name__ == "__main__":

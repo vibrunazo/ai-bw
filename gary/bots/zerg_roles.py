@@ -78,6 +78,7 @@ class ZergRoles:
         # without touching Gary-Z's other dice (eval/pairs.py)
         self.rng = random.Random(bot.rng.random())
         self.record: list | None = None      # a paired episode's arm: its decisions, kept here
+        self.shadow = None                   # an A/B pair's other model: its odds of the roles drawn, recorded
 
     def _setup(self, obs: dict) -> None:
         from gary.policy.roles import Ground
@@ -162,10 +163,18 @@ class ZergRoles:
         # (the record: the roles drawn this snapshot, the model's mean odds over its units, the orders to give)
         drawn = Counter(self.names[k] for _, k, _ in self.rec["index"].values())
         if drawn:
-            LOG.decision(hi.side, "roles", hi.frame, ", ".join(f"{r.lower()} {c}" for r, c in drawn.most_common()),
-                         top=top(lambda k: self.names[k].lower(), probs[[i for i, _, _ in self.rec["index"].values()]].mean(0)),
-                         inputs={"units": len(self.rec["index"]), "enemy": len(enemy)}, by="draw",
-                         then="orders: " + (", ".join(f"{r.lower()} {len(g)}" for r, g in groups.items()) or "none"))
+            chosen = list(self.rec["index"].values())
+            other = None
+            if self.shadow is not None:               # (an A/B arm: the other model's odds of the same roles)
+                sp = self.shadow.predict_move(rows, extra, obs["frame"] * 42 / 1000)[0]
+                other = float(np.mean([sp[i, k] for i, k, _ in chosen]))
+            self.rec["record"] = LOG.decision(
+                hi.side, "roles", hi.frame, ", ".join(f"{r.lower()} {c}" for r, c in drawn.most_common()),
+                float(np.mean([probs[i, k] for i, k, _ in chosen])),
+                top(lambda k: self.names[k].lower(), probs[[i for i, _, _ in chosen]].mean(0)),
+                {"units": len(chosen), "enemy": len(enemy)}, "draw",
+                then="orders: " + (", ".join(f"{r.lower()} {len(g)}" for r, g in groups.items()) or "none"),
+                p_other=other)
         # every non-empty group queued, most urgent first, one order a turn (the first alone went before:
         # one zergling drawing retreat cost the rest their orders, and draws were logged as done)
         for role in URGENT:
@@ -193,11 +202,14 @@ class ZergRoles:
         rec, self.rec = self.rec, None
         if rec is None or not (rec["drawn"] >= 0).any() or not (LOG.on or self.record is not None):
             return
-        item = {k: v for k, v in rec.items() if k != "index"}
+        item = {k: v for k, v in rec.items() if k not in ("index", "record")}
         if self.record is not None:
             self.record.append(item)
         else:
             LOG.add("roles_z", **item)
+        if rec.get("record") is not None:             # (its row among the RL decisions, in its record)
+            rec["record"]["rl"] = len(self.record) - 1 if self.record is not None else \
+                len(LOG.items["roles_z"]) - 1 if LOG.on else None
 
     def _carry_out(self, obs: dict) -> bool:
         p = self.pending
