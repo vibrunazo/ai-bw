@@ -118,6 +118,11 @@ class GaryZ(ZergV3):
         # stage-judge-go is replaced, its home defense and v3's raid and lurkers stay
         self.army_model = ArmyModel.load(latest_model("army"))
         self.army_tracker = ArmyTracker(self.army_model.spec, hi.slot, mapinfo.size, self.home)
+        # its fights: the Zerg role model (gary/bots/zerg_roles.py: the pros' Zerg units before contact and
+        # in it), in place of v3's scripted micro; none trained yet, v3's
+        from gary.bots.zerg_roles import ZergRoles, latest_zerg_model
+        roles = latest_zerg_model()
+        self.fight_roles = ZergRoles(self, roles) if roles is not None else None
         self.sizes = dict(GROUND)
         self.next_ask, self.army_goal = 0, None  # the whole army's destination, asked every ARMY_EVERY
         self.sent_to: dict[int, tuple] = {}
@@ -432,6 +437,8 @@ class GaryZ(ZergV3):
     def army(self, obs: dict, mine: list[dict]) -> bool:
         self.army_tracker.remember(obs)
         if self._overlord_posts(obs, mine):
+            return True
+        if self.fight_roles is not None and self.fight_roles.step(obs, mine):
             return True
         if self.poke and not self.poked and not self.all_in and self._poke(obs, mine):
             return True

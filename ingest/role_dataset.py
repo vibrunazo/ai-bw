@@ -31,9 +31,14 @@ from gary.policy.roles import EXTRA, MAX_UNITS, ROLES, Ground, extra_features, t
 SLICE = 12
 
 
+HALLS = {"T": {106}, "Z": {131, 132, 133}}          # its bases: Command Centers; Hatcheries, Lairs, Hives
+SHELTERS = {"T": {125}, "Z": {146}}                  # where its units shelter: bunkers; sunken colonies
+
+
 class Probe:
-    def __init__(self, near: float = NEAR):
+    def __init__(self, near: float = NEAR, race: str = "T"):
         self.near = near                   # units with an enemy fighter this close are labeled
+        self.halls, self.shelters = HALLS[race], SHELTERS[race]
         self.start = None
         self.flip = None
         self.snaps = []                    # (frame, rows, extra, tags)
@@ -50,7 +55,7 @@ class Probe:
         if self.start is None:
             self.start = f
             mw, mh = obs["map"]["w"], obs["map"]["h"]
-            cc = next((u for u in obs["units"] if u["owner"] == slot and u["type"] == 106), None)
+            cc = next((u for u in obs["units"] if u["owner"] == slot and u["type"] in self.halls), None)
             starts = game.start_locations()
             main = min(starts, key=lambda s: math.dist((s["x"], s["y"]), (cc["x"], cc["y"]))) if cc and starts else {"x": 0, "y": 0}
             self.flip = (main["x"] > mw / 2, main["y"] > mh / 2)
@@ -94,8 +99,9 @@ class Probe:
             rows, tags, _ = snap
             extra = extra_features(rows, tags, positions, self.prev, self.flip)
             own = [u for u in obs["units"] if u["owner"] == slot]
-            extra[:, 6:] = terrain_features(tags, positions, self.ground, [(u["x"], u["y"]) for u in own if u["type"] == 106],
-                                            [(u["x"], u["y"]) for u in own if u["type"] == 125 and u["completed"]], self.flip)
+            extra[:, 6:] = terrain_features(tags, positions, self.ground, [(u["x"], u["y"]) for u in own if u["type"] in self.halls],
+                                            [(u["x"], u["y"]) for u in own if u["type"] in self.shelters and u["completed"]],
+                                            self.flip)
             self.snaps.append((f, rows, extra, tags))
         self.prev = positions
 

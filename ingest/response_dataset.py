@@ -35,7 +35,7 @@ import numpy as np
 from eval import monitor, priority
 from eval.micro_roles import NEAR
 from gary.policy.roles import EXTRA, MAX_UNITS, ROLES
-from ingest.role_dataset import Probe
+from ingest.role_dataset import HALLS, Probe
 
 SIGHT = 12 * 32                 # a seen enemy fighter this near: the unit is labeled
 ACTIVE = SIGHT + 4 * 32         # ...this near its fighters or buildings: the game steps finely
@@ -71,7 +71,7 @@ def _moment(o: dict, slot: int) -> bool:
 
 
 def _job(job: tuple) -> dict:
-    path, end, sha1 = job
+    path, end, sha1, race = job
     out = {"sha1": sha1, "error": None, "rows": [], "extra": [], "labels": [], "near": [], "move": [], "time": [],
            "tags": []}
     try:
@@ -80,9 +80,9 @@ def _job(job: tuple) -> dict:
         try:
             last = min(end or MAX_MIN * 1440, MAX_MIN * 1440)
             g.step(24)
-            slot = next(u["owner"] for u in g.observe()["units"] if u["type"] == 106)
+            slot = next(u["owner"] for u in g.observe()["units"] if u["type"] in HALLS[race])
             seen = Seen(g, slot)
-            probe = Probe(near=SIGHT)
+            probe = Probe(near=SIGHT, race=race)
             quiet = QUIET
             while g.frame + 24 <= last:
                 o = seen.observe()
@@ -117,7 +117,7 @@ def _job(job: tuple) -> dict:
     return out
 
 
-def select(games: int) -> list[tuple]:
+def select(games: int, race: str = "T") -> list[tuple]:
     from eval.humanlike import clean_replays
     from ingest.inventory import data_root
     clean = clean_replays()
@@ -126,23 +126,24 @@ def select(games: int) -> list[tuple]:
         r = json.loads(line)
         sha[r["rel_path"]] = r["sha1"]
     recs = [r for r in map(json.loads, open(data_root() / "interim" / "build_orders.jsonl", encoding="utf-8"))
-            if r["matchup"] == "TvZ" and r["race"] == "T" and r["rel_path"] in clean and r.get("duration_s", 0) >= 360
+            if r["matchup"] == "TvZ" and r["race"] == race and r["rel_path"] in clean and r.get("duration_s", 0) >= 360
             and any(m in re.sub(r"[^a-z ]", "", r.get("map", "").lower()) for m in MAPS)]
     random.Random(0).shuffle(recs)
-    return [(str(data_root() / "raw" / r["rel_path"]), clean[r["rel_path"]] or None, sha[r["rel_path"]])
+    return [(str(data_root() / "raw" / r["rel_path"]), clean[r["rel_path"]] or None, sha[r["rel_path"]], race)
             for r in recs[:games]]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--race", choices=("T", "Z"), default="T", help="whose side (TvZ games)")
     ap.add_argument("--games", type=int, default=600)
     ap.add_argument("--parallel", type=int, default=4)
-    ap.add_argument("--out", help="default: data/interim/roles/response_T.npz")
+    ap.add_argument("--out", help="default: data/interim/roles/response_<race>.npz")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
     from ingest.inventory import data_root
-    jobs = select(args.games)
+    jobs = select(args.games, args.race)
     with ProcessPoolExecutor(args.parallel) as pool:
         results = list(monitor.track(pool.map(_job, jobs, chunksize=1), len(jobs), "games"))
     n = sum(len(r["rows"]) for r in results)
@@ -163,7 +164,7 @@ def main() -> None:
             count[i], time_s[i], game[i] = k, t, gi
             unit_tags[i, :k] = tg[:k]
             i += 1
-    out = Path(args.out) if args.out else data_root() / "interim" / "roles" / "response_T.npz"
+    out = Path(args.out) if args.out else data_root() / "interim" / "roles" / f"response_{args.race}.npz"
     out.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out, rows=rows, extra=extra, labels=labels, near=near, move=move, count=count, time=time_s, game=game,
                         tags=unit_tags, sha1=np.array([r["sha1"] for r in results]))
