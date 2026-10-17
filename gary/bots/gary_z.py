@@ -121,11 +121,6 @@ class GaryZ(ZergV3):
         # stage-judge-go is replaced, its home defense and v3's raid and lurkers stay
         self.army_model = ArmyModel.load(latest_model("army"))
         self.army_tracker = ArmyTracker(self.army_model.spec, hi.slot, mapinfo.size, self.home)
-        # its fights: the Zerg role model (gary/bots/zerg_roles.py: the pros' Zerg units before contact and
-        # in it), in place of v3's scripted micro; none trained yet, v3's
-        from gary.bots.zerg_roles import ZergRoles, latest_zerg_model
-        roles = latest_zerg_model()
-        self.fight_roles = ZergRoles(self, roles) if roles is not None else None
         self.sizes = dict(GROUND)
         self.next_ask: dict[int, int] = {}       # group -> when its destination is drawn again
         self.army_goal: dict[int, tuple | None] = {}   # group -> its drawn destination
@@ -142,6 +137,11 @@ class GaryZ(ZergV3):
         self._post_points = None
         self.next_query = 0
         self.rng = random.Random(seed * 7919 + 1)          # the dice (deterministic per seed)
+        # its fights: the Zerg role model (gary/bots/zerg_roles.py: the pros' Zerg units before contact and
+        # in it), in place of v3's scripted micro; none trained yet, v3's
+        from gary.bots.zerg_roles import ZergRoles, latest_zerg_model
+        roles = latest_zerg_model()
+        self.fight_roles = ZergRoles(self, roles) if roles is not None else None
         self.used_larva: dict[int, int] = {}                # larva tag -> frame it was morphed
         self.spent: list[tuple[int, int, int]] = []         # (frame, minerals, gas) just spent
         self.morphs: list[tuple[int, int, int]] = []       # (frame, unit type, frames to make) ordered

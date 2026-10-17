@@ -241,6 +241,8 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
         zerg.target = next((u["x"], u["y"]) for u in obs["units"] if u["type"] == C.COMMAND_CENTER)
         end = int(minutes * 60 * 24)
         result = "time"
+        from eval.pairs import Brancher                    # (paired fight episodes, when GARY_PAIRS is set)
+        brancher = Brancher(game, slot_of, seed or 0)
         from eval.economy import Built
         built = Built(slot_of["T"])
         while his["T"].frame < end:
@@ -252,6 +254,8 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
             zerg.act()
             for i, hi in enumerate(his.values()):
                 hi.step(2, advance_game=(i == 0))
+            if brancher.on:
+                brancher.maybe(game, {"gary": gary, "zerg": zerg, "his": his, "slot_of": slot_of})
             if his["T"].frame % 24 < 2:
                 built.look(game.observe()["units"])
             if his["T"].frame % (24 * 30) < 2:
@@ -273,6 +277,7 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
                     result = "Gary lost" if not alive["T"] else "Gary won"
                     break
         game.save_replay(save)
+        brancher.save()
         pov = save[:-4] + ".pov.jsonl" if save.endswith(".rep") else save + ".pov.jsonl"
         his["T"].save_pov(pov)
         if hasattr(gary, "save_trace") and pov.endswith(".pov.jsonl"):

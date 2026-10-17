@@ -480,7 +480,8 @@ OPTIONS = {
     "nowhere": lambda m: m["fight"].setdefault("roles", {}).update(where=False),
     # army.py: destinations and move/attack drawn from the army model's odds, logged for the league's RL
     # (Gary-Z's likeliest-cell army stood at home 79% at 8-10 min; drawn 56%, pros 35%)
-    "draw": lambda m: m["army"].update(draw=True),
+    "draw": lambda m: (m["army"].update(draw=True),
+                       m["fight"].setdefault("roles", {}).update(draw=True) if m["fight"].get("provider") == "role_ahead" else None),
     # the army model updated by the league's RL (train/league_rl.py --layer army_t), drawing as it learned
     "army_rl": lambda m: m["army"].update(model="army_rl/latest", draw=True),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)

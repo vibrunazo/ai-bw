@@ -19,6 +19,8 @@ outcomes, the classifier's gap).
     python -m train.league_rl --round r2 --layer roles_z
     python -m train.league_rl --round r2 --layer army_z
     python -m train.league_rl --round r2 --layer army_t
+    (eval/league_loop.py calls train_pairs: the Zerg role model from paired fight episodes, the army
+    layers frozen at imitation until the critic predicts more than who is ahead)
 Output: the updated model (roles_z: runs/roles_rl/Z_<time>/; army_z: runs/army/TvZ_Z_<time>_rl/, the
 newest Zerg army model Gary-Z loads; army_t: runs/army_rl/TvZ_T_<time>/, played with the option
 army_rl) and report.json beside it.
@@ -201,6 +203,87 @@ def update_army(data, adv, args, device, race):
             opt.step()
             stats.append((pg.item(), kl.item()))
     return model, start, stats
+
+
+def load_pairs(rounds: list[str]):
+    """Training pairs (both arms the same model) from the rounds' games: each arm's decisions with its
+    advantage, the arm's outcome less the pair's mean (the position's luck cancelled); and every pair's
+    arms (for the gate and the diagnostics)."""
+    files = [f for r in rounds for f in sorted(glob.glob(str(REPO / "runs" / "league" / r / "*" / "*.pairs.npz")))]
+    dec = {k: [] for k in ("rows", "extra", "count", "time", "drawn", "logp")}
+    adv = []
+    for f in files:
+        d = np.load(f, allow_pickle=False)
+        if "dec/pair" not in d.files:
+            continue
+        reward, model = d["reward"], d["model"]
+        same = model[:, 0] == model[:, 1]
+        a = reward - reward.mean(1, keepdims=True)
+        for i in range(len(d["dec/pair"])):
+            pi, arm = int(d["dec/pair"][i]), int(d["dec/arm"][i])
+            if not same[pi] or reward[pi, 0] == reward[pi, 1]:
+                continue                                  # (A/B pairs judge; equal outcomes teach nothing)
+            for k in dec:
+                dec[k].append(d[f"dec/{k}"][i])
+            adv.append(a[pi, arm])
+    return {k: np.stack(v) for k, v in dec.items()} if adv else {}, np.array(adv, np.float32), len(files)
+
+
+def train_pairs(rounds: list[str], start: Path, imitation: Path, out: Path, lr: float = 3e-5, epochs: int = 4,
+                batch: int = 256, clip: float = 0.2, kl: float = 0.1) -> dict:
+    """One PPO update of the Zerg role model from the rounds' training pairs, KL-leashed to the imitation
+    model (not the round's start: no drift compounding over rounds). The new model and report.json in out."""
+    from gary.policy.roles import RoleModel, tensors
+    data, adv, n_files = load_pairs(rounds)
+    if not len(adv):
+        return {"decisions": 0}
+    adv = (adv / (adv.std() + 1e-6)).astype(np.float32)   # (already centred per pair)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    torch.manual_seed(0)
+    model = RoleModel.load(start, device)
+    net = model.net.eval()                                 # (no dropout: the logged odds had none)
+    ref = RoleModel.load(imitation, device).net.eval()
+    opt = torch.optim.AdamW(net.parameters(), lr=lr)
+    n, stats = len(adv), []
+
+    def kl_to_ref(idx):
+        count = data["count"][idx].astype(int)
+        k = int(count.max())
+        pad = np.arange(k)[None, :] >= count[:, None]
+        inputs = tensors(data["rows"][idx][:, :k].astype(np.int16), data["extra"][idx][:, :k].astype(np.float32), pad,
+                         data["time"][idx].astype(np.float32), device)
+        return inputs, k
+
+    for epoch in range(epochs):
+        order = np.random.default_rng(epoch).permutation(n)
+        for s0 in range(0, n, batch):
+            idx = order[s0:s0 + batch]
+            inputs, k = kl_to_ref(idx)
+            drawn = torch.as_tensor(data["drawn"][idx][:, :k].astype(np.int64), device=device)
+            old = torch.as_tensor(data["logp"][idx][:, :k].astype(np.float32), device=device)
+            mask = drawn >= 0
+            logp = F.log_softmax(net(*inputs), -1)
+            with torch.no_grad():
+                logp0 = F.log_softmax(ref(*inputs), -1)
+            new = logp.gather(-1, drawn.clamp(min=0)[..., None])[..., 0]
+            a = torch.as_tensor(adv[idx], device=device)[:, None].expand_as(new)
+            ratio = torch.exp(new - old)
+            pg = -torch.min(ratio * a, ratio.clamp(1 - clip, 1 + clip) * a)[mask].mean()
+            klv = (logp0.exp() * (logp0 - logp)).sum(-1)[mask].mean()
+            loss = pg + kl * klv
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+            stats.append((pg.item(), klv.item()))
+    out.mkdir(parents=True, exist_ok=True)
+    model.net.eval().cpu()
+    model.config = {**model.config, "rl": {"rounds": rounds, "from": str(start), "imitation": str(imitation),
+                                           "kl": kl, "lr": lr, "epochs": epochs, "decisions": int(n)}}
+    model.save(out / "model.pt")
+    report = {"rounds": rounds, "from": str(start), "imitation": str(imitation), "decisions": int(n), "files": n_files,
+              "pg_first": stats[0][0], "pg_last": stats[-1][0], "kl_to_imitation": stats[-1][1]}
+    (out / "report.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+    return report
 
 
 def main() -> None:

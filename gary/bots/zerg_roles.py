@@ -17,6 +17,7 @@ one and shift+clicks on the rest (12 at most), then the order.
 from __future__ import annotations
 
 import math
+import random
 from pathlib import Path
 
 import numpy as np
@@ -42,6 +43,9 @@ def latest_zerg_model() -> Path | None:
     """The newest Zerg role model: updated by the league's RL (runs/roles_rl/Z_*), else the newest
     trained on the Zerg's response dataset (runs/roles/*/model.pt)."""
     from gary.policy.roles import RoleModel
+    import os
+    if os.environ.get("GARY_ZROLES_MODEL"):           # (the league loop's incumbent or candidate, pinned)
+        return Path(os.environ["GARY_ZROLES_MODEL"])
     rl = sorted(Path("runs/roles_rl").glob("Z_*/model.pt"))
     if rl:
         return rl[-1]
@@ -67,6 +71,10 @@ class ZergRoles:
         self.pending: dict | None = None
         self.told: dict[int, tuple[str, int]] = {}
         self.acted = 0                       # orders given (the log's count)
+        # its own dice (deterministic per game): a paired episode draws its arms' fight decisions anew
+        # without touching Gary-Z's other dice (eval/pairs.py)
+        self.rng = random.Random(bot.rng.random())
+        self.record: list | None = None      # a paired episode's arm: its decisions, kept here
 
     def _setup(self, obs: dict) -> None:
         from gary.policy.roles import Ground
@@ -125,7 +133,7 @@ class ZergRoles:
             u = by_tag.get(t)
             if u is None or u["owner"] != slot or u["type"] not in FIGHTERS or not u["completed"]:
                 continue
-            k = self.bot.rng.choices(range(probs.shape[1]), weights=probs[i].tolist())[0]
+            k = self.rng.choices(range(probs.shape[1]), weights=probs[i].tolist())[0]
             drawn[i], logp[i] = k, np.log(probs[i, k] + 1e-9)
             role = self.names[k]
             if role not in URGENT:
@@ -141,10 +149,14 @@ class ZergRoles:
                 dx, dy = moves[i] * 32
                 if math.hypot(dx, dy) >= WHERE_MIN:
                     groups.setdefault(role, []).append((u, (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)))
-        if LOG.on and (drawn >= 0).any():
+        if (LOG.on or self.record is not None) and (drawn >= 0).any():
             pad = lambda a: np.concatenate([a[:MAX_UNITS], np.zeros((max(0, MAX_UNITS - len(a)),) + a.shape[1:], a.dtype)])
-            LOG.add("roles_z", frame=hi.frame, rows=pad(rows.astype(np.int16)), extra=pad(extra.astype(np.float16)),
-                    count=min(n, MAX_UNITS), time=obs["frame"] * 42 / 1000, drawn=drawn, logp=logp)
+            item = dict(frame=hi.frame, rows=pad(rows.astype(np.int16)), extra=pad(extra.astype(np.float16)),
+                        count=min(n, MAX_UNITS), time=obs["frame"] * 42 / 1000, drawn=drawn, logp=logp)
+            if self.record is not None:
+                self.record.append(item)
+            else:
+                LOG.add("roles_z", **item)
         for role in URGENT:
             group = groups.get(role, [])[:MAX_GROUP]
             if not group:

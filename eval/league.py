@@ -20,6 +20,7 @@ learns from whole games and segments, through the outcomes logged here.
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import subprocess
@@ -39,11 +40,20 @@ MAPS = {m: REPO / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
 
 def play(job: tuple) -> dict:
     """One game in its own process (Gary-Z's decision log written as the process ends)."""
-    version, name, path, seed, minutes, out = job
+    version, name, path, seed, minutes, out, pairs, incumbent, candidate = job
     folder = out / name
     folder.mkdir(parents=True, exist_ok=True)
     rep = folder / f"{version}_seed{seed}.rep"
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "GARY_DECISION_LOG": str(rep.with_suffix(".decisions.npz"))}
+    # Gary-Z's fight roles: the incumbent, or on odd seeds the candidate (its own games: the gap score
+    # judges it too); paired episodes against the other one
+    main, other = (candidate, incumbent) if candidate and seed % 2 else (incumbent, candidate)
+    if main:
+        env["GARY_ZROLES_MODEL"] = str(main)
+    if pairs:
+        env["GARY_PAIRS"] = str(rep.with_suffix(".pairs.npz"))
+        if other:
+            env["GARY_PAIRS_CANDIDATE"] = str(other)
     cmd = [sys.executable, "-m", "gary.bots.zerg_rush", "--vs", version, "--opponent", "garyz", "--map", str(path),
            "--minutes", str(minutes), "--seed", str(seed), "--save", str(rep)]
     p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
@@ -54,7 +64,7 @@ def play(job: tuple) -> dict:
         if line.startswith(("Gary won", "Gary lost", "time")):
             result = line.split(";")[0].replace("Gary ", "")
             break
-    return {"map": name, "seed": seed, "result": result, "replay": str(rep)}
+    return {"map": name, "seed": seed, "result": result, "replay": str(rep), "zroles": str(main) if main else None}
 
 
 def decisions(rep: str) -> dict:
@@ -86,12 +96,15 @@ def main() -> None:
     ap.add_argument("--first", type=int, default=101)
     ap.add_argument("--minutes", type=float, default=20)
     ap.add_argument("--parallel", type=int, default=4)
+    ap.add_argument("--pairs", action="store_true", help="paired fight episodes in every game (eval/pairs.py)")
+    ap.add_argument("--incumbent", help="Gary-Z's fight-role model (default: its newest)")
+    ap.add_argument("--candidate", help="a candidate fight-role model: odd seeds play it, pairs A/B it")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
     out = REPO / "runs" / "league" / args.round
-    jobs = [(args.vs, name, path, s, args.minutes, out) for name, path in MAPS.items()
-            for s in range(args.first, args.first + args.seeds)]
+    jobs = [(args.vs, name, path, s, args.minutes, out, args.pairs, args.incumbent, args.candidate)
+            for name, path in MAPS.items() for s in range(args.first, args.first + args.seeds)]
     with ThreadPoolExecutor(args.parallel) as pool:
         games = list(monitor.track(pool.map(play, jobs), len(jobs), "games"))
     for g in games:
@@ -102,13 +115,25 @@ def main() -> None:
              "results": dict(Counter(g["result"] for g in games)),
              "by_map": {m: dict(Counter(g["result"] for g in games if g["map"] == m)) for m in MAPS},
              "decisions": {k: sum(g["decisions"].get(k, 0) for g in games) for k in ("army_t", "roles_t", "army_z", "roles_z")},
-             "gap": {"T": gaps(done, "T", args.parallel), "Z": gaps(done, "Z", args.parallel)}}
+             "gap": {"T": gaps(done, "T", args.parallel), "Z": gaps(done, "Z", args.parallel)},
+             "decided": sum(1 for g in games if g["result"] in ("won", "lost")) / max(1, len(games))}
+    if args.candidate:                    # (Gary-Z's gap, its candidate's games against the incumbent's)
+        for who, model in (("candidate", args.candidate), ("incumbent", args.incumbent)):
+            mine = [g["replay"] for g in games if g["result"] != "error" and g["zroles"] == str(model)]
+            table["gap"][f"Z_{who}"] = gaps(mine, "Z", args.parallel) if mine else None
+    if args.pairs:
+        from eval.pairs import summarize
+        files = sorted(glob.glob(str(out / "*" / "*.pairs.npz")))
+        table["pairs"] = summarize(files, args.incumbent, args.candidate)
     (out / "round.json").write_text(json.dumps(table, indent=1), encoding="utf-8")
     print(f"round {args.round}: {len(games)} games, Gary-T {table['results']}; by map {table['by_map']}")
     print(f"decisions logged: {table['decisions']}")
-    for side in ("T", "Z"):
-        print(f"gap score {side} (2-4/5-7/8-10/11-14/15-20 min, all): "
-              + " ".join("-" if v is None else f"{v[0]:.2f}" for v in table["gap"][side]))
+    for side, gap in table["gap"].items():
+        if gap:
+            print(f"gap score {side} (2-4/5-7/8-10/11-14/15-20 min, all): "
+                  + " ".join("-" if v is None else f"{v[0]:.2f}" for v in gap))
+    if "pairs" in table:
+        print(f"pairs: {json.dumps(table['pairs'])}")
     print(f"saved {out / 'round.json'}")
 
 

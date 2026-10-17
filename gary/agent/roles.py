@@ -883,11 +883,13 @@ class RoleAhead(RoleRules):
     rules have nothing to say, and that is where Gary felt AFK to the user (marines moved into the
     mineral line as zerglings came, a lone marine running from 4 zerglings to the buildings): units
     with no seen enemy fighter within AHEAD_FROM that the model (with a where head) would reposition,
-    pull back or retreat go where it moves them; the rules decide for the rest."""
+    pull back or retreat go where it moves them; the rules decide for the rest. With draw (the league),
+    each such unit's decision is drawn from the model's odds instead of the likeliest, and logged."""
 
-    def __init__(self, g, model, **options):
+    def __init__(self, g, model, draw: bool = False, **options):
         super().__init__(g, **options)
         self.model = model
+        self.draw = draw
 
     def decide(self, obs: dict, snap) -> Intent | None:
         g = self.g
@@ -906,25 +908,28 @@ class RoleAhead(RoleRules):
         fresh = lambda u, role: not (self.told.get(u["tag"], ("", -10**9))[0] == role
                                      and now - self.told[u["tag"]][1] < REPEAT)
         groups: dict[str, list] = {}
+        self.choice: dict[int, int] = {}
         if moves is not None:
             fx, fy = (-1 if g.flip[0] else 1), (-1 if g.flip[1] else 1)
             for u in mine:
                 if min(math.dist((u["x"], u["y"]), (e["x"], e["y"])) for e in enemy) < AHEAD_FROM:
                     continue
                 i = index[u["tag"]]
-                role = names[int(probs[i].argmax())].upper()
+                k = int(g.fight.rng.choice(len(probs[i]), p=probs[i] / probs[i].sum())) if self.draw else int(probs[i].argmax())
+                self.choice[u["tag"]] = k
+                role = names[k].upper()
                 dx, dy = moves[i] * 32
                 if role in ("RETREAT", "PULL_BACK", "REPOSITION") and math.hypot(dx, dy) >= WHERE_MIN and fresh(u, role):
                     groups.setdefault(role, []).append((u, (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)))
         from gary.decision_log import LOG
         from gary.policy.roles import MAX_UNITS
-        if LOG.on:                          # (each before-contact unit's likeliest decision and its log-probability)
+        if LOG.on and self.draw:            # (each before-contact unit's drawn decision and its log-probability)
             drawn = np.full(MAX_UNITS, -1, np.int8)
             logp = np.zeros(MAX_UNITS, np.float32)
             for u in mine:
                 i = index[u["tag"]]
-                if i < MAX_UNITS and min(math.dist((u["x"], u["y"]), (e["x"], e["y"])) for e in enemy) >= AHEAD_FROM:
-                    k = int(probs[i].argmax())
+                k = self.choice.get(u["tag"])
+                if i < MAX_UNITS and k is not None:
                     drawn[i], logp[i] = k, np.log(probs[i, k] + 1e-9)
             if (drawn >= 0).any():
                 pad = lambda a: np.concatenate([a[:MAX_UNITS], np.zeros((max(0, MAX_UNITS - len(a)),) + a.shape[1:], a.dtype)])
