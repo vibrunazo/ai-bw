@@ -197,6 +197,14 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    0.09-0.47). A few orders a minute in fights can't move an army that stands bunched at home: that
    is the army layer above. The trainable pieces now exist on both sides (macro, army, fight roles);
    next is the league that trains them.
+   **The league, round r1 (2026-10-16, eval/league.py):** v0.29 against Gary-Z, 3 maps x 8 seeds, 20
+   minutes; Gary-Z's learned layers now draw their decisions from the models' odds and log them
+   (inputs, the drawn decision, its log-probability: 3,187 army and 7,450 fight-role decisions). Gary-T
+   won 6, lost 0, 18 undecided. The army layer had taken the likeliest cell for every group (the
+   user's catch): drawn, Gary-Z's army at 8-10 min is at home 56% (79%; pros 35%), in the field 43%
+   (21%; 54%), spread 15 tiles (6; 21), standing 43% (67%; 42%), 6.6 orders per fighter (4.2; 6.4).
+   The gap score barely moves (0.46 at 8-10 min, 0.50): an average over 50 features dilutes a few big
+   ones. The fight episodes train the fight roles; the army layer learns from the league's outcomes.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
