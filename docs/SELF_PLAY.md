@@ -384,6 +384,15 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    20%), the same at 6-8 and 10-12 min. The model answers visible bio pressure as pros do; the pressure
    is Gary-T's army roaming (at home 20-29% of 8-10 min, pros 60%; at Zerg bases twice the pros' share).
    The sides' humanlikeness is coupled: Gary-Z's economy starts with Gary-T's army layer.
+   **Gary-T's army moves paced at the pros' rate:** pro Terrans make 1-6 army moves of 2+ cells a minute
+   (400 TvZ games, rising from 1 at 4 min to 6 at 15); Gary-T's drawn army layer made 9-19. Now a move
+   spends a token that comes at the pros' rate for the minute (option draw). c3's seeds, unpaced / paced
+   / pros: standing 0.24 / 0.40 / 0.39 at 8-10 min (0.58 against 0.40 at 5-7), at home 0.29 / 0.33 / 0.60
+   (0.43 against 0.64 at 5-7), Gary-T's gap 0.46-0.53 / 0.43-0.46 over 8-20 min (lower everywhere);
+   Gary-T won 10 / 5. Gary-Z with less pressure: drones 17 / 20 at 6 min, 18 / 22 at 8 (pros 22 / 25),
+   army supply 13 / 22 at 12 min (c3 / c5; pros 33), SCVs killed by its mutalisks 0.3 / 0.6 a game; still
+   no win. Its gas now banks unspent (620-770 at 8-10 min; the median still makes no mutalisks) and its
+   larvae sit at the cap 26% of 8 min (pros 10%) with 90-150 minerals: minerals are now the limit.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

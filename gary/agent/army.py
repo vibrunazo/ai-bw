@@ -41,6 +41,8 @@ WAVE = 16
 ASK_EVERY = 24 * 2                  # how often Gary asks the model about its army
 MOVE_CELLS = 2                      # destinations closer than this are "stay"
 MOVE_P = 0.5                        # move when the model puts more belief than this away from here
+PRO_MOVES = {4: 1.0, 5: 2.2, 6: 3.2, 7: 3.5, 8: 4.0, 9: 4.3, 10: 4.4, 11: 5.0, 12: 5.4, 13: 5.3, 14: 6.3, 15: 6.0}
+                                    # pro Terrans' army moves of 2+ cells per minute (400 TvZ games' orders, mean)
 FIGHT_MIN = -0.02                   # don't go if the fight estimate says we'd lose 2+ points of army share
 FIGHT_MARGIN = 0.01                 # ...or if going looks worse than staying by more than 1 point
 REORDER_AFTER = 24 * 8              # don't repeat the same order to a group within 8 s
@@ -120,6 +122,7 @@ class LearnedArmy:
         # cells next to known enemy presence, or among the others (the destinations stay imitation)
         self.engage = engage
         self.force_engage: bool | None = None  # a paired episode's arm: its first decision's engage forced
+        self.move_tokens, self.tokens_at = 1.0, 0  # draw: moves paced at the pros' rate (PRO_MOVES)
         # option: whether the fight estimate may hold a plain move (positioning), and by how much going must
         # look worse than staying (and lose outright) to hold. v0.27's 1 and 2 points held about 90% of its
         # army's decisions at 5-6 min, 92% of them within 2 points: noise for an estimate correlating 0.40
@@ -229,6 +232,14 @@ class LearnedArmy:
             # at home 25-29% of 8-10 min against the pros' 60%)
             if p_away < MOVE_P:
                 return None
+            # (paced at the pros' rate of army moves of 2+ cells: they make 1-6 a minute, rising with the
+            # game; Gary-T's army layer made 9-19, and its army roamed, at home 20-29% of 8-10 min against
+            # the pros' 60%; a move spends a token, the tokens come at the pros' rate for the minute)
+            m = min(15, hi.frame // 1440)
+            self.move_tokens = min(2.0, self.move_tokens + (hi.frame - self.tokens_at) * PRO_MOVES.get(m, 6.0) / 1440)
+            self.tokens_at = hi.frame
+            if self.move_tokens < 1.0:
+                return None
             where = np.where(away[None], where, 0.0)
             return self._drawn(obs, mine, group, grid, glob, where, kind, here)
         if p_away < MOVE_P:
@@ -294,6 +305,7 @@ class LearnedArmy:
         if cell_dist(best, here) < MOVE_CELLS:
             log("stay")
             return None
+        self.move_tokens -= 1.0
         near_enemy = self.tracker.seen_buildings.reshape(GRID, GRID)[
             max(0, best // GRID - 2):best // GRID + 3, max(0, best % GRID - 2):best % GRID + 3].any()
         attack = drawn_attack or bool(near_enemy)
@@ -345,6 +357,7 @@ class LearnedArmy:
         (self.record.append(item) if self.record is not None else LOG.add("engage_t", **item))
         if cell_dist(best, here) < MOVE_CELLS:
             return None
+        self.move_tokens -= 1.0
         attack = eng or bool(self.rng.random() < float(kind[0, 1]))
         last = self.ordered.get(here)
         if last and cell_dist(last[0], best) <= 1 and last[1] == attack and hi.frame - last[2] < REORDER_AFTER:

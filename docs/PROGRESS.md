@@ -186,8 +186,13 @@ plan and the full log).
   inputs, creep colonies fall from 7% to 2% of its odds at 8-10 minutes and drones rise from 22% to
   31%: the model answers visible pressure as pros do, and the pressure is Gary-T's army roaming (at home
   20-29% against the pros' 60%). The sides' humanlikeness is coupled.
-- **Next:** Gary-T's army at home as pros keep it (why it roams: hunts, drawn destinations; a
-  when-to-order estimate), then Gary-Z's economy again; a human game with the current Gary-T.
+- **Gary-T's army moves paced at the pros' rate** (1-6 moves of 2+ cells a minute; it made 9-19): its
+  army stands as pros' do (0.40 of 8-10 minutes, pros 0.39), at home a little more (0.33, pros 0.60),
+  its gap score lower at every minute range. Gary-Z, under less pressure, drones closer to the pros
+  (22 at 8 minutes, pros 25) and has 22 army supply at 12 minutes (13 before, pros 33); still no win:
+  its gas now banks unspent and minerals are short.
+- **Next:** Gary-Z's minerals and mutalisks (gas banked, larvae capped); then the attack-or-hold loop;
+  a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
