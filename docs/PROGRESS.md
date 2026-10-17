@@ -27,8 +27,8 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
 | **P2 Micro** | **◐ (current)** | Fight, command and role models from pro skirmishes; home-defense scenarios and 120 s episodes from pro replays; roles by hand rules, a learned role model (with terrain inputs) on par with them after RL, not beyond; choke blocks as a skill | Responses within the human band: on home-defense scenarios v0.10's hand rules are still the best Gary (pro +1, v0.10 −28); learned role choice and the post's spot found nothing past them |
 | P2b First playable | ◐ | Full games against people, offline, via the bridge; learned macro steered by build style, the style chosen per map (v0.19) | Build timings within tolerance (≥18/20 unharassed runs); supply blocks and idle production under harass within the human band |
 | P2c Debug viewer | ● | POV viewer with cursor, clicks and every action in words; videos | Trace overlays beyond actions |
-| P3 BC full game | ◐ | Separate imitation models for macro, army movement and fights; a belief model of the enemy army; a value network (`gary/policy/value.py`: who wins, the score ahead; it judges at 30 s as 3 minutes of score do) | One policy with intent and belief heads, the Opponent Model |
-| P4 RL | ◐ (started) | RL on fights (scenarios, episodes: at the rules' level); macro from branches (nothing: a decision is worth sd 130 against chaos's 512); per game: the strategy selector (v0.19: losses 57 → 30 of 333), the early-defense switch (in progress) | Elo gain at equal humanlikeness |
+| P3 BC full game | ◐ | Separate imitation models for macro, army movement and fights, for the Terran and (Gary-Z) the Zerg; a role model learned before contact as well as in it; a belief model of the enemy army; a value network (`gary/policy/value.py`: who wins, the score ahead; it judges at 30 s as 3 minutes of score do); the humanlikeness classifier and its pro-distance table (`eval/humanlike.py`) | One policy with intent and belief heads, the Opponent Model; Gary closer to the pros in the classifier's table |
+| P4 RL | ◐ (started) | RL on fights (scenarios, episodes: at the rules' level); macro from branches (nothing: a decision is worth sd 130 against chaos's 512); per game: the strategy selector (v0.19: losses 57 → 30 of 333), the early-defense switch; the self-play skeleton: Gary-Z v0 as a learned opponent, the classifier as the anchor | The league and its first RL update; Elo gain at equal humanlikeness |
 | P5 Explain, P5b Broadcast | — | (The POV viewer's action overlay is a start) | |
 | P6 Deploy | ◐ | Remastered bridge for offline games | Pro blind-test sessions; the bridge's known bugs (a supply depot placed a tile off at expansions) |
 
@@ -59,6 +59,43 @@ learned per map in v0.19; when to go into the early-pool defense, being learned 
 | Matchups and races | | Terran in TvZ only | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T |
 
 ## Versions
+
+### Next: the self-play skeleton (started)
+
+Every piece of the self-play loop, crude, before any of it is polished (docs/SELF_PLAY.md has the
+plan and the full log).
+
+- **The bridge, 1:1 with OpenBW:** a LAN game in Remastered re-simulates in OpenBW to the same
+  state (`adapters/scr_bridge/tools/parity.py`), so games against people are as informative as
+  headless ones.
+- **Gary-Z v0, a learned Zerg opponent (`gary/bots/gary_z.py`):** Zerg v3's hands with the Zerg
+  macro model (steered by a pro build plan rolled per game: 11 plans from the pros' openings) and
+  the Zerg army model. Its execution leaks, found with probes and fixed one by one: decisions at the
+  pros' tempo (a few-percent Creep Colony had come 100 times a minute), the hands shared by streaks
+  (a camera tug-of-war froze the macro for minutes), gas drones re-staffed after a float, groups by
+  supply and by type clicks, no earliest attack (its army model was never asked before 7:00).
+  Acceptance (48 games, three maps, 20 minutes, against v0.27): Gary-T won 20, lost 1, 27 undecided;
+  plans spread like the pros'; the same seed gives the same game. Its macro matches the pros' to
+  8:00 (drones 24, three hatcheries); its army is half theirs, and it fights with v3's scripted micro.
+- **The humanlikeness classifier (`eval/humanlike.py`):** one player's side, per minute, from the
+  replays as that player saw them, against 300 pro games on the same maps: the economy, the army's
+  composition and placement, and the moments before contact (what its units do when enemy
+  fighters come into view: the user's sense of Gary as "AFK" was anticipation, not reaction time).
+  It tells Gary from the pros at AUC 0.99+ in every minute, so the work list is its per-feature gap
+  table, and a gap score that moves. Gary-T's biggest gaps: lone outnumbered units never move away
+  (pros 11-18%), they attack (67-86%, pros 39-52%), marines rarely stimmed at the sight of mutalisks
+  (14%, pros 40%), no moving between shots (pros 4-10%), bunkers and turrets the pros don't build.
+  Gary-Z's: an army bunched, standing, at home. Games against the replayed-pro fixture can't be
+  measured (it creates its units in the engine).
+- **v0.28:** v0.27 whose army layer doesn't hold plain moves on the fight estimate's noise (it held
+  ~90% of its decisions at 5-6 minutes, 92% of them within 2 points). Against the replayed pros (24
+  games): won 5, lost 0 (v0.27: 2, 0).
+- **v0.29:** v0.28 with a role model learned from 600 pro games' units before contact as well as in
+  it, with a where head (each unit's move): the hand rules in contact, the model before it. On 226 pro
+  home defenses: a tie with v0.28 (-2 +- 6 net value); its roles everywhere lost 52 (the rules were
+  tuned on those scenarios for twenty versions). The neural role policy is the league's learner.
+- **Next:** the same role model for Gary-Z's fights (in progress), then target inference, the
+  league, and the first RL update on fight episodes with a KL leash to imitation.
 
 ### Next: the belief model (started)
 
