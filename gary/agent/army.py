@@ -40,6 +40,7 @@ from gary.policy.belief import ARMY_SUPPLY
 
 WAVE = 16
 ASK_EVERY = 24 * 2                  # how often Gary asks the model about its army
+COMMIT_TICK = 24 * 5                # commit: each cluster asked this often (the pros' data: ingest/army_dataset.py TICK)
 MOVE_CELLS = 2                      # destinations closer than this are "stay"
 MOVE_P = 0.5                        # move when the model puts more belief than this away from here
 PRO_MOVES = {4: 1.0, 5: 2.2, 6: 3.2, 7: 3.5, 8: 4.0, 9: 4.3, 10: 4.4, 11: 5.0, 12: 5.4, 13: 5.3, 14: 6.3, 15: 6.0}
@@ -108,7 +109,7 @@ class LearnedArmy:
     def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False, belief=None,
                  belief_total: bool = False, watch: bool = False, home_guard: bool = False, belief_hold: bool = True,
                  hunt_belief: bool = False, hold_moves: bool = True, hold_margin: float | None = None,
-                 draw: bool = False, engage=None):
+                 draw: bool = False, engage=None, commit: bool = False):
         self.g = g
         # option: draw the destination and move/attack from the model's odds (the league's learner: RL
         # learns from drawn decisions and their probabilities, logged), instead of the likeliest cell
@@ -125,6 +126,13 @@ class LearnedArmy:
         # cells next to known enemy presence, or among the others (the destinations stay imitation)
         self.engage = engage
         self.force_engage: bool | None = None  # a paired episode's arm: its first decision's engage forced
+        # option: commitments (train/commit.py: the model's kind head is keep/engage/move, its numbers carry
+        # the cluster's commitment). Each cluster asked every COMMIT_TICK: keep (its commitment stands),
+        # engage or move (a new one, the destination drawn on that side). Replaces the pacing and the stay
+        # rule: when to re-decide is the model's, learned from the pros, as are the triggers
+        self.commit = commit
+        self.commitments: list[tuple[int, int, int, int]] = []   # (frame, from cell, to cell, 1 engage / 2 move)
+        self.force_commit: int | None = None   # a paired episode's arm: its first decision forced
         self.move_tokens, self.tokens_at = 1.0, 0  # draw: moves paced at the pros' rate (PRO_MOVES)
         # option: whether the fight estimate may hold a plain move (positioning), and by how much going must
         # look worse than staying (and lose outright) to hold. v0.27's 1 and 2 points held about 90% of its
@@ -217,9 +225,11 @@ class LearnedArmy:
         clusters = self._clusters(army)
         if not clusters:
             return None
-        self.next_ask = hi.frame + ASK_EVERY // len(clusters)       # one cluster per question
+        self.next_ask = hi.frame + (COMMIT_TICK if self.commit else ASK_EVERY) // len(clusters)   # one cluster a question
         group = clusters[self.ask_turn % len(clusters)]
         self.ask_turn += 1
+        if self.commit:
+            return self._committed(obs, mine, group)
         grid, glob = self.tracker.inputs(obs, group)
         where, kind = self.model.predict(grid, glob)
         cx = sum(u["x"] for u in group) / len(group)
@@ -403,6 +413,76 @@ class LearnedArmy:
         self.ordered[here] = (best, attack, hi.frame)
         g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
                              {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": float(p[best]),
+                              "fight": 0.0, "done": [], "boxes": 0}, "army"))
+        return "army"
+
+    def _commitment(self, here: int) -> tuple[int, float]:
+        """The cluster's commitment: its last order whose path passes within 2 cells (1 engage, 2 move; 0
+        none in COMMIT_AGE_S) and its age in seconds."""
+        from gary.policy.army import COMMIT_AGE_S, path_dist
+        f = self.g.hi.frame
+        self.commitments = [c for c in self.commitments if f - c[0] <= COMMIT_AGE_S * 24]
+        for at, a, b, k in reversed(self.commitments):
+            if path_dist(here, a, b) <= 2:
+                return k, (f - at) / 24
+        return 0, float(COMMIT_AGE_S)
+
+    def _committed(self, obs, mine, group) -> str | None:
+        """The commit option: the cluster's next step drawn from the model's keep / engage / move, given its
+        commitment; a new commitment's destination drawn from the model's odds among the cells 2+ away next
+        to known enemy presence (engage) or not (move). Recorded, and logged for RL ("commit_t")."""
+        from gary.decision_log import LOG
+        g, hi = self.g, self.g.hi
+        cx = sum(u["x"] for u in group) / len(group)
+        cy = sum(u["y"] for u in group) / len(group)
+        here = self.tracker.cell(cx, cy)
+        held, age = self._commitment(here)
+        grid, glob = self.tracker.inputs(obs, group, (held, age))
+        where, kind = self.model.predict(grid, glob)
+        q = kind[0].astype(np.float64)
+        if self.force_commit is not None:
+            k, self.force_commit = int(self.force_commit), None
+            by = "forced (a paired arm)"
+        else:
+            k = int(self.rng.choice(3, p=q / q.sum()))
+            by = "draw"
+        if self.then_rng is not None:          # (an arm's first decision drawn its own way, the rest shared)
+            self.rng, self.then_rng = self.then_rng, None
+        names = ["keep", "engage", "move"]
+        self._seen = {"units": len(group), "at": self._cell_name(here),
+                      "commitment": f"{names[held] if held else 'none'}, {age:.0f} s"}
+        options = [[n, round(float(q[i]), 3)] for i, n in enumerate(names)]
+        why = explain_army(self.model, grid, glob, lambda w, kd: kd[:, k])
+        item = dict(frame=hi.frame, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16), choice=k,
+                    logp=float(np.log(q[k] + 1e-9)))
+        (self.record.append(item) if self.record is not None else LOG.add("commit_t", **item))
+        rl = self._rl_row("commit_t")
+        if k == 0:
+            LOG.decision("T", "commit", hi.frame, "keep", q[0], options, self._seen, by, then="its commitment stands",
+                         rl=rl, why=why)
+            return None
+        m = np.asarray(grid[0]).reshape(-1, GRID, GRID)
+        enemy = (m[3] > 0) | (m[6] > 0) | (m[7] > 0)
+        near = enemy.copy()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                near |= np.roll(np.roll(enemy, dy, 0), dx, 1)
+        far = np.array([cell_dist(c, here) >= MOVE_CELLS for c in range(GRID * GRID)])
+        mask = far & (near.reshape(-1) if k == 1 else ~near.reshape(-1))
+        p = where[0] * mask
+        if p.sum() <= 0:
+            LOG.decision("T", "commit", hi.frame, names[k], q[k], options, self._seen, by,
+                         then="no cell on that side: its commitment stands", rl=rl, why=why)
+            return None
+        best = int(self.rng.choice(len(p), p=p / p.sum()))
+        self.commitments.append((hi.frame, here, best, k))
+        LOG.decision("T", "commit", hi.frame, f"{names[k]} to {self._cell_name(best)}", q[k], options, self._seen, by,
+                     then="sent", rl=rl, why=why)
+        x, y = self.tracker.center(best)
+        attack = k == 1
+        self.ordered[here] = (best, attack, hi.frame)
+        g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
+                             {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": float(q[k]),
                               "fight": 0.0, "done": [], "boxes": 0}, "army"))
         return "army"
 

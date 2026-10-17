@@ -377,6 +377,7 @@ MODEL_PATHS = {"roles/latest": latest_role_model, "macro/latest": latest_macro_m
                "fight_cmd/latest_memory": lambda: latest_command_model(True), "fight_cmd_rl/v08": latest_rl_fight_model,
                "belief/latest": lambda: _newest("belief"), "plan/latest": lambda: _newest("plan"),
                "army_rl/latest": lambda: _newest("army_rl"), "engage/latest": lambda: _newest("engage"),
+               "commit/latest": lambda: _newest("commit"),
                "macro_rl/latest": lambda: sorted((REPO_ROOT / "runs" / "macro_rl").glob("*/model.pt"))[-1]}
 
 
@@ -499,6 +500,10 @@ OPTIONS = {
     # army.py: attack or hold drawn by the engage model (train/engage.py, from the pros' orders: held-out AUC
     # 0.80), destinations from the army model on that side; the league's learner for the army's initiative
     "engage": lambda m: m["army"].update(draw=True, engage="engage/latest"),
+    # army.py: commitments (train/commit.py: keep / engage / move every 5 s per cluster, given its commitment,
+    # learned from the pros' armies between orders too); the army model replaced by the commit model, whose
+    # destination head was trained along (GARY_TCOMMIT_MODEL pins it)
+    "commit": lambda m: m["army"].update(draw=True, commit=True, model="commit/latest"),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
@@ -738,7 +743,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)
         else:
-            pinned = os.environ.get("GARY_TARMY_MODEL") if m["army"].get("draw") else None   # (the league loop's)
+            pinned = os.environ.get("GARY_TCOMMIT_MODEL" if m["army"].get("commit") else "GARY_TARMY_MODEL")                 if m["army"].get("draw") else None                                               # (the league loop's)
             army = load("army", pinned or str(model_path(m["army"]["model"])))
             models["army"] = getattr(army, "path", "?")
             belief = None
@@ -752,7 +757,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                  home_guard=m["army"].get("home_guard", False),
                                  belief_hold=bool(m["army"].get("belief")), hunt_belief=m["army"].get("hunt_belief", False),
                                  hold_moves=m["army"].get("hold_moves", True), hold_margin=m["army"].get("hold_margin"),
-                                 draw=m["army"].get("draw", False), engage=_engage_model(m))
+                                 draw=m["army"].get("draw", False), engage=_engage_model(m),
+                                 commit=m["army"].get("commit", False))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:

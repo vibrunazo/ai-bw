@@ -18,7 +18,23 @@ start positions differ; the model learns "toward the enemy", not "toward the top
 Far moves (attacks, retreats, defending) and short ones (holding, fighting in place) are both
 kept, so the model also learns when the army stays where it is.
 
-Output: data/interim/army/v1/<sha1[:2]>/<sha1>.npz and data/interim/army/v1/index.jsonl.
+Commitments (v2): orders alone say where a pro sends a group, not when they leave it be. So every
+TICK seconds each of the player's army clusters (Gary's clustering: the densest cell of their army
+and the cells within 2, up to 3 clusters, at least MIN_SUP) is a sample too, labeled by what the
+player did with it in the next TICK seconds: keep (no order sending a group there 2+ cells: shorter
+orders are fighting or standing in place), engage (an order sending it 2+ cells to a cell next to
+enemy presence the player knew of: enemy army in sight or seen in 30 s, enemy buildings ever seen)
+or move (any other order of 2+ cells). Each with the cluster's commitment:
+its last order's label (engage or move, none if none in COMMIT_S), that order the last one whose
+path (from where the group stood to where it was sent) passes within 2 cells of the cluster: the
+commitment follows the group on its way. And that order's age. Pros re-decide on events, not a timer: the model learns the triggers from the state.
+
+  tick_grid (9, 256)  as an order's grid, channel 8 the cluster's supply at its center
+  tick_frame, tick_units, tick_seen, tick_eco  as for orders
+  tick_label  0 keep, 1 engage, 2 move;  tick_target  the order's cell (-1 keep)
+  tick_commit 0 none, 1 engage, 2 move;  tick_age  seconds since that order
+
+Output: data/interim/army/v2/<sha1[:2]>/<sha1>.npz and data/interim/army/v2/index.jsonl.
 
 Usage:
   python ingest/army_dataset.py --matchup TvZ --limit 200
@@ -42,12 +58,56 @@ import numpy as np
 from inventory import data_root
 from macro_dataset import RACES, TOWN_HALLS, run_resim, select
 
-VERSION = "v1"
+VERSION = "v2"
 GRID, CELLS, CHANNELS = 16, 256, 9
 MIN_SUP = 8                  # at least 4 supply (x2) selected
 WINDOW = 48                  # at most one sample per player per 2 s
 RECENT = 30                  # channel 7 remembers enemy army for 30 s
 KIND = {"move": 0, "amove": 1, "attack": 1, "patrol": 1}
+TICK = 5                     # seconds (snapshots) between commitment samples
+COMMIT_S = 120               # an order older than this is no commitment any more
+CLUSTERS = 3
+NEAR, MOVED = 1, 2           # engage: the target this close to enemy presence, the group sent this far
+
+
+def cheb(a: int, b: int) -> int:
+    return max(abs(a // GRID - b // GRID), abs(a % GRID - b % GRID))
+
+
+def clusters(army: np.ndarray) -> list[tuple[int, int]]:
+    """(center cell, supply x2) of up to CLUSTERS army clusters on one grid row (supply x2 per cell):
+    the densest cell and every cell within 2 of it, then again with what's left (gary/agent/army.py)."""
+    left = army.astype(np.int64).copy()
+    out = []
+    while len(out) < CLUSTERS and left.sum() >= MIN_SUP:
+        c = int(left.argmax())
+        cy, cx = divmod(c, GRID)
+        y0, y1, x0, x1 = max(0, cy - 2), min(GRID, cy + 3), max(0, cx - 2), min(GRID, cx + 3)
+        sq = left.reshape(GRID, GRID)
+        sup = int(sq[y0:y1, x0:x1].sum())
+        sq[y0:y1, x0:x1] = 0
+        if sup >= MIN_SUP:
+            out.append((c, sup))
+    return out
+
+
+def path_dist(c: int, a: int, b: int) -> float:
+    """Cells (Chebyshev) from cell c to the straight path from cell a to cell b: a group ordered from a to b
+    is somewhere on it."""
+    cy, cx = divmod(c, GRID)
+    ay, ax = divmod(a, GRID)
+    by, bx = divmod(b, GRID)
+    return min(max(abs(cy - (ay + (by - ay) * s)), abs(cx - (ax + (bx - ax) * s))) for s in np.linspace(0, 1, 9))
+
+
+def engaging(grid: np.ndarray, target: int, group: int) -> bool:
+    """An order into the enemy (train/engage.py's label): 2+ cells away, to a cell next to enemy army in
+    sight or seen lately or enemy buildings ever seen."""
+    if cheb(target, group) < MOVED:
+        return False
+    enemy = ((grid[3] > 0) | (grid[6] > 0) | (grid[7] > 0)).reshape(GRID, GRID)
+    ty, tx = divmod(target, GRID)
+    return bool(enemy[max(0, ty - NEAR):ty + NEAR + 1, max(0, tx - NEAR):tx + NEAR + 1].any())
 
 
 def out_dir() -> Path:
@@ -153,6 +213,48 @@ def build_game(rec: dict) -> dict:
             target[j] = cell_of(r["x"], r["y"], mw, mh, fx, fy)
             kind[j] = KIND[r["kind"]]
             sup[j] = r["sup"]
+        # commitments: every TICK s each army cluster, what the player did with it next (see the docstring)
+        fx_ = lambda r: cell_of(r["x"], r["y"], mw, mh, fx, fy)
+        gx_ = lambda r: cell_of(r["cx"], r["cy"], mw, mh, fx, fy)
+        known = []                                   # (frame, group cell, label) of orders so far
+        order_t = [max(0, min(T - 1, int(np.searchsorted(frames, r["frame"], side="right")) - 1)) for r in orders]
+        labeled = []
+        for r, t in zip(orders, order_t):
+            base = np.concatenate([g[t], seen_bld[t][None], recent[t][None]])
+            if cheb(fx_(r), gx_(r)) >= MOVED:          # (shorter: fighting or standing in place, a keep)
+                labeled.append((r["frame"], gx_(r), fx_(r), 1 if engaging(base, fx_(r), gx_(r)) else 2))
+        k = 0
+        tk: dict[str, list] = {n: [] for n in ("grid", "t", "label", "target", "commit", "age")}
+        for t in range(0, T, TICK):
+            f0, f1 = frames[t], frames[t] + TICK * 24
+            while k < len(labeled) and labeled[k][0] < f0:
+                known.append(labeled[k])
+                k += 1
+            nxt = [o for o in labeled[k:] if o[0] < f1]
+            for c, sup in clusters(g[t, 0]):
+                mine = [o for o in nxt if cheb(o[1], c) <= 2]
+                past = [o for o in known if path_dist(c, o[1], o[2]) <= 2 and f0 - o[0] <= COMMIT_S * 24]
+                at = np.zeros((CHANNELS, CELLS), np.uint16)
+                at[:6] = g[t]
+                at[6] = seen_bld[t]
+                at[7] = recent[t]
+                at[8, c] = sup
+                tk["grid"].append(np.minimum(at, 255).astype(np.uint8))
+                tk["t"].append(t)
+                tk["label"].append(mine[0][3] if mine else 0)
+                tk["target"].append(mine[0][2] if mine else -1)
+                tk["commit"].append(past[-1][3] if past else 0)
+                tk["age"].append((f0 - past[-1][0]) / 24 if past else COMMIT_S)
+        ti = np.array(tk["t"], np.int64)
+        out[f"p{i}_tick_grid"] = np.array(tk["grid"], np.uint8).reshape(-1, CHANNELS, CELLS)
+        out[f"p{i}_tick_frame"] = frames[ti] if len(ti) else np.zeros(0, np.int32)
+        out[f"p{i}_tick_units"] = d["units"][ti]
+        out[f"p{i}_tick_seen"] = d["seen"][ti]
+        out[f"p{i}_tick_eco"] = d["eco"][ti]
+        out[f"p{i}_tick_label"] = np.array(tk["label"], np.int8)
+        out[f"p{i}_tick_target"] = np.array(tk["target"], np.int16)
+        out[f"p{i}_tick_commit"] = np.array(tk["commit"], np.int8)
+        out[f"p{i}_tick_age"] = np.array(tk["age"], np.float32)
         out[f"p{i}_grid"] = np.minimum(grid, 255).astype(np.uint8)
         out[f"p{i}_frame"] = frames[tidx]
         out[f"p{i}_units"] = d["units"][tidx]
@@ -170,7 +272,8 @@ def build_game(rec: dict) -> dict:
     path.write_bytes(buf.getvalue())
     names = {p["slot"]: p for p in header["players"]}
     players = [{"slot": s, "name": names.get(s, {}).get("name", ""),
-                "race": RACES.get(names.get(s, {}).get("race"), "?"), "samples": counts[i]}
+                "race": RACES.get(names.get(s, {}).get("race"), "?"), "samples": counts[i],
+                "ticks": int(len(out[f"p{i}_tick_label"]))}
                for i, s in enumerate(slots)]
     row.update(ok=True, map=header.get("map"), map_w=mw, map_h=mh, end_frame=header.get("end_frame"),
                players=players, bytes=path.stat().st_size, seconds=round(time.time() - t0, 2))

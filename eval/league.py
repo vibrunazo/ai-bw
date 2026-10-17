@@ -49,7 +49,8 @@ def play(job: tuple) -> dict:
     # judges it too); paired episodes against the other one
     main, other = (candidate, incumbent) if candidate and seed % 2 else (incumbent, candidate)
     if main:
-        env[{"army_t": "GARY_TARMY_MODEL", "engage_t": "GARY_TENGAGE_MODEL"}.get(layer, "GARY_ZROLES_MODEL")] = str(main)
+        env[{"army_t": "GARY_TARMY_MODEL", "engage_t": "GARY_TENGAGE_MODEL", "commit_t": "GARY_TCOMMIT_MODEL"}.get(
+            layer, "GARY_ZROLES_MODEL")] = str(main)
     if pairs:
         env["GARY_PAIRS"] = str(rep.with_suffix(".pairs.npz"))
         env["GARY_PAIRS_LAYER"] = layer
@@ -100,7 +101,7 @@ def main() -> None:
     ap.add_argument("--pairs", action="store_true", help="paired fight episodes in every game (eval/pairs.py)")
     ap.add_argument("--incumbent", help="Gary-Z's fight-role model (default: its newest)")
     ap.add_argument("--candidate", help="a candidate model of the layer: odd seeds play it, pairs A/B it")
-    ap.add_argument("--layer", default="roles_z", choices=("roles_z", "army_t", "engage_t"),
+    ap.add_argument("--layer", default="roles_z", choices=("roles_z", "army_t", "engage_t", "commit_t"),
                     help="what the pairs and the candidate are: Gary-Z's fight roles or Gary-T's army layer")
     priority.add_argument(ap)
     args = ap.parse_args()

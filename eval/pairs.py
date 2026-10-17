@@ -111,7 +111,7 @@ class Brancher:
 
     def maybe(self, game, objs: dict) -> None:
         """At a fight (no more often than EVERY), a pair of arms; objs: the bots and hands, by name."""
-        if self.layer in ("army_t", "engage_t"):
+        if self.layer in ("army_t", "engage_t", "commit_t"):
             return self._maybe_army(game, objs)
         f = game.frame
         if f < self.next:
@@ -189,7 +189,8 @@ class Brancher:
         self.next = f + CHECK
         gary = objs["gary"]
         army = getattr(gary, "army", None)
-        if army is None or not getattr(army, "draw", False) or (self.layer == "engage_t" and army.engage is None):
+        if army is None or not getattr(army, "draw", False) or (self.layer == "engage_t" and army.engage is None) \
+                or (self.layer == "commit_t" and not getattr(army, "commit", False)):
             return
         o = game.observe()
         mine = [u for u in o["units"] if u["owner"] == self.slot_t and u["type"] in gary.army_types and u["completed"]]
@@ -228,6 +229,9 @@ class Brancher:
             layer.then_rng = np.random.default_rng(dice[2])
             if self.layer == "engage_t" and not ab:
                 layer.force_engage = arm == 0              # (training: the first decision attack in one arm, hold in the other)
+            if self.layer == "commit_t" and not ab:
+                layer.force_commit = 1 if arm == 0 else 2  # (the first commitment engage in one arm, move in the other;
+                                                           # then each arm keeps or changes it as the model does)
             layer.record = []
             if self.candidate is not None:               # (the other model's odds of each choice, recorded)
                 mine_model = gary.army.engage if self.layer == "engage_t" else gary.army.model
@@ -247,6 +251,8 @@ class Brancher:
             c["gary"].army.then_rng = np.random.default_rng(dice[2])
             if self.layer == "engage_t" and not ab:
                 c["gary"].army.force_engage = True
+            if self.layer == "commit_t" and not ab:
+                c["gary"].army.force_commit = 1
             _play(game, c, ARMY_WINDOW)
             if snap(game.observe()) == end0:
                 self.checks_ok += 1
@@ -259,7 +265,7 @@ class Brancher:
         if not self.path or not self.pairs:
             return
         self._save_records()
-        if self.layer in ("army_t", "engage_t"):
+        if self.layer in ("army_t", "engage_t", "commit_t"):
             return self._save_army()
         out = {"frame": [], "ab": [], "reward": [], "away": [], "moved": [], "field": [], "units": [], "model": []}
         dec = {"pair": [], "arm": [], "rows": [], "extra": [], "count": [], "time": [], "drawn": [], "logp": []}
@@ -298,7 +304,8 @@ class Brancher:
 
     def _save_army(self) -> None:
         out = {"frame": [], "ab": [], "reward": [], "away": [], "moved": [], "field": [], "units": [], "model": []}
-        keys = ("grid", "glob", "engage", "logp") if self.layer == "engage_t" else ("grid", "glob", "cell", "attack", "logp")
+        keys = {"engage_t": ("grid", "glob", "engage", "logp"), "commit_t": ("grid", "glob", "choice", "logp")}.get(
+            self.layer, ("grid", "glob", "cell", "attack", "logp"))
         dec = {"pair": [], "arm": [], **{k: [] for k in keys}}
         for i, p in enumerate(self.pairs):
             out["frame"].append(p["frame"])

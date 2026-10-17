@@ -37,32 +37,55 @@ class ArmySpec:
     race: str
     own_types: list[int]          # own unit types counted in the numbers
     seen_types: list[int]         # enemy unit types counted
+    commit: bool = False          # the group's commitment in the numbers too (train/commit.py)
 
     @property
     def n_global(self) -> int:
-        return 8 + len(self.own_types) + 2 * len(self.seen_types)
+        return 8 + len(self.own_types) + 2 * len(self.seen_types) + (COMMIT_INPUTS if self.commit else 0)
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
+COMMIT_INPUTS = 3                 # the group's commitment: engaging, moving (one-hot; none: both 0), its age
+COMMIT_AGE_S = 120                # an order older than this is no commitment (ingest/army_dataset.py COMMIT_S)
+
+
+def path_dist(c: int, a: int, b: int) -> float:
+    """Cells (Chebyshev) from cell c to the straight path from cell a to cell b: a group ordered from a to b
+    is somewhere on it (its commitment follows it there; as ingest/army_dataset.py)."""
+    cy, cx = divmod(c, GRID)
+    ay, ax = divmod(a, GRID)
+    by, bx = divmod(b, GRID)
+    return min(max(abs(cy - (ay + (by - ay) * s)), abs(cx - (ax + (bx - ax) * s))) for s in np.linspace(0, 1, 9))
+
+
+def commit_inputs(commit: np.ndarray, age_s: np.ndarray) -> np.ndarray:
+    """(n, COMMIT_INPUTS): commit 0 none, 1 engage, 2 move; age in seconds."""
+    return np.stack([(commit == 1).astype(np.float32), (commit == 2).astype(np.float32),
+                     np.minimum(age_s, COMMIT_AGE_S).astype(np.float32) / 60.0], 1)
+
+
 def encode_global(spec: ArmySpec, frame: np.ndarray, eco: np.ndarray, group_sup: np.ndarray,
                   units: np.ndarray, seen: np.ndarray, seen_mem: np.ndarray, own_army: np.ndarray,
-                  enemy_army_mem: np.ndarray) -> np.ndarray:
+                  enemy_army_mem: np.ndarray, commit: np.ndarray | None = None) -> np.ndarray:
     """(n, n_global) numbers. eco: minerals, gas, supply used x2, supply max x2; group_sup x2;
     units / seen / seen_mem: (n, 228) counts (seen_mem: the most seen at once in MEMORY_S);
-    own_army, enemy_army_mem: army supply x2 (enemy: of seen_mem)."""
+    own_army, enemy_army_mem: army supply x2 (enemy: of seen_mem); commit: (n, COMMIT_INPUTS) when
+    spec.commit (commit_inputs)."""
     parts = [(frame / (24 * 60 * 20.0))[:, None], np.minimum(eco[:, 0] / 1000.0, 5)[:, None],
              np.minimum(eco[:, 1] / 1000.0, 5)[:, None], (eco[:, 2] / 400.0)[:, None],
              (eco[:, 3] / 400.0)[:, None], (group_sup / 400.0)[:, None],
              (own_army / 400.0)[:, None], (enemy_army_mem / 400.0)[:, None],
              np.log1p(units[:, spec.own_types]), np.log1p(seen[:, spec.seen_types]),
              np.log1p(seen_mem[:, spec.seen_types])]
+    if spec.commit:
+        parts.append(commit if commit is not None else np.zeros((len(frame), COMMIT_INPUTS), np.float32))
     return np.concatenate([p.astype(np.float32) for p in parts], axis=1)
 
 
 class ArmyNet(nn.Module):
-    def __init__(self, n_global: int, ch: int = 64):
+    def __init__(self, n_global: int, ch: int = 64, n_kind: int = 2):
         super().__init__()
         self.inp = nn.Conv2d(CHANNELS, ch, 3, padding=1)
         self.glob = nn.Sequential(nn.Linear(n_global, ch), nn.GELU(), nn.Linear(ch, ch))
@@ -70,7 +93,7 @@ class ArmyNet(nn.Module):
         self.convs = nn.ModuleList(nn.Conv2d(ch, ch, 3, padding=d, dilation=d) for d in (1, 2, 4, 8))
         self.mix = nn.Linear(2 * ch, ch)            # whole-map summary, fed back to every cell
         self.where = nn.Conv2d(ch, 1, 1)
-        self.kind = nn.Linear(2 * ch, 2)
+        self.kind = nn.Linear(2 * ch, n_kind)        # move/attack; or keep/engage/move (train/commit.py)
         # fight estimate for a given destination and order: the whole map + the destination cell
         self.value = nn.Sequential(nn.Linear(3 * ch + 2, ch), nn.GELU(), nn.Linear(ch, 1))
 
@@ -192,8 +215,9 @@ class ArmyTracker:
         self.recent = [(f, a) for f, a in self.recent if f0 - f <= RECENT_S * 24] + [(f0, g[3])]
         self.seen_hist = [(f, a) for f, a in self.seen_hist if f0 - f <= MEMORY_S * 24] + [(f0, seen)]
 
-    def inputs(self, obs: dict, group: list[dict]) -> tuple[np.ndarray, np.ndarray]:
-        """grid (9, 256) and numbers for ordering `group` (own units) now."""
+    def inputs(self, obs: dict, group: list[dict], commit: tuple[int, float] | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """grid (9, 256) and numbers for ordering `group` (own units) now; commit: the group's commitment
+        (0 none, 1 engage, 2 move) and its age in seconds, for a model with spec.commit."""
         self.remember(obs)
         g, units, seen = self._now(obs)
         g[6] = self.seen_buildings
@@ -210,7 +234,9 @@ class ArmyTracker:
         glob = encode_global(self.spec, np.array([obs["frame"]], np.float32), eco,
                              np.array([group_sup], np.float32), units[None], seen[None], seen_mem[None],
                              np.array([units @ ARMY_SUPPLY], np.float32),
-                             np.array([seen_mem @ ARMY_SUPPLY], np.float32))
+                             np.array([seen_mem @ ARMY_SUPPLY], np.float32),
+                             commit_inputs(np.array([commit[0] if commit else 0]),
+                                           np.array([commit[1] if commit else COMMIT_AGE_S])) if self.spec.commit else None)
         return g[None], glob
 
 

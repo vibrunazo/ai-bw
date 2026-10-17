@@ -47,6 +47,7 @@ DICE_FLOOR = 0.01               # the dice decoder: decisions under this odds ar
 USED_LARVA = 2 * 24             # a larva just morphed shows as a larva a moment longer: not used again
 IN_FLIGHT = 24                  # money just spent shows in the bank a moment later: counted as spent
 GOAL_TIMEOUT = 30 * 24          # a decision not carried out in 30 s is dropped
+COMMIT_TICK = 5 * 24            # commit mode: each cluster asked this often (ingest/army_dataset.py TICK)
 QUERY_EVERY = 12
 GAS_FLOAT, GAS_LOW = 400, 300   # gas above this (and above the minerals): its drones go back to minerals;
                                 # below this, back to gas (150 trapped it: no gas mined from 4:00 to 8:00
@@ -134,7 +135,13 @@ class GaryZ(ZergV3):
         self.tracker = MacroTracker(self.model.spec, hi.slot, plan)
         # where the groups go: the Zerg army model (runs/army/TvZ_Z_*), as the Terran's army; v1's
         # stage-judge-go is replaced, its home defense and v3's raid and lurkers stay
-        self.army_model = ArmyModel.load(latest_model("army"))
+        # GARY_Z_COMMIT ("latest" or a model's path): commitments (train/commit.py --race Z: keep / engage / move
+        # every 5 s per cluster, given its commitment), the commit model also choosing destinations
+        commit = os.environ.get("GARY_Z_COMMIT")
+        self.army_commit = bool(commit)
+        self.army_model = ArmyModel.load(latest_model("commit") if commit == "latest" else commit) if commit \
+            else ArmyModel.load(latest_model("army"))
+        self.commitments: list[tuple[int, int, int, int]] = []   # (frame, from cell, to cell, 1 engage / 2 move)
         self.army_tracker = ArmyTracker(self.army_model.spec, hi.slot, mapinfo.size, self.home)
         self.sizes = dict(GROUND)
         self.next_ask: dict[int, int] = {}       # group -> when its destination is drawn again
@@ -531,7 +538,7 @@ class GaryZ(ZergV3):
         if hi.frame < self.cluster_ask.get(k, 0):
             self.cluster_turn += 1
             return False
-        self.cluster_ask[k] = hi.frame + ARMY_EVERY
+        self.cluster_ask[k] = hi.frame + (COMMIT_TICK if self.army_commit else ARMY_EVERY)
         self.cluster_turn += 1
         members = clusters[k]
         # a cluster much smaller than the main one joins it rather than going its own way: each drawing
@@ -550,6 +557,8 @@ class GaryZ(ZergV3):
                              by=f"rule: a cluster under {JOIN_BELOW:.0%} of the main one joins it")
                 return self._army_job_step(obs, mine)
             return False
+        if self.army_commit:
+            return self._committed(obs, mine, members, k)
         grid, glob = self.army_tracker.inputs(obs, members)
         where, kind = self.army_model.predict(grid, glob)
         cell = self.rng.choices(range(where.shape[1]), weights=where[0].tolist())[0]
@@ -567,6 +576,56 @@ class GaryZ(ZergV3):
             return False                                   # (held, or the drawn cell is where they are)
         self.army_job = {"tags": [u["tag"] for u in members], "point": self.army_tracker.center(cell),
                          "kind": "attack" if attack else "move", "selecting": False, "tries": 0}
+        return self._army_job_step(obs, mine)
+
+    def _committed(self, obs: dict, mine: list[dict], members: list[dict], k: int) -> bool:
+        """Commit mode: the cluster's next step drawn from the commit model's keep / engage / move given its
+        commitment (its last order whose path passes within 2 cells, and its age); a new commitment's
+        destination drawn among the cells 2+ away next to known enemy presence (engage) or not (move)."""
+        from gary.policy.army import COMMIT_AGE_S, GRID, path_dist
+        hi = self.hi
+        mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
+        here = self.army_tracker.cell(*mid)
+        self.commitments = [c for c in self.commitments if hi.frame - c[0] <= COMMIT_AGE_S * 24]
+        held, age = next(((c[3], (hi.frame - c[0]) / 24) for c in reversed(self.commitments)
+                          if path_dist(here, c[1], c[2]) <= 2), (0, float(COMMIT_AGE_S)))
+        grid, glob = self.army_tracker.inputs(obs, members, (held, age))
+        where, kind = self.army_model.predict(grid, glob)
+        q = kind[0].astype(np.float64)
+        choice = self.rng.choices(range(3), weights=(q / q.sum()).tolist())[0]
+        names = ["keep", "engage", "move"]
+
+        def name(c):
+            x, y = self.army_tracker.center(c)
+            return f"({x // 32},{y // 32})"
+        seen = {"who": f"cluster {k}", "units": len(members), "at": name(here),
+                "commitment": f"{names[held] if held else 'none'}, {age:.0f} s"}
+        options = [[n, round(float(q[i]), 3)] for i, n in enumerate(names)]
+        why = explain_army(self.army_model, grid, glob, lambda w, kd: kd[:, choice])
+        LOG.add("commit_z", frame=hi.frame, group=k, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16),
+                choice=choice, logp=float(np.log(q[choice] + 1e-9)))
+        if choice == 0:
+            LOG.decision("Z", "commit", hi.frame, "keep", q[0], options, seen, "draw", then="its commitment stands", why=why)
+            return False
+        m = np.asarray(grid[0]).reshape(-1, GRID, GRID)
+        enemy = (m[3] > 0) | (m[6] > 0) | (m[7] > 0)
+        near = enemy.copy()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                near |= np.roll(np.roll(enemy, dy, 0), dx, 1)
+        far = np.array([_cell_dist(c, here) >= 2 for c in range(GRID * GRID)])
+        mask = far & (near.reshape(-1) if choice == 1 else ~near.reshape(-1))
+        p = where[0] * mask
+        if p.sum() <= 0:
+            LOG.decision("Z", "commit", hi.frame, names[choice], q[choice], options, seen, "draw",
+                         then="no cell on that side: its commitment stands", why=why)
+            return False
+        cell = self.rng.choices(range(len(p)), weights=(p / p.sum()).tolist())[0]
+        self.commitments.append((hi.frame, here, cell, choice))
+        LOG.decision("Z", "commit", hi.frame, f"{names[choice]} to {name(cell)}", q[choice], options, seen, "draw",
+                     then="sent", why=why)
+        self.army_job = {"tags": [u["tag"] for u in members], "point": self.army_tracker.center(cell),
+                         "kind": "attack" if choice == 1 else "move", "selecting": False, "tries": 0}
         return self._army_job_step(obs, mine)
 
     def _army_record(self, who: str, members: list[dict], where, kind, cell: int, attack: bool, then, grid, glob) -> None:
