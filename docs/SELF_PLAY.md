@@ -217,6 +217,25 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    the loop runs end to end (play, log, score, update, play). Learning needs many rounds, and lower
    variance: paired fight episodes (the same position branched with different decisions) for the
    roles, the value net's estimate in place of 45 s of raw outcome for the army.
+   **The first night (2026-10-17), after Fable's notes:** one RL target, Gary-Z's fight roles, on
+   paired episodes; the army layers frozen at imitation (the RL'd army models archived, Gary-Z rolled
+   back; decisions still logged), as this plan says: army decisions learn last, once the critic
+   predicts more than who is ahead. eval/pairs.py: at fights in league games the game is saved and two
+   20 s arms are played with both bots live (the opponent reacts: no replayed commands), deep copies of
+   both bots with the models and the game shared; checked before the run: the same seed plays the same
+   game, the same arm twice from a saved moment ends identically, and the main line is the same with
+   pairs on as off. Training pairs draw the incumbent twice (advantage: an arm's outcome less the
+   pair's mean); A/B pairs put the incumbent against the candidate with the same dice. The outcome
+   counts every unit within 12 tiles of the fight's middle, workers and buildings too, wherever they
+   went; the retreat share (fighters ending 4+ tiles farther from the enemy) and moves are logged per
+   arm, field fights apart, since there retreat costs nothing (it was learned here before, from drills
+   with nothing to defend). eval/league_loop.py: rounds on fresh seeds; the candidate plays odd seeds;
+   it is kept only if the A/B pairs favor it and Gary-Z's gap score in its own games is no worse;
+   a new candidate from the round's training pairs, PPO KL-leashed to the imitation model; state.json
+   per round. Gary-T won all 17 decided games of r2-r3, so the night teaches Gary-Z only: over the rounds
+   the decided share and Gary-Z's gap score should move; if they don't after a few nights, the fix is
+   Gary-Z's army layer, not more RL. Side job: the Zerg belief model from pro games, frozen (the Zerg
+   value model needs train/value.py to learn a Zerg side first: it trains on Gary-T's games).
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
