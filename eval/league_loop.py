@@ -7,7 +7,7 @@ A round (fresh seeds every round: never judged on the seeds it trained on):
   play     eval/league.py --pairs: the incumbent fight-role model plays even seeds, the candidate odd
            seeds; at fights, paired arms (incumbent drawing twice: training; incumbent against the
            candidate, the same dice: A/B)
-  gate     the candidate is kept only if the A/B pairs favor it (mean a standard error above zero,
+  gate     the candidate is kept only if the A/B pairs favor it (mean two standard errors above zero,
            AB_MIN pairs or more), it doesn't retreat more in field fights (RETREAT_SLACK, unless the gain
            is two standard errors), and Gary-Z's gap score in its own games is no worse than in the
            incumbent's (GAP_TOLERANCE);
@@ -58,6 +58,7 @@ def main() -> None:
                     "pairs join this run's while the incumbent is unchanged")
     ap.add_argument("--layer", default="roles_z", choices=("roles_z", "army_t"),
                     help="the RL target: Gary-Z's fight roles, or Gary-T's army layer (paired 90 s branches)")
+    ap.add_argument("--gate-se", type=float, default=2.0, help="the A/B mean must be this many standard errors above zero")
     ap.add_argument("--lr", type=float, default=3e-5)
     ap.add_argument("--epochs", type=int, default=4)
     ap.add_argument("--kl", type=float, default=0.1)
@@ -105,7 +106,9 @@ def main() -> None:
             arms = pairs.get("arms", {})
             fa = lambda who: (arms.get(who) or {}).get("field_away") or 0.0
             retreat_ok = fa("candidate") <= fa("incumbent") + RETREAT_SLACK or mean > 2 * se
-            ab_ok = pairs.get("pairs_ab", 0) >= AB_MIN and mean > se and retreat_ok
+            # (two standard errors: a1 and a2 kept three candidates on one, and all three were noise in the
+            # head-to-heads; each kept model is the next base, so false keeps compound)
+            ab_ok = pairs.get("pairs_ab", 0) >= AB_MIN and mean > args.gate_se * se and retreat_ok
             gc, gi = band_mean(table["gap"].get(f"{side}_candidate")), band_mean(table["gap"].get(f"{side}_incumbent"))
             gap_ok = gc is not None and gi is not None and gc <= gi + GAP_TOLERANCE
             entry["gate"] = {"ab_ok": ab_ok, "retreat_ok": retreat_ok, "gap_ok": gap_ok, "gap_candidate": gc, "gap_incumbent": gi,
