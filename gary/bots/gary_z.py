@@ -576,6 +576,12 @@ class GaryZ(ZergV3):
                      {"who": who, "units": len(members), "at": f"({int(mid[0]) // 32},{int(mid[1]) // 32})",
                       "p_attack": float(kind[0, 1])}, "draw", then=then or "sent")
 
+    def _up(self, job: Job, mine) -> bool:
+        """v3's check, for a job that placed its building: one never placed isn't up because another of
+        its kind stands within 3 tiles of its spot (three of four creep colonies decided in 20 s ended so,
+        unbuilt: eval/why.py, seed 3005)."""
+        return job.tries > 0 and super()._up(job, mine)
+
     def _clusters(self, fighters: list[dict]) -> list[list[dict]]:
         """Fighters split by where they stand: up to CLUSTERS, biggest first; units within 2 grid cells
         of a cluster's busiest cell join it (as the Terran's army layer clusters)."""
@@ -742,21 +748,24 @@ class GaryZ(ZergV3):
                 over.append([name(k), "can't now (what it needs, the pros' cap, nothing to make it from)"])
                 continue
             g = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": self._name(act, uid)}
-            larva = act == MORPH and uid in Z.FROM_LARVA
+            # (this decision's own: the larvae's flag above stays. Overwritten here once, a parked Lurker Aspect
+            # left Gary-Z with no larva for the rest of the roll: drones set aside as waiting with 5 larvae
+            # standing, the under-MIN_P rule on, creep colonies at 5% taken instead: eval/why.py, seed 3005)
+            from_larva = act == MORPH and uid in Z.FROM_LARVA
             if self._affordable(g, me):
                 self.goal = g
                 self.log(f"next: {g['name']} ({g['p']:.0%})")
                 record(g["name"], g["p"])
-                if larva:                       # (pros spend larvae in bursts, a hatchery's at once: the timing
+                if from_larva:                       # (pros spend larvae in bursts, a hatchery's at once: the timing
                     self.next_query = hi.frame + QUERY_EVERY    # head's gap is between bursts; paced by it,
                 return                                          # the larvae piled up, 2,000 minerals at 10:00)
-            if not larva and self.parked is None:
+            if not from_larva and self.parked is None:
                 self.parked = g
                 self.log(f"next: {g['name']} ({g['p']:.0%}), parked for its money")
                 record(g["name"], g["p"], "parked for its money")
                 over.append([g["name"], "parked for its money"])
                 continue                                     # (and a larva meanwhile, if one is affordable)
-            if self.parked is not None and not larva:
+            if self.parked is not None and not from_larva:
                 over.append([g["name"], "one already parked: meanwhile only larvae"])
                 continue                                     # (one parked at a time; meanwhile only larvae)
             record(None, None, f"waits: {g['name']} needs money")   # (a larva the money doesn't cover yet: wait)
