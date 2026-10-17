@@ -141,11 +141,14 @@ plan and the full log).
   at odds of 1 to 3 (pros about even), with 15% of its army there (pros 27%): clusters trickle in alone;
   its army is half the pros' and nearly all zerglings, no mutalisks at 8-10 minutes (pros 6-8, killing 9
   SCVs a game), and it barely attacks. The roles were never the bottleneck.
-- **Next:** how much one army decision is worth against the game's chaos (`eval/army_effect.py`:
-  attack against hold, branched, both bots live; measured on Gary-T's army, since Gary-Z's rarely
-  reaches 6 supply), which decides army RL with the raw score or a critic first; Gary-Z's army size
-  and mutalisks, and its clusters fighting together; one last night of fight-role RL with the fixed
-  logging; a human game with the current Gary-T.
+- **One army decision against the game's chaos (`eval/army_effect.py`):** at 77 moments of Gary-T's
+  games, its army attacking against holding, branched with the hands redrawn: the decision's effect
+  over 90 s varies three times as much as the chaos does (sd 650 against 210 value), past two standard
+  errors at 62% of moments, attacking better at 40%. Army RL on paired branches can start with the
+  score as its outcome, without a critic first.
+- **Next:** army RL on paired branches (Gary-T first: Gary-Z's army is too small to decide much);
+  Gary-Z's army size and mutalisks, and its clusters fighting together; one last night of fight-role RL
+  with the fixed logging; a human game with the current Gary-T.
 
 ### Next: the belief model (started)
 

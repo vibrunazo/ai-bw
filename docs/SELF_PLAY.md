@@ -299,6 +299,16 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    its mutalisks near 0.1 a game (pros 9.0); a quarter of its army at a Terran base 0.06 minutes a game
    (pros 1.4), Terran buildings killed 0.1 a game (pros 6.1). So: the army's size and makeup (gas,
    mutalisks: the macro), clusters fighting apart, and no attacks. The roles were never the bottleneck.
+   **An army decision's effect against the chaos (2026-10-17, eval/army_effect.py, Fable's measurement):**
+   Gary-Z's ground army never reached 6 supply in a probe game, so it was measured on Gary-T's (16+
+   supply, median 24): at 77 moments in 24 games, its army attacking the nearest Zerg base against
+   holding (its army layer frozen for the window), 6 replays each with both sides' hands redrawn, 90 s,
+   both bots live. The effect's spread across moments: sd 6.5 (650 value); the chaos within a condition:
+   median sd 2.1 (210); ratio 3.1; 62% of moments past two standard errors; attacking better at 40% of
+   them (it depends on the moment: what the army layer has to learn). The macro decision measured before
+   was sd 130 against chaos's 512. So army RL on paired branches can start with the score as the outcome,
+   no critic first. (Attack-or-hold with the rest frozen is a starker choice than the army model's
+   cells: real decisions will be smaller; still well above what the macro saw.)
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
