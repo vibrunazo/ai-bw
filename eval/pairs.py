@@ -203,9 +203,12 @@ class Brancher:
             self.candidate = ArmyModel.load(self.candidate_path)
         ab = self.candidate is not None and self.kind_turn % 2 == 0
         self.kind_turn += 1
-        dice = [int(self.rng.random() * 2 ** 31) for _ in range(2)]
+        # one decision branched: each arm's first army decision drawn with its own dice, the rest with
+        # shared dice (a1 drew every decision of 90 s apart: ~+-5 a pair, the credit smeared over dozens);
+        # only that first decision is the arm's to train on
+        dice = [int(self.rng.random() * 2 ** 31) for _ in range(3)]
         if ab:
-            dice = [dice[0], dice[0]]
+            dice = [dice[0], dice[0], dice[2]]
         arms, end0 = [], None
         for arm in range(2):
             game.restore()
@@ -214,17 +217,20 @@ class Brancher:
             if ab and arm == 1:
                 layer.model = self.candidate
             layer.rng = np.random.default_rng(dice[arm])
+            layer.then_rng = np.random.default_rng(dice[2])
             layer.record = []
             _play(game, c, ARMY_WINDOW)
             end = snap(game.observe())
             end0 = end if arm == 0 else end0
             from eval.army_effect import _net
             arms.append({"reward": -_net(start, end, self.slot_z), "away": 0.0, "moved": 0.0, "field": False,
-                         "units": len(mine), "model": str(getattr(layer.model, "path", "?")), "decisions": layer.record})
+                         "units": len(mine), "model": str(getattr(layer.model, "path", "?")),
+                         "decisions": layer.record[:1]})
         if self.kind_turn % CHECK_EVERY == 1:
             game.restore()
             c = _copy(objs)
             c["gary"].army.rng = np.random.default_rng(dice[0])
+            c["gary"].army.then_rng = np.random.default_rng(dice[2])
             _play(game, c, ARMY_WINDOW)
             if snap(game.observe()) == end0:
                 self.checks_ok += 1

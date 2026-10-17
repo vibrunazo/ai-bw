@@ -159,9 +159,12 @@ plan and the full log).
   there (15%; pros 27%); Gary-T won 9, 7, 9 of 24. Gary-Z's army stays half the pros' (13 supply at
   10-12 minutes, pros 26-33), its minerals short when the Spire finishes: winning needs its macro, not
   more execution fixes.
-- **Next:** RL on Gary-T's army layer on paired 90 s branches (round loop a1, running); one last night of
-  fight-role RL with the fixed logging, then that line closes; Gary-Z's economy and army size; a human
-  game with the current Gary-T.
+- **RL on Gary-T's army layer, loop a1 (5 rounds, 120 games):** paired 90 s branches with every army
+  decision of the window drawn apart: one candidate kept (A/B +0.50 +- 0.41), three rejected; about +-5
+  per pair, the credit spread over dozens of decisions. Next loop: one decision branched, the rest with
+  shared dice.
+- **Next:** army RL with one decision branched (loop a2); one last night of fight-role RL with the fixed
+  logging, then that line closes; Gary-Z's economy and army size; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 

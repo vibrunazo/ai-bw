@@ -321,6 +321,14 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    10-12 min, pros 26-33), its minerals short when the Spire finishes (50-130), the macro model giving
    mutalisks 6-20% after it. Gary-Z winning is still out of reach; the army RL (where signal exists)
    goes ahead on Gary-T.
+   **Army RL on paired branches, loop a1 (Gary-T's army layer, 5 rounds, 120 games, seeds 8001+):** at
+   moments its army had 16+ supply, two 90 s arms drawing all its army decisions with different dice;
+   ~100 training and ~115 A/B pairs a round; branch checks 59 of 59 the same. Round 1's candidate kept
+   (A/B +0.50 +- 0.41, its games' gap 0.459 against 0.461); rounds 2-4 rejected (+0.32 +- 0.45, -0.53 +-
+   0.42, +0.06 +- 0.57). Per pair about +-5 (500 value) over 90 s: every decision of the window differed
+   between the arms, the credit spread over dozens, the noise with it (the effect measurement had one
+   decision apart: 3x the chaos). Next, loop a2: one decision branched, the arms' later decisions with
+   shared dice, only that decision trained on.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

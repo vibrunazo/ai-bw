@@ -113,6 +113,7 @@ class LearnedArmy:
         self.draw = draw
         self.rng = np.random.default_rng(g.hi.slot * 7919 + int(getattr(g, "seed", 0) or 0))
         self.record: list | None = None        # a paired episode's arm: its drawn decisions, kept here
+        self.then_rng = None                   # a paired episode's arm: the shared dice after its first decision
         # option: whether the fight estimate may hold a plain move (positioning), and by how much going must
         # look worse than staying (and lose outright) to hold. v0.27's 1 and 2 points held about 90% of its
         # army's decisions at 5-6 min, 92% of them within 2 points: noise for an estimate correlating 0.40
@@ -269,6 +270,8 @@ class LearnedArmy:
         p = where[0].astype(np.float64)
         best = int(self.rng.choice(len(p), p=p / p.sum()))
         drawn_attack = bool(self.rng.random() < float(kind[0, 1]))
+        if self.then_rng is not None:          # (an arm's first decision drawn its own way, the rest shared)
+            self.rng, self.then_rng = self.then_rng, None
         logp = float(np.log(p[best] + 1e-9) + np.log(kind[0, int(drawn_attack)] + 1e-9))
         def log(outcome):
             item = dict(frame=hi.frame, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16), cell=best,
