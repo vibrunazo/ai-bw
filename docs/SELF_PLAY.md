@@ -329,6 +329,12 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    between the arms, the credit spread over dozens, the noise with it (the effect measurement had one
    decision apart: 3x the chaos). Next, loop a2: one decision branched, the arms' later decisions with
    shared dice, only that decision trained on.
+   **A leak, not a bug (2026-10-17):** at 13:00 round a2_r1 lost 21 of 24 games to failed allocations of
+   under a megabyte. Two workers of the belief check stopped at 04:00 had kept running (stopping the
+   job killed only its parent), each in the endless loop past the replay's end, and had committed about
+   149 GB. Killed; a2 rewound to its clean round 0 and resumed. The same pressure likely explains a1's
+   training crash ("Unable to allocate 1.70 MiB") and night n3's one access violation inside a branch
+   (more likely a failed allocation in the native env than a save/restore fault).
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a
