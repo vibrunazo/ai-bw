@@ -346,6 +346,25 @@ Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the 
    bigger than the model's own alternatives, which are mostly nearby cells. What that leaves: many more
    pairs (the compute isn't here), or decisions with big contrasts (attack or hold as the learned choice,
    the destination kept from imitation), or a critic to cut the noise per decision.
+   **The last fight-role run, n4 (decisions logged as carried out, the gate at two standard errors):**
+   six rounds, nothing kept: A/B +0.02, -0.01, -0.01, +0.13 +- 0.07, +0.08 +- 0.06; the retreat gate
+   stopped two candidates that ran away more (0.34 against 0.25, 0.24 against 0.18); branch checks all
+   the same. Five tries at RL on per-unit roles, all ending at the start: the roles line is closed;
+   roles stay at imitation and rules.
+   **Gary-Z's macro audit, first check (Fable's: is it the decoder?):** in 6 games the model's odds and
+   Gary-Z's decisions by 2-minute window, against pro Zergs' production (3,941 games' build orders, to
+   8 min). The decisions follow the odds (at 6-8 min Mutalisk odds 3%, decided 2%): not the decoder. The
+   model itself, in Gary-Z's states, gives mutalisks 3% where pros produce 22%, and buildings or tech
+   27-39% where pros put 17-18%, half of it creep colonies (16% of all decisions at 4-8 min, 3-9 a game,
+   75 minerals and a drone each; 2-4 sunkens standing by 9:00). Gary-Z's states aren't the pros' to the
+   model (as the belief model's error on league games said): the next audit step is which inputs.
+   **Attack or hold, learned (train/engage.py):** at 1.3M pro army orders, whether the group was sent into
+   the enemy (2+ cells, next to known enemy buildings or army; 20% of orders), on the army model's inputs:
+   held-out AUC 0.80 (the move/attack head 0.60). In play (option engage) it draws attack or hold and
+   the destination comes from the army model's odds on that side, so destinations stay imitation; no
+   fight-estimate hold (going in is this decision's). Paired branches (layer engage_t) force the first
+   decision attack in one arm and hold in the other (the contrast measured at 3x the chaos), the rest on
+   shared dice; PPO on that head alone, KL-leashed to the supervised start; gate at two standard errors.
 2. **Macro, steered by a build style:** at the start Gary-Z rolls a pro Zerg style (z) and its macro
    is conditioned on it, as the Terran's is: unsteered, a model blends 9-pool, 2-hatch mutalisk and
    3-hatch lurker into a soup, and Zerg tech is gas-gated. Each decision maps onto v3's execution (a

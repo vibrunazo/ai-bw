@@ -168,9 +168,17 @@ plan and the full log).
   (a few hundred decisions a round, +-5 noise a pair) the army layer doesn't learn either; the effect
   measurement's contrast (the whole army attacking or holding) is far bigger than the model's own
   alternatives.
-- **Next:** one last night of fight-role RL with the fixed logging, then that line closes; for the army,
-  a learned decision with a big contrast (attack or hold, the destination from imitation) or a critic
-  to cut the noise; Gary-Z's economy and army size; a human game with the current Gary-T.
+- **The roles line closed:** the last fight-role run (decisions logged as carried out, a two-standard-
+  error gate) kept nothing in six rounds; five tries at RL on per-unit roles have ended at the start.
+- **Gary-Z's macro audit:** its decisions follow the macro model's odds (not the decoder); the model in
+  Gary-Z's states gives mutalisks 3% at 6-8 minutes where pros produce 22%, and buildings 27-39% where
+  pros put 17-18% (half creep colonies): Gary-Z's states look unlike the pros' to the model.
+- **Attack or hold, learned (`train/engage.py`):** from 1.3M pro army orders, whether the group was sent
+  into the enemy: held-out AUC 0.80. In play (option `engage`) it draws attack or hold and the army
+  model picks the destination on that side; RL on paired branches forcing attack in one arm and hold in
+  the other at one decision, the contrast measured at three times the chaos.
+- **Next:** the engage RL loop; which of the macro model's inputs make Gary-Z's states unlike the pros';
+  a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
