@@ -23,6 +23,9 @@ a query over it rather than a script that re-simulates it. One JSON line each:
             interface: apm, off screen; or by the game), retried, dropped, done; by, who had the hands
   hands     {f, side, owner}: who has the hands from now (Gary-T's arbiter; Gary-Z's turns)
   note      {f, side, text}: what a layer said in the game's log (a rule firing, a group sent)
+  seen, belief, death   what Gary saw and lost between decisions (gary/agent/sightings.py): enemy
+            fighters in sight and whether they close on its buildings, enemy buildings first seen, the
+            belief model's estimate once a minute, each own fighter lost (alone or not, who held it)
 
 A paired branch's arms (eval/pairs.py) keep their own records, saved beside the pairs as
 <game>.pairs.records.jsonl: a "pair" line ({pair, f, layer, ab, rewards, models}) then each arm's

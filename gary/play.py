@@ -126,6 +126,8 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
             if hi.frame // 1440 > minute:
                 minute = hi.frame // 1440
                 report(hi, game)
+                if pov:                      # saved every minute: a client or console that dies keeps the game so far
+                    _save_live(hi, gary, pov)
     except GameError as e:
         print(f"game over / bridge lost: {e}")
     finally:
@@ -133,13 +135,18 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
             snaps.close()
         if pov and hi is not None:
             try:
-                hi.save_pov(pov)
-                if gary is not None and pov.endswith(".pov.jsonl"):
-                    gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
-                    LOG.save_records(pov[:-len(".pov.jsonl")] + ".records.jsonl")
+                _save_live(hi, gary, pov)
                 print(f"saved {pov}")
             except Exception as e:
                 print(f"could not save pov: {e}")
+
+
+def _save_live(hi: HumanInterface, gary, pov: str) -> None:
+    """The live game's POV log, and Gary's trace and records next to it (gary/decision_log.py)."""
+    hi.save_pov(pov)
+    if gary is not None and pov.endswith(".pov.jsonl"):
+        gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
+        LOG.save_records(pov[:-len(".pov.jsonl")] + ".records.jsonl")
         game.close()
 
 

@@ -43,6 +43,7 @@ from gary import terran as T
 from gary.decision_log import LOG
 from gary.agent.fight import FIGHT_TASKS, INTERRUPTIBLE
 from gary.agent.gary import Gary, Task
+from gary.agent.sightings import Sightings
 
 
 WAIT_MIN = 24                        # waits shorter than a second aren't traced
@@ -55,6 +56,7 @@ class FixedPriority:
     def __init__(self, g: Gary, suspend_builds: bool = False):
         self.g = g
         self.suspend_builds = suspend_builds
+        self.sightings = Sightings(g)    # what Gary saw and lost between decisions: the game's records
         self.suspended = None            # v2: a build a fight turn put aside, to go on after
         self.interrupted = None          # the task the last fight turn dropped
         self.waits: dict[str, tuple[int, set[str]]] = {}   # layer -> (waiting since, tasks on the hands)
@@ -65,6 +67,7 @@ class FixedPriority:
         self.interrupted = None
         who = self._act()
         self._trace(before, who)
+        self.sightings.look()            # every half second: what Gary sees, in the records
 
     def _act(self) -> str | None:
         """One turn; who got the hands (or acted without a task), or None. (LOG.owner: who is acting, stamped

@@ -230,6 +230,18 @@ plan and the full log).
   the RL problem in plain sight: the one decision trained (the forced attack or hold) is redrawn by the
   arm itself 15 s later, and the arms end within a point of each other (two training pairs: a lead,
   not a result).
+- **What Gary saw and lost between decisions (2026-10-18, `gary/agent/sightings.py`):** three record
+  kinds for the human games' questions (does it react to an army approaching, to the first losses, or
+  never; why was that marine there alone). `seen`: enemy fighters on contact, when 2+ supply of them is
+  new, else every 10 s in sight, with where, by which base, how far from Gary's nearest building and
+  whether they are closing on it (tiles gained in 5 s); an enemy building the first time it is seen.
+  `belief`: once a minute with the belief model on (option `belief`), the Zerg army it expects against the
+  most seen in 3 minutes. `death`: each own fighter gone, where, alone or with how many within 6 tiles,
+  the enemy near it, the last source that ordered it (its lease) and who had the hands; marines sent into
+  or standing by a bunker aren't deaths. From hi.observe() every half second, Gary-T only; the game is
+  byte-identical with the looks on and off (one v2 game, replay and POV). `eval/why.py` shows them
+  (`--layer seen`, `death`, `belief`). Live play now saves the POV log, trace and records every minute, so
+  a client that dies keeps the game so far.
 - **The attack-or-hold round read pair by pair (e1, 24 games, 188 training pairs, every replay check
   identical):** the forced decision (attack in one arm, hold in the other: the one RL trains on) was sent
   in every pair, 7.5 s after the branch (median). But each arm then decides 5.5 times more in its 90 s,

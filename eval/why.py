@@ -16,6 +16,11 @@ Each line: the time, the side and who had its hands, then
                why; then
   an order     order: what, its fate (sent, refused, retried, dropped, waiting, done) and why, given by whom
   a note       what a layer said in the game's log (--notes off to hide)
+  seen         enemy fighters coming into sight, new ones, or every 10 s while in sight (how many, where, by
+               which base, closing on Gary's buildings or not); an enemy building first seen
+  belief       once a minute: the enemy army the belief model expects against the most seen in 3 minutes
+  death        one of Gary's fighters gone: where, alone or not, the enemy near it, who held it, the hands
+               (gary/agent/sightings.py; --layer seen, belief or death shows those alone)
 --orders: "fates" (the default: every order that wasn't simply sent, and the production orders sent),
 "all" (every order, repeats folded), "none". Last, the window's counts per layer and per order fate.
 
@@ -89,6 +94,32 @@ def line(r: dict) -> str:
         if r.get("why"):
             out += f": {r['why']}"
         return out + f" (by {r['by']})"
+    if r["kind"] == "seen":
+        where = f"at {r['at'][0]},{r['at'][1]} ({r['near']}" + (f", {r['dist']} tiles from a building)" if r.get("dist") is not None else ")")
+        if r["what"] == "building":
+            return f"seen: {r['type']}{'' if r.get('done', True) else ' (unfinished)'} {where}"
+        out = f"seen: {r['what']}, {r['n']} units, {r['supply']:g} supply: " \
+              + ", ".join(f"{n} {k}" for k, n in sorted(r["types"].items(), key=lambda kv: -kv[1])) + f" {where}"
+        if r.get("closing") is not None:
+            out += f", closing {r['closing']:+g} tiles in 5 s"
+        if r.get("new"):
+            out += f", {r['new']:g} supply new"
+        return out
+    if r["kind"] == "belief":
+        out = f"belief: zerg army {r['supply']:g} supply expected"
+        if "q80" in r:
+            out += f" (80th percentile {r['q80']:g})"
+        out += f", most seen at once in 3 min {r['seen_3min']:g}"
+        if "drones" in r:
+            out += f", drones {r['drones']:g}"
+        return out
+    if r["kind"] == "death":
+        out = f"death: {r['type']} at {r['at'][0]},{r['at'][1]} ({r['near']}), "
+        out += "alone" if r["alone"] else f"{r['with']} own fighters within 6 tiles (nearest {r['nearest']})"
+        out += f", {r['enemy_near']} enemy fighters within 8"
+        if r.get("held_by"):
+            out += f", held by {r['held_by']}"
+        return out + f" (hands: {r['hands']})"
     return f"note: {r['text']}"
 
 
@@ -124,6 +155,10 @@ def show(rows: list[dict], f0: int, f1: int, args, tag=lambda r: r["side"]) -> N
                 continue
         elif r["kind"] == "note":
             if args.notes == "off" or args.layer:
+                continue
+        elif r["kind"] in ("seen", "belief", "death"):
+            counts[f"{tag(r)} {r['kind']}"] += 1
+            if args.layer and r["kind"] not in args.layer:
                 continue
         else:
             continue
@@ -207,7 +242,7 @@ def main() -> None:
     ap.add_argument("--pair", type=int, help="one paired branch's arms, side by side")
     ap.add_argument("--side", choices=["T", "Z"])
     ap.add_argument("--layer", action="append", help="only these layers' decisions (macro, army, engage, roles, "
-                                                     "posture, gas); repeatable")
+                                                     "posture, gas) or records (seen, belief, death); repeatable")
     ap.add_argument("--orders", choices=["fates", "all", "none"], default="fates")
     ap.add_argument("--notes", choices=["on", "off"], default="on")
     args = ap.parse_args()
