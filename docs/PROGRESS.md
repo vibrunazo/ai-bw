@@ -320,6 +320,42 @@ plan and the full log).
     yet why SCVs reached the user's base: a per-unit order trail is the next record); the model's own turrets
     still fail to start at some spots headless (3 of 16: the builder stops short); where the first marines
     stand against six zerglings (1 against 6 by the bunker).
+- **Gary-Z, the morning after (2026-10-18, runs/league/g1-g4, each 24 games on seeds 5001+ against
+  `v029+commit+draw+floor+mass`, 25 min; the baseline is f_floor_mass on the same seeds):** Gary-Z is what
+  keeps the league one-sided (one win in about 240 games), so the Terran's fixes went to its side.
+  | Gary-Z variant | Gary-T won / time | gap Z (all) | army 8/10/12 min | SCVs by mutas | attack min | T buildings lost |
+  |---|---|---|---|---|---|---|
+  | baseline | 9 / 15 | 0.30 | 10/14/12 | 1.9 | 0.3 | 0.6 |
+  | + mass, floor, records (g1) | 13 / 11 | 0.32 | 8/11/15 | 2.0 | 0.2 | 0.4 |
+  | + hatchery money kept while picking (g2) | 20 / 4 | 0.41 | | | | reverted |
+  | + the new raid (g3) | 14 / 10 | 0.31 | 8/10/8 | 5.4 | 0.5 | 1.0 |
+  | + money kept 90 s, oldest hatchery job (g4) | 18 / 6 | 0.36 | | | | reverted |
+  | pros (60 games) | | 0 | 18/26/32 | 9.0 | 1.4 | 6.1 |
+  - **Its own records:** gary/agent/sightings.py serves both sides now; Gary-Z's act loop records what it saw and
+    each fighter it lost, so `eval/why.py --side Z` answers its why-questions. Drones aren't counted: a drone
+    "dies" to the tracker when it morphs or enters an extractor (182 false deaths in one game).
+  - **Summed odds (GARY_Z_MASS) and a floor on its draws (GARY_Z_FLOOR):** the Terran's mass and floor on the Zerg
+    side. Mass fired 2.0 times a game, mostly a Hydralisk Den and a Queen's Nest at 9-11 min; the floor stopped
+    draws like "two zerglings to (84,36) at 0.3%". Neither moved the results.
+  - **The hatchery gap is execution, not odds, and not money either.** Pros have 4 hatcheries at 8:00 and 5 at
+    12:00, Gary-Z 3 and 4 with every larva used (capped 0%, pros 10%): larvae are its cap and the missing
+    hatchery its missing army. Expansion and hatchery jobs waited in "pick" for money 30-120 s (42, 35, 20 and 8
+    of them in g1; a hatchery's 90th-percentile time to stand 7 minutes), and 15 builder drones a game vanished
+    on their walks (most in games already lost, with 26 marines in the main). Keeping the job's money while it
+    picks lost games both ways (g2, g4): against this Terran, units now beat a hatchery later.
+  - **The raid (gary_z.py `_mutas`, v3's left as it was):** v3's flock formed only from mutalisks within 12
+    tiles of the gather point, where new ones never go (a flock in 13 of 24 games, 20 raids in all, 286
+    mutalisks made), and attack-moved seven at a mineral line until half were dead. Now five anywhere at home
+    form it; the line with no turret seen and the fewest marines; the approach along the map's edge to a post
+    beyond the minerals; SCVs picked off one at a time; back to the post at 30 hp lost in 2 s or a turret or
+    three marines within reach, in again after 6 s, another line after three back-offs; home at 60%. SCVs
+    killed 2.0 -> 5.4 a game (pros 9.0), attack minutes 0.2 -> 0.5, Terran buildings 0.4 -> 1.0; the flock still
+    loses 3-4 mutalisks a raid to marines in the mineral line it only sees once there.
+  - **What keeps Gary-Z from winning now:** its army is a quarter of the pros' at 12 minutes with the drones and
+    hatcheries nearly the pros' (39 drones at 12:00, pros 33): the larvae go to drones, and what army there is
+    bleeds in the field at odds 0.45 with 18% of it present (pros 0.71, 27%). The next levers are the army's
+    engagement (clusters joining before they fight, retreating when outweighed) and the expansion jobs'
+    execution (which base, the drone's walk), not the decoder.
 - **The attack-or-hold round read pair by pair (e1, 24 games, 188 training pairs, every replay check
   identical):** the forced decision (attack in one arm, hold in the other: the one RL trains on) was sent
   in every pair, 7.5 s after the branch (median). But each arm then decides 5.5 times more in its 90 s,
