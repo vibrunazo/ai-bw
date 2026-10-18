@@ -56,7 +56,7 @@ class FixedPriority:
     def __init__(self, g: Gary, suspend_builds: bool = False):
         self.g = g
         self.suspend_builds = suspend_builds
-        self.sightings = Sightings(g)    # what Gary saw and lost between decisions: the game's records
+        self.sightings = Sightings.for_gary(g)   # what Gary saw and lost between decisions: the game's records
         self.suspended = None            # v2: a build a fight turn put aside, to go on after
         self.interrupted = None          # the task the last fight turn dropped
         self.waits: dict[str, tuple[int, set[str]]] = {}   # layer -> (waiting since, tasks on the hands)

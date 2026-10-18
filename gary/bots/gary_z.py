@@ -153,6 +153,23 @@ class GaryZ(ZergV3):
         # seeds, at home 47% at 5-7 min (groups 78%, pros 38%), in the field 47% (20%, 52%), Gary-Z's gap
         # score 0.34 (0.45), decided 38% (17%), lone units moving away 10% (3%, pros 18%)
         self.cluster_army = os.environ.get("GARY_Z_ARMY", "clusters") == "clusters"
+        # GARY_Z_FLOOR (default 0.15; 0: off): no keep / engage / move drawn under these odds, the destination
+        # among the 5 likeliest cells (as the Terran's option floor: the drawn variety without the 5% draws)
+        self.commit_floor = float(os.environ.get("GARY_Z_FLOOR", "0.15")) or None
+        # GARY_Z_MASS (default on; 0: off): every one-off decision (a hatchery or an expansion, a tech building,
+        # Lair / Hive / Greater Spire, research, an upgrade) once its odds, summed over the decisions taken
+        # while it was possible, reach one (the Terran macro's expand_mass and option mass). The dice roll
+        # them at 1-5% a decision and seldom land: Gary-Z had one hatchery fewer than the pros from 8:00
+        # (3/4, 4/5) with every larva used (capped 0%, pros 10%) and 540-650 minerals banked (pros 380-430),
+        # its army half the pros' at 10:00
+        self.mass = os.environ.get("GARY_Z_MASS", "1") != "0"
+        self.one_off = [k for k, (a, u) in enumerate(self.model.spec.decisions)
+                        if a in (RESEARCH, UPGRADE, EXPAND) or (a == BMORPH and u in (Z.LAIR, Z.HIVE, Z.GREATER_SPIRE))
+                        or (a == BUILD and u in (Z.HATCHERY, Z.DEN, Z.SPIRE, Z.QUEENS_NEST, Z.DEFILER_MOUND, Z.ULTRA_CAVERN, Z.EVO))]
+        self.odds: dict[int, float] = {}         # one-off decision -> its odds summed since it was possible
+        from gary.agent.sightings import Sightings   # what Gary-Z saw and lost between decisions (its records)
+        # (fighters only: a drone "dies" to the tracker when it morphs or enters an extractor)
+        self.sightings = Sightings(hi, "Z", mapinfo, self.home, lambda u: u["type"] in Z.ARMY)
         self.army_job: dict | None = None
         self.cluster_ask: dict[int, int] = {}
         self.cluster_turn = 0
@@ -191,6 +208,7 @@ class GaryZ(ZergV3):
         obs = hi.observe()
         me = obs["me"]
         mine = [u for u in obs["units"] if u["owner"] == hi.slot]
+        self.sightings.look(obs)
         self._timing(mine)
         # gas as it's spent: v3 put 3 drones on every extractor from the start whatever the plan, and the
         # gas piled up (1,204 at 6:00) while the minerals ran short
@@ -458,7 +476,7 @@ class GaryZ(ZergV3):
         self.next_ask[n] = hi.frame + ARMY_EVERY
         grid, glob = self.army_tracker.inputs(obs, members)
         where, kind = self.army_model.predict(grid, glob)
-        cell = self.rng.choices(range(where.shape[1]), weights=where[0].tolist())[0]
+        cell = self._draw_cell(where[0])
         attack = self.rng.random() < float(kind[0, 1])
         held = attack and self.army_model.fight(grid, glob, cell, True) < HOLD_BELOW
         self.army_goal[n] = None if held else (cell, attack)
@@ -468,6 +486,17 @@ class GaryZ(ZergV3):
                 cell=cell, attack=attack, held=held,
                 logp=float(np.log(where[0, cell] + 1e-9) + np.log(kind[0, int(attack)] + 1e-9)))
         return self.army_goal[n]
+
+    def _draw_cell(self, where) -> int:
+        """A destination drawn from the model's odds over cells; with the floor (GARY_Z_FLOOR), among the 5
+        likeliest only: drawn over every cell, two zerglings went across the map on 0.3% odds (seed 5001)."""
+        p = np.asarray(where, dtype=np.float64)
+        if self.commit_floor:
+            keep = np.argsort(-p)[:5]
+            pf = np.zeros_like(p)
+            pf[keep] = p[keep]
+            p = pf
+        return self.rng.choices(range(len(p)), weights=(p / p.sum()).tolist())[0]
 
     def _group(self, n: int, obs: dict, lings: dict, enemy: list[dict]) -> bool:
         """Group n goes where its drawn goal is (_army_goal), unless it's there or on its way. (True: it acted.)"""
@@ -561,7 +590,7 @@ class GaryZ(ZergV3):
             return self._committed(obs, mine, members, k)
         grid, glob = self.army_tracker.inputs(obs, members)
         where, kind = self.army_model.predict(grid, glob)
-        cell = self.rng.choices(range(where.shape[1]), weights=where[0].tolist())[0]
+        cell = self._draw_cell(where[0])
         attack = self.rng.random() < float(kind[0, 1])
         held = attack and self.army_model.fight(grid, glob, cell, True) < HOLD_BELOW
         LOG.add("army_z", frame=hi.frame, group=k, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16),
@@ -592,7 +621,13 @@ class GaryZ(ZergV3):
         grid, glob = self.army_tracker.inputs(obs, members, (held, age))
         where, kind = self.army_model.predict(grid, glob)
         q = kind[0].astype(np.float64)
-        choice = self.rng.choices(range(3), weights=(q / q.sum()).tolist())[0]
+        qd = q.copy()
+        if self.commit_floor:                   # (no choice drawn under the floor; keep if none is above it)
+            qd[qd < self.commit_floor] = 0.0
+            if qd.sum() <= 0:
+                qd[0] = 1.0
+        qd = qd / qd.sum()
+        choice = self.rng.choices(range(3), weights=qd.tolist())[0]
         names = ["keep", "engage", "move"]
 
         def name(c):
@@ -603,7 +638,7 @@ class GaryZ(ZergV3):
         options = [[n, round(float(q[i]), 3)] for i, n in enumerate(names)]
         why = explain_army(self.army_model, grid, glob, lambda w, kd: kd[:, choice])
         LOG.add("commit_z", frame=hi.frame, group=k, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16),
-                choice=choice, logp=float(np.log(q[choice] + 1e-9)))
+                choice=choice, logp=float(np.log(qd[choice] + 1e-9)))
         if choice == 0:
             LOG.decision("Z", "commit", hi.frame, "keep", q[0], options, seen, "draw", then="its commitment stands", why=why)
             return False
@@ -620,6 +655,11 @@ class GaryZ(ZergV3):
             LOG.decision("Z", "commit", hi.frame, names[choice], q[choice], options, seen, "draw",
                          then="no cell on that side: its commitment stands", why=why)
             return False
+        if self.commit_floor:                   # (among the 5 likeliest cells on that side)
+            keep_cells = np.argsort(-p)[:5]
+            pf = np.zeros_like(p)
+            pf[keep_cells] = p[keep_cells]
+            p = pf
         cell = self.rng.choices(range(len(p)), weights=(p / p.sum()).tolist())[0]
         self.commitments.append((hi.frame, here, cell, choice))
         LOG.decision("Z", "commit", hi.frame, f"{names[choice]} to {name(cell)}", q[choice], options, seen, "draw",
@@ -751,6 +791,10 @@ class GaryZ(ZergV3):
         parked decision's (unless it's the one asking)."""
         minerals, gas = self._bank(me)
         minerals -= self._kept()
+        # a building job still picking its drone keeps its money too (v3's _kept counts jobs from the walk on,
+        # so the larvae spent an expansion's 300 as fast as it came: "pick for 120 s, no drone" in the records;
+        # pros save for the hatchery). The job's own check (v3 _work) uses _kept and isn't blocked by itself
+        minerals -= sum(Z.COST[j.unit_type][0] for j in self.jobs.values() if j.state == "pick" and j.unit_type in Z.COST)
         if self.parked is not None and self.parked is not but:
             pm, pg = self._cost(self.parked["act"], self.parked["id"])
             minerals, gas = minerals - pm, gas - pg
@@ -802,9 +846,31 @@ class GaryZ(ZergV3):
         name = lambda k: self._name(*self.model.spec.decisions[k])
         over: list[list] = []
 
-        def record(choice, p, then=None, k=None):
-            LOG.decision("Z", "macro", hi.frame, choice, p, top(name, probs[0]), self._seen(obs, mine, me), "dice",
+        def record(choice, p, then=None, k=None, by="dice"):
+            LOG.decision("Z", "macro", hi.frame, choice, p, top(name, probs[0]), self._seen(obs, mine, me), by,
                          over[:8], then, why=explain_macro(self.model, x, k) if k is not None else None)
+        if self.mass:
+            # a one-off whose summed odds reached one, the largest first: taken if possible and affordable, else
+            # parked for its money (the larvae go on meanwhile, as below)
+            for mass, j in sorted(((self.odds[j], j) for j in self.one_off if self.odds.get(j, 0.0) >= 1.0), reverse=True):
+                act, uid = self.model.spec.decisions[j]
+                if self._cant(act, uid, obs, mine, me):
+                    continue
+                g = {"act": act, "id": uid, "p": float(probs[0, j]), "since": hi.frame, "name": self._name(act, uid)}
+                by = f"rule: its odds summed to {mass:.2f} since it was possible"
+                if self._affordable(g, me):
+                    self.goal = g
+                    self._summed(probs, j, obs, mine, me)
+                    self.log(f"next: {g['name']} ({mass:.2f} odds summed since it was possible)")
+                    record(g["name"], g["p"], k=j, by=by)
+                    return
+                if self.parked is None:
+                    self.parked = g
+                    self._summed(probs, j, obs, mine, me)
+                    self.log(f"next: {g['name']} ({mass:.2f} odds summed), parked for its money")
+                    record(g["name"], g["p"], "parked for its money", k=j, by=by)
+                    over.append([g["name"], "parked for its money"])
+                    break
         for k in order:
             act, uid = self.model.spec.decisions[k]
             if not larva and act == MORPH and uid in Z.FROM_LARVA and Z.can_make(uid, self._done_types(mine), self.researched) \
@@ -835,6 +901,7 @@ class GaryZ(ZergV3):
             from_larva = act == MORPH and uid in Z.FROM_LARVA
             if self._affordable(g, me):
                 self.goal = g
+                self._summed(probs, k, obs, mine, me)
                 self.log(f"next: {g['name']} ({g['p']:.0%})")
                 record(g["name"], g["p"], k=k)
                 if from_larva:                       # (pros spend larvae in bursts, a hatchery's at once: the timing
@@ -842,6 +909,7 @@ class GaryZ(ZergV3):
                 return                                          # the larvae piled up, 2,000 minerals at 10:00)
             if not from_larva and self.parked is None:
                 self.parked = g
+                self._summed(probs, k, obs, mine, me)
                 self.log(f"next: {g['name']} ({g['p']:.0%}), parked for its money")
                 record(g["name"], g["p"], "parked for its money", k=k)
                 over.append([g["name"], "parked for its money"])
@@ -852,6 +920,16 @@ class GaryZ(ZergV3):
             record(None, None, f"waits: {g['name']} needs money")   # (a larva the money doesn't cover yet: wait)
             return
         record(None, None, "nothing it can do now")
+
+    def _summed(self, probs, k: int, obs: dict, mine: list[dict], me: dict) -> None:
+        """A decision taken (k): every other one-off possible now adds its odds to its sum; k's own starts over."""
+        if not self.mass:
+            return
+        for j in self.one_off:
+            if j == k:
+                self.odds[j] = 0.0
+            elif probs[0, j] >= 0.01 and self._cant(*self.model.spec.decisions[j], obs, mine, me) is None:
+                self.odds[j] = self.odds.get(j, 0.0) + float(probs[0, j])
 
     def _seen(self, obs: dict, mine: list[dict], me: dict) -> dict:
         """What the macro saw, in brief, for its records."""
