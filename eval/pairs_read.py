@@ -48,7 +48,7 @@ def read(folder: Path, layer: str) -> list[dict]:
                 undone = None
                 for r in later:
                     k = kind(r)
-                    if (fk == "engage" and k in ("move", "hold")) or (fk == "hold" and k == "engage"):
+                    if (fk == "engage" and k in ("move", "hold")) or (fk in ("hold", "move") and k == "engage"):
                         undone = (r["f"] - h["f"]) / 24
                         break
                 item["arms"][arm] = {"forced": fk, "later": len(later), "later_engage": sum(1 for r in later if kind(r) == "engage"),
