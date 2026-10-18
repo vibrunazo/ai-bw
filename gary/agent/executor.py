@@ -525,6 +525,10 @@ class ScriptedExecutor:
         level = int(terrain[1][level_at[1] // 8, level_at[0] // 8]) if terrain and level_at else None
         cands = sorted((math.dist((tx * 32 + w * 16, ty * 32 + h * 16), near), tx, ty)
                        for ty in range(cy - 8, cy + 8) for tx in range(cx - 8, cx + 8))
+        # (a tile in from the map's edge: a turret at tile 0 passed the game's check live and its builder
+        # never got there, human game 3)
+        mw, mh = (self.g.map.size[0] // 32, self.g.map.size[1] // 32) if self.g.map is not None else (256, 256)
+        cands = [c for c in cands if 1 <= c[1] and 1 <= c[2] and c[1] + w <= mw - 1 and c[2] + h <= mh - 1]
         for same_level in ((True, False) if level is not None else (False,)):
             for _, tx, ty in cands:
                 if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.g.reserved) \

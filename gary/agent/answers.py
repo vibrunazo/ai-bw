@@ -48,10 +48,13 @@ LURKER_TURRETS_PER_BASE = 1               # against lurkers, turrets for detecti
 # and the natural in turn; the headless loss above was against bots, a human's mutas count for more
 MUTA_ANSWER = [(BUILD, T.EBAY, 1), (BUILD, T.ACADEMY, 1)]
 MUTA_TURRETS_PER_BASE = 2                 # pros 6.9 by 10:00 over their bases
-TURRET_IN_LINE = 1.3                      # a turret aimed this far from the CC toward its minerals' middle
-                                          # (just past them), off the SCVs' paths (executor.py spot_near
-                                          # avoid): halfway, the mining SCVs stood in its spot and the game
-                                          # refused it again and again (seed 108, OpenBW)
+TURRET_BY_END = 80                        # px: a turret aimed this far from an end of the mineral line toward
+                                          # the CC, off the SCVs' paths (executor.py spot_near avoid). It was
+                                          # aimed just past the minerals' middle (1.3 of the way from the CC):
+                                          # behind the line that is a cliff or the map's edge, and the builder
+                                          # stopped short or the order was lost (human game 3: 6 of 16 turret
+                                          # orders, SCVs walking main to natural and back for minutes; the same
+                                          # headless, 3 of 16). Halfway, the mining SCVs stood in its spot
 TURRET_OF_BASE = 10 * 32                  # px: a turret this close to a base's minerals guards it
 
 
@@ -164,7 +167,14 @@ class Answers:
             if not isinstance(plan, dict) or plan.get("kind") == "wait":
                 return None                      # (no Engineering Bay yet)
             self.asked[key] = f
-            near = (int(cc["x"] + (mx - cc["x"]) * TURRET_IN_LINE), int(cc["y"] + (my - cc["y"]) * TURRET_IN_LINE))
+            # the end of the mineral line with no turret by it yet (the one toward the zerg first), 2.5 tiles
+            # toward the CC: reachable, beside the line, off most mining paths
+            enemy = getattr(g.army, "enemy_main", None) or (g.enemy_starts[0] if len(g.enemy_starts) == 1 else None)
+            a, b = max(((p, q) for p in base.minerals for q in base.minerals), key=lambda pq: math.dist(*pq))
+            end = min((a, b), key=lambda e: (sum(1 for t in turrets if math.dist((t["x"], t["y"]), e) < 4 * 32),
+                                             math.dist(e, enemy) if enemy else 0))
+            d = math.dist(end, (cc["x"], cc["y"])) or 1.0
+            near = (int(end[0] + (cc["x"] - end[0]) * TURRET_BY_END / d), int(end[1] + (cc["y"] - end[1]) * TURRET_BY_END / d))
             where = "main" if base is g.main else "natural" if base is g.natural else base
             paths = [((int(cc["x"]), int(cc["y"])), (int(x), int(y))) for x, y in base.minerals]
             return {"act": BUILD, "id": T.TURRET, "p": 1.0, "since": f, "where": where, "near": near, "avoid": paths,
