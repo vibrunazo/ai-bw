@@ -53,6 +53,21 @@ GAS_FLOAT, GAS_LOW = 400, 300   # gas above this (and above the minerals): its d
                                 # below this, back to gas (150 trapped it: no gas mined from 4:00 to 8:00
                                 # with ~160 banked, too little for mutalisks; pros bank 350-450 then)
 RALLY_IN_LINE = 0.6              # the rally: this far from the hatchery toward its minerals' middle
+# the mutalisk raid (_mutas)
+RAID_FLOCK = 5                   # mutalisks at home before the flock forms and goes out (v3: 7)
+RAID_MEMORY = 90 * 24            # anti-air seen is remembered this long
+RAID_POST = 7 * 32               # px beyond a mineral line (out from the map's middle) where the flock waits
+RAID_TURRET = 8 * 32             # a turret (range 7) this near the flock, or a line: a threat
+RAID_SEE = 8 * 32                # marines this near the flock count
+RAID_WAYPOINT = 14 * 32          # the approach: along the map's edge, this far aside of the post, then in
+RAID_MARINES = 3                 # this many marines (or better) within reach: back off
+RAID_HIT_HP = 30                 # the flock losing this much hp (a turret shot, five marine volleys)...
+RAID_HIT_S = 2                   # ...in this many seconds: back off
+RAID_REST_S = 6                  # seconds at the post before coming back
+RAID_CYCLES = 3                  # back-offs at one line before another line (or home)
+RAID_SWITCH = 10 * 24            # lines switched for a turret at most this often
+RAID_REAIM = 2 * 24              # the SCV aimed at again this often
+RAID_KEEP = 0.6                  # home with fewer than this share of the flock it left with
 POST_OUT = 10 * 32               # px: the outer watch post, this far outside Gary's natural toward the middle
 POST_AGAIN = 60 * 24            # a post whose overlord was lost is manned again after this
 ARMY_EVERY = 5 * 24              # a group's destination asked of the army model this often
@@ -149,6 +164,14 @@ class GaryZ(ZergV3):
         self.sent_to: dict[int, tuple] = {}
         self.straggle_after, self.straggle_tries = 0, 0
         self.unreached: set[tuple[int, int]] = set()   # bases its drones never reached: not expanded to again
+        # the mutalisk raid (_mutas): the line raided, back-offs at it, the flock's hp lately, when each line was
+        # last hit, and Gary's Command Centers seen (their mineral lines are raid targets too)
+        self.raid_line = None
+        self.raid_cycles = 0
+        self.raid_switched = -10 ** 6
+        self.raid_hp: list[tuple[int, int]] = []
+        self.raided_at: dict[tuple, int] = {}
+        self.seen_halls: dict[int, tuple[int, int]] = {}
         # the army by clusters, not v1's hotkey groups (GARY_Z_ARMY=groups for those): 24 games on the same
         # seeds, at home 47% at 5-7 min (groups 78%, pros 38%), in the field 47% (20%, 52%), Gary-Z's gap
         # score 0.34 (0.45), decided 38% (17%), lone units moving away 10% (3%, pros 18%)
@@ -487,6 +510,184 @@ class GaryZ(ZergV3):
                 logp=float(np.log(where[0, cell] + 1e-9) + np.log(kind[0, int(attack)] + 1e-9)))
         return self.army_goal[n]
 
+    # --- the mutalisk raid ----------------------------------------------------------------------------
+
+    def _mutas(self, obs, mine) -> bool:
+        """v3's flock with a raid that gets through (v3's attack-moved seven at a mineral line and turned back
+        once half were dead or the anti-air near outweighed them: 12 mutalisks made a game, 1.9 SCVs killed,
+        pros 9). The mineral line with no turret seen by it and the fewest marines; a move (not an attack-move)
+        to a point beyond the line, out from the map's middle, where the minerals screen it; then the SCVs
+        picked off one at a time (a right-click on one, re-aimed every 2 s); back to that point the moment
+        the flock bleeds (RAID_HIT_HP in RAID_HIT_S) or a turret or RAID_MARINES marines are within reach,
+        again after RAID_REST_S if the threat left, else another line; home at 60% of the flock. (True: it
+        acted.)"""
+        hi = self.hi
+        if self._aimed_at != self.target:
+            self._aim()
+        mutas = {u["tag"]: u for u in mine if u["type"] == Z.MUTALISK and u["completed"]}
+        self.flock &= set(mutas)
+        enemy = [u for u in obs["units"] if u["owner"] not in (hi.slot, 11)]
+        for u in enemy:                                    # (anti-air, remembered: v3's air_seen, 90 s)
+            if u["type"] in V3.AIR_THREAT:
+                self.air_seen[u["tag"]] = (hi.frame, u["x"], u["y"], u["type"])
+            elif u["type"] == T.CC:
+                self.seen_halls[u["tag"]] = (u["x"], u["y"])
+        self.air_seen = {t: v for t, v in self.air_seen.items() if hi.frame - v[0] < RAID_MEMORY}
+        flock = [mutas[t] for t in self.flock]
+        home = self.gather
+        hatcheries = [(u["x"], u["y"]) for u in mine if u["type"] in Z.TOWN_HALLS]
+        raid = [u for u in enemy if u["type"] in set(V3.AIR_THREAT) | {32, 34, 1, 2, 5, 30} and u["type"] not in (7, 124, 125)
+                and any(math.dist((u["x"], u["y"]), h) < V3.DEFEND_NEAR for h in hatcheries)]
+        if raid and flock and self.flock_state in ("home", "back") and self.all_in != "go":
+            at = (sum(u["x"] for u in raid) / len(raid), sum(u["y"] for u in raid) / len(raid))
+            if self.flock_state != "defend" or hi.frame - self.flock_since >= V3.MUTA_REAIM:
+                return self._flock_order("attack", at, "defend")
+        if self.flock_state == "defend" and not raid:
+            self.flock_state = "back"
+        if self.flock_state == "home":
+            # (v3 formed the flock from mutalisks within 12 tiles of the gather point in front of the natural, 7 at
+            # once: new mutalisks rally to the mineral lines, so in round g1 a flock formed in 13 of 24 games and
+            # raided 20 times in all while 286 were made. Anywhere by a hatchery, RAID_FLOCK at once)
+            loose = [u for t, u in mutas.items() if t not in self.flock
+                     and any(math.dist((u["x"], u["y"]), h) < 16 * 32 for h in hatcheries)]
+            if loose and (self.flock or len(loose) >= RAID_FLOCK):
+                return self._form_flock(obs, mutas, loose)
+            ready = len(flock) >= RAID_FLOCK and hi.frame - self.flock_since >= V3.MUTA_REST
+            if (ready or (self.all_in == "go" and flock)) and self.lines:
+                self.raid_line = self.lines[0] if self.all_in == "go" else self._raid_line(hi.frame)
+                self.raid_cycles, self.raid_hp = 0, []
+                self.flock_size = len(flock)
+                return self._raid_go(self.raid_line)
+            return False
+        if not flock:
+            self.flock_state, self.flock_since = "home", hi.frame
+            return False
+        mid = (sum(u["x"] for u in flock) / len(flock), sum(u["y"] for u in flock) / len(flock))
+        hp = sum(u["hp"] for u in flock)
+        self.raid_hp = [(f, h) for f, h in getattr(self, "raid_hp", []) if hi.frame - f <= RAID_HIT_S * 24] + [(hi.frame, hp)]
+        bleeding = self.raid_hp[0][1] - hp >= RAID_HIT_HP
+        turret_near = any(v[3] in (124, 125) and math.dist(v[1:3], mid) < RAID_TURRET for v in self.air_seen.values()
+                          if hi.frame - v[0] < 5 * 24)
+        marines_near = sum(1 for u in enemy if u["type"] in (0, 3, 58, 8) and math.dist((u["x"], u["y"]), mid) < RAID_SEE)
+        lost = len(flock) < self.flock_size * RAID_KEEP
+        if self.flock_state in ("out", "hit", "poke_back"):
+            if lost and self.all_in != "go":
+                self.log(f"mutalisks home: {len(flock)} of {self.flock_size} left")
+                return self._flock_order("move", home, "back")
+            threatened = bleeding or turret_near or marines_near >= RAID_MARINES
+            if self.flock_state == "hit" and threatened and self.all_in != "go":
+                self.raid_cycles += 1
+                LOG.decision("Z", "raid", hi.frame, "back off", inputs={"mutas": len(flock), "marines": marines_near, "turret": turret_near,
+                             "hp_lost": self.raid_hp[0][1] - hp, "cycles": self.raid_cycles},
+                             by="rule: the flock bleeds, or a turret or marines within reach")
+                return self._flock_order("move", self._raid_post(self.raid_line), "poke_back")
+            if self.flock_state == "out" and self.all_in != "go":
+                line_turret = any(v[3] in (124, 125) and math.dist(v[1:3], self.raid_line) < RAID_TURRET + 3 * 32
+                                  for v in self.air_seen.values())
+                if line_turret and hi.frame - self.raid_switched >= RAID_SWITCH:   # (the line itself is turreted)
+                    other = self._raid_line(hi.frame, but=self.raid_line)
+                    self.raid_switched = hi.frame
+                    LOG.decision("Z", "raid", hi.frame, "another line" if other else "home", inputs={"mutas": len(flock)},
+                                 by="rule: a turret seen by that line on the way in")
+                    if other is None:
+                        return self._flock_order("move", home, "back")
+                    self.raid_line, self.raid_cycles = other, 0
+                    return self._raid_go(self.raid_line)
+                if bleeding or marines_near >= RAID_MARINES:          # (shot at in transit: back, then again)
+                    self.raid_cycles += 1
+                    LOG.decision("Z", "raid", hi.frame, "back off", inputs={"mutas": len(flock), "marines": marines_near,
+                                 "turret": turret_near, "hp_lost": self.raid_hp[0][1] - hp, "cycles": self.raid_cycles},
+                                 by="rule: shot at on the way in")
+                    return self._flock_order("move", self._raid_post(self.raid_line), "poke_back")
+            if self.flock_state == "out" and math.dist(mid, self._raid_post(self.raid_line)) < 5 * 32:
+                self.flock_state, self.flock_since = "hit", hi.frame
+            if self.flock_state == "poke_back" and hi.frame - self.flock_since >= RAID_REST_S * 24:
+                if self.raid_cycles >= RAID_CYCLES:
+                    other = self._raid_line(hi.frame, but=self.raid_line)
+                    if other is None:
+                        return self._flock_order("move", home, "back")
+                    self.raid_line, self.raid_cycles = other, 0
+                    return self._raid_go(self.raid_line)
+                self.flock_state, self.flock_since = "hit", hi.frame
+            if self.flock_state == "hit" and hi.frame - self.flock_since >= RAID_REAIM:
+                scvs = [u for u in enemy if u["type"] == 7 and math.dist((u["x"], u["y"]), self.raid_line) < 10 * 32]
+                if scvs:                                   # (one SCV at a time: a right-click on it, on screen)
+                    scv = min(scvs, key=lambda u: (u["hp"], math.dist((u["x"], u["y"]), mid)))
+                    if set(obs["selection"]) != self.flock & set(mutas):
+                        hi.hotkey_recall(V3.MUTA_KEY)
+                        return True
+                    if self._look(obs, (scv["x"], scv["y"])):
+                        return True
+                    at = screen_of(obs, scv["x"], scv["y"])
+                    if at is not None:
+                        hi.right_click(*at)
+                        self.flock_since = hi.frame
+                        self.raided_at[tuple(self.raid_line)] = hi.frame
+                        return True
+                return self._flock_order("attack", self.raid_line, "hit")
+            return False
+        if self.flock_state == "defend":
+            if hi.frame - self.flock_since >= V3.MUTA_REAIM and raid:
+                at = (sum(u["x"] for u in raid) / len(raid), sum(u["y"] for u in raid) / len(raid))
+                return self._flock_order("attack", at, "defend")
+            return False
+        if self.flock_state == "back" and math.dist(mid, home) < 6 * 32:
+            self.flock_state, self.flock_since = "home", hi.frame
+        return False
+
+    def _raid_go(self, line) -> bool:
+        """Out to a line's post along the map's edge: a waypoint RAID_WAYPOINT aside of the post (on Gary-Z's
+        side), then the post, queued (a straight flight from home crossed the Terran base and its marines)."""
+        hi = self.hi
+        obs = hi.observe()
+        mutas = {u["tag"] for u in obs["units"] if u["owner"] == hi.slot and u["type"] == Z.MUTALISK}
+        if set(obs["selection"]) != self.flock & mutas or not obs["selection"]:
+            hi.hotkey_recall(V3.MUTA_KEY)
+            return True
+        post = self._raid_post(line)
+        w, h = self.map.size
+        ox, oy = line[0] - w / 2, line[1] - h / 2           # out from the middle
+        d = math.hypot(ox, oy) or 1.0
+        px, py = -oy / d, ox / d                            # along the edge
+        side = 1 if (px * (self.home[0] - post[0]) + py * (self.home[1] - post[1])) >= 0 else -1
+        wp = (int(min(w - 64, max(64, post[0] + side * px * RAID_WAYPOINT))),
+              int(min(h - 64, max(64, post[1] + side * py * RAID_WAYPOINT))))
+        hi.minimap_right_click(*wp)
+        hi.minimap_right_click(*post, queued=True)
+        if self.flock_state != "out":
+            self.log(f"mutalisks ({len(self.flock)}): out")
+        self.flock_state, self.flock_since = "out", hi.frame
+        return True
+
+    def _raid_line(self, frame: int, but=None):
+        """The mineral line to raid: no turret seen by it first, then the fewest marines seen near it, then the
+        one raided longest ago; not `but`. Gary's main and natural (v3's lines) and any base whose Command
+        Center Gary-Z has seen."""
+        lines = list(self.lines)
+        for v in self.seen_halls.values():
+            if all(math.dist(v, l) > 8 * 32 for l in lines):
+                lines.append(v)
+        lines = [l for l in lines if but is None or math.dist(l, but) > 2 * 32]
+        if not lines:
+            return None
+        recent = {t: v for t, v in self.air_seen.items() if frame - v[0] < RAID_MEMORY}
+
+        def key(line):
+            turrets = sum(1 for v in recent.values() if v[3] in (124, 125) and math.dist(v[1:3], line) < RAID_TURRET + 3 * 32)
+            marines = sum(V3.AIR_THREAT[v[3]] for v in recent.values() if v[3] not in (124, 125) and math.dist(v[1:3], line) < 10 * 32)
+            return (turrets, marines, self.raided_at.get(tuple(line), -10 ** 6))
+        return min(lines, key=key)
+
+    def _raid_post(self, line) -> tuple[int, int]:
+        """Where the flock waits by a mineral line: RAID_POST beyond it, out from the map's middle (the minerals
+        between it and the base), inside the map."""
+        w, h = self.map.size
+        dx, dy = line[0] - w / 2, line[1] - h / 2
+        d = math.hypot(dx, dy) or 1.0
+        x = min(w - 64, max(64, line[0] + dx / d * RAID_POST))
+        y = min(h - 64, max(64, line[1] + dy / d * RAID_POST))
+        return int(x), int(y)
+
     def _draw_cell(self, where) -> int:
         """A destination drawn from the model's odds over cells; with the floor (GARY_Z_FLOOR), among the 5
         likeliest only: drawn over every cell, two zerglings went across the map on 0.3% odds (seed 5001)."""
@@ -791,10 +992,9 @@ class GaryZ(ZergV3):
         parked decision's (unless it's the one asking)."""
         minerals, gas = self._bank(me)
         minerals -= self._kept()
-        # a building job still picking its drone keeps its money too (v3's _kept counts jobs from the walk on,
-        # so the larvae spent an expansion's 300 as fast as it came: "pick for 120 s, no drone" in the records;
-        # pros save for the hatchery). The job's own check (v3 _work) uses _kept and isn't blocked by itself
-        minerals -= sum(Z.COST[j.unit_type][0] for j in self.jobs.values() if j.state == "pick" and j.unit_type in Z.COST)
+        # (not the jobs still picking a drone: keeping their money starved the larvae and lost games either way:
+        # every picking job's for as long as it took, round g2_keep, Gary-T won 20 of 24 against 13; the oldest
+        # hatchery job's for 90 s at most, round g4_keep90, 18 against 14, Gary-Z's gap 0.36 against 0.31)
         if self.parked is not None and self.parked is not but:
             pm, pg = self._cost(self.parked["act"], self.parked["id"])
             minerals, gas = minerals - pm, gas - pg
