@@ -77,17 +77,42 @@ def decisions(rep: str) -> dict:
     return {k.split("/")[0]: int(d[k].shape[0]) for k in d.files if k.endswith("/frame")}
 
 
-def gaps(replays: list[str], race: str, workers: int) -> list:
-    """The side's gap score per minute range (eval/humanlike.py), against the cached pros."""
-    from eval.humanlike import _job, _names, gap_score, gary_end, matrix, pro_rows
-    names = _names(race)
+def side_rows(replays: list[str], race: str, workers: int) -> dict[str, list[dict]]:
+    """Each replay's per-minute feature rows for one side (eval/humanlike.py features), from the re-simulation."""
+    from eval.humanlike import _job, gary_end
     with ProcessPoolExecutor(workers) as pool:
         got = dict(pool.map(_job, [(r, race, gary_end(r)) for r in replays]))
-    gary = {p: rows for p, rows in got.items() if rows}
+    return {p: rows for p, rows in got.items() if rows}
+
+
+def gaps(rows: dict[str, list[dict]], race: str, workers: int) -> list:
+    """The side's gap score per minute range (eval/humanlike.py), against the cached pros."""
+    from eval.humanlike import _names, gap_score, matrix, pro_rows
+    names = _names(race)
     pros = pro_rows(race, 300, workers)
-    Xg, _, _ = matrix(gary, names)
+    Xg, _, _ = matrix(rows, names)
     Xp, _, _ = matrix(pros, names)
     return gap_score(Xg, Xp)
+
+
+AHEAD = 1.4          # a game at time: the side whose supply used (workers and army) in the last minute is this many
+                     # times the other's is ahead; else even
+
+
+def grade(games: list[dict], rows_t: dict, rows_z: dict) -> None:
+    """Games at time graded by who is ahead at the end (g["graded"]): the critic's job for the league (docs/
+    SELF_PLAY.md) until a Zerg one exists; the Terran value network reads the lead already taken well (0.92 AUC
+    on decided games), and that is all this needs. Supply used is race-neutral: drones and army against SCVs
+    and army. 15 of 24 games a round ended at time with both sides looking alike in the results."""
+    for g in games:
+        g["graded"] = g["result"]
+        if g["result"] != "time":
+            continue
+        t, z = rows_t.get(g["replay"]), rows_z.get(g["replay"])
+        if not t or not z:
+            continue
+        st, sz = t[-1].get("supply_used") or 0, z[-1].get("supply_used") or 0
+        g["graded"] = "time, T ahead" if st >= AHEAD * sz else "time, Z ahead" if sz >= AHEAD * st else "time, even"
 
 
 def main() -> None:
@@ -104,9 +129,24 @@ def main() -> None:
     ap.add_argument("--layer", default="roles_z", choices=("roles_z", "army_t", "engage_t", "commit_t"),
                     help="what the pairs and the candidate are: Gary-Z's fight roles or Gary-T's army layer")
     priority.add_argument(ap)
+    ap.add_argument("--regrade", action="store_true", help="an existing round: grade its games at time by who is ahead (no games played)")
     args = ap.parse_args()
     priority.apply(args.priority)
     out = REPO / "runs" / "league" / args.round
+    if args.regrade:
+        table = json.loads((out / "round.json").read_text(encoding="utf-8"))
+        games = table["games"]
+        done = [g["replay"] for g in games if g["result"] != "error"]
+        rows_t, rows_z = side_rows(done, "T", args.parallel), side_rows(done, "Z", args.parallel)
+        grade(games, rows_t, rows_z)
+        table["graded"] = dict(Counter(g["graded"] for g in games))
+        table["graded_by_map"] = {m: dict(Counter(g["graded"] for g in games if g["map"] == m)) for m in MAPS}
+        (out / "round.json").write_text(json.dumps(table, indent=1), encoding="utf-8")
+        print(f"round {args.round}: {table['results']}")
+        print(f"graded (games at time by who is ahead at the end, supply used {AHEAD:g}x): {table['graded']}")
+        for m, c in table["graded_by_map"].items():
+            print(f"  {m}: {c}")
+        return
     jobs = [(args.vs, name, path, s, args.minutes, out, args.pairs, args.incumbent, args.candidate, args.layer)
             for name, path in MAPS.items() for s in range(args.first, args.first + args.seeds)]
     with ThreadPoolExecutor(args.parallel) as pool:
@@ -115,23 +155,28 @@ def main() -> None:
         g["decisions"] = decisions(g["replay"])
         monitor.tally("results", g["result"])
     done = [g["replay"] for g in games if g["result"] != "error"]
+    rows_t, rows_z = side_rows(done, "T", args.parallel), side_rows(done, "Z", args.parallel)
+    grade(games, rows_t, rows_z)
     table = {"round": args.round, "terran": args.vs, "minutes": args.minutes, "games": games,
              "results": dict(Counter(g["result"] for g in games)),
+             "graded": dict(Counter(g["graded"] for g in games)),
              "by_map": {m: dict(Counter(g["result"] for g in games if g["map"] == m)) for m in MAPS},
              "decisions": {k: sum(g["decisions"].get(k, 0) for g in games) for k in ("army_t", "roles_t", "army_z", "roles_z")},
-             "gap": {"T": gaps(done, "T", args.parallel), "Z": gaps(done, "Z", args.parallel)},
+             "gap": {"T": gaps(rows_t, "T", args.parallel), "Z": gaps(rows_z, "Z", args.parallel)},
              "decided": sum(1 for g in games if g["result"] in ("won", "lost")) / max(1, len(games))}
     if args.candidate:                    # (the layer's side's gap, its candidate's games against the incumbent's)
         side = "Z" if args.layer == "roles_z" else "T"
         for who, model in (("candidate", args.candidate), ("incumbent", args.incumbent)):
             mine = [g["replay"] for g in games if g["result"] != "error" and g["zroles"] == str(model)]
-            table["gap"][f"{side}_{who}"] = gaps(mine, side, args.parallel) if mine else None
+            rows = rows_z if side == "Z" else rows_t
+            table["gap"][f"{side}_{who}"] = gaps({r: rows[r] for r in mine if r in rows}, side, args.parallel) if mine else None
     if args.pairs:
         from eval.pairs import summarize
         files = sorted(glob.glob(str(out / "*" / "*.pairs.npz")))
         table["pairs"] = summarize(files, args.incumbent, args.candidate)
     (out / "round.json").write_text(json.dumps(table, indent=1), encoding="utf-8")
     print(f"round {args.round}: {len(games)} games, Gary-T {table['results']}; by map {table['by_map']}")
+    print(f"graded (games at time by who is ahead at the end, supply used {AHEAD:g}x): {table['graded']}")
     print(f"decisions logged: {table['decisions']}")
     for side, gap in table["gap"].items():
         if gap:
