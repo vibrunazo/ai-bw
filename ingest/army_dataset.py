@@ -246,14 +246,14 @@ def build_game(rec: dict) -> dict:
                 known.append(labeled[k])
                 k += 1
             nxt = [o for o in labeled[k:] if o[0] < f1]
-            for c, sup in clusters(g[t, 0]):
+            for c, csup in clusters(g[t, 0]):      # (not `sup`: that is the orders' array, saved below)
                 mine = [o for o in nxt if cheb(o[1], c) <= 2]
                 past = [o for o in known if path_dist(c, o[1], o[2]) <= 2 and f0 - o[0] <= COMMIT_S * 24]
                 at = np.zeros((CHANNELS, CELLS), np.uint16)
                 at[:6] = g[t]
                 at[6] = seen_bld[t]
                 at[7] = recent[t]
-                at[8, c] = sup
+                at[8, c] = csup
                 tk["grid"].append(np.minimum(at, 255).astype(np.uint8))
                 tk["t"].append(t)
                 tk["label"].append(mine[0][3] if mine else 0)

@@ -47,22 +47,22 @@ from train.macro import is_test  # noqa: E402  (same held-out games as the macro
 MAX_PER_PLAYER = 160          # samples per player-game (keeps memory in check, spreads over games)
 
 
-def army_dir() -> Path:
-    return data_root() / "interim" / "army" / "v1"
+def army_dir(version: str = "v1") -> Path:
+    return data_root() / "interim" / "army" / version
 
 
-def player_games(matchup: str, race: str, keep=None) -> list[tuple[str, int, bool, str, int]]:
+def player_games(matchup: str, race: str, keep=None, version: str = "v1") -> list[tuple[str, int, bool, str, int]]:
     """(army npz, player index, held out, macro npz, the same player's index there)."""
     macro_dir = data_root() / "interim" / "macro" / "v1"
     with open(macro_dir / "index.jsonl", encoding="utf-8") as f:
         macro = {r["sha1"]: r for r in map(json.loads, f) if r.get("ok")}
     out = []
-    with open(army_dir() / "index.jsonl", encoding="utf-8") as f:
+    with open(army_dir(version) / "index.jsonl", encoding="utf-8") as f:
         rows = {r["sha1"]: r for r in map(json.loads, f)}
     for r in rows.values():
         if not r.get("ok") or r["matchup"] != matchup or r["sha1"] not in macro or (keep and not keep(r["sha1"])):
             continue
-        path = str(army_dir() / r["sha1"][:2] / f"{r['sha1']}.npz")
+        path = str(army_dir(version) / r["sha1"][:2] / f"{r['sha1']}.npz")
         mpath = str(macro_dir / r["sha1"][:2] / f"{r['sha1']}.npz")
         mslots = [p["slot"] for p in macro[r["sha1"]]["players"]]
         for i, p in enumerate(r["players"]):
@@ -165,13 +165,14 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=2e-3)
     ap.add_argument("--channels", type=int, default=64)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--data", default="v1", help="army dataset version folder (v1: orders only; v3: with commitment ticks, what ingest/army_dataset.py builds now)")
     GameFilter.add_args(ap)
     args = ap.parse_args()
     keep = GameFilter.from_args(args)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     t0 = time.time()
 
-    jobs = player_games(args.matchup, args.race, keep)
+    jobs = player_games(args.matchup, args.race, keep, args.data)
     print(f"{len(jobs)} player-games ({keep.describe()})", flush=True)
     own, seen = set(), set()
     with ProcessPoolExecutor(args.workers) as pool:
