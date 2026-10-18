@@ -57,8 +57,10 @@ def play(map_path: str, minutes: float, seed: int, save: str, matchup: str = "Zv
                 LOG.slot = s                          # (the records say whose they are: eval/why.py --slot)
                 bots[s].act()
             LOG.slot = None
-            for i, hi in enumerate(his.values()):
+            for i, (s, hi) in enumerate(his.items()):
+                LOG.slot = s                          # (the orders the hands carry out are recorded here too)
                 hi.step(2, advance_game=(i == 0))
+            LOG.slot = None
             if his[first].frame % (24 * 30) < 2:
                 o = game.observe()
                 t = his[first].frame // 24

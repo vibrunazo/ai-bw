@@ -12,8 +12,8 @@ goal, as of 2026-10-18, and the order in which it gets there. Update it when a s
 | PvT | 18,187 | 138 | none |
 | TvZ | 15,434 | 15,402 | all |
 | PvP | 7,360 | 149 | none |
-| ZvZ | 6,353 | 29, the rest running | none |
-| TvT | 2,799 | 10, queued | none |
+| ZvZ | 6,353 | 6,285 (6,103 clean) | all |
+| TvT | 2,799 | 2,716 (2,486 clean) | all |
 
 Everything but 598 games is from 1.16 and before (StarData, the TL packs): old maps, old metas.
 The 598 Remastered-era games (version 1.21+) are the cwal.gg sample and a few TL games; a bulk
@@ -89,11 +89,16 @@ turrets and bunkers), so a ZvZ game is the first thing that breaks it.
 
 ## Order of work
 
-1. **Mirrors from the data we have** (running): re-simulate ZvZ and TvT, build their datasets,
-   train ZvZ Zerg and TvT Terran models. ZvZ Gary-Z vs Gary-Z exposes the Terran-opponent
-   assumptions; TvT Gary-T vs Gary-T exposes the manifests' TvZ default and roles' Zerg prey
-   kinds. Fix both with one table of the enemy per race (town halls, production, static defense,
-   fighters, names) in a shared `gary/races.py`, looked up by the enemy race seen in the lobby.
+1. **Mirrors from the data we have.** Done for Zerg on 2026-10-18: ZvZ and TvT re-simulated and
+   their datasets built; ZvZ Zerg macro (top-1 0.61) and army models trained; `gary/races.py`
+   holds the enemy per race (town halls, production, static defense, fighters, names) and Gary-Z
+   takes a matchup, so its press, sweep, raid memory and alarm read the table instead of naming
+   Terran buildings. `eval/mirror.py` plays Gary-Z against Gary-Z; the first three games ran to a
+   kill at 10:18 and 7:00 and one to the 20-minute limit, with mutalisk, zergling and scourge
+   play. The records are tagged by player slot (a mirror cannot tell its players apart by race).
+   Still open: Gary-Z reads the matchup from the launcher, not the lobby; the pro-history table
+   and plans exist for ZvZ without build styles (no taxonomy yet); TvT Gary-T vs Gary-T has not
+   been played (the manifests' TvZ default and roles' Zerg prey kinds will show there).
 2. **Modern replays** when the cwal.gg download lands: inventory, `run_batch.py --remastered`,
    datasets per matchup, then retrain `--era modern` against mixed and judge both on the league
    and on the humanlikeness gap measured against modern pros. The pro reference for economy and
