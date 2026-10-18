@@ -146,6 +146,19 @@ class MacroModel:
         return out
 
 
+
+def pro_history(race: str) -> np.ndarray | None:
+    """The pros' mean decision counts per minute for a race (ingest: data/interim/macro/history_mean_<race>.npy),
+    or None if not computed."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ingest"))
+    try:
+        from inventory import data_root
+        return np.load(data_root() / "interim" / "macro" / "v1" / f"history_mean_{race}.npy")
+    except Exception:
+        return None
+
+
 class MacroTracker:
     """Builds the model's features during play, from what the player sees (gary.interface
     observations), the way ingest/macro_dataset.py built them from replays.
@@ -160,6 +173,11 @@ class MacroTracker:
         self.seen_max = np.zeros(228, dtype=np.float32)
         self.decided = np.zeros(len(spec.decisions), dtype=np.float32)
         self.last_decision_frame = 0
+        # history: None, or the pros' mean decision counts per minute ((31, decisions): data/interim/macro/
+        # history_mean_<race>.npy): the model then sees a pro's typical past, not this player's own. Gary-Z's own
+        # history fed back on itself: its drone odds rested on "its decisions so far" at +0.36 (the records'
+        # attribution, round g12), 60-70% drones at 6:00-7:30 where pros decide drones 17-24% of the time
+        self.history: np.ndarray | None = None
 
     def note_decision(self, act: int, uid: int, frame: int) -> None:
         self.decided[self.spec.decision_index(act, uid)] += 1
@@ -188,5 +206,6 @@ class MacroTracker:
         me = obs["me"]
         eco = np.array([[me["minerals"], me["gas"], me["supply_used"] * 2, me["supply_max"] * 2]], dtype=np.float32)
         frame = np.array([obs["frame"]], dtype=np.float32)
-        return encode(self.spec, frame, eco, units, seen[None], self.seen_max[None], self.decided[None],
+        decided = self.decided if self.history is None else self.history[min(obs["frame"] // 1440, len(self.history) - 1)]
+        return encode(self.spec, frame, eco, units, seen[None], self.seen_max[None], decided[None],
                       np.array([(obs["frame"] - self.last_decision_frame) / 24.0], dtype=np.float32), self.style)

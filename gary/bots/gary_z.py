@@ -170,6 +170,11 @@ class GaryZ(ZergV3):
         # only 4% none) and kept droning while pros switch to army (57% of larvae at 6:00)
         self.plan, self.poke, self.pressing = "mutas", True, False
         self.tracker = MacroTracker(self.model.spec, hi.slot, plan)
+        # GARY_Z_HISTORY (default pro; own: this player's): the decision history the macro model sees (gary/policy/macro.py
+        # MacroTracker.history): the pros' mean per minute, so its own drone-heavy past doesn't feed back on itself
+        if os.environ.get("GARY_Z_HISTORY", "pro") == "pro":
+            from gary.policy.macro import pro_history
+            self.tracker.history = pro_history("Z")
         # where the groups go: the Zerg army model (runs/army/TvZ_Z_*), as the Terran's army; v1's
         # stage-judge-go is replaced, its home defense and v3's raid and lurkers stay
         # GARY_Z_COMMIT ("latest" or a model's path): commitments (train/commit.py --race Z: keep / engage / move

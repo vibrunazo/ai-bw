@@ -58,12 +58,12 @@ MINUTES = 12
 
 # --- pro games ---------------------------------------------------------------------------------
 
-def pro_jobs() -> list[tuple]:
+def pro_jobs(race: str = "T") -> list[tuple]:
     from inventory import data_root
     won = {}
     with open(data_root() / "interim" / "build_orders.jsonl", encoding="utf-8") as f:
         for r in map(json.loads, f):
-            if r.get("matchup") == "TvZ" and r.get("race") == "T" and r.get("won") is not None:
+            if r.get("matchup") == "TvZ" and r.get("race") == race and r.get("won") is not None:
                 won[r["sha1"]] = bool(r["won"])
     root = data_root() / "interim" / "macro" / "v1"
     jobs = []
@@ -71,27 +71,27 @@ def pro_jobs() -> list[tuple]:
         for r in map(json.loads, f):
             if r.get("ok") and r.get("matchup") == "TvZ" and r["sha1"] in won and len(r["players"]) == 2:
                 for i, p in enumerate(r["players"]):
-                    if p["race"] == "T":
+                    if p["race"] == race:
                         jobs.append((str(root / r["sha1"][:2] / f"{r['sha1']}.npz"), i, won[r["sha1"]], r["sha1"]))
     return jobs
 
 
-_belief = None
+_belief: dict = {}
 
 
-def _belief_model():
-    global _belief
-    if _belief is None:
-        from gary.agent.manifests import model_path
+def _belief_model(race: str = "T"):
+    if race not in _belief:
+        from gary.agent.manifests import _newest
         from gary.policy.belief import BeliefModel
         torch.set_num_threads(1)
-        _belief = BeliefModel.load(model_path("belief/latest"))
-    return _belief
+        _belief[race] = BeliefModel.load(_newest("belief", race=race))
+    return _belief[race]
 
 
 def pro_samples(args: tuple) -> tuple[np.ndarray, np.ndarray, str]:
-    """The Terran's view every STRIDE_S seconds of one pro game, and whether it won."""
-    (path, i, won, sha1), spec_d = args
+    """The player's view (race T or Z) every STRIDE_S seconds of one pro game, and whether it won."""
+    (path, i, won, sha1), spec_d, race = args
+    enemy = {"T": "Z", "Z": "T"}[race]
     from gary.policy.belief import WORKERS, features_series
     from gary.policy.macro import FeatureSpec, encode
     from gary.policy.value import EXTRAS, army_supply, belief_outputs, extras, no_style
@@ -119,13 +119,13 @@ def pro_samples(args: tuple) -> tuple[np.ndarray, np.ndarray, str]:
     x = no_style(spec, encode(spec, f, d["eco"][ts, i].astype(np.float32), d["units"][ts, i].astype(np.float32),
                               seen[ts], seen_max, cum[done], (f - last) / 24.0, None))
     # the extras (each row of the arrays is a second)
-    b = features_series(d["seen"][:, i], d["units"][:, i, :, 0], d["eco"][:, i], frames, "Z", "T")[ts]
-    own = army_supply(d["units"][:, i, :, 1].astype(np.float32), "T")
-    workers = d["units"][:, i, WORKERS["T"], 1].astype(np.float32)
-    seen_army = army_supply(seen, "Z")
+    b = features_series(d["seen"][:, i], d["units"][:, i, :, 0], d["eco"][:, i], frames, enemy, race)[ts]
+    own = army_supply(d["units"][:, i, :, 1].astype(np.float32), race)
+    workers = d["units"][:, i, WORKERS[race], 1].astype(np.float32)
+    seen_army = army_supply(seen, enemy)
     ago = np.maximum(ts - LOOKBACK_S, 0)
     seen_army_max = np.array([seen_army[a:t + 1].max() for a, t in zip(ago, ts)])
-    ex = extras(belief_outputs(_belief_model(), b), own[ts], own[ago], workers[ts] - workers[ago], seen_army[ts],
+    ex = extras(belief_outputs(_belief_model(race), b), own[ts], own[ago], workers[ts] - workers[ago], seen_army[ts],
                 seen_army_max)
     return np.concatenate([x, ex], 1).astype(np.float16), np.full(len(ts), float(won), np.float32), sha1
 
@@ -201,23 +201,25 @@ def main() -> None:
     ap.add_argument("--parallel", type=int, default=14)
     ap.add_argument("--reuse", help="a run folder whose collected data to train on again")
     ap.add_argument("--no-extras", action="store_true", help="ablation: the extras zeroed (the macro model's view alone)")
+    ap.add_argument("--race", default="T", choices=["T", "Z"], help="whose value: the Zerg's from the pro games alone (its "
+                    "win head: who is ahead; Gary-Z's own games, for the net heads, are not played here yet)")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
-    from gary.agent.manifests import model_path
+    from gary.agent.manifests import _newest
     from gary.policy.macro import MacroModel
-    spec = MacroModel.load(str(model_path("macro/latest"))).spec
-    run = REPO_ROOT / "runs" / "value" / f"TvZ_T_{time.strftime('%Y%m%d-%H%M%S')}"
+    spec = MacroModel.load(str(_newest("macro", race=args.race))).spec
+    run = REPO_ROOT / "runs" / "value" / f"TvZ_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
     run.mkdir(parents=True, exist_ok=True)
     src = Path(args.reuse) if args.reuse else run
     if not args.reuse:
-        jobs = pro_jobs()
+        jobs = pro_jobs(args.race)
         random.Random(0).shuffle(jobs)
         jobs = jobs[:args.pro_games]
         gjobs = [(o, mp, s, VERSIONS[s % 2], st) for o in OPPONENTS for mp in MAPS for s in range(1, args.gary_seeds + 1)
-                 for st in STYLES]
+                 for st in STYLES] if args.race == "T" else []
         with ProcessPoolExecutor(args.parallel) as pool:
-            pro = list(monitor.track(pool.map(pro_samples, [(j, spec.to_dict()) for j in jobs], chunksize=16), len(jobs),
+            pro = list(monitor.track(pool.map(pro_samples, [(j, spec.to_dict(), args.race) for j in jobs], chunksize=16), len(jobs),
                                      "pro games"))
             np.savez_compressed(src / "pro.npz", x=np.concatenate([p[0] for p in pro]), win=np.concatenate([p[1] for p in pro]),
                                 game=np.concatenate([[p[2]] * len(p[1]) for p in pro]))
@@ -246,7 +248,7 @@ def main() -> None:
         gmin.append(fr / 1440)
         gopp.append(np.array([g["game"].split("/")[0]] * len(w), object))
         k += len(w)
-    gnet = np.concatenate(gnet)
+    gnet = np.concatenate(gnet) if gnet else np.zeros((0, 3), np.float32)
     X = np.concatenate([pro["x"].astype(np.float32)] + gx)
     W = np.concatenate([pro["win"]] + gwin)
     N = np.concatenate([np.full((n0, 2), np.nan, np.float32), gnet[:, :2]])
@@ -278,7 +280,8 @@ def main() -> None:
         net.eval()
         with torch.no_grad():
             disc = np.full(len(X), np.nan, np.float32)
-            disc[n0:] = torch.cat([net(Xn[i:i + 65536])[1][:, 2] for i in range(n0, len(X), 65536)]).numpy()
+            if n0 < len(X):                        # (none of Gary's games: the pro win head alone, --race Z)
+                disc[n0:] = torch.cat([net(Xn[i:i + 65536])[1][:, 2] for i in range(n0, len(X), 65536)]).numpy()
         net.train()
         boot = np.where(NXT >= 0, disc[np.maximum(NXT, 0)], np.where(ENDED, 0.0, np.nan))
         return torch.tensor((R + step * boot).astype(np.float32))
@@ -312,6 +315,11 @@ def main() -> None:
         m = ~np.isnan(y)
         r2 = 1 - np.mean((y[m] - p[m]) ** 2) / np.var(y[m]) if m.any() else float("nan")
         print(f"  net{h}: sd {np.std(y[m]) * 1000:.0f}, explained {r2:.1%} (the noise left: sd {np.sqrt(np.mean((y[m] - p[m]) ** 2)) * 1000:.0f})")
+    if n0 == len(X):                                      # (the pro win head alone, --race Z: nothing of Gary's to judge)
+        torch.save({"state": net.state_dict(), "n_in": X.shape[1], "mean": mean.tolist(), "std": std.tolist(),
+                    "spec": spec.to_dict(), "heads": ["win", "net60", "net180", "disc"], "gamma_s": GAMMA_S}, run / "model.pt")
+        print(f"-> {run / 'model.pt'}")
+        return
     with torch.no_grad():
         dp = torch.cat([net(Xn[i:i + 65536])[1][:, 2] for i in range(n0, len(X), 65536)]).numpy()
     G = np.zeros(len(X) - n0)
