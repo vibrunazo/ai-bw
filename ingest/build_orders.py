@@ -433,7 +433,18 @@ def build(args: argparse.Namespace) -> None:
     raw_root = data_root() / "raw"
     cache_root = data_root() / "interim" / "cmdcache"
     games = select_games(args)
-    print(f"{len(games)} games selected", flush=True)
+    out = data_root() / "interim" / "build_orders.jsonl"
+    # Incremental: games already extracted are skipped (--force redoes them), and the rows of games
+    # outside this run's selection (other matchups, other sources) are kept.
+    kept, done, selected = [], set(), {g["sha1"] for g in games}
+    if out.exists():
+        for r in map(json.loads, out.open(encoding="utf-8")):
+            done.add(r["sha1"])
+            if r["sha1"] not in selected or not args.force:
+                kept.append(r)
+    if not args.force:
+        games = [g for g in games if g["sha1"] not in done]
+    print(f"{len(games)} games selected ({len(done)} already extracted)", flush=True)
     rows, totals, failed = [], Counter(), 0
     # Processes, not threads: the evidence pass is pure Python and would serialize on the GIL.
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
@@ -448,7 +459,7 @@ def build(args: argparse.Namespace) -> None:
                 print(f"  failed: {futures[fut]['rel_path']}: {e!r}"[:200])
             if n % 2000 == 0:
                 print(f"  {n}/{len(games)}", flush=True)
-    out = data_root() / "interim" / "build_orders.jsonl"
+    rows = kept + rows
     rows.sort(key=lambda r: (r["rel_path"], r["player"] or ""))
     with out.open("w", encoding="utf-8") as f:
         for r in rows:
@@ -488,6 +499,7 @@ def main() -> None:
     ap.add_argument("--source", help="e.g. stardata")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--min-count", type=int, default=50, help="report: hide rarer items")
+    ap.add_argument("--force", action="store_true", help="re-extract games already in build_orders.jsonl")
     ap.add_argument("--screp")
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4)
     args = ap.parse_args()
