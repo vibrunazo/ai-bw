@@ -131,6 +131,9 @@ class LearnedArmy:
         # engage or move (a new one, the destination drawn on that side). Replaces the pacing and the stay
         # rule: when to re-decide is the model's, learned from the pros, as are the triggers
         self.commit = commit
+        self.commit_floor: float | None = None   # option floor (with draw): no choice drawn under these odds, and the
+                                        # destination drawn among the 5 likeliest cells: the drawn rate and variety
+                                        # without the 5% disasters (human game 3's two retreats)
         self.commit_act = commit_act    # option act: in play, a new commitment when the model's odds of one (engage
                                         # + move) reach this, the likelier of the two; None: the likeliest of the
                                         # three (which is keep most ticks: Gary-T won 7 of 24 against Gary-Z with 17
@@ -450,8 +453,13 @@ class LearnedArmy:
             k, self.force_commit = int(self.force_commit), None
             by = "forced (a paired arm)"
         elif self.draw:                        # training (the league): sampled, logged with its odds
-            k = int(self.rng.choice(3, p=q / q.sum()))
-            by = "draw"
+            qd = q.copy()
+            if self.commit_floor is not None:
+                qd[qd < self.commit_floor] = 0.0
+                if qd.sum() <= 0:
+                    qd[0] = 1.0
+            k = int(self.rng.choice(3, p=qd / qd.sum()))
+            by = "draw" if self.commit_floor is None else f"draw above {self.commit_floor:.0%}"
         elif self.commit_act is not None:     # play: acts once the odds of acting reach the threshold
             k = int(1 + q[1:].argmax()) if 1.0 - q[0] >= self.commit_act else 0
             by = f"favorite above {self.commit_act:.0%} odds of acting"
@@ -486,6 +494,11 @@ class LearnedArmy:
             LOG.decision("T", "commit", hi.frame, names[k], q[k], options, self._seen, by,
                          then="no cell on that side: its commitment stands", rl=rl, why=why)
             return None
+        if self.draw and self.commit_floor is not None:          # (among the 5 likeliest cells on that side)
+            keep_cells = np.argsort(-p)[:5]
+            pf = np.zeros_like(p)
+            pf[keep_cells] = p[keep_cells]
+            p = pf
         best = int(self.rng.choice(len(p), p=p / p.sum())) if self.draw else int(p.argmax())
         self.commitments.append((hi.frame, here, best, k))
         LOG.decision("T", "commit", hi.frame, f"{names[k]} to {self._cell_name(best)}", q[k], options, self._seen, by,

@@ -514,6 +514,10 @@ OPTIONS = {
     # deterministic rate matches the drawn one, the pros'), the likelier of engage and move; the plain likeliest
     # is keep most ticks and Gary-T turned passive (won 7 of 24 against Gary-Z, 17 at time; drawn 13 and 11)
     "act": lambda m: m["army"].update(commit_act=0.41),
+    # army.py commit_floor (with commit and draw): the drawn decode without its disasters: no keep / engage / move
+    # drawn under 15% (human game 3's 19 low draws were all under 14%), the destination among the 5 likeliest
+    # cells. The deterministic decodes won fewer games against Gary-Z than drawing (6-7 of 24 against 13)
+    "floor": lambda m: m["army"].update(commit_floor=0.15),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
@@ -773,6 +777,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                  hold_moves=m["army"].get("hold_moves", True), hold_margin=m["army"].get("hold_margin"),
                                  draw=m["army"].get("draw", False), engage=_engage_model(m),
                                  commit=m["army"].get("commit", False), commit_act=m["army"].get("commit_act"))
+            g.army.commit_floor = m["army"].get("commit_floor")
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:
