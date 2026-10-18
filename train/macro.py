@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
 import time
 from collections import Counter
@@ -114,13 +115,14 @@ def count_caps(jobs: list, workers: int, q: float = 90) -> dict[int, list[int]]:
 
 def samples(args: tuple) -> tuple[np.ndarray, ...]:
     """Features and targets for one player-game."""
-    (path, i, style, _), spec_d = args
+    (path, i, style, _, *rest), spec_d = args
+    weight = rest[0] if rest else 1.0                 # the game's weight in the loss (--weight-modern)
     spec = FeatureSpec(**spec_d)
     d = np.load(path)
     frames, cmds = d["frames"], d["cmds"]
     c = cmds[cmds[:, 1] == i]
     empty = (np.zeros((0, spec.size), np.float16), np.zeros(0, np.int16), np.zeros(0, np.float32),
-             np.zeros(0, np.int8))
+             np.zeros(0, np.int8), np.zeros(0, np.float32))
     if len(c) == 0:
         return empty
     cls = np.array([spec.decision_index(a, u) for a, u in c[:, 2:4].tolist()], dtype=np.int64)
@@ -139,7 +141,7 @@ def samples(args: tuple) -> tuple[np.ndarray, ...]:
                d["seen"][ts, i].astype(np.float32), seen_max, cum[nxt], (f - last) / 24.0, style)
     delay = np.minimum((c[nxt, 0] - f) / 24.0, MAX_DELAY_S).astype(np.float32)
     minute = np.minimum(f // (24 * 60), 30).astype(np.int8)
-    return x.astype(np.float16), cls[nxt].astype(np.int16), delay, minute
+    return x.astype(np.float16), cls[nxt].astype(np.int16), delay, minute, np.full(len(ts), weight, np.float32)
 
 
 def load_split(jobs: list, spec: FeatureSpec, workers: int) -> dict:
@@ -149,12 +151,12 @@ def load_split(jobs: list, spec: FeatureSpec, workers: int) -> dict:
             parts[job[3]].append(res)
     out = {}
     for held, rs in parts.items():
-        out["test" if held else "train"] = tuple(np.concatenate([r[k] for r in rs]) for k in range(4))
+        out["test" if held else "train"] = tuple(np.concatenate([r[k] for r in rs]) for k in range(5))
     return out
 
 
 def evaluate(net: MacroNet, data: tuple, spec: FeatureSpec, prior: np.ndarray, device: str) -> dict:
-    x, y, delay, minute = data
+    x, y, delay, minute = data[:4]
     net.eval()
     hits1, hits3, pred_s = [], [], []
     with torch.no_grad():
@@ -196,6 +198,12 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--caps-only", metavar="RUN_DIR", help="only (re)compute caps.json for a trained run")
     GameFilter.add_args(ap)
+    ap.add_argument("--test-era", choices=["old", "modern"], help="hold out every game of this era as the test set "
+                    "(training on the rest, or on --era); a transfer test across eras")
+    ap.add_argument("--weight-modern", type=float, default=1.0, help="weight of a modern-era (1.21+) game's samples in the "
+                    "loss relative to an old one (the meta moved: let fewer new games count more)")
+    ap.add_argument("--games", type=int, help="train on a random subset of this many player-games (learning curves)")
+    ap.add_argument("--out", help="save the run here instead of runs/macro/<matchup>_<race>_<time> (experiments that must not become the newest model)")
     args = ap.parse_args()
     keep = GameFilter.from_args(args)
     if args.caps_only:
@@ -207,11 +215,25 @@ def main() -> None:
     t0 = time.time()
 
     jobs = player_games(args.matchup, args.race, keep)
-    print(f"{len(jobs)} player-games ({sum(j[3] for j in jobs)} held out; {keep.describe()})", flush=True)
+    if args.test_era:                       # every game of one era is the test set; the rest train
+        test_keep = GameFilter(args.test_era, args.source, args.bots)
+        test = {j[0] for j in player_games(args.matchup, args.race, test_keep)}
+        jobs = [(p, i, s, p in test) for p, i, s, _ in jobs if p in test or keep.era != args.test_era]
+        if keep.era is None:
+            jobs = [j for j in jobs]        # (--era unset: the training set is every other era)
+    if args.games:
+        train = [j for j in jobs if not j[3]]
+        random.Random(0).shuffle(train)
+        jobs = train[:args.games] + [j for j in jobs if j[3]]
+    if args.weight_modern != 1.0:
+        modern = {sha for sha, r in keep.rows.items() if r.get("version") == "1.21+"}
+        jobs = [(p, i, s, h, args.weight_modern if Path(p).stem in modern else 1.0) for p, i, s, h in jobs]
+    print(f"{len(jobs)} player-games ({sum(j[3] for j in jobs)} held out; {keep.describe()}"
+          f"{'; test era ' + args.test_era if args.test_era else ''}{f'; modern x{args.weight_modern:g}' if args.weight_modern != 1.0 else ''})", flush=True)
     spec = build_spec(args.race, jobs, args.workers)
     print(f"features {spec.size}, decision classes {len(spec.decisions)}, styles {len(spec.styles)}", flush=True)
     data = load_split(jobs, spec, args.workers)
-    xtr, ytr, dtr, mtr = data["train"]
+    xtr, ytr, dtr, mtr, wtr = data["train"]
     print(f"samples: train {len(ytr):,}, test {len(data['test'][1]):,}  ({time.time() - t0:.0f} s)", flush=True)
 
     # baseline: the most common next decision at each game minute (training games)
@@ -230,6 +252,7 @@ def main() -> None:
     xt = torch.from_numpy(xtr).to(device)
     yt = torch.from_numpy(ytr.astype(np.int64)).to(device)
     dt = torch.from_numpy(dtr).to(device)
+    wt = torch.from_numpy(wtr).to(device)
     for epoch in range(args.epochs):
         net.train()
         perm = torch.randperm(len(yt), device=device)
@@ -237,7 +260,8 @@ def main() -> None:
         for s in range(0, len(perm), args.batch):
             idx = perm[s:s + args.batch]
             logits, when = net(xt[idx].float())
-            loss = F.cross_entropy(logits, yt[idx]) + 0.5 * F.l1_loss(when, torch.log1p(dt[idx]))
+            w = wt[idx]
+            loss = ((F.cross_entropy(logits, yt[idx], reduction="none") + 0.5 * (when - torch.log1p(dt[idx])).abs()) * w).sum() / w.sum()
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
@@ -248,13 +272,14 @@ def main() -> None:
               f"top3 {res['top3']}  non-routine top1 {res['top1_nonroutine']}  "
               f"timing median err {res['timing_median_err_s']} s", flush=True)
 
-    out = REPO_ROOT / "runs" / "macro" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
+    out = Path(args.out) if args.out else REPO_ROOT / "runs" / "macro" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
     out.mkdir(parents=True, exist_ok=True)
     MacroModel(spec, net.cpu(), config).save(out / "model.pt")
     (out / "caps.json").write_text(json.dumps(count_caps(jobs, args.workers)), encoding="utf-8")
     report = {"matchup": args.matchup, "race": args.race, "player_games": len(jobs), "games": keep.describe(),
               "train_samples": int(len(ytr)), "features": spec.size, "classes": len(spec.decisions),
-              "epochs": args.epochs, "minutes": round((time.time() - t0) / 60, 1), "test": res}
+              "epochs": args.epochs, "minutes": round((time.time() - t0) / 60, 1), "test": res,
+              "test_era": args.test_era, "weight_modern": args.weight_modern, "train_games": int(sum(1 for j in jobs if not j[3]))}
     (out / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
     print(f"saved {out / 'model.pt'}")
