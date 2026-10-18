@@ -1,0 +1,93 @@
+"""The pros' typical decision history: mean counts of each macro decision taken so far, per minute.
+
+gary/policy/macro.py's MacroTracker can show the macro model the pros' typical past instead of the
+player's own (Gary-Z's own history fed back on itself: PROGRESS.md, round g12). This writes what
+it reads, from the macro dataset and the newest macro model's decision index:
+
+  data/interim/macro/v1/history_mean_<race>.npy          (31, decisions): the race's mean, minutes 0-30
+  data/interim/macro/v1/history_mean_<race>_styles.npy   (styles, 31, decisions): per build style, at each
+                                                          minute the style's own mean while MIN_STYLE of its
+                                                          games are still going, the race's mean after
+
+Re-run after the macro model is retrained (its decision index is the column order) or when games
+are added. Takes the same --era/--source filter as the trainers.
+
+Usage:
+  python -m train.macro_history --race Z
+  python -m train.macro_history --matchup TvZ --race T --era modern
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import numpy as np
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+from gary.agent.manifests import _newest  # noqa: E402
+from gary.policy.macro import MacroModel  # noqa: E402
+from train.macro import macro_dir, player_games  # noqa: E402
+from train.select import GameFilter  # noqa: E402
+
+MINUTES = 31
+MIN_STYLE = 50
+
+
+def counts_by_minute(path: str, player: int, spec) -> np.ndarray | None:
+    """(MINUTES, decisions): this player's decisions taken before each minute mark."""
+    d = np.load(path)
+    c = d["cmds"][d["cmds"][:, 1] == player]
+    if len(c) == 0:
+        return None
+    cls = np.array([spec.decision_index(a, u) for a, u in c[:, 2:4].tolist()], dtype=np.int64)
+    out = np.zeros((MINUTES, len(spec.decisions)), np.float32)
+    end = int(d["frames"][-1])
+    for m in range(MINUTES):
+        f = m * 24 * 60
+        if f > end:
+            out[m] = np.nan                 # the game was over: no observation of this minute
+            continue
+        k = np.searchsorted(c[:, 0], f, side="left")
+        np.add.at(out[m], cls[:k], 1)
+    return out
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--matchup", default="TvZ")
+    ap.add_argument("--race", required=True, choices=["T", "Z", "P"])
+    GameFilter.add_args(ap)
+    args = ap.parse_args()
+    keep = GameFilter.from_args(args)
+    spec = MacroModel.load(str(_newest("macro", args.matchup, args.race))).spec
+    jobs = player_games(args.matchup, args.race, keep)
+    print(f"{len(jobs)} player-games ({keep.describe()}); {len(spec.decisions)} decisions", flush=True)
+    tables, styles = [], []
+    for path, i, style, _ in jobs:
+        t = counts_by_minute(path, i, spec)
+        if t is not None:
+            tables.append(t)
+            styles.append(-1 if style is None else int(style))
+    tables, styles = np.stack(tables), np.array(styles)
+    mean = np.nanmean(tables, axis=0).astype(np.float32)
+    out = macro_dir()
+    np.save(out / f"history_mean_{args.race}.npy", mean)
+    print(f"wrote history_mean_{args.race}.npy {mean.shape}; {mean[10].sum():.0f} decisions taken by 10:00 on average")
+    if len(spec.styles):
+        per = np.repeat(mean[None], len(spec.styles), axis=0)
+        for s in range(len(spec.styles)):
+            rows = tables[styles == s]
+            alive = (~np.isnan(rows[:, :, 0])).sum(axis=0) if len(rows) else np.zeros(MINUTES, int)
+            enough = alive >= MIN_STYLE                     # minutes this style still has MIN_STYLE games in
+            if enough.any():
+                per[s, enough] = np.nanmean(rows[:, enough], axis=0)
+            print(f"  style {s}: {len(rows)} players, its own mean to minute {int(enough.sum()) - 1}, the race's after")
+        np.save(out / f"history_mean_{args.race}_styles.npy", per.astype(np.float32))
+        print(f"wrote history_mean_{args.race}_styles.npy {per.shape}")
+
+
+if __name__ == "__main__":
+    main()

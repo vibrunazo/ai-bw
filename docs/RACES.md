@@ -27,6 +27,28 @@ trainers take `--matchup`, and each race's unit types come from the data (`Featu
 hand-named Zerg plans (`taxonomy/plans.py`) exist for TvZ only, and the macro dataset copes with a
 matchup that has no taxonomy (style unset).
 
+### Adding replays
+
+Every stage is incremental, keyed by the replay's sha1: the inventory re-parses only new files,
+`run_batch.py` re-simulates only replays missing from its index, the macro, army and fight
+builders skip games already in theirs, and `build_orders.py` skips games already extracted and
+keeps the rows of other matchups. Nothing is recomputed from scratch when replays are added;
+`--force` redoes a stage on purpose. What does need redoing after new data:
+
+- **Models** retrain from the whole dataset (hours, not days); there is no incremental training.
+- **The tech-cluster taxonomy** (`taxonomy/discover.py`, HDBSCAN) can assign different cluster
+  ids when re-run on more data, so the macro index's styles are rewritten
+  (`macro_dataset.py --restyle`) and the macro model, which is conditioned on them, retrains. The
+  Zerg plans (`taxonomy/plans.py`) are rules and stay stable.
+- **The pros' decision history** (`train/macro_history.py`) is derived from the macro dataset and
+  the macro model's decision index: re-run after either changes.
+
+The inventory (`data/interim/inventory.jsonl`, one row per replay) is the index the scripts look
+things up in: sha1, source and pack, era (`version`), matchup, map name and hash, duration, the
+two players with race, APM, EAPM and bot flags, the winner, 1v1-human and duplicate flags. The
+per-stage indexes (`resim_index.jsonl`, each dataset's `index.jsonl`, `build_orders.jsonl`) join
+to it by sha1; `train/select.py` is that join for the trainers.
+
 ## Models
 
 Per matchup and race: macro, army, commit, fight, belief, value. The belief tables (enemy types,
