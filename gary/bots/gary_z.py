@@ -65,6 +65,8 @@ INTERCEPT_ODDS = 0.7             # ...with under this share of its own supply, a
 INTERCEPT_AGAIN = 8 * 24         # a sweep ordered at most this often
 FLOCK_SAVE = os.environ.get("GARY_Z_FLOCK_SAVE", "0") == "1"   # the saving below (off: it made the flock, 8 in 30 s, and
                                  # changed no result: round g10 Gary-T won 10 lost 1 of 24 against g8's 8 and 1, the gap 0.33 against 0.31)
+RALLY_SIEGE = 14 * 32            # enemy fighters this near the meeting point: the hatcheries rally to the main
+RALLY_SIEGE_FOR = 20 * 24        # ...and keep to it this long after the last was seen there
 ALARM_UNTIL = 12 * 60 * 24       # the alarm (_decide): until then...
 ALARM_MARGIN = 16                # ...the Terran fighters seen in a minute outweigh the army by this (x2: 8 supply)
 ALARM_SUNKENS = 3                # sunkens at the natural at most, one per 8 supply of threat
@@ -224,7 +226,8 @@ class GaryZ(ZergV3):
         self.army_sent = self.army_dropped = 0   # (cluster orders given, and dropped unselected)
         self.lurk_streak, self.lurk_backoff = 0, 0
         self.task_key, self.task_since = None, 0      # group -> the destination it was last sent to
-        self.rally_of: dict[int, bool] = {}     # hatchery -> rallied to the front (True) or its minerals
+        self.rally_of: dict[int, str] = {}      # hatchery -> where it rallies: "minerals", "front" or "back" (besieged)
+        self.siege_until = 0                     # the meeting point had enemy fighters by it until then
         self.goal: dict | None = None
         self.parked: dict | None = None        # a decision waiting for its money, kept for it meanwhile
         self.turn, self.streak = "macro", 0    # who goes first, and how many actions in a row it had
@@ -366,6 +369,10 @@ class GaryZ(ZergV3):
         walked back to the main; Argon's catch)."""
         return self._owned_bases(mine) or [self.main_base]
 
+    def gather_point(self):
+        """Where fighters gather: the front, or the main while the front is besieged (_rallies)."""
+        return self.home if self.hi.frame < self.siege_until else self.gather
+
     def _rallies(self, obs, hatches, pool) -> bool:
         """Every finished hatchery rallies to the ground beside its own base's minerals (a minimap
         right-click there), not to the army's gathering point as v2's did: each drone walked to the
@@ -378,14 +385,25 @@ class GaryZ(ZergV3):
         # (the user's way: beside the minerals while droning, the army's meeting point from RALLY_FRONT_AT,
         # when pros switch to army; v1's groups form at the meeting point, and the army model orders groups)
         front = hi.frame >= RALLY_FRONT_AT
+        # besieged: enemy fighters by the meeting point (the natural's front): every hatchery rallies to the main
+        # instead, for RALLY_SIEGE_FOR after they leave. On Python the push camped Gary-Z's natural from 7:05 and
+        # every pair of zerglings hatched into it: 66 deaths in 6-10 min, 55 at the natural, 58 with two or fewer
+        # of their own near (round g12 seed 5005). Pros re-rally to the main when the natural is contested
+        from gary.policy.army import is_building, is_worker, supply_x2
+        if any(u["owner"] not in (hi.slot, 11) and supply_x2(u["type"]) > 0 and not is_worker(u["type"]) and not is_building(u["type"])
+               and math.dist((u["x"], u["y"]), self.gather) < RALLY_SIEGE for u in obs["units"]):
+            self.siege_until = hi.frame + RALLY_SIEGE_FOR
+        mode = "back" if front and hi.frame < self.siege_until else "front" if front else "minerals"
         for h in hatches:
-            if not h["completed"] or self.rally_of.get(h["tag"]) == front:
+            if not h["completed"] or self.rally_of.get(h["tag"]) == mode:
                 continue
             base = self.map.base_near((h["x"], h["y"]))
-            if not base.minerals and not front:
-                self.rally_of[h["tag"]] = front
+            if not base.minerals and mode == "minerals":
+                self.rally_of[h["tag"]] = mode
                 continue
-            if front:
+            if mode == "back":
+                spot = self.home
+            elif mode == "front":
                 spot = self.gather
             else:
                 mx = sum(x for x, _ in base.minerals) / len(base.minerals)
@@ -395,7 +413,7 @@ class GaryZ(ZergV3):
                 return True
             if obs["selection"] == [h["tag"]]:
                 hi.minimap_right_click(*spot)
-                self.rally_of[h["tag"]] = front
+                self.rally_of[h["tag"]] = mode
                 return True
             top = screen_of(obs, h["x"], h["y"] - 24)
             if top:

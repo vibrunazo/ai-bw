@@ -338,6 +338,7 @@ plan and the full log).
   | + larvae and minerals saved while the Spire morphs (g10) | 10 / 13, **lost 1** | 0.33 | | | | now an option |
   | + the alarm on the Terran fighters seen (g11) | 13 / 11 | 0.31 | | | | |
   | + the alarm on fighters away from the Terran's bases only (g12) | 10 / 14 | **0.29** | | | | |
+  | + hatcheries rally to the main while the front is besieged (g13) | 8 / 15, **lost 1** (Python 5 / 3) | **0.29** | | | | |
   | pros (60 games) | | 0 | 18/26/32 | 9.0 | 1.4 | 6.1 |
   - **Its own records:** gary/agent/sightings.py serves both sides now; Gary-Z's act loop records what it saw and
     each fighter it lost, so `eval/why.py --side Z` answers its why-questions. Drones aren't counted: a drone
@@ -400,6 +401,12 @@ plan and the full log).
     its home army, which outweighs a Zerg's most of the game: g11, Gary-T won 13, 5 on Fighting Spirit against 1);
     counting those away from the Terran's known Command Centers (g12): Gary-T won 10, none lost, 14 at time, Gary-Z's
     gap 0.29, the day's best, 0.37 at 5-10 min. Python stays 7 of 8 to the Terran in every round of the day.
+  - **The siege rally (g13):** on Python the push camps Gary-Z's natural from about 7:00 and every pair of
+    zerglings hatched into it (g12 seed 5005: 66 deaths in 6-10 min, 55 at the natural, 58 with two or fewer of
+    their own near). Now, with enemy fighters within 14 tiles of the meeting point, every hatchery rallies to the
+    main and stragglers gather there, until 20 s after the last was seen. Round g13: Gary-T won 8, lost 1, 15 at
+    time; Python 5 Terran wins and 3 at time, the first time all day it wasn't 7 or 8; Gary-Z's gap 0.29, its
+    5-7 / 8-10 / 11-14 / 15-20 bands 0.36 / 0.37 / 0.46 / 0.43, the day's best in each.
   - **What keeps Gary-Z from winning now:** its army is a quarter of the pros' at 12 minutes with the drones and
     hatcheries nearly the pros' (39 drones at 12:00, pros 33): the larvae go to drones, and what army there is
     bleeds in the field at odds 0.45 with 18% of it present (pros 0.71, 27%). The next levers are the army's
