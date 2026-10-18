@@ -242,6 +242,38 @@ plan and the full log).
   byte-identical with the looks on and off (one v2 game, replay and POV). `eval/why.py` shows them
   (`--layer seen`, `death`, `belief`). Live play now saves the POV log, trace and records every minute, so
   a client that dies keeps the game so far.
+- **Human game 3 (2026-10-18, `runs/live/v029commit_human3`, v0.29 with `commit`; the user's Zerg won
+  at 21:11; records, trace, POV and replay saved):** the user: "played MUCH better than last time;
+  most of the AFK feeling is gone"; Gary "could have won at many points" (the natural broken at 6:30,
+  the attacks at 9:00, 13:00 and 18:20 with the bigger army) "and always threw it": marines into the
+  main's sunkens one at a time, no stim heard until 20:15, medics late, never six marines behind the
+  mineral line; still bot-like: lone marines chasing 3 mutalisks across the map and dying, SCVs
+  running main to natural and back, SCVs in the attacks, 12 marines shooting an egg. Overpool: the
+  early zerglings again killed lone marines (1 against 6 by the bunker) and lone SCVs; the scouting
+  SCV dodged the zerglings well; at 3:30 one zergling in the base drew no reaction (the rush posture
+  keeps the marines in the bunker: nothing decided, by the records). What the records say:
+  - **The two retreats that threw the win were draws.** The `commit` option plays with `draw=True`
+    (the league's training mode), so the commitment layer samples: at 6:33 the 13 marines at the
+    user's broken natural were sent home by "move (4.8%)", at 7:49 the 12 marines again by "move
+    (5.1%)"; 19 commitments under 15% were drawn and sent in the game (5:22 move 4.2%, 12:28 move
+    7.7% with 20 units, 15:23 move 7.3% with 17...). Play must take the likeliest decision; only
+    training samples (CONTROL.md step 7). c9 and c10 were drawn too, so their play numbers are those
+    of a sampling Gary.
+  - **The fatal attacks were the hunt rule, not the commitment model:** at 8:32, "hunts, no enemy army
+    seen for 73 s: where an enemy building was", 23 units attack-moved into the main at "100% sure",
+    re-issued every 8 s; the marines arrived one by one into three sunkens (46 deaths in minute 18 the
+    same way). The v0.16 hunt, adopted against Zerg v3, is a scripted attack decision on top of the
+    learned one.
+  - **Lone marines against mutalisks are the fight roles:** "fight: 1 Marine/Medic -> close in" and
+    "1 Medic -> fire" against 3 mutalisks at 13:39-13:48 and 15:15-15:37, each dying alone (held by
+    roles CLOSE_IN or FIRE); the roles send single units at flyers they can't catch.
+  - **Macro:** Academy 7:39 (pros ~4:10), first Medic 8:39, Stim Packs 11:23 (6%), no third Command
+    Center all game with 800-1,100 minerals banked at 11-13 min; turrets at 9:41 against mutalisks
+    seen at 8:50, repaired (the user noticed).
+  - **Deaths:** 176 fighters, 77 at the user's bases, 62 in the field, 37 at home; alone 50 (28%, pros
+    12%); last held by army ARMY_ATTACK 70, roles CLOSE_IN 33, roles FIRE 12, reinforce 8.
+  - Live note: the start command focused Gary's client, so the user saw Gary's spawn; focus the user's
+    client after Alt+O.
 - **The attack-or-hold round read pair by pair (e1, 24 games, 188 training pairs, every replay check
   identical):** the forced decision (attack in one arm, hold in the other: the one RL trains on) was sent
   in every pair, 7.5 s after the branch (median). But each arm then decides 5.5 times more in its 90 s,
