@@ -274,6 +274,52 @@ plan and the full log).
     12%); last held by army ARMY_ATTACK 70, roles CLOSE_IN 33, roles FIRE 12, reinforce 8.
   - Live note: the start command focused Gary's client, so the user saw Gary's spawn; focus the user's
     client after Alt+O.
+- **The night after human game 3 (2026-10-18, runs/night, runs/league/f_*; every variant 24 games against
+  Gary-Z on the three maps to 25 min, seeds 5001+, and 16 against Zerg v3):** the fixes, each an option
+  judged on the same seeds (the roles' fixes in all: medics never fire or close in alone and follow the group
+  that does; away from home no closing in on a group of flyers; mineral-line turrets at an end of the line
+  toward the CC, no spot at the map's edge: 16 of 16 turret orders sent in a v3 mutalisk game, 13 before).
+  | Gary-T against Gary-Z | won | lost | time | gap T 5-7 / 8-10 / 11-14 / 15-20 / all | v3 won-lost-time |
+  |---|---|---|---|---|---|
+  | commit+draw (as played) | 13 | 0 | 11 | .38 .47 .49 .55 / .38 | |
+  | commit (the likeliest) | 7 | 0 | 17 | .47 .47 .58 .59 / .41 | 8-1-7 |
+  | commit+nohunt | 0 | 0 | 24 | .47 .39 .58 .59 / .42 | 4-0-12 |
+  | commit+nohunt+mass | 4 | 1 | 19 | .43 .35 .54 .44 / .34 | 3-0-13 |
+  | commit+act (acts at 41% odds) | 6 | 0 | 18 | .46 .46 .56 .56 / .38 | |
+  | commit+act+nohunt | 3 | 0 | 21 | .46 .44 .55 .54 / .37 | 4-0-12 |
+  | commit+act+nohunt+mass | 3 | 0 | 21 | .43 .45 .48 .46 / .32 | 4-0-12 |
+  | commit+draw+floor (no draw under 15%) | 8 | 1 | 15 | .42 .47 .52 .53 / .35 | |
+  | commit+draw+floor+mass | 9 | 0 | 15 | .40 .45 .49 .50 / .33 | 10-1-5 |
+  | commit+draw+floor+nohunt+mass | 6 | 0 | 18 | .40 .44 .49 .49 / .34 | |
+  - **The decode:** the likeliest of keep / engage / move is keep most ticks, and Gary-T turned passive (7
+    wins, worse late gap); acting at the pros' rate (41% odds of acting, where the deterministic rate matches
+    the drawn one over 4,821 ticks) engages as often as drawing (37 against 41 commitments a game) but to the
+    same cells (median 25 tiles, drawn 29) and finishes fewer games (6). Drawing above a floor of 15% keeps
+    the drawn rate and variety without the 5% draws that threw the human game (all 19 low draws in it were
+    under 14%): 8-9 wins, the gap as drawn or better. Play's decode is `floor`; `draw` alone stays the
+    league's training mode.
+  - **The hunt:** without it the likeliest decode never finishes a game (0 of 24; v3 4 won of 16) and the
+    drawn decodes finish about three fewer: the engage choice doesn't yet go for the enemy's buildings on
+    its own. The hunt stays on in play until it does; it is still the scripted attack that lost the human
+    game's fights, so it is the next thing to learn (an engage toward remembered buildings once no army is
+    seen) rather than keep.
+  - **mass** (every one-off decision once its summed odds reach one, as expand_mass) is the one consistent
+    gain in humanlikeness: the Terran gap 0.32-0.34 against 0.38-0.42 without it under every decode, mostly
+    at 11-20 min; headless the early tech is unchanged (Refinery 4.6, Academy 5.3 min either way) and the late
+    tech completes (a Starport in 23 of 24 games against 17, a Science Facility in 22 against 11, the Factory
+    7.8 against 8.2 min). The human game's Academy at 7:39 was the rush posture's aftermath, not the decoder.
+  - **Recommended for play:** `v029+commit+draw+floor+mass` (against Gary-Z won 9 lost 0 of 24, against v3 won
+    10 lost 1 of 16, gap 0.33). Not yet a manifest of its own.
+  - **Round e2 (`eval/pairs_read.py`): paired branches on the commitment layer, 241 training pairs, 70 of 70
+    replay checks identical.** The commitment input didn't make the branched decision hold: the drawn layer
+    sends 8.4 decisions a 90 s window, the forced engage is undone by a move in 200 of 236 pairs (median 17
+    s), the forced move by an engage in 219 of 236 (14 s), and the arms differ by +0.01 +- 0.39 (sd 6.1; an
+    arm's own 7.7), as e1. Single-decision army RL stays off until a commitment is held for a minimum span in
+    the training arms, or the unit of RL is the whole window's policy.
+  - **Still open from the game:** SCVs in the attacks (the records show transfers and turret builders, not
+    yet why SCVs reached the user's base: a per-unit order trail is the next record); the model's own turrets
+    still fail to start at some spots headless (3 of 16: the builder stops short); where the first marines
+    stand against six zerglings (1 against 6 by the bunker).
 - **The attack-or-hold round read pair by pair (e1, 24 games, 188 training pairs, every replay check
   identical):** the forced decision (attack in one arm, hold in the other: the one RL trains on) was sent
   in every pair, 7.5 s after the branch (median). But each arm then decides 5.5 times more in its 90 s,
