@@ -51,6 +51,8 @@ def find(where: str, seed: int | None) -> Path:
              and r.name.endswith((f"seed{seed}.records.jsonl", f"_{seed}.records.jsonl", f"{seed}.records.jsonl"))]
     if not found:
         sys.exit(f"no records for seed {seed} under {p}")
+    if len({r.parent for r in found}) > 1:              # (a round plays each seed on every map)
+        sys.exit(f"seed {seed} is in several games; name one:\n  " + "\n  ".join(str(r) for r in sorted(found)))
     return max(found, key=lambda r: r.stat().st_mtime)
 
 

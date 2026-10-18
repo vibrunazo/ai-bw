@@ -240,8 +240,25 @@ plan and the full log).
   decides a window; the cadence is (Gary-T asks every ~15 s, pros order 1-6 a minute). Before RL: the
   attack-or-hold choice held as a commitment until the pros would decide again (the keep class), then
   pairs on the commitment.
-- **Next:** that commitment; a round read the same way (does the outcome difference rise above the
-  noise?); a human game with the current Gary-T.
+- **Commitments (keep / engage / move), learned from the pros:** every 5 s each pro army cluster labeled
+  by what the pro did with it next (keep, engage, move), with its commitment (its last order, following
+  the group on its way) and that order's age; 4,000 TvZ games (ingest/army_dataset.py v2,
+  train/commit.py). Held-out: order vs keep AUC 0.76 (Zerg 0.78), re-decision rate per cluster-minute
+  within 0.1-0.3 of the pros' at every minute, and the hysteresis learned (P(engage) already engaging /
+  moving / none: 0.20 / 0.11 / 0.04, pros 0.17 / 0.09 / 0.03).
+- **In play (c9: Gary-T on commitments; c10: both sides):** Gary-T's army stands like a pro's at 5-7
+  minutes (0.33, pros 0.37; c8 0.65) and gives orders closer to their rate, but it isn't home more (8-10
+  minutes 0.24, pros 0.63) and its gap score is unchanged (0.36). Gary-Z now attacks (352 engage
+  commitments in c10, none before) and does worse: Gary-T won 13 of 24 (8), Gary-Z's drones at 8 minutes
+  15 (27.5), its gap score 0.39 (0.30). Its worst game, read from the records: Gary-T's 8 units engaged
+  its base at 6:06 while all of Gary-Z's army stood at the far end of the map on a minute-old move
+  commitment, and every 5 s the model kept it at 88-92% while its drones went from 13 to 2. In the pro
+  data, enemy army next to the player's buildings with the cluster away isn't a trigger (pros re-decide
+  as often as anywhere, 0.22 / 0.20; the model matches), because the inputs have nothing for what a pro
+  reacts to: losses. The grid shows where the workers are, not that they are dying.
+- **Next:** losses as an input (own units lost in the last seconds, per cell) in the commit data and
+  model, judged on the same pro-data probe (do pros re-decide when they lose workers, and does the
+  model?); then c11 on the same seeds; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
