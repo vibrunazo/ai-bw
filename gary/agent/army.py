@@ -109,7 +109,7 @@ class LearnedArmy:
     def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False, belief=None,
                  belief_total: bool = False, watch: bool = False, home_guard: bool = False, belief_hold: bool = True,
                  hunt_belief: bool = False, hold_moves: bool = True, hold_margin: float | None = None,
-                 draw: bool = False, engage=None, commit: bool = False):
+                 draw: bool = False, engage=None, commit: bool = False, commit_act: float | None = None):
         self.g = g
         # option: draw the destination and move/attack from the model's odds (the league's learner: RL
         # learns from drawn decisions and their probabilities, logged), instead of the likeliest cell
@@ -131,6 +131,11 @@ class LearnedArmy:
         # engage or move (a new one, the destination drawn on that side). Replaces the pacing and the stay
         # rule: when to re-decide is the model's, learned from the pros, as are the triggers
         self.commit = commit
+        self.commit_act = commit_act    # option act: in play, a new commitment when the model's odds of one (engage
+                                        # + move) reach this, the likelier of the two; None: the likeliest of the
+                                        # three (which is keep most ticks: Gary-T won 7 of 24 against Gary-Z with 17
+                                        # at time, drawn 13 and 11). 0.41 is where the deterministic rate matches
+                                        # the drawn one (the pros') over human game 3 and round c10
         self.commitments: list[tuple[int, int, int, int]] = []   # (frame, from cell, to cell, 1 engage / 2 move)
         self.force_commit: int | None = None   # a paired episode's arm: its first decision forced
         self.move_tokens, self.tokens_at = 1.0, 0  # draw: moves paced at the pros' rate (PRO_MOVES)
@@ -447,6 +452,9 @@ class LearnedArmy:
         elif self.draw:                        # training (the league): sampled, logged with its odds
             k = int(self.rng.choice(3, p=q / q.sum()))
             by = "draw"
+        elif self.commit_act is not None:     # play: acts once the odds of acting reach the threshold
+            k = int(1 + q[1:].argmax()) if 1.0 - q[0] >= self.commit_act else 0
+            by = f"favorite above {self.commit_act:.0%} odds of acting"
         else:                                  # play: the likeliest (human game 3 was played drawn: the two
             k = int(q.argmax())                # retreats that threw it were 4.8% and 5.1% draws)
             by = "favorite"

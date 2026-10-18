@@ -510,6 +510,10 @@ OPTIONS = {
     # engage choice decides when the army goes for the enemy's buildings. In human game 3 the hunt sent 23
     # marines into three sunkens at "100% sure", one by one, twice
     "nohunt": lambda m: m["army"].update(hunt=False),
+    # army.py commit_act: with commit, a new commitment once the model's odds of one reach 41% (where the
+    # deterministic rate matches the drawn one, the pros'), the likelier of engage and move; the plain likeliest
+    # is keep most ticks and Gary-T turned passive (won 7 of 24 against Gary-Z, 17 at time; drawn 13 and 11)
+    "act": lambda m: m["army"].update(commit_act=0.41),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
@@ -768,7 +772,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                  belief_hold=bool(m["army"].get("belief")), hunt_belief=m["army"].get("hunt_belief", False),
                                  hold_moves=m["army"].get("hold_moves", True), hold_margin=m["army"].get("hold_margin"),
                                  draw=m["army"].get("draw", False), engage=_engage_model(m),
-                                 commit=m["army"].get("commit", False))
+                                 commit=m["army"].get("commit", False), commit_act=m["army"].get("commit_act"))
     if m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:
