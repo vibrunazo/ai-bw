@@ -43,7 +43,8 @@ layer below is a provider per race over race-neutral contracts, trained from tha
 that matchup's replays. TvZ, with Gary as Terran, was the first instance built (§14), chosen in
 October 2026 because it was convenient to start somewhere; the learned Zerg that plays it in
 self-play (docs/SELF_PLAY.md) is Gary playing Zerg, not an opponent bot. Nothing in the design is
-specific to Terran or to TvZ, and code that is counts as debt (PROGRESS.md tracks it).
+specific to Terran or to TvZ, and code that is counts as debt: docs/RACES.md audits it, file by
+file, and holds the order in which it gets paid.
 
 ### Goals
 
