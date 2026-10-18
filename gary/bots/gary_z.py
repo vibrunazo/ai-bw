@@ -67,6 +67,7 @@ FLOCK_SAVE = os.environ.get("GARY_Z_FLOCK_SAVE", "0") == "1"   # the saving belo
                                  # changed no result: round g10 Gary-T won 10 lost 1 of 24 against g8's 8 and 1, the gap 0.33 against 0.31)
 RALLY_SIEGE = 14 * 32            # enemy fighters this near the meeting point: the hatcheries rally to the main
 RALLY_SIEGE_FOR = 20 * 24        # ...and keep to it this long after the last was seen there
+HISTORY_FADE = 12                # minutes over which the pros' history fades to Gary-Z's own in the macro's inputs
 ALARM_UNTIL = 12 * 60 * 24       # the alarm (_decide): until then...
 ALARM_MARGIN = 16                # ...the Terran fighters seen in a minute outweigh the army by this (x2: 8 supply)
 ALARM_SUNKENS = 3                # sunkens at the natural at most, one per 8 supply of threat
@@ -172,9 +173,12 @@ class GaryZ(ZergV3):
         self.tracker = MacroTracker(self.model.spec, hi.slot, plan)
         # GARY_Z_HISTORY (default pro; own: this player's): the decision history the macro model sees (gary/policy/macro.py
         # MacroTracker.history): the pros' mean per minute, so its own drone-heavy past doesn't feed back on itself
-        if os.environ.get("GARY_Z_HISTORY", "pro") == "pro":
+        hist = os.environ.get("GARY_Z_HISTORY", "pro")      # pro (fading to its own over HISTORY_FADE minutes), pro_all
+        if hist != "own":                                    # (the pros' all game), own, or a constant share (0.5)
             from gary.policy.macro import pro_history
-            self.tracker.history = pro_history("Z")
+            self.tracker.history = pro_history("Z", plan)      # (its own rolled style's pros)
+            self.tracker.history_weight = 1.0 if hist in ("pro", "pro_all") else float(hist)
+            self.tracker.history_until = HISTORY_FADE if hist == "pro" else 0
         # where the groups go: the Zerg army model (runs/army/TvZ_Z_*), as the Terran's army; v1's
         # stage-judge-go is replaced, its home defense and v3's raid and lurkers stay
         # GARY_Z_COMMIT ("latest" or a model's path): commitments (train/commit.py --race Z: keep / engage / move

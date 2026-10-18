@@ -339,6 +339,10 @@ plan and the full log).
   | + the alarm on the Terran fighters seen (g11) | 13 / 11 | 0.31 | | | | |
   | + the alarm on fighters away from the Terran's bases only (g12) | 10 / 14 | **0.29** | | | | |
   | + hatcheries rally to the main while the front is besieged (g13) | 8 / 15, **lost 1** (Python 5 / 3) | **0.29** | | | | |
+  | + the macro sees the pros' mean history, not its own (g14) | 12 / 9, **lost 3** | 0.37 | | | | |
+  | half its own history, half the pros' (g15) | 11 / 12, **lost 1** | 0.35 | | | | |
+  | the pros' history of its own build style (g16) | 6 / 15, **lost 3** (Python 4 / 2 / 2) | 0.42 | | | | |
+  | that history fading to its own over 12 minutes (g17, the default) | 8 / 15, **lost 1** (Python 3 / 4 / 1) | 0.33 | | | | |
   | pros (60 games) | | 0 | 18/26/32 | 9.0 | 1.4 | 6.1 |
   - **Its own records:** gary/agent/sightings.py serves both sides now; Gary-Z's act loop records what it saw and
     each fighter it lost, so `eval/why.py --side Z` answers its why-questions. Drones aren't counted: a drone
@@ -407,6 +411,27 @@ plan and the full log).
     main and stragglers gather there, until 20 s after the last was seen. Round g13: Gary-T won 8, lost 1, 15 at
     time; Python 5 Terran wins and 3 at time, the first time all day it wasn't 7 or 8; Gary-Z's gap 0.29, its
     5-7 / 8-10 / 11-14 / 15-20 bands 0.36 / 0.37 / 0.46 / 0.43, the day's best in each.
+  - **The decode's feedback loop (g14-g17):** the alarm was a hand-written version of what the macro model should
+    know, so why didn't it react? The pro data: with 12+ bio units in sight, pros' next decisions move from 24% to
+    17% drones and 8% to 17% zerglings, a mild signal; but pros at 5-9 min decide drones 17-24% of the time
+    where Gary-Z's model gave 60-70% with the same drone count. The records' attribution: its drone odds rested on
+    "its decisions so far" at +0.36. Its own dice-driven, drone-heavy past told the imitation model it was a
+    greedy player, and the model obliged. MacroTracker.history (gary/policy/macro.py) can replace the player's own
+    counts with the pros' mean per minute (data/interim/macro/v1/history_mean_<race>.npy; per build style,
+    history_mean_<race>_styles.npy: an average over styles told a 3-hatch player it had made a 9-pool player's
+    units). With it Gary-Z has 8 army at 6:00 instead of 0 and P(drone) 0.19 at 6-8 min; the rounds: the pros'
+    history all game is the most decisive (g16: Gary-T won 6, Gary-Z 3, two on Python, the first ever there) and
+    the least pro-like (gap 0.42: the army stands, sits at home and strays like a pro's, but the pros' typical
+    past keeps the model droning past what it has, 53 workers at 15-20 min against 35); its own is the most
+    pro-like (0.29) with the dead early game. The default is the pros' history of its own style fading to its
+    own over 12 minutes (g17: Gary-T won 8, lost 1, gap 0.33, Python 3 / 4 / 1). The same loop exists on the
+    Terran side (its history is its own too); untested there.
+  - **The critic for games at time, and the Zerg value model:** `eval/league.py` grades every game at time by who
+    is ahead at the end (supply used in the last minute, from the re-simulation the gap scores run; a lead of
+    1.4x), in the round table and `--regrade` for past rounds: g13 regraded, Zerg ahead 3, Terran ahead 4, even 8
+    of 15. `train/value.py --race Z` trains the Zerg value model's win head from the pros' Zerg side (held out
+    AUC 0.643; the Terran's 0.64; runs/value/TvZ_Z_*); Gary-Z's own games for the net heads aren't played there
+    yet. Both are the critic the plan said grades unfinished games; both sides of the league have one now.
   - **What keeps Gary-Z from winning now:** its army is a quarter of the pros' at 12 minutes with the drones and
     hatcheries nearly the pros' (39 drones at 12:00, pros 33): the larvae go to drones, and what army there is
     bleeds in the field at odds 0.45 with 18% of it present (pros 0.71, 27%). The next levers are the army's

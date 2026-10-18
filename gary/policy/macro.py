@@ -147,14 +147,21 @@ class MacroModel:
 
 
 
-def pro_history(race: str) -> np.ndarray | None:
-    """The pros' mean decision counts per minute for a race (ingest: data/interim/macro/history_mean_<race>.npy),
-    or None if not computed."""
+def pro_history(race: str, style: int | None = None) -> np.ndarray | None:
+    """The pros' mean decision counts per minute for a race (data/interim/macro/v1/history_mean_<race>.npy), or
+    for one of its build styles (history_mean_<race>_styles.npy, the race's mean where a style has too few
+    players: an average over styles told a 3-hatch player it had made a 9-pool player's units). None if not
+    computed."""
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ingest"))
     try:
         from inventory import data_root
-        return np.load(data_root() / "interim" / "macro" / "v1" / f"history_mean_{race}.npy")
+        root = data_root() / "interim" / "macro" / "v1"
+        if style is not None and (root / f"history_mean_{race}_styles.npy").exists():
+            t = np.load(root / f"history_mean_{race}_styles.npy")
+            if 0 <= style < len(t):
+                return t[style]
+        return np.load(root / f"history_mean_{race}.npy")
     except Exception:
         return None
 
@@ -178,6 +185,11 @@ class MacroTracker:
         # history fed back on itself: its drone odds rested on "its decisions so far" at +0.36 (the records'
         # attribution, round g12), 60-70% drones at 6:00-7:30 where pros decide drones 17-24% of the time
         self.history: np.ndarray | None = None
+        self.history_weight = 1.0        # the pros' share in the history the model sees (1: theirs alone; 0.5: half its own)
+        self.history_until = 0           # minutes over which that share fades to 0 (0: constant). With the pros' history
+                                         # all game Gary-Z over-droned late (53 workers at 15-20 min, pros 35: the pros'
+                                         # typical past kept telling the model to drone past what it had), with its
+                                         # own early (the loop) it had no army at 6:00; round g16 against g13
 
     def note_decision(self, act: int, uid: int, frame: int) -> None:
         self.decided[self.spec.decision_index(act, uid)] += 1
@@ -206,6 +218,10 @@ class MacroTracker:
         me = obs["me"]
         eco = np.array([[me["minerals"], me["gas"], me["supply_used"] * 2, me["supply_max"] * 2]], dtype=np.float32)
         frame = np.array([obs["frame"]], dtype=np.float32)
-        decided = self.decided if self.history is None else self.history[min(obs["frame"] // 1440, len(self.history) - 1)]
+        decided = self.decided
+        if self.history is not None:
+            pro = self.history[min(obs["frame"] // 1440, len(self.history) - 1)]
+            w = self.history_weight * (max(0.0, 1.0 - obs["frame"] / (self.history_until * 1440)) if self.history_until else 1.0)
+            decided = w * pro + (1.0 - w) * self.decided
         return encode(self.spec, frame, eco, units, seen[None], self.seen_max[None], decided[None],
                       np.array([(obs["frame"] - self.last_decision_frame) / 24.0], dtype=np.float32), self.style)
