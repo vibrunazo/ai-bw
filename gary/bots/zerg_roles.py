@@ -35,6 +35,11 @@ WHERE_MIN = 0.25 * 32           # px per half second: a shorter predicted move i
 REPEAT = 24                     # the same role isn't given to a unit again within a second
 TRIES = 3                       # looks and selections before a decision is dropped
 MAX_GROUP = 12
+NEAR = 10 * 32                  # the retreat rule: fighters this near the group's middle count for its strength
+RETREAT_RATIO = 1.5             # outweighed by this, away from home: back toward the hatchery
+AT_HOME = 8 * 32                # a hatchery this near: home (its sunkens; no retreat)
+RETREAT_STEP = 10 * 32          # px toward the hatchery per retreat order
+RETREAT_AGAIN = 3 * 24          # a retreat ordered at most this often
 ATTACKING = {10, 14}
 URGENT = ("RETREAT", "PULL_BACK", "REPOSITION", "FIRE", "CLOSE_IN")
 FIGHTERS = Z.ARMY - {Z.LURKER}  # (lurkers: v3's lurker routine burrows them)
@@ -71,6 +76,7 @@ class ZergRoles:
         self.next_ask = 0
         self.pending: dict | None = None
         self.queue: list[dict] = []          # this snapshot's other role groups, carried out in turn
+        self.retreat_at = -10 ** 6           # when the retreat rule last ordered
         self.rec: dict | None = None         # this snapshot's decisions as carried out (logged once done)
         self.told: dict[int, tuple[str, int]] = {}
         self.acted = 0                       # orders given (the log's count)
@@ -130,6 +136,26 @@ class ZergRoles:
                  and not is_worker(u["type"]) and not is_building(u["type"])]
         if not enemy:
             return False
+        # outweighed away from home: back toward the nearest hatchery, before the model's roles (its retreats
+        # came 7% of the time; in round g3 Gary-Z lost 118 fighters a game, half of them with two or fewer of
+        # their own within 6 tiles and 8 enemy fighters within 8: zerglings into bio in pieces)
+        own = [u for u in seen if u["owner"] == slot and u["type"] in FIGHTERS and u["completed"]]
+        halls = [(u["x"], u["y"]) for u in mine if u["type"] in Z.TOWN_HALLS]
+        if own and halls and hi.frame - self.retreat_at >= RETREAT_AGAIN:
+            mx, my = sum(u["x"] for u in own) / len(own), sum(u["y"] for u in own) / len(own)
+            ours = sum(supply_x2(u["type"]) for u in own if math.dist((u["x"], u["y"]), (mx, my)) < NEAR)
+            theirs = sum(supply_x2(u["type"]) for u in enemy if math.dist((u["x"], u["y"]), (mx, my)) < NEAR)
+            home = min(halls, key=lambda h: math.dist(h, (mx, my)))
+            if theirs > RETREAT_RATIO * max(ours, 1) and math.dist(home, (mx, my)) > AT_HOME:
+                group = sorted(own, key=lambda u: math.dist((u["x"], u["y"]), (mx, my)))[:MAX_GROUP]
+                d = math.dist(home, (mx, my))
+                point = (int(mx + (home[0] - mx) / d * RETREAT_STEP), int(my + (home[1] - my) / d * RETREAT_STEP))
+                self.retreat_at = hi.frame
+                LOG.decision("Z", "roles", hi.frame, "retreat", inputs={"units": len(group), "ours": ours / 2, "theirs": theirs / 2},
+                             by=f"rule: outweighed {RETREAT_RATIO:g} to 1 away from home, back toward the hatchery")
+                self.pending = {"role": "RETREAT", "tags": [u["tag"] for u in group], "point": point, "kind": "move",
+                                "tries": 0, "selecting": False}
+                return self._carry_out(obs)
         fx, fy = (-1 if self.flip[0] else 1), (-1 if self.flip[1] else 1)
         groups: dict[str, list] = {}
         # each unit's decision drawn from the model's odds (keep, or a new role), not the likeliest: what

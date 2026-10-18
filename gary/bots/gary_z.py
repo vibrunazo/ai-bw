@@ -88,7 +88,8 @@ MINERAL_ORDERS = {85, 86, 87, 90}   # MoveToMinerals, WaitForMinerals, MiningMin
 LURK_STREAK = 8                 # v3's lurker routine: this many turns in a row at most...
 LURK_BACKOFF = 3 * 24           # ...then it waits this long
 MUTA_FLOCK_SAVE = 6             # gas saved (no floating) while a Spire stands and fewer mutalisks than this
-JOIN_BELOW = 0.5                # a cluster under this share of the main one's size joins it
+JOIN_BELOW = 1.0                # a cluster under this share of the main one's size joins it (0.5 until round g3: clusters
+                                # of a median 11 still went out on their own and died in pieces, 118 fighters a game)
 CLUSTERS = 3                    # the army by clusters: this many at most, each asked in turn
 MAX_SELECT = 12                 # units a selection takes
 STREAK = 3                      # actions in a row one side keeps the hands (a selection and its order)

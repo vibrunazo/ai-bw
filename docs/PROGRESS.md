@@ -330,6 +330,7 @@ plan and the full log).
   | + hatchery money kept while picking (g2) | 20 / 4 | 0.41 | | | | reverted |
   | + the new raid (g3) | 14 / 10 | 0.31 | 8/10/8 | 5.4 | 0.5 | 1.0 |
   | + money kept 90 s, oldest hatchery job (g4) | 18 / 6 | 0.36 | | | | reverted |
+  | + every cluster joins the biggest; retreat at 1.5:1 away from home (g5) | 13 / 10, **lost 1** | 0.30 | 12/10/8 (15 min 22) | 6.8 | 0.6 | 0.4 |
   | pros (60 games) | | 0 | 18/26/32 | 9.0 | 1.4 | 6.1 |
   - **Its own records:** gary/agent/sightings.py serves both sides now; Gary-Z's act loop records what it saw and
     each fighter it lost, so `eval/why.py --side Z` answers its why-questions. Drones aren't counted: a drone
@@ -351,6 +352,16 @@ plan and the full log).
     three marines within reach, in again after 6 s, another line after three back-offs; home at 60%. SCVs
     killed 2.0 -> 5.4 a game (pros 9.0), attack minutes 0.2 -> 0.5, Terran buildings 0.4 -> 1.0; the flock still
     loses 3-4 mutalisks a raid to marines in the mineral line it only sees once there.
+  - **Joining and retreating (g5):** in g3 Gary-Z lost 118 fighters a game, 58% in the field, half of them with
+    two or fewer of its own within 6 tiles and 8 enemy fighters within 8: zerglings into bio in pieces, under
+    "move" orders to clusters of a median 11 (30 a game). Now every cluster but the biggest joins it
+    (JOIN_BELOW 0.5 -> 1.0), and the Zerg roles retreat a group outweighed 1.5 to 1 away from a hatchery
+    (zerg_roles.py, before the model's roles, which retreated 7% of the time). Round g5: Gary-Z's first league
+    win of the day (seed 5004, Fighting Spirit), gap 0.30, army at 15 min 22 (17), SCVs by mutalisks 6.8; but
+    130 deaths a game (118), the same share in pieces: the units die in transit between its bases and the
+    main body, which the join rule sends them across the field to reach. The next piece is where new fighters
+    gather (each hatchery rallies to its own mineral line; pros rally every hatchery to one point), so that
+    the army forms before it moves, not on the way.
   - **What keeps Gary-Z from winning now:** its army is a quarter of the pros' at 12 minutes with the drones and
     hatcheries nearly the pros' (39 drones at 12:00, pros 33): the larvae go to drones, and what army there is
     bleeds in the field at odds 0.45 with 18% of it present (pros 0.71, 27%). The next levers are the army's
