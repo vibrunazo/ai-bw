@@ -38,6 +38,7 @@ import torch.nn.functional as F
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
 from inventory import data_root  # noqa: E402
+from train.select import GameFilter  # noqa: E402
 
 from gary.policy.army import (ARMY_SUPPLY, CELLS, CHANNELS, GRID, MEMORY_S, VALUE_HORIZON_S,  # noqa: E402
                               VALUE_SCALE, ArmyModel, ArmyNet, ArmySpec, encode_global)
@@ -50,7 +51,7 @@ def army_dir() -> Path:
     return data_root() / "interim" / "army" / "v1"
 
 
-def player_games(matchup: str, race: str) -> list[tuple[str, int, bool, str, int]]:
+def player_games(matchup: str, race: str, keep=None) -> list[tuple[str, int, bool, str, int]]:
     """(army npz, player index, held out, macro npz, the same player's index there)."""
     macro_dir = data_root() / "interim" / "macro" / "v1"
     with open(macro_dir / "index.jsonl", encoding="utf-8") as f:
@@ -59,7 +60,7 @@ def player_games(matchup: str, race: str) -> list[tuple[str, int, bool, str, int
     with open(army_dir() / "index.jsonl", encoding="utf-8") as f:
         rows = {r["sha1"]: r for r in map(json.loads, f)}
     for r in rows.values():
-        if not r.get("ok") or r["matchup"] != matchup or r["sha1"] not in macro:
+        if not r.get("ok") or r["matchup"] != matchup or r["sha1"] not in macro or (keep and not keep(r["sha1"])):
             continue
         path = str(army_dir() / r["sha1"][:2] / f"{r['sha1']}.npz")
         mpath = str(macro_dir / r["sha1"][:2] / f"{r['sha1']}.npz")
@@ -164,11 +165,14 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=2e-3)
     ap.add_argument("--channels", type=int, default=64)
     ap.add_argument("--workers", type=int, default=8)
+    GameFilter.add_args(ap)
     args = ap.parse_args()
+    keep = GameFilter.from_args(args)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     t0 = time.time()
 
-    jobs = player_games(args.matchup, args.race)
+    jobs = player_games(args.matchup, args.race, keep)
+    print(f"{len(jobs)} player-games ({keep.describe()})", flush=True)
     own, seen = set(), set()
     with ProcessPoolExecutor(args.workers) as pool:
         for o, s in pool.map(scan, [j for j in jobs if not j[2]], chunksize=32):

@@ -32,6 +32,7 @@ import torch.nn.functional as F
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
 from inventory import data_root  # noqa: E402
+from train.select import GameFilter  # noqa: E402
 
 from gary.policy.fight import ACTIONS, DEST_SCALE, MAX_UNITS, OTARGET, SIDE, X, Y, FightModel, FightNet, tensors  # noqa: E402
 from train.macro import is_test  # noqa: E402
@@ -46,12 +47,12 @@ def fight_dir(version: str = "v1") -> Path:
     return data_root() / "interim" / "fight" / version
 
 
-def jobs_for(matchup: str, race: str, version: str = "v1") -> list[tuple[str, int, bool]]:
+def jobs_for(matchup: str, race: str, version: str = "v1", keep=None) -> list[tuple[str, int, bool]]:
     out = []
     with open(fight_dir(version) / "index.jsonl", encoding="utf-8") as f:
         rows = {r["sha1"]: r for r in map(json.loads, f)}
     for r in rows.values():
-        if not r.get("ok") or r["matchup"] != matchup:
+        if not r.get("ok") or r["matchup"] != matchup or (keep and not keep(r["sha1"])):
             continue
         for i, p in enumerate(r["players"]):
             if p["race"] == race and p["snapshots"] > 0:
@@ -187,10 +188,13 @@ def main() -> None:
     ap.add_argument("--limit", type=int, help="only this many player-games (quick tests)")
     ap.add_argument("--class-weight", type=float, default=0.5,
                     help="weigh each action by frequency^-this in the loss (rare actions count more); 0 = off")
+    GameFilter.add_args(ap)
     args = ap.parse_args()
+    keep = GameFilter.from_args(args)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     t0 = time.time()
-    jobs = jobs_for(args.matchup, args.race)[:args.limit]
+    jobs = jobs_for(args.matchup, args.race, keep=keep)[:args.limit]
+    print(keep.describe(), flush=True)
     data = load_all(jobs, args.workers)
     n_train, n_test = len(data["train"][0]), len(data["test"][0])
     print(f"{len(jobs)} player-games; snapshots: train {n_train:,}, test {n_test:,} ({time.time() - t0:.0f} s)", flush=True)

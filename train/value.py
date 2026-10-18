@@ -58,18 +58,19 @@ MINUTES = 12
 
 # --- pro games ---------------------------------------------------------------------------------
 
-def pro_jobs(race: str = "T") -> list[tuple]:
+def pro_jobs(race: str = "T", matchup: str = "TvZ", keep=None) -> list[tuple]:
     from inventory import data_root
     won = {}
     with open(data_root() / "interim" / "build_orders.jsonl", encoding="utf-8") as f:
         for r in map(json.loads, f):
-            if r.get("matchup") == "TvZ" and r.get("race") == race and r.get("won") is not None:
+            if r.get("matchup") == matchup and r.get("race") == race and r.get("won") is not None:
                 won[r["sha1"]] = bool(r["won"])
     root = data_root() / "interim" / "macro" / "v1"
     jobs = []
     with open(root / "index.jsonl", encoding="utf-8") as f:
         for r in map(json.loads, f):
-            if r.get("ok") and r.get("matchup") == "TvZ" and r["sha1"] in won and len(r["players"]) == 2:
+            if (r.get("ok") and r.get("matchup") == matchup and r["sha1"] in won and len(r["players"]) == 2
+                    and not (keep and not keep(r["sha1"]))):
                 for i, p in enumerate(r["players"]):
                     if p["race"] == race:
                         jobs.append((str(root / r["sha1"][:2] / f"{r['sha1']}.npz"), i, won[r["sha1"]], r["sha1"]))
@@ -203,17 +204,22 @@ def main() -> None:
     ap.add_argument("--no-extras", action="store_true", help="ablation: the extras zeroed (the macro model's view alone)")
     ap.add_argument("--race", default="T", choices=["T", "Z"], help="whose value: the Zerg's from the pro games alone (its "
                     "win head: who is ahead; Gary-Z's own games, for the net heads, are not played here yet)")
+    ap.add_argument("--matchup", default="TvZ")
+    from train.select import GameFilter
+    GameFilter.add_args(ap)
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
+    keep = GameFilter.from_args(args)
     from gary.agent.manifests import _newest
     from gary.policy.macro import MacroModel
     spec = MacroModel.load(str(_newest("macro", race=args.race))).spec
-    run = REPO_ROOT / "runs" / "value" / f"TvZ_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
+    run = REPO_ROOT / "runs" / "value" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
     run.mkdir(parents=True, exist_ok=True)
     src = Path(args.reuse) if args.reuse else run
     if not args.reuse:
-        jobs = pro_jobs(args.race)
+        jobs = pro_jobs(args.race, args.matchup, keep)
+        print(f"{len(jobs)} pro player-games ({keep.describe()})", flush=True)
         random.Random(0).shuffle(jobs)
         jobs = jobs[:args.pro_games]
         gjobs = [(o, mp, s, VERSIONS[s % 2], st) for o in OPPONENTS for mp in MAPS for s in range(1, args.gary_seeds + 1)

@@ -43,6 +43,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
 sys.path.insert(0, str(REPO_ROOT))
 from inventory import data_root  # noqa: E402
+from train.select import GameFilter  # noqa: E402
 from gary.policy.belief import (ARMY_SUPPLY, ENEMY_TYPES, TOWN_HALLS, WINDOWS, WORKERS,  # noqa: E402
                                 BeliefNet, features_series)
 
@@ -83,14 +84,17 @@ def load_game(args: tuple) -> tuple | None:
     return X[idx], Y[idx], recent[idx], frames[idx], out
 
 
-def jobs_for(race: str) -> list[tuple]:
-    enemy = {"T": "Z", "Z": "T"}.get(race, "Z")
-    matchup = "TvZ" if {race, enemy} == {"T", "Z"} else None
+def jobs_for(race: str, matchup: str = "TvZ", keep=None) -> list[tuple]:
+    """Every player of this race in the matchup, with the enemy race (the same one in a mirror)."""
+    races = matchup.split("v")
+    assert race in races, (race, matchup)
+    enemy = races[1] if races[0] == race else races[0]
     jobs = []
     root = data_root() / "interim" / "macro" / "v1"
     with open(root / "index.jsonl", encoding="utf-8") as f:
         for r in map(json.loads, f):
-            if not r.get("ok") or r.get("matchup") != matchup or len(r.get("players", [])) != 2:
+            if (not r.get("ok") or r.get("matchup") != matchup or len(r.get("players", [])) != 2
+                    or (keep and not keep(r["sha1"]))):
                 continue
             for i, p in enumerate(r["players"]):
                 if p["race"] == race and r["players"][1 - i]["race"] == enemy:
@@ -121,17 +125,20 @@ def score(name: str, pred_sup: np.ndarray, true_sup: np.ndarray, t: np.ndarray) 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--race", default="T", choices=["T", "Z"])
+    ap.add_argument("--matchup", default="TvZ")
+    ap.add_argument("--race", default="T", choices=["T", "Z", "P"])
     ap.add_argument("--games", type=int, help="at most this many player-games (quick runs)")
+    GameFilter.add_args(ap)
     ap.add_argument("--epochs", type=int, default=8)
     ap.add_argument("--workers", type=int, default=8)
     from eval import priority
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
-    jobs = jobs_for(args.race)[:args.games]
+    keep = GameFilter.from_args(args)
+    jobs = jobs_for(args.race, args.matchup, keep)[:args.games]
     enemy = jobs[0][2]
-    print(f"{len(jobs)} player-games ({sum(j[4] for j in jobs)} held out)", flush=True)
+    print(f"{len(jobs)} player-games ({sum(j[4] for j in jobs)} held out; {keep.describe()})", flush=True)
     with ProcessPoolExecutor(args.workers) as pool:
         rows = [r for r in pool.map(load_game, jobs, chunksize=16) if r is not None]
     tr = [r for r in rows if not r[4]]
@@ -186,7 +193,7 @@ def main() -> None:
     for j, qq in enumerate(QUANTILES):
         r[f"belief model, {int(qq * 100)}th percentile"] = score(f"belief model ({int(qq * 100)}th pct)", quant[:, j], true_sup, fte)
 
-    out = REPO_ROOT / "runs" / "belief" / f"TvZ_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"   # (the matchup, then whose side)
+    out = REPO_ROOT / "runs" / "belief" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"   # (the matchup, then whose side)
     out.mkdir(parents=True, exist_ok=True)
     torch.save({"state": net.state_dict(), "n_in": Xtr.shape[1], "n_out": Ytr.shape[1] + len(QUANTILES),
                 "quantiles": QUANTILES, "sup_scale": SUP_SCALE, "race": args.race,

@@ -34,6 +34,7 @@ import torch.nn.functional as F
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
 from inventory import data_root  # noqa: E402
+from train.select import GameFilter  # noqa: E402
 
 from gary.policy.macro import OTHER, FeatureSpec, MacroModel, MacroNet, encode  # noqa: E402
 
@@ -51,13 +52,13 @@ def is_test(sha1: str) -> bool:
     return int(sha1[:8], 16) % 10 == 0
 
 
-def player_games(matchup: str, race: str) -> list[tuple[str, int, int | None, bool]]:
-    """(npz path, player index, style, held out) for every player of this race."""
+def player_games(matchup: str, race: str, keep=None) -> list[tuple[str, int, int | None, bool]]:
+    """(npz path, player index, style, held out) for every player of this race; keep: a GameFilter."""
     out = []
     with open(macro_dir() / "index.jsonl", encoding="utf-8") as f:
         rows = {r["sha1"]: r for r in map(json.loads, f)}
     for r in rows.values():
-        if not r.get("ok") or r["matchup"] != matchup:
+        if not r.get("ok") or r["matchup"] != matchup or (keep and not keep(r["sha1"])):
             continue
         path = str(macro_dir() / r["sha1"][:2] / f"{r['sha1']}.npz")
         for i, p in enumerate(r["players"]):
@@ -194,17 +195,19 @@ def main() -> None:
     ap.add_argument("--layers", type=int, default=3)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--caps-only", metavar="RUN_DIR", help="only (re)compute caps.json for a trained run")
+    GameFilter.add_args(ap)
     args = ap.parse_args()
+    keep = GameFilter.from_args(args)
     if args.caps_only:
-        caps = count_caps(player_games(args.matchup, args.race), args.workers)
+        caps = count_caps(player_games(args.matchup, args.race, keep), args.workers)
         (Path(args.caps_only) / "caps.json").write_text(json.dumps(caps), encoding="utf-8")
         print(f"wrote {Path(args.caps_only) / 'caps.json'} ({len(caps)} unit types)")
         return
     device = "cuda" if torch.cuda.is_available() else "cpu"
     t0 = time.time()
 
-    jobs = player_games(args.matchup, args.race)
-    print(f"{len(jobs)} player-games ({sum(j[3] for j in jobs)} held out)", flush=True)
+    jobs = player_games(args.matchup, args.race, keep)
+    print(f"{len(jobs)} player-games ({sum(j[3] for j in jobs)} held out; {keep.describe()})", flush=True)
     spec = build_spec(args.race, jobs, args.workers)
     print(f"features {spec.size}, decision classes {len(spec.decisions)}, styles {len(spec.styles)}", flush=True)
     data = load_split(jobs, spec, args.workers)
@@ -249,7 +252,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     MacroModel(spec, net.cpu(), config).save(out / "model.pt")
     (out / "caps.json").write_text(json.dumps(count_caps(jobs, args.workers)), encoding="utf-8")
-    report = {"matchup": args.matchup, "race": args.race, "player_games": len(jobs),
+    report = {"matchup": args.matchup, "race": args.race, "player_games": len(jobs), "games": keep.describe(),
               "train_samples": int(len(ytr)), "features": spec.size, "classes": len(spec.decisions),
               "epochs": args.epochs, "minutes": round((time.time() - t0) / 60, 1), "test": res}
     (out / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")

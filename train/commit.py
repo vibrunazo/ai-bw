@@ -45,12 +45,13 @@ from eval import monitor, priority  # noqa: E402
 from gary.policy.army import (ARMY_SUPPLY, GRID, MEMORY_S, ArmyModel, ArmyNet, ArmySpec,  # noqa: E402
                               commit_inputs, encode_global)
 from train.macro import is_test  # noqa: E402
+from train.select import GameFilter  # noqa: E402
 
 MAX_TICKS = 400                 # samples per player-game in training (held-out games: all)
 KEEP, ENGAGE, MOVE = 0, 1, 2
 
 
-def jobs(matchup: str, race: str, version: str = "v3") -> list[tuple]:
+def jobs(matchup: str, race: str, version: str = "v3", keep=None) -> list[tuple]:
     """(army npz, player index, held out, macro npz, the player's index there)."""
     army = data_root() / "interim" / "army" / version
     macro_dir = data_root() / "interim" / "macro" / "v1"
@@ -59,7 +60,7 @@ def jobs(matchup: str, race: str, version: str = "v3") -> list[tuple]:
     out = []
     with open(army / "index.jsonl", encoding="utf-8") as f:
         for r in map(json.loads, f):
-            if not r.get("ok") or r["matchup"] != matchup or r["sha1"] not in macro:
+            if not r.get("ok") or r["matchup"] != matchup or r["sha1"] not in macro or (keep and not keep(r["sha1"])):
                 continue
             mslots = [p["slot"] for p in macro[r["sha1"]]["players"]]
             for i, p in enumerate(r["players"]):
@@ -122,8 +123,10 @@ def widen(base: ArmyModel, spec: ArmySpec) -> ArmyNet:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--race", default="T", choices=["T", "Z"])
+    ap.add_argument("--matchup", default="TvZ")
+    ap.add_argument("--race", default="T", choices=["T", "Z", "P"])
     ap.add_argument("--epochs", type=int, default=4)
+    GameFilter.add_args(ap)
     ap.add_argument("--batch", type=int, default=1024)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--workers", type=int, default=3)
@@ -132,11 +135,13 @@ def main() -> None:
     priority.apply(args.priority)
     from sklearn.metrics import roc_auc_score
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    start = sorted((REPO / "runs" / "army").glob(f"TvZ_{args.race}_*/model.pt"))[-1]
+    start = sorted((REPO / "runs" / "army").glob(f"{args.matchup}_{args.race}_*/model.pt"))[-1]
     base = ArmyModel.load(start)
     spec = ArmySpec(base.spec.race, base.spec.own_types, base.spec.seen_types, commit=True, losses=True)
     t0 = time.time()
-    js = jobs("TvZ", args.race)
+    keep = GameFilter.from_args(args)
+    js = jobs(args.matchup, args.race, keep=keep)
+    print(f"{len(js)} player-games ({keep.describe()})", flush=True)
     data = load(js, spec, args.workers)
     grid, glob, label, target, commit, _ = data["train"]
     tg, tglob, tl, tt, tc, tf = data["test"]
@@ -193,7 +198,7 @@ def main() -> None:
             total += loss.item() * len(idx)
         print(f"epoch {epoch + 1}: loss {total / len(Y):.4f}  test {evaluate()}", flush=True)
     res = evaluate()
-    out = REPO / "runs" / "commit" / f"TvZ_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
+    out = REPO / "runs" / "commit" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
     out.mkdir(parents=True, exist_ok=True)
     model = ArmyModel(spec, net.cpu().eval(), {**base.config, "net": {**base.config["net"], "n_kind": 3,
                                                                         "channels": spec.channels},
