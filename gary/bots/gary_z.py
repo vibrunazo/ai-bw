@@ -56,6 +56,10 @@ RALLY_IN_LINE = 0.6              # the rally: this far from the hatchery toward 
 # the mutalisk raid (_mutas)
 HATCH_MASS = float(os.environ.get("GARY_Z_HATCH_MASS", "0.5"))   # a hatchery or expansion at this much summed odds (one-offs: 1.0):
                                  # the summed odds reached 1.6 a game, one hatchery fewer than the pros from 8:00 on
+PRESS_RATIO = 2.0                # the press: own fighter supply this many times the Terran fighters seen lately...
+PRESS_MIN = 40                   # ...and at least this (x2: 20 supply)
+PRESS_MEMORY = 60 * 24           # Terran fighters seen this long ago still count
+PRESS_AGAIN = 20 * 24            # the press re-aimed this often
 INTERCEPT_FAR = 24 * 32          # the main body sweeps a Terran packet in sight this near...
 INTERCEPT_ODDS = 0.7             # ...with under this share of its own supply, away from turrets and bunkers
 INTERCEPT_AGAIN = 8 * 24         # a sweep ordered at most this often
@@ -174,6 +178,9 @@ class GaryZ(ZergV3):
         # last hit, and Gary's Command Centers seen (their mineral lines are raid targets too)
         self.raid_line = None
         self.intercept_after = 0
+        self.press_after = 0
+        self.enemy_buildings: dict[int, tuple[int, int, int]] = {}
+        self.enemy_fighters: dict[int, tuple[int, int]] = {}
         self.raid_cycles = 0
         self.raid_switched = -10 ** 6
         self.raid_hp: list[tuple[int, int]] = []
@@ -794,7 +801,8 @@ class GaryZ(ZergV3):
                              by=f"rule: a cluster under {JOIN_BELOW:.0%} of the main one joins it")
                 return self._army_job_step(obs, mine)
             return False
-        if k == 0 and self._intercept(obs, mine, members):
+        self._remember_enemy(obs)
+        if k == 0 and (self._intercept(obs, mine, members) or self._press(obs, mine, members)):
             return True
         if self.army_commit:
             return self._committed(obs, mine, members, k)
@@ -815,6 +823,58 @@ class GaryZ(ZergV3):
             return False                                   # (held, or the drawn cell is where they are)
         self.army_job = {"tags": [u["tag"] for u in members], "point": self.army_tracker.center(cell),
                          "kind": "attack" if attack else "move", "selecting": False, "tries": 0}
+        return self._army_job_step(obs, mine)
+
+    def _remember_enemy(self, obs: dict) -> None:
+        """Terran fighters and buildings in sight, remembered (for the sweep's odds and the press's targets)."""
+        from gary.policy.army import is_building, is_worker, supply_x2
+        f = self.hi.frame
+        for u in obs["units"]:
+            if u["owner"] in (self.hi.slot, 11):
+                continue
+            if is_building(u["type"]):
+                self.enemy_buildings[u["tag"]] = (u["x"], u["y"], u["type"])
+            elif supply_x2(u["type"]) > 0 and not is_worker(u["type"]):
+                self.enemy_fighters[u["tag"]] = (f, supply_x2(u["type"]))
+        gone = {u["tag"] for u in obs["units"] if u["owner"] in (self.hi.slot, 11)}   # (own tags never collide)
+        self.enemy_fighters = {t: v for t, v in self.enemy_fighters.items() if f - v[0] <= PRESS_MEMORY}
+
+    def _press(self, obs: dict, mine: list[dict], members: list[dict]) -> bool:
+        """Far ahead and unthreatened, the main body attacks the nearest Terran building it knows of: in round g6
+        five of fifteen games ran to time with Gary-Z's army at 75 against 7, 78 against 11, 42 against 6, and it
+        never went over. Own fighter supply at least PRESS_RATIO times the Terran fighters seen in PRESS_MEMORY
+        (at least PRESS_MIN), no enemy fighter within 12 tiles of a hatchery; re-aimed every PRESS_AGAIN at the
+        building nearest the body, so a cleared base leads to the next. (True: it acted.)"""
+        hi = self.hi
+        if hi.frame < self.press_after or not self.enemy_buildings:
+            return False
+        from gary.policy.army import is_building, is_worker, supply_x2
+        own = sum(supply_x2(u["type"]) for u in mine if u["type"] in Z.ARMY and u["completed"])
+        seen = sum(v[1] for v in self.enemy_fighters.values())
+        if own < PRESS_MIN or own < PRESS_RATIO * max(seen, 8):
+            return False
+        halls = [(u["x"], u["y"]) for u in mine if u["type"] in Z.TOWN_HALLS]
+        enemy = [u for u in obs["units"] if u["owner"] not in (hi.slot, 11) and supply_x2(u["type"]) > 0
+                 and not is_worker(u["type"]) and not is_building(u["type"])]
+        if any(math.dist((e["x"], e["y"]), h) < 12 * 32 for e in enemy for h in halls):
+            return False
+        mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
+        alive = {u["tag"] for u in obs["units"]}
+        self.enemy_buildings = {t: v for t, v in self.enemy_buildings.items()
+                                if t in alive or not any(math.dist((u["x"], u["y"]), v[:2]) < 6 * 32 for u in members)}
+        if not self.enemy_buildings:                 # (a remembered building the body stands by and doesn't see: gone)
+            return False
+        # (what ends a game first: Command Centers, then production, then the rest; the nearest within each. On
+        # heartbreak seed 5002 the nearest-first press cleared the Terran's SCVs and army by 22:00 and left 18
+        # buildings, turrets among them, standing at the 25-minute limit)
+        rank = lambda t: 0 if t == T.CC else 1 if t in T.PRODUCTION else 2
+        x, y, t = min(self.enemy_buildings.values(), key=lambda v: (rank(v[2]), math.dist(v[:2], mid)))
+        self.press_after = hi.frame + PRESS_AGAIN
+        LOG.decision("Z", "army", hi.frame, f"attack to ({x // 32},{y // 32})",
+                     inputs={"units": len(members), "ours": own / 2, "theirs_seen": seen / 2, "target": T.NAMES.get(t, str(t))},
+                     by=f"rule: {PRESS_RATIO:g}x the Terran fighters seen, nothing at home: presses the nearest building", then="sent")
+        self.army_job = {"tags": [u["tag"] for u in members], "point": (int(x), int(y)), "kind": "attack",
+                         "selecting": False, "tries": 0}
         return self._army_job_step(obs, mine)
 
     def _intercept(self, obs: dict, mine: list[dict], members: list[dict]) -> bool:

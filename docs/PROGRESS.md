@@ -331,6 +331,9 @@ plan and the full log).
   | + the new raid (g3) | 14 / 10 | 0.31 | 8/10/8 | 5.4 | 0.5 | 1.0 |
   | + money kept 90 s, oldest hatchery job (g4) | 18 / 6 | 0.36 | | | | reverted |
   | + every cluster joins the biggest; retreat at 1.5:1 away from home (g5) | 13 / 10, **lost 1** | 0.30 | 12/10/8 (15 min 22) | 6.8 | 0.6 | 0.4 |
+  | + the main body sweeps packets it outweighs; hatcheries at 0.5 summed odds (g6) | 9 / 15 | 0.31 | | | | |
+  | g6 with Gary-Z on commitments (g7) | 9 / 14, **lost 1** | 0.34 | | | | |
+  | + the press: far ahead, the nearest Terran building, CCs first (g8) | 8 / 15, **lost 1** | 0.31 | | | | |
   | pros (60 games) | | 0 | 18/26/32 | 9.0 | 1.4 | 6.1 |
   - **Its own records:** gary/agent/sightings.py serves both sides now; Gary-Z's act loop records what it saw and
     each fighter it lost, so `eval/why.py --side Z` answers its why-questions. Drones aren't counted: a drone
@@ -362,6 +365,25 @@ plan and the full log).
     main body, which the join rule sends them across the field to reach. The next piece is where new fighters
     gather (each hatchery rallies to its own mineral line; pros rally every hatchery to one point), so that
     the army forms before it moves, not on the way.
+  - **Watching g5 seed 5007 (frames every 30 s from the re-simulation, both armies and Gary-Z's orders):**
+    Gary-Z had no army from 6:00 to 7:30 (32 drone decisions and two zergling ones before 6:00, Lair 4:18,
+    Spire 5:43) while the Terran had 13-18 supply; lost its first army at home at 9:00 to the Terran's first
+    push of 15; then waited at its main while the Terran fed units one by one across the map for ten
+    minutes, 8-19 in sight at a time, and fought each packet at its doorstep: 357 fighters lost to 235, the
+    Terran at 94 supply to its 65 at 15:00 (42 SCVs to 39 drones, five Barracks against four larva-bound
+    hatcheries). Not the composition (16 lurkers by 11:00, a Hive at 10:52, defilers from 15:00) and not the
+    spread at home (two thirds of the ground army within 8 tiles of its middle when quiet).
+  - **The sweep and the press (g6, g8):** the main body attack-moves onto enemy fighters in sight within 24
+    tiles whose supply is under 70% of its own, away from turrets and bunkers (17.8 a game); and once its
+    fighter supply is twice the Terran fighters seen in the last minute, at least 20 supply, with nothing within
+    12 tiles of a hatchery, it attacks the nearest Terran building it knows of, Command Centers first, then
+    production. A hatchery or expansion triggers at 0.5 summed odds (hatcheries by 12:00 beyond the first 3.0,
+    was 2.5). Round g6: Gary-T won 9 (13), the trade even (168 Zerg deaths to 159 Terran; 130 to 113), Gary-Z's
+    gap at 11-14 min 0.48 (0.61). Round g8 with the press: Gary-T won 8, lost 1, 15 at time; in the time games
+    the Zerg army was ahead at the end in 3 of 15 (5 of 15 in g6: 75 to 7, 78 to 11, 42 to 6 without going over),
+    and on heartbreak 5002 the press cleared the Terran's SCVs and army by 22:00 and still left 18 buildings at
+    25:00. Gary-Z on commitments instead of the plain army model (g7): one win too, the gap worse (0.34).
+    Today: 3 Gary-Z wins in 192 league games, none before.
   - **What keeps Gary-Z from winning now:** its army is a quarter of the pros' at 12 minutes with the drones and
     hatcheries nearly the pros' (39 drones at 12:00, pros 33): the larvae go to drones, and what army there is
     bleeds in the field at odds 0.45 with 18% of it present (pros 0.71, 27%). The next levers are the army's
