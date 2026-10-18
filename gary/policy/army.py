@@ -38,6 +38,11 @@ class ArmySpec:
     own_types: list[int]          # own unit types counted in the numbers
     seen_types: list[int]         # enemy unit types counted
     commit: bool = False          # the group's commitment in the numbers too (train/commit.py)
+    losses: bool = False          # a 10th map channel: own losses in the last LOSS_S, where they died
+
+    @property
+    def channels(self) -> int:
+        return CHANNELS + (1 if self.losses else 0)
 
     @property
     def n_global(self) -> int:
@@ -47,8 +52,20 @@ class ArmySpec:
         return asdict(self)
 
 
+LOSS_S = 10                       # own losses counted this long (ingest/army_dataset.py v3)
+GONE_AFTER = 48                   # an own unit out of sight this long is lost (an SCV in a refinery, a drone
+                                  # in an extractor, comes back sooner; a loaded bunker's marines are skipped)
 COMMIT_INPUTS = 3                 # the group's commitment: engaging, moving (one-hot; none: both 0), its age
 COMMIT_AGE_S = 120                # an order older than this is no commitment (ingest/army_dataset.py COMMIT_S)
+
+
+def loss_value(unit_type: int) -> int:
+    """A loss's weight on the losses channel: a worker 2, a fighter its supply x2, a building 4 (else 0)."""
+    if is_worker(unit_type):
+        return 2
+    if is_building(unit_type):
+        return 4
+    return supply_x2(unit_type)
 
 
 def path_dist(c: int, a: int, b: int) -> float:
@@ -85,9 +102,9 @@ def encode_global(spec: ArmySpec, frame: np.ndarray, eco: np.ndarray, group_sup:
 
 
 class ArmyNet(nn.Module):
-    def __init__(self, n_global: int, ch: int = 64, n_kind: int = 2):
+    def __init__(self, n_global: int, ch: int = 64, n_kind: int = 2, channels: int = CHANNELS):
         super().__init__()
-        self.inp = nn.Conv2d(CHANNELS, ch, 3, padding=1)
+        self.inp = nn.Conv2d(channels, ch, 3, padding=1)
         self.glob = nn.Sequential(nn.Linear(n_global, ch), nn.GELU(), nn.Linear(ch, ch))
         # dilated convolutions: every cell sees the whole 16x16 map after four layers
         self.convs = nn.ModuleList(nn.Conv2d(ch, ch, 3, padding=d, dilation=d) for d in (1, 2, 4, 8))
@@ -136,7 +153,7 @@ class ArmyModel:
     def predict(self, grid: np.ndarray, glob: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """(n, 256) destination probabilities and (n, 2) move/attack probabilities."""
         dev = next(self.net.parameters()).device
-        where, kind, _ = self.net(torch.as_tensor(grid, dtype=torch.float32, device=dev).view(-1, CHANNELS, GRID, GRID),
+        where, kind, _ = self.net(torch.as_tensor(grid, dtype=torch.float32, device=dev).view(-1, self.spec.channels, GRID, GRID),
                                   torch.as_tensor(glob, dtype=torch.float32, device=dev))
         return torch.softmax(where, -1).cpu().numpy(), torch.softmax(kind, -1).cpu().numpy()
 
@@ -145,7 +162,7 @@ class ArmyModel:
         """Expected change in the player's share of all army supply over the next 45 s if the
         group is sent to `target` (moving, or attack-moving)."""
         dev = next(self.net.parameters()).device
-        _, _, v = self.net(torch.as_tensor(grid, dtype=torch.float32, device=dev).view(-1, CHANNELS, GRID, GRID),
+        _, _, v = self.net(torch.as_tensor(grid, dtype=torch.float32, device=dev).view(-1, self.spec.channels, GRID, GRID),
                            torch.as_tensor(glob, dtype=torch.float32, device=dev),
                            torch.tensor([target], device=dev), torch.tensor([int(attack)], device=dev))
         return float(v[0]) / VALUE_SCALE
@@ -162,6 +179,10 @@ class ArmyTracker:
         self.seen_buildings = np.zeros(CELLS, np.float32)
         self.recent: list[tuple[int, np.ndarray]] = []      # (frame, enemy army grid)
         self.seen_hist: list[tuple[int, np.ndarray]] = []   # (frame, enemy unit counts by type)
+        self.own_last: dict[int, tuple[int, int]] = {}         # spec.losses: own tag -> (type, cell) last seen
+        self.missing: dict[int, tuple[int, int, int]] = {}     # own tags out of sight: (frame, cell, value)
+        self.lost: list[tuple[int, int, int]] = []             # (frame, cell, value) of own losses
+        self.hidden: set[int] = set()                          # own tags not lost when unseen (in a bunker)
 
     def cell(self, x: float, y: float) -> int:
         gx = min(GRID - 1, max(0, int(x * GRID // self.mw)))
@@ -180,7 +201,7 @@ class ArmyTracker:
     def _now(self, obs: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Channels 0-5 (own / visible enemy army, workers, buildings), own and visible enemy
         unit counts by type."""
-        g = np.zeros((CHANNELS, CELLS), np.float32)
+        g = np.zeros((self.spec.channels, CELLS), np.float32)
         units = np.zeros(228, np.float32)
         seen = np.zeros(228, np.float32)
         for u in obs["units"]:
@@ -211,9 +232,29 @@ class ArmyTracker:
             return
         g, _, seen = self._now(obs)
         f0 = obs["frame"]
+        if self.spec.losses:
+            self._losses(obs)
         self.seen_buildings = np.maximum(self.seen_buildings, g[5])
         self.recent = [(f, a) for f, a in self.recent if f0 - f <= RECENT_S * 24] + [(f0, g[3])]
         self.seen_hist = [(f, a) for f, a in self.seen_hist if f0 - f <= MEMORY_S * 24] + [(f0, seen)]
+
+    def _losses(self, obs: dict) -> None:
+        """Own units gone since the last look: lost where last seen, once out of sight GONE_AFTER (an SCV
+        in a refinery comes back); units in self.hidden (loaded in a bunker) aren't."""
+        f0 = obs["frame"]
+        now = {u["tag"]: (u["type"], self.cell(u["x"], u["y"])) for u in obs["units"] if u["owner"] == self.slot}
+        for tag, (t, c) in self.own_last.items():
+            if tag not in now and tag not in self.hidden and tag not in self.missing:
+                self.missing[tag] = (f0, c, loss_value(t))
+        for tag in [t for t in self.missing if t in now]:
+            del self.missing[tag]                      # (back: it was only out of sight)
+        for tag, (f, c, v) in list(self.missing.items()):
+            if f0 - f >= GONE_AFTER:
+                del self.missing[tag]
+                if v:
+                    self.lost.append((f, c, v))
+        self.lost = [x for x in self.lost if f0 - x[0] <= LOSS_S * 24 + GONE_AFTER]
+        self.own_last = {**{t: x for t, x in self.own_last.items() if t in self.missing}, **now}
 
     def inputs(self, obs: dict, group: list[dict], commit: tuple[int, float] | None = None) -> tuple[np.ndarray, np.ndarray]:
         """grid (9, 256) and numbers for ordering `group` (own units) now; commit: the group's commitment
@@ -222,6 +263,10 @@ class ArmyTracker:
         g, units, seen = self._now(obs)
         g[6] = self.seen_buildings
         g[7] = np.max([a for _, a in self.recent], axis=0)
+        if self.spec.losses:                   # (where its units died in the last LOSS_S, as the pros' data)
+            for f, c, v in self.lost:
+                if obs["frame"] - f <= LOSS_S * 24 + GONE_AFTER:
+                    g[9, c] += v
         group_sup = 0
         for u in group:
             s = supply_x2(u["type"])

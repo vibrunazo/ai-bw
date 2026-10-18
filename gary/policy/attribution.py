@@ -53,7 +53,8 @@ def army_groups(spec) -> list[tuple[str, int, np.ndarray]]:
     """The army model's inputs that are zeroed, in named groups: (name, 0 = grid channel / 1 = numbers, indices)."""
     n_own, n_seen = len(spec.own_types), len(spec.seen_types)
     o = 8
-    return [("enemy army in sight (map)", 0, np.array([3])), ("enemy workers in sight (map)", 0, np.array([4])),
+    return ([("own losses lately", 0, np.array([9]))] if getattr(spec, "losses", False) else []) + [
+            ("enemy army in sight (map)", 0, np.array([3])), ("enemy workers in sight (map)", 0, np.array([4])),
             ("enemy buildings in sight (map)", 0, np.array([5])), ("enemy buildings ever seen", 0, np.array([6])),
             ("enemy army seen lately", 0, np.array([7])), ("money", 1, np.array([1, 2])),
             ("enemy units in sight by type", 1, np.arange(o + n_own, o + n_own + n_seen)),

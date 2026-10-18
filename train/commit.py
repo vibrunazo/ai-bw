@@ -41,7 +41,8 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "ingest"))
 from inventory import data_root  # noqa: E402
 
-from gary.policy.army import (ARMY_SUPPLY, CHANNELS, GRID, MEMORY_S, ArmyModel, ArmyNet, ArmySpec,  # noqa: E402
+from eval import monitor, priority  # noqa: E402
+from gary.policy.army import (ARMY_SUPPLY, GRID, MEMORY_S, ArmyModel, ArmyNet, ArmySpec,  # noqa: E402
                               commit_inputs, encode_global)
 from train.macro import is_test  # noqa: E402
 
@@ -49,9 +50,9 @@ MAX_TICKS = 400                 # samples per player-game in training (held-out 
 KEEP, ENGAGE, MOVE = 0, 1, 2
 
 
-def jobs(matchup: str, race: str) -> list[tuple]:
-    """(v2 army npz, player index, held out, macro npz, the player's index there)."""
-    army = data_root() / "interim" / "army" / "v2"
+def jobs(matchup: str, race: str, version: str = "v3") -> list[tuple]:
+    """(army npz, player index, held out, macro npz, the player's index there)."""
+    army = data_root() / "interim" / "army" / version
     macro_dir = data_root() / "interim" / "macro" / "v1"
     with open(macro_dir / "index.jsonl", encoding="utf-8") as f:
         macro = {r["sha1"]: r for r in map(json.loads, f) if r.get("ok")}
@@ -82,6 +83,8 @@ def load_player(args: tuple) -> tuple:
     t = np.clip(np.searchsorted(mf, frames, side="right") - 1, 0, len(mf) - 1)
     seen_mem = np.stack([seen_all[max(0, k - MEMORY_S):k + 1].max(0) for k in t]) if len(t) else np.zeros((0, 228), np.float32)
     grid = d[f"p{i}_tick_grid"][idx]
+    if spec.losses:                                     # (the 10th channel: own losses lately, v3)
+        grid = np.concatenate([grid, d[f"p{i}_tick_loss"][idx][:, None]], 1)
     commit = d[f"p{i}_tick_commit"][idx]
     glob = encode_global(spec, frames.astype(np.float32), d[f"p{i}_tick_eco"][idx].astype(np.float32),
                          grid[:, 8].sum(1).astype(np.float32), d[f"p{i}_tick_units"][idx].astype(np.float32),
@@ -94,21 +97,24 @@ def load_player(args: tuple) -> tuple:
 def load(js: list, spec: ArmySpec, workers: int) -> dict:
     parts = {False: [], True: []}
     with ProcessPoolExecutor(workers) as pool:
-        for job, res in zip(js, pool.map(load_player, [(j, spec.to_dict()) for j in js], chunksize=16)):
+        results = pool.map(load_player, [(j, spec.to_dict()) for j in js], chunksize=16)
+        for job, res in zip(js, monitor.track(results, len(js), "player-games loaded")):
             parts[job[2]].append(res)
     return {("test" if held else "train"): tuple(np.concatenate([r[k] for r in rs]) for k in range(6))
             for held, rs in parts.items()}
 
 
 def widen(base: ArmyModel, spec: ArmySpec) -> ArmyNet:
-    """The army model's network with the numbers widened by the commitment (new weights zero: it starts as
-    the army model) and a fresh keep/engage/move head."""
+    """The army model's network with the numbers widened by the commitment and the map by the losses
+    channel (new weights zero: it starts as the army model) and a fresh keep/engage/move head."""
     old = base.net
     ch = base.config["net"].get("ch", 64)
-    net = ArmyNet(spec.n_global, ch=ch, n_kind=3)
+    net = ArmyNet(spec.n_global, ch=ch, n_kind=3, channels=spec.channels)
     state = {k: v for k, v in old.state_dict().items() if not k.startswith("kind.")}
     w = state["glob.0.weight"]
     state["glob.0.weight"] = torch.cat([w, torch.zeros(w.shape[0], spec.n_global - w.shape[1])], 1)
+    w = state["inp.weight"]
+    state["inp.weight"] = torch.cat([w, torch.zeros(w.shape[0], spec.channels - w.shape[1], *w.shape[2:])], 1)
     net.load_state_dict(state, strict=False)
     return net
 
@@ -121,12 +127,14 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=1024)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--workers", type=int, default=3)
+    priority.add_argument(ap)
     args = ap.parse_args()
+    priority.apply(args.priority)
     from sklearn.metrics import roc_auc_score
     device = "cuda" if torch.cuda.is_available() else "cpu"
     start = sorted((REPO / "runs" / "army").glob(f"TvZ_{args.race}_*/model.pt"))[-1]
     base = ArmyModel.load(start)
-    spec = ArmySpec(base.spec.race, base.spec.own_types, base.spec.seen_types, commit=True)
+    spec = ArmySpec(base.spec.race, base.spec.own_types, base.spec.seen_types, commit=True, losses=True)
     t0 = time.time()
     js = jobs("TvZ", args.race)
     data = load(js, spec, args.workers)
@@ -145,7 +153,7 @@ def main() -> None:
         ks, ws = [], []
         with torch.no_grad():
             for s in range(0, len(g), 4096):
-                w, k, _ = net(torch.from_numpy(g[s:s + 4096]).to(device).float().view(-1, CHANNELS, GRID, GRID),
+                w, k, _ = net(torch.from_numpy(g[s:s + 4096]).to(device).float().view(-1, spec.channels, GRID, GRID),
                               torch.from_numpy(x[s:s + 4096]).to(device).float())
                 ks.append(torch.softmax(k, -1).cpu().numpy())
                 ws.append(torch.topk(w, 5, -1).indices.cpu().numpy())
@@ -168,12 +176,12 @@ def main() -> None:
         out["where_top5"] = round(float((w5[o] == tt[o, None]).any(1).mean()), 3) if o.any() else None
         return out
     print("before:", evaluate(), flush=True)
-    for epoch in range(args.epochs):
+    for epoch in monitor.track(range(args.epochs), args.epochs, "epochs"):
         perm = torch.randperm(len(Y))
         total = 0.0
         for s in range(0, len(perm), args.batch):
             idx = perm[s:s + args.batch]
-            w, k, _ = net(G[idx].to(device).float().view(-1, CHANNELS, GRID, GRID), X[idx].to(device).float())
+            w, k, _ = net(G[idx].to(device).float().view(-1, spec.channels, GRID, GRID), X[idx].to(device).float())
             y = Y[idx].to(device)
             loss = F.cross_entropy(k, y)
             o = y > KEEP
@@ -187,7 +195,8 @@ def main() -> None:
     res = evaluate()
     out = REPO / "runs" / "commit" / f"TvZ_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
     out.mkdir(parents=True, exist_ok=True)
-    model = ArmyModel(spec, net.cpu().eval(), {**base.config, "net": {**base.config["net"], "n_kind": 3},
+    model = ArmyModel(spec, net.cpu().eval(), {**base.config, "net": {**base.config["net"], "n_kind": 3,
+                                                                        "channels": spec.channels},
                                                "commit": {"from": str(start), "classes": ["keep", "engage", "move"]}})
     model.save(out / "model.pt")
     (out / "report.json").write_text(json.dumps({"from": str(start), "ticks_train": int(len(Y)),

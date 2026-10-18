@@ -33,8 +33,13 @@ commitment follows the group on its way. And that order's age. Pros re-decide on
   tick_frame, tick_units, tick_seen, tick_eco  as for orders
   tick_label  0 keep, 1 engage, 2 move;  tick_target  the order's cell (-1 keep)
   tick_commit 0 none, 1 engage, 2 move;  tick_age  seconds since that order
+  tick_loss (256,)    the player's own losses in the last LOSS_S seconds, where they died (a worker 2, a
+                      fighter its supply x2, a building 4; capped at 255): what a pro reacts to, a raid on
+                      the mineral line, that the grid of where units stand doesn't show (v3; c10: Gary-Z's
+                      army kept its commitment while its drones went from 13 to 2)
 
-Output: data/interim/army/v2/<sha1[:2]>/<sha1>.npz and data/interim/army/v2/index.jsonl.
+Output: data/interim/army/v3/<sha1[:2]>/<sha1>.npz and data/interim/army/v3/index.jsonl. Needs a
+gary_resim whose "gone" events carry the owner and the place (resim/gary_resim.cpp).
 
 Usage:
   python ingest/army_dataset.py --matchup TvZ --limit 200
@@ -55,19 +60,29 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # (the repo: gary's unit tables)
 from inventory import data_root
+from eval import monitor, priority
 from macro_dataset import RACES, TOWN_HALLS, run_resim, select
 
-VERSION = "v2"
+VERSION = "v3"
 GRID, CELLS, CHANNELS = 16, 256, 9
 MIN_SUP = 8                  # at least 4 supply (x2) selected
 WINDOW = 48                  # at most one sample per player per 2 s
 RECENT = 30                  # channel 7 remembers enemy army for 30 s
 KIND = {"move": 0, "amove": 1, "attack": 1, "patrol": 1}
 TICK = 5                     # seconds (snapshots) between commitment samples
+LOSS_S = 10                  # own losses counted this long (gary/policy/army.py LOSS_S)
 COMMIT_S = 120               # an order older than this is no commitment any more
 CLUSTERS = 3
 NEAR, MOVED = 1, 2           # engage: the target this close to enemy presence, the group sent this far
+
+
+def loss_value(unit_type: int) -> int:
+    """A loss's weight on the losses grid: a worker 2, a fighter its supply x2, a building 4 (else 0); as
+    gary/policy/army.py's loss_value, which the army tracker uses in play."""
+    from gary.policy.army import loss_value as value
+    return value(unit_type)
 
 
 def cheb(a: int, b: int) -> int:
@@ -245,6 +260,16 @@ def build_game(rec: dict) -> dict:
                 tk["target"].append(mine[0][2] if mine else -1)
                 tk["commit"].append(past[-1][3] if past else 0)
                 tk["age"].append((f0 - past[-1][0]) / 24 if past else COMMIT_S)
+        # own losses: each death of this player's units in the LOSS_S before the tick, at its place
+        deaths = [(r["frame"], cell_of(r["x"], r["y"], mw, mh, fx, fy), loss_value(r["unit"])) for r in lines
+                  if r["type"] == "event" and r["ev"] == "gone" and r.get("slot") == s and "x" in r
+                  and 0 <= r["x"] < mw and 0 <= r["y"] < mh]
+        loss = np.zeros((len(tk["t"]), CELLS), np.int32)
+        for j, t in enumerate(tk["t"]):
+            for f, c, v in deaths:
+                if frames[t] - LOSS_S * 24 < f <= frames[t]:
+                    loss[j, c] += v
+        out[f"p{i}_tick_loss"] = np.minimum(loss, 255).astype(np.uint8)
         ti = np.array(tk["t"], np.int64)
         out[f"p{i}_tick_grid"] = np.array(tk["grid"], np.uint8).reshape(-1, CHANNELS, CELLS)
         out[f"p{i}_tick_frame"] = frames[ti] if len(ti) else np.zeros(0, np.int32)
@@ -309,7 +334,9 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4)
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--report", action="store_true")
+    priority.add_argument(ap)
     args = ap.parse_args()
+    priority.apply(args.priority)
     if args.report:
         report()
         return
@@ -323,7 +350,7 @@ def main() -> None:
     with open(out_dir() / "index.jsonl", "a", encoding="utf-8") as index, \
             ProcessPoolExecutor(args.workers) as pool:
         futures = [pool.submit(build_game, r) for r in todo]
-        for n, fut in enumerate(as_completed(futures), 1):
+        for n, fut in enumerate(monitor.track(as_completed(futures), len(futures), "games built"), 1):
             index.write(json.dumps(fut.result(), ensure_ascii=False) + "\n")
             if n % 100 == 0 or n == len(todo):
                 index.flush()

@@ -358,8 +358,9 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 	// in their Select commands), gives the true build order:
 	//   start  a building began (placed, or a drone/building morphed into it; "from" = old type)
 	//   done   a building finished, or a unit was produced (eggs, larva, etc. are not reported)
-	//   gone   a building or unit died (or was removed when its owner left)
-	struct tracked { int type; bool completed; bool seen; };
+	//   gone   a building or unit died (or was removed when its owner left): its owner and where it
+	//          was last seen alive (for losses by place: ingest/army_dataset.py)
+	struct tracked { int type; bool completed; bool seen; int slot; int x; int y; };
 	std::unordered_map<uint16_t, tracked> known;
 
 	bool transient(int type) const {
@@ -373,12 +374,14 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 		}
 	}
 
-	void emit(const char* ev, int slot, int type, uint16_t tag, int from = -1, const unit_t* u = nullptr) {
+	void emit(const char* ev, int slot, int type, uint16_t tag, int from = -1, const unit_t* u = nullptr,
+	          int x = -1, int y = -1) {
 		char buf[200];
 		int n = snprintf(buf, sizeof buf, "{\"type\":\"event\",\"frame\":%d,\"slot\":%d,\"ev\":\"%s\",\"unit\":%d,\"tag\":%u",
 		                 st.current_frame, slot, ev, type, (unsigned)tag);
 		if (from >= 0) n += snprintf(buf + n, sizeof buf - n, ",\"from\":%d", from);
 		if (u && u->sprite) n += snprintf(buf + n, sizeof buf - n, ",\"x\":%d,\"y\":%d", u->sprite->position.x, u->sprite->position.y);
+		else if (x >= 0) n += snprintf(buf + n, sizeof buf - n, ",\"x\":%d,\"y\":%d", x, y);
 		snprintf(buf + n, sizeof buf - n, "}\n");
 		fputs(buf, stdout);
 	}
@@ -391,15 +394,18 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 				int type = (int)u->unit_type->id;
 				bool done = u_completed(u);
 				bool building = ut_building(u->unit_type);
+				int ux = u->sprite ? u->sprite->position.x : -1, uy = u->sprite ? u->sprite->position.y : -1;
 				auto it = known.find(tag);
 				if (it == known.end()) {
 					if (building) emit(done ? "done" : "start", p, type, tag, -1, u);  // done: starting buildings
 					else if (done && !transient(type)) emit("done", p, type, tag, -1, u);
-					known[tag] = {type, done, true};
+					known[tag] = {type, done, true, p, ux, uy};
 					continue;
 				}
 				tracked& t = it->second;
 				t.seen = true;
+				t.slot = p;
+				if (ux >= 0) { t.x = ux; t.y = uy; }
 				if (t.type != type) {
 					if (building) emit("start", p, type, tag, t.type, u);           // drone -> building, hatchery -> lair
 					else if (done && transient(t.type) && !transient(type)) emit("done", p, type, tag, t.type, u);
@@ -414,7 +420,8 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 		}
 		for (auto it = known.begin(); it != known.end();) {
 			if (!it->second.seen) {
-				if (!transient(it->second.type)) emit("gone", -1, it->second.type, it->first);
+				if (!transient(it->second.type)) emit("gone", it->second.slot, it->second.type, it->first, -1, nullptr,
+				                                      it->second.x, it->second.y);
 				it = known.erase(it);
 			} else ++it;
 		}
