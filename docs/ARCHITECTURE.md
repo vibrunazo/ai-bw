@@ -1133,7 +1133,7 @@ Contributors with different hardware should report their throughput benchmark (P
 | No bulk access to modern pro replays | Start with STARDATA plus Liquipedia packs; ask the RepMastered maintainer about research access |
 | OpenBW headless throughput is unmeasured (native Linux vs. WSL2) | First P0 benchmark; it decides the B0-b numbers |
 | OpenBW engine repo has no license file (default: all rights reserved) | Use it as an external dependency only; don't vendor or redistribute its source; ask the maintainers to clarify |
-| **Decided:** first matchup | **TvZ**: Terran bot vs. Zerg human |
+| **Decided:** first matchup | **TvZ**, Gary as Terran first, then as Zerg (self-play). The first instance only: Gary plays every race and matchup (§1); the other matchups' replays are already in the inventory (PvZ 19k, PvT 19k, PvP 7.6k, ZvZ 6.5k, TvT 3.1k games) |
 | **Decided:** compute | Start at B0 (1 h on a reference workstation) and scale up through the tiers (§13) |
 | **Open:** STARDATA subset strategy | Full dataset is ~365 GB compressed; decide whether to mirror it or stream a TvZ subset |
 
