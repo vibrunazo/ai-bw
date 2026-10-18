@@ -123,7 +123,7 @@ def line(r: dict) -> str:
     return f"note: {r['text']}"
 
 
-def show(rows: list[dict], f0: int, f1: int, args, tag=lambda r: r["side"]) -> None:
+def show(rows: list[dict], f0: int, f1: int, args, tag=lambda r: r["side"] + (str(r["slot"]) if "slot" in r else "")) -> None:
     """The records in [f0, f1) in time order, filtered by args; tag(r) names whose line it is."""
     hands: dict[tuple, str] = {}
     counts, fates = Counter(), Counter()
@@ -141,7 +141,7 @@ def show(rows: list[dict], f0: int, f1: int, args, tag=lambda r: r["side"]) -> N
         if r["kind"] == "hands":
             hands[who] = r["owner"]
             continue
-        if r["f"] < f0 or (args.side and r["side"] != args.side):
+        if r["f"] < f0 or (args.side and r["side"] != args.side) or (args.slot is not None and r.get("slot") != args.slot):
             continue
         if r["kind"] == "decision":
             counts[f"{tag(r)} {r['layer']}"] += 1
@@ -240,7 +240,8 @@ def main() -> None:
     ap.add_argument("--to", type=float, help="to this minute (default: a minute on)")
     ap.add_argument("--pairs", action="store_true", help="the game's paired branches, listed")
     ap.add_argument("--pair", type=int, help="one paired branch's arms, side by side")
-    ap.add_argument("--side", choices=["T", "Z"])
+    ap.add_argument("--side", choices=["T", "Z", "P"])
+    ap.add_argument("--slot", type=int, help="one player's records in a mirror (eval/mirror.py tags them by slot)")
     ap.add_argument("--layer", action="append", help="only these layers' decisions (macro, army, engage, roles, "
                                                      "posture, gas) or records (seen, belief, death); repeatable")
     ap.add_argument("--orders", choices=["fates", "all", "none"], default="fates")

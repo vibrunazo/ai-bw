@@ -53,6 +53,7 @@ def top(names, probs, k: int = TOP) -> list[list]:
 
 class DecisionLog:
     def __init__(self):
+        self.slot: int | None = None            # the player whose records are being written (a mirror launcher sets it)
         self.path = os.environ.get("GARY_DECISION_LOG")
         self.items: dict[str, list[dict]] = defaultdict(list)
         self.records: list[dict] = []
@@ -79,6 +80,17 @@ class DecisionLog:
 
     # --- records ---------------------------------------------------------------------------------
 
+    def _who(self, side: str) -> str:
+        """The key of a player's hands state: the side, plus the slot when a game has set one (a mirror)."""
+        return side if self.slot is None else f"{side}{self.slot}"
+
+    def _put(self, r: dict) -> None:
+        """A record; with the player's slot when a game has set one (a mirror: both sides are the same race,
+        so "side" alone does not tell the players apart; eval/why.py --slot)."""
+        if self.slot is not None:
+            r["slot"] = self.slot
+        self.records.append(r)
+
     def decision(self, side: str, layer: str, frame: int, choice, p: float | None = None, top: list | None = None,
                  inputs: dict | None = None, by: str = "model", over: list | None = None, then: str | None = None,
                  rl: int | None = None, p_other: float | None = None, why: list | None = None) -> dict:
@@ -99,24 +111,25 @@ class DecisionLog:
             r["then"] = then
         if why:
             r["why"] = why
-        self.records.append(r)
+        self._put(r)
         return r
 
     def order(self, side: str, frame: int, what: str, fate: str, why: str = "", by: str | None = None) -> None:
         r = {"f": int(frame), "kind": "order", "side": side, "what": what, "fate": fate}
         if why:
             r["why"] = why
-        r["by"] = by if by is not None else self.owner.get(side, "?")
-        self.records.append(r)
+        r["by"] = by if by is not None else self.owner.get(self._who(side), "?")
+        self._put(r)
 
     def hands(self, side: str, frame: int, owner: str) -> None:
-        self.owner[side] = owner
-        if self.held.get(side) != owner:
-            self.held[side] = owner
-            self.records.append({"f": int(frame), "kind": "hands", "side": side, "owner": owner})
+        who = self._who(side)
+        self.owner[who] = owner
+        if self.held.get(who) != owner:
+            self.held[who] = owner
+            self._put({"f": int(frame), "kind": "hands", "side": side, "owner": owner})
 
     def note(self, side: str, frame: int, text: str) -> None:
-        self.records.append({"f": int(frame), "kind": "note", "side": side, "text": text})
+        self._put({"f": int(frame), "kind": "note", "side": side, "text": text})
 
     def save_records(self, path) -> None:
         with open(path, "w", encoding="utf-8") as f:

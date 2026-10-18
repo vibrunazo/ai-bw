@@ -70,7 +70,7 @@ RALLY_SIEGE = 14 * 32            # enemy fighters this near the meeting point: t
 RALLY_SIEGE_FOR = 20 * 24        # ...and keep to it this long after the last was seen there
 HISTORY_FADE = 12                # minutes over which the pros' history fades to Gary-Z's own in the macro's inputs
 ALARM_UNTIL = 12 * 60 * 24       # the alarm (_decide): until then...
-ALARM_MARGIN = 16                # ...the Terran fighters seen in a minute outweigh the army by this (x2: 8 supply)
+ALARM_MARGIN = 16                # ...the enemy fighters seen in a minute outweigh the army by this (x2: 8 supply)
 ALARM_SUNKENS = 3                # sunkens at the natural at most, one per 8 supply of threat
 ALARM_HOME = 16 * 32             # Terran fighters this near a known Command Center of theirs are at home: no threat
 ALARM_MIN_P = 0.30               # under the alarm, tech, expansions, research and upgrades need this much odds
@@ -1211,9 +1211,9 @@ class GaryZ(ZergV3):
         alarm = hi.frame < ALARM_UNTIL and threat >= own_army + ALARM_MARGIN
         if alarm != self.alarm_on:
             self.alarm_on = alarm
-            self.log(f"alarm {'on' if alarm else 'off'}: {threat / 2:.0f} Terran supply seen, {own_army / 2:.0f} army")
+            self.log(f"alarm {'on' if alarm else 'off'}: {threat / 2:.0f} enemy supply seen, {own_army / 2:.0f} army")
             LOG.decision("Z", "macro", hi.frame, "alarm on" if alarm else "alarm off", inputs={"threat": threat / 2, "army": own_army / 2},
-                         by=f"rule: the Terran fighters seen in a minute outweigh the army by {ALARM_MARGIN // 2}")
+                         by=f"rule: the enemy fighters seen in a minute outweigh the army by {ALARM_MARGIN // 2}")
         # (the record: the model's top odds, what it saw, and each option drawn ahead of the choice and why
         # it was set aside; gary/decision_log.py)
         name = lambda k: self._name(*self.model.spec.decisions[k])
@@ -1245,7 +1245,7 @@ class GaryZ(ZergV3):
                     self.goal = g
                     self._summed(probs, k, obs, mine, me)
                     self.log(f"next: {g['name']} (alarm)")
-                    record(g["name"], g["p"], k=k, by=f"rule: alarm ({threat / 2:.0f} Terran supply seen, {own_army / 2:.0f} army)")
+                    record(g["name"], g["p"], k=k, by=f"rule: alarm ({threat / 2:.0f} enemy supply seen, {own_army / 2:.0f} army)")
                     return
                 if act in (BUILD, BMORPH) and self.parked is None:
                     self.parked = g
