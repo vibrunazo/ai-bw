@@ -7,6 +7,10 @@ did what it did.
 
 **License:** code is [MIT-0](LICENSE); docs and data are [CC0](LICENSE-CC0). No attribution required.
 
-**Status:** early. Gary plays Terran in TvZ, with build and army decisions learned from pro
-replays, but it's not a good sparring partner yet. What each version can do:
+Gary is meant to play **every race in every matchup**. TvZ came first because it was convenient
+to start somewhere, not because Gary is a Terran bot; the learned Zerg that plays it in self-play
+is Gary too, playing Zerg.
+
+**Status:** early. So far Gary plays Terran and Zerg in TvZ, with build and army decisions learned
+from pro replays, but it's not a good sparring partner yet. What each version can do:
 [docs/PROGRESS.md](docs/PROGRESS.md). The design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

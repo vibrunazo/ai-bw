@@ -2,7 +2,10 @@
 
 Direction 3 in TODO.md: every piece of ARCHITECTURE.md present and connected, crude where it has to
 be, training together. The first milestone is a learned Zerg Gary that is a real opponent for the
-Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the rest needs.
+Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the rest needs, and it is
+Gary: Gary plays every race and matchup (ARCHITECTURE.md §1), so "Gary-Z" is Gary playing Zerg, a
+sparring partner for Terran players, judged by the same goals, humanlikeness and records as the Terran
+side; TvZ is only the first pair the league runs.
 (Revised 2026-10-16 after outside reviews: the humanlikeness classifier replaced subjective ratings.)
 
 ## What exists
