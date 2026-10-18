@@ -54,6 +54,11 @@ GAS_FLOAT, GAS_LOW = 400, 300   # gas above this (and above the minerals): its d
                                 # with ~160 banked, too little for mutalisks; pros bank 350-450 then)
 RALLY_IN_LINE = 0.6              # the rally: this far from the hatchery toward its minerals' middle
 # the mutalisk raid (_mutas)
+HATCH_MASS = float(os.environ.get("GARY_Z_HATCH_MASS", "0.5"))   # a hatchery or expansion at this much summed odds (one-offs: 1.0):
+                                 # the summed odds reached 1.6 a game, one hatchery fewer than the pros from 8:00 on
+INTERCEPT_FAR = 24 * 32          # the main body sweeps a Terran packet in sight this near...
+INTERCEPT_ODDS = 0.7             # ...with under this share of its own supply, away from turrets and bunkers
+INTERCEPT_AGAIN = 8 * 24         # a sweep ordered at most this often
 RAID_FLOCK = 5                   # mutalisks at home before the flock forms and goes out (v3: 7)
 RAID_MEMORY = 90 * 24            # anti-air seen is remembered this long
 RAID_POST = 7 * 32               # px beyond a mineral line (out from the map's middle) where the flock waits
@@ -168,6 +173,7 @@ class GaryZ(ZergV3):
         # the mutalisk raid (_mutas): the line raided, back-offs at it, the flock's hp lately, when each line was
         # last hit, and Gary's Command Centers seen (their mineral lines are raid targets too)
         self.raid_line = None
+        self.intercept_after = 0
         self.raid_cycles = 0
         self.raid_switched = -10 ** 6
         self.raid_hp: list[tuple[int, int]] = []
@@ -788,6 +794,8 @@ class GaryZ(ZergV3):
                              by=f"rule: a cluster under {JOIN_BELOW:.0%} of the main one joins it")
                 return self._army_job_step(obs, mine)
             return False
+        if k == 0 and self._intercept(obs, mine, members):
+            return True
         if self.army_commit:
             return self._committed(obs, mine, members, k)
         grid, glob = self.army_tracker.inputs(obs, members)
@@ -807,6 +815,39 @@ class GaryZ(ZergV3):
             return False                                   # (held, or the drawn cell is where they are)
         self.army_job = {"tags": [u["tag"] for u in members], "point": self.army_tracker.center(cell),
                          "kind": "attack" if attack else "move", "selecting": False, "tries": 0}
+        return self._army_job_step(obs, mine)
+
+    def _intercept(self, obs: dict, mine: list[dict], members: list[dict]) -> bool:
+        """The main body sweeps a Terran packet in sight that it outweighs (theirs under INTERCEPT_ODDS of its
+        own supply) within INTERCEPT_FAR, away from Terran turrets and bunkers. In g5 seed 5007 the Terran fed
+        units one by one across the map for ten minutes, 8-19 in sight at a time, while Gary-Z's 20-30 waited at
+        home and fought each packet at its doorstep (357 fighters lost to 235). (True: it acted.)"""
+        hi = self.hi
+        if hi.frame < self.intercept_after:
+            return False
+        from gary.policy.army import is_building, is_worker, supply_x2
+        enemy = [u for u in obs["units"] if u["owner"] not in (hi.slot, 11) and supply_x2(u["type"]) > 0
+                 and not is_worker(u["type"]) and not is_building(u["type"])]
+        if not enemy:
+            return False
+        mid = (sum(u["x"] for u in members) / len(members), sum(u["y"] for u in members) / len(members))
+        near = [e for e in enemy if math.dist((e["x"], e["y"]), mid) < INTERCEPT_FAR]
+        if not near:
+            return False
+        theirs = sum(supply_x2(e["type"]) for e in near)
+        ours = sum(supply_x2(u["type"]) for u in members)
+        if theirs > INTERCEPT_ODDS * ours:
+            return False
+        at = (sum(e["x"] for e in near) / len(near), sum(e["y"] for e in near) / len(near))
+        static = [u for u in obs["units"] if u["owner"] not in (hi.slot, 11) and u["type"] in (T.TURRET, T.BUNKER)]
+        if any(math.dist((b["x"], b["y"]), at) < 9 * 32 for b in static):
+            return False
+        self.intercept_after = hi.frame + INTERCEPT_AGAIN
+        LOG.decision("Z", "army", hi.frame, f"attack to ({int(at[0]) // 32},{int(at[1]) // 32})",
+                     inputs={"units": len(members), "ours": ours / 2, "theirs": theirs / 2},
+                     by="rule: the main body sweeps a packet it outweighs within reach", then="sent")
+        self.army_job = {"tags": [u["tag"] for u in members], "point": (int(at[0]), int(at[1])), "kind": "attack",
+                         "selecting": False, "tries": 0}
         return self._army_job_step(obs, mine)
 
     def _committed(self, obs: dict, mine: list[dict], members: list[dict], k: int) -> bool:
@@ -1053,7 +1094,9 @@ class GaryZ(ZergV3):
         if self.mass:
             # a one-off whose summed odds reached one, the largest first: taken if possible and affordable, else
             # parked for its money (the larvae go on meanwhile, as below)
-            for mass, j in sorted(((self.odds[j], j) for j in self.one_off if self.odds.get(j, 0.0) >= 1.0), reverse=True):
+            due = ((self.odds[j], j) for j in self.one_off
+                   if self.odds.get(j, 0.0) >= (HATCH_MASS if self.model.spec.decisions[j][1] == Z.HATCHERY else 1.0))
+            for mass, j in sorted(due, reverse=True):
                 act, uid = self.model.spec.decisions[j]
                 if self._cant(act, uid, obs, mine, me):
                     continue
