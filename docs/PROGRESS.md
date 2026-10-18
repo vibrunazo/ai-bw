@@ -334,6 +334,10 @@ plan and the full log).
   | + the main body sweeps packets it outweighs; hatcheries at 0.5 summed odds (g6) | 9 / 15 | 0.31 | | | | |
   | g6 with Gary-Z on commitments (g7) | 9 / 14, **lost 1** | 0.34 | | | | |
   | + the press: far ahead, the nearest Terran building, CCs first (g8) | 8 / 15, **lost 1** | 0.31 | | | | |
+  | g8 at 30 minutes (g9; 17 of 24 games ran with the flock saving, edited mid-round) | 13 / 10, **lost 1** | 0.33 | | | | |
+  | + larvae and minerals saved while the Spire morphs (g10) | 10 / 13, **lost 1** | 0.33 | | | | now an option |
+  | + the alarm on the Terran fighters seen (g11) | 13 / 11 | 0.31 | | | | |
+  | + the alarm on fighters away from the Terran's bases only (g12) | 10 / 14 | **0.29** | | | | |
   | pros (60 games) | | 0 | 18/26/32 | 9.0 | 1.4 | 6.1 |
   - **Its own records:** gary/agent/sightings.py serves both sides now; Gary-Z's act loop records what it saw and
     each fighter it lost, so `eval/why.py --side Z` answers its why-questions. Drones aren't counted: a drone
@@ -384,6 +388,18 @@ plan and the full log).
     and on heartbreak 5002 the press cleared the Terran's SCVs and army by 22:00 and still left 18 buildings at
     25:00. Gary-Z on commitments instead of the plain army model (g7): one win too, the gap worse (0.34).
     Today: 3 Gary-Z wins in 192 league games, none before.
+  - **The flock saving (g10) and the alarm (g11, g12):** the Spire stood at 5.8 min with 0-3 larvae free and no
+    mutalisk in the next minute (pros flock 7-9 at once). Larvae and minerals saved while it morphs gave 9 larvae,
+    668 minerals and 766 gas when it stood and 8 mutalisks in 30 s, and changed no result (g10): off by default
+    (`GARY_Z_FLOCK_SAVE=1`). On Python the Terran's push lands at 7:18-9:41 with 10-16 marines into 0-6 army, and
+    Gary-Z saw it coming (11-20 fighters in sight by 6-7 min, the overlord posts work) while its macro model kept
+    droning at 60-70% odds: pros in that state make zerglings and sunkens, and the pros' data holds few such states.
+    The alarm: before 12:00, the Terran fighters seen in a minute outweigh the army by 8 supply: no drones, tech and
+    expansions only at 30% odds, a sunken at the natural per 8 supply of threat (3 at most), the larvae to the
+    likeliest army unit. Counting every fighter seen it fired falsely (the overlord outside the Terran natural sees
+    its home army, which outweighs a Zerg's most of the game: g11, Gary-T won 13, 5 on Fighting Spirit against 1);
+    counting those away from the Terran's known Command Centers (g12): Gary-T won 10, none lost, 14 at time, Gary-Z's
+    gap 0.29, the day's best, 0.37 at 5-10 min. Python stays 7 of 8 to the Terran in every round of the day.
   - **What keeps Gary-Z from winning now:** its army is a quarter of the pros' at 12 minutes with the drones and
     hatcheries nearly the pros' (39 drones at 12:00, pros 33): the larvae go to drones, and what army there is
     bleeds in the field at odds 0.45 with 18% of it present (pros 0.71, 27%). The next levers are the army's

@@ -63,7 +63,16 @@ PRESS_AGAIN = 20 * 24            # the press re-aimed this often
 INTERCEPT_FAR = 24 * 32          # the main body sweeps a Terran packet in sight this near...
 INTERCEPT_ODDS = 0.7             # ...with under this share of its own supply, away from turrets and bunkers
 INTERCEPT_AGAIN = 8 * 24         # a sweep ordered at most this often
-SAVE_MIN_P = 0.20                # while saving for the flock, a decision that isn't an overlord needs this much odds
+FLOCK_SAVE = os.environ.get("GARY_Z_FLOCK_SAVE", "0") == "1"   # the saving below (off: it made the flock, 8 in 30 s, and
+                                 # changed no result: round g10 Gary-T won 10 lost 1 of 24 against g8's 8 and 1, the gap 0.33 against 0.31)
+ALARM_UNTIL = 12 * 60 * 24       # the alarm (_decide): until then...
+ALARM_MARGIN = 16                # ...the Terran fighters seen in a minute outweigh the army by this (x2: 8 supply)
+ALARM_SUNKENS = 3                # sunkens at the natural at most, one per 8 supply of threat
+ALARM_HOME = 16 * 32             # Terran fighters this near a known Command Center of theirs are at home: no threat
+ALARM_MIN_P = 0.30               # under the alarm, tech, expansions, research and upgrades need this much odds
+SAVE_MIN_P = 0.20                # while saving for the flock, a decision that isn't an overlord or a colony needs this
+                                 # much odds (colonies are the defense the push meets while the flock is saved for: without
+                                 # them Gary-Z died by 10-15 min in 5 of 8 Heartbreak Ridge games, round g9)
 RAID_FLOCK = 5                   # mutalisks at home before the flock forms and goes out (v3: 7)
 RAID_MEMORY = 90 * 24            # anti-air seen is remembered this long
 RAID_POST = 7 * 32               # px beyond a mineral line (out from the map's middle) where the flock waits
@@ -179,6 +188,7 @@ class GaryZ(ZergV3):
         # last hit, and Gary's Command Centers seen (their mineral lines are raid targets too)
         self.raid_line = None
         self.intercept_after = 0
+        self.alarm_on = False
         self.press_after = 0
         self.enemy_buildings: dict[int, tuple[int, int, int]] = {}
         self.enemy_fighters: dict[int, tuple[int, int]] = {}
@@ -836,7 +846,7 @@ class GaryZ(ZergV3):
             if is_building(u["type"]):
                 self.enemy_buildings[u["tag"]] = (u["x"], u["y"], u["type"])
             elif supply_x2(u["type"]) > 0 and not is_worker(u["type"]):
-                self.enemy_fighters[u["tag"]] = (f, supply_x2(u["type"]))
+                self.enemy_fighters[u["tag"]] = (f, supply_x2(u["type"]), u["x"], u["y"])
         gone = {u["tag"] for u in obs["units"] if u["owner"] in (self.hi.slot, 11)}   # (own tags never collide)
         self.enemy_fighters = {t: v for t, v in self.enemy_fighters.items() if f - v[0] <= PRESS_MEMORY}
 
@@ -1147,10 +1157,31 @@ class GaryZ(ZergV3):
         # had 0-3 larvae free then, no mutalisk in the next minute and 5 in two, round g8): no larva morph but an
         # overlord until the larvae are at their cap, where one more would be lost anyway
         n_larvae = sum(1 for u in mine if u["type"] == Z.LARVA)
-        saving = (any(u["type"] == Z.SPIRE and not u["completed"] for u in mine)
+        saving = (FLOCK_SAVE and any(u["type"] == Z.SPIRE and not u["completed"] for u in mine)
                   and sum(1 for u in mine if u["type"] == Z.MUTALISK) < MUTA_FLOCK_SAVE
                   and n_larvae < 3 * sum(1 for u in mine if u["type"] in Z.TOWN_HALLS and u["completed"]))
         waiting = False
+        # the alarm: before ALARM_UNTIL, the Terran fighters seen in the last minute outweigh the army by ALARM_MARGIN.
+        # The model kept droning at 60-70% odds with 20 marines in sight and 6 army at 6:00-7:30 (round g10, Python,
+        # Gary-T won 7 of 8 by a push at 7:18-9:41 into 0-6 army): pros in that state make zerglings and sunkens,
+        # and the pros' data holds few such states because they don't get into them. While it is on: no drones,
+        # tech and expansions only at real odds, a sunken at the natural per 8 supply of threat (ALARM_SUNKENS at
+        # most), and the larvae to the likeliest army unit the model gives
+        from gary.policy.army import supply_x2 as _sx2
+        self._remember_enemy(obs)
+        # (fighters away from the Terran's known Command Centers only: the overlord outside its natural sees its home
+        # army, which outweighs a Zerg's most of the game, and the alarm starved Gary-Z of drones for minutes: round
+        # g11, Gary-T won 13 of 24 against 8, 5 on Fighting Spirit against 1. Pros react to an army moving out)
+        ccs = [(x, y) for x, y, t in self.enemy_buildings.values() if t == T.CC]
+        threat = sum(v[1] for v in self.enemy_fighters.values()
+                     if not any(math.dist(v[2:4], c) < ALARM_HOME for c in ccs))
+        own_army = sum(_sx2(u["type"]) for u in mine if u["type"] in Z.ARMY and u["completed"])
+        alarm = hi.frame < ALARM_UNTIL and threat >= own_army + ALARM_MARGIN
+        if alarm != self.alarm_on:
+            self.alarm_on = alarm
+            self.log(f"alarm {'on' if alarm else 'off'}: {threat / 2:.0f} Terran supply seen, {own_army / 2:.0f} army")
+            LOG.decision("Z", "macro", hi.frame, "alarm on" if alarm else "alarm off", inputs={"threat": threat / 2, "army": own_army / 2},
+                         by=f"rule: the Terran fighters seen in a minute outweigh the army by {ALARM_MARGIN // 2}")
         # (the record: the model's top odds, what it saw, and each option drawn ahead of the choice and why
         # it was set aside; gary/decision_log.py)
         name = lambda k: self._name(*self.model.spec.decisions[k])
@@ -1159,6 +1190,38 @@ class GaryZ(ZergV3):
         def record(choice, p, then=None, k=None, by="dice"):
             LOG.decision("Z", "macro", hi.frame, choice, p, top(name, probs[0]), self._seen(obs, mine, me), by,
                          over[:8], then, why=explain_macro(self.model, x, k) if k is not None else None)
+        if alarm:
+            want = min(ALARM_SUNKENS, threat // 16 + 1)
+            sunkens = self._count(mine, Z.SUNKEN)
+            creeps_done = [u for u in mine if u["type"] == Z.CREEP and u["completed"]]
+            creep_pending = any(j.unit_type == Z.CREEP for j in self.jobs.values()) or any(
+                u["type"] == Z.CREEP and not u["completed"] for u in mine)
+            steps = []
+            if creeps_done and sunkens < want:
+                steps.append((BMORPH, Z.SUNKEN))
+            if not creep_pending and sunkens + len(creeps_done) < want:
+                steps.append((BUILD, Z.CREEP))
+            army_ks = sorted((k for k, (a, u) in enumerate(self.model.spec.decisions)
+                              if a == MORPH and u in (Z.ZERGLING, Z.HYDRALISK, Z.MUTALISK)), key=lambda k: -probs[0, k])
+            steps += [self.model.spec.decisions[k] for k in army_ks]
+            for act, uid in steps:
+                if self._cant(act, uid, obs, mine, me):
+                    continue
+                k = self.model.spec.decisions.index((act, uid))
+                g = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": self._name(act, uid)}
+                if self._affordable(g, me):
+                    self.goal = g
+                    self._summed(probs, k, obs, mine, me)
+                    self.log(f"next: {g['name']} (alarm)")
+                    record(g["name"], g["p"], k=k, by=f"rule: alarm ({threat / 2:.0f} Terran supply seen, {own_army / 2:.0f} army)")
+                    return
+                if act in (BUILD, BMORPH) and self.parked is None:
+                    self.parked = g
+                    record(g["name"], g["p"], "parked for its money", k=k, by="rule: alarm")
+                    over.append([g["name"], "parked for its money"])
+                    break
+                record(None, None, f"waits: {g['name']} needs money (alarm)")
+                return
         if self.mass:
             # a one-off whose summed odds reached one, the largest first: taken if possible and affordable, else
             # parked for its money (the larvae go on meanwhile, as below)
@@ -1190,13 +1253,19 @@ class GaryZ(ZergV3):
                 waiting = True  # (no larva free yet: that one waits for the next, as the Terran's macro waits for
                 over.append([name(k), "no larva free: waits for one"])     # a busy building)
                 continue
-            if saving and not (act == MORPH and uid == Z.OVERLORD):
+            if saving and not (act == MORPH and uid == Z.OVERLORD) and uid not in (Z.CREEP, Z.SUNKEN, Z.SPORE):
                 if act == MORPH and uid in Z.FROM_LARVA:
                     over.append([name(k), "rule: larvae saved for the Spire's flock"])
                     continue
                 if probs[0, k] < SAVE_MIN_P:          # (the minerals too: with the larvae held, the dice drained 600
                     over.append([name(k), f"rule: under {SAVE_MIN_P:.0%} while saving for the flock"])   # into six creep
                     continue                          # colonies and three sunkens at 8%, and the mutalisks waited for money)
+            if alarm and act == MORPH and uid == Z.DRONE:
+                over.append([name(k), "rule: alarm: no drones"])
+                continue
+            if alarm and (act == EXPAND or act in (RESEARCH, UPGRADE) or (act == BUILD and uid in TECH_PATH | {Z.HATCHERY, Z.EVO}))                     and probs[0, k] < ALARM_MIN_P:
+                over.append([name(k), f"rule: alarm: under {ALARM_MIN_P:.0%}"])
+                continue
             if act == BUILD and uid in TECH_PATH and probs[0, k] < TECH_MIN_P:
                 over.append([name(k), f"rule: a tech path under {TECH_MIN_P:.0%}"])
                 continue        # (a tech path opened only on the model's real odds: drawn at 1-6% across dozens of
