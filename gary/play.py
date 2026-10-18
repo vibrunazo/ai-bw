@@ -139,6 +139,7 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
                 print(f"saved {pov}")
             except Exception as e:
                 print(f"could not save pov: {e}")
+        game.close()
 
 
 def _save_live(hi: HumanInterface, gary, pov: str) -> None:
@@ -147,7 +148,6 @@ def _save_live(hi: HumanInterface, gary, pov: str) -> None:
     if gary is not None and pov.endswith(".pov.jsonl"):
         gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
         LOG.save_records(pov[:-len(".pov.jsonl")] + ".records.jsonl")
-        game.close()
 
 
 def main() -> None:
