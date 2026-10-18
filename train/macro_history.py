@@ -4,8 +4,8 @@ gary/policy/macro.py's MacroTracker can show the macro model the pros' typical p
 player's own (Gary-Z's own history fed back on itself: PROGRESS.md, round g12). This writes what
 it reads, from the macro dataset and the newest macro model's decision index:
 
-  data/interim/macro/v1/history_mean_<race>.npy          (31, decisions): the race's mean, minutes 0-30
-  data/interim/macro/v1/history_mean_<race>_styles.npy   (styles, 31, decisions): per build style, at each
+  data/interim/macro/v1/history_mean_<matchup>_<race>.npy        (31, decisions): the race's mean, minutes 0-30
+  data/interim/macro/v1/history_mean_<matchup>_<race>_styles.npy (styles, 31, decisions): per build style, at each
                                                           minute the style's own mean while MIN_STYLE of its
                                                           games are still going, the race's mean after
 
@@ -74,8 +74,9 @@ def main() -> None:
     tables, styles = np.stack(tables), np.array(styles)
     mean = np.nanmean(tables, axis=0).astype(np.float32)
     out = macro_dir()
-    np.save(out / f"history_mean_{args.race}.npy", mean)
-    print(f"wrote history_mean_{args.race}.npy {mean.shape}; {mean[10].sum():.0f} decisions taken by 10:00 on average")
+    tag = f"{args.matchup}_{args.race}"
+    np.save(out / f"history_mean_{tag}.npy", mean)
+    print(f"wrote history_mean_{tag}.npy {mean.shape}; {mean[10].sum():.0f} decisions taken by 10:00 on average")
     if len(spec.styles):
         per = np.repeat(mean[None], len(spec.styles), axis=0)
         for s in range(len(spec.styles)):
@@ -85,8 +86,8 @@ def main() -> None:
             if enough.any():
                 per[s, enough] = np.nanmean(rows[:, enough], axis=0)
             print(f"  style {s}: {len(rows)} players, its own mean to minute {int(enough.sum()) - 1}, the race's after")
-        np.save(out / f"history_mean_{args.race}_styles.npy", per.astype(np.float32))
-        print(f"wrote history_mean_{args.race}_styles.npy {per.shape}")
+        np.save(out / f"history_mean_{tag}_styles.npy", per.astype(np.float32))
+        print(f"wrote history_mean_{tag}_styles.npy {per.shape}")
 
 
 if __name__ == "__main__":

@@ -147,9 +147,9 @@ class MacroModel:
 
 
 
-def pro_history(race: str, style: int | None = None) -> np.ndarray | None:
-    """The pros' mean decision counts per minute for a race (data/interim/macro/v1/history_mean_<race>.npy), or
-    for one of its build styles (history_mean_<race>_styles.npy, the race's mean where a style has too few
+def pro_history(race: str, style: int | None = None, matchup: str = "TvZ") -> np.ndarray | None:
+    """The pros' mean decision counts per minute for a race in a matchup (data/interim/macro/v1/
+    history_mean_<matchup>_<race>.npy, train/macro_history.py), or for one of its build styles (..._styles.npy, the race's mean where a style has too few
     players: an average over styles told a 3-hatch player it had made a 9-pool player's units). None if not
     computed."""
     import sys
@@ -157,11 +157,11 @@ def pro_history(race: str, style: int | None = None) -> np.ndarray | None:
     try:
         from inventory import data_root
         root = data_root() / "interim" / "macro" / "v1"
-        if style is not None and (root / f"history_mean_{race}_styles.npy").exists():
-            t = np.load(root / f"history_mean_{race}_styles.npy")
+        if style is not None and (root / f"history_mean_{matchup}_{race}_styles.npy").exists():
+            t = np.load(root / f"history_mean_{matchup}_{race}_styles.npy")
             if 0 <= style < len(t):
                 return t[style]
-        return np.load(root / f"history_mean_{race}.npy")
+        return np.load(root / f"history_mean_{matchup}_{race}.npy")
     except Exception:
         return None
 
@@ -181,7 +181,7 @@ class MacroTracker:
         self.decided = np.zeros(len(spec.decisions), dtype=np.float32)
         self.last_decision_frame = 0
         # history: None, or the pros' mean decision counts per minute ((31, decisions): data/interim/macro/
-        # history_mean_<race>.npy): the model then sees a pro's typical past, not this player's own. Gary-Z's own
+        # history_mean_<matchup>_<race>.npy): the model then sees a pro's typical past, not this player's own. Gary-Z's own
         # history fed back on itself: its drone odds rested on "its decisions so far" at +0.36 (the records'
         # attribution, round g12), 60-70% drones at 6:00-7:30 where pros decide drones 17-24% of the time
         self.history: np.ndarray | None = None

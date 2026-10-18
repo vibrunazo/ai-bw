@@ -38,6 +38,7 @@ from gary.interface import screen_of
 from gary.policy.army import ArmyModel, ArmyTracker
 from gary.policy.attribution import explain_army, explain_macro
 from gary.policy.macro import MacroModel, MacroTracker
+from gary.races import enemy_of
 
 MORPH, BMORPH, BUILD, RESEARCH, UPGRADE, EXPAND = 1, 2, 3, 4, 5, 6
 MIN_P = 0.05                    # never a decision the model gives less than this (as the Terran's macro)
@@ -131,10 +132,10 @@ def _cell_dist(a: int, b: int) -> int:
     return max(abs(a // 16 - b // 16), abs(a % 16 - b % 16))
 
 
-def latest_model(kind: str = "macro") -> Path:
-    found = sorted(Path(f"runs/{kind}").glob("TvZ_Z_*/model.pt"))
+def latest_model(kind: str = "macro", matchup: str = "TvZ") -> Path:
+    found = sorted(Path(f"runs/{kind}").glob(f"{matchup}_Z_*/model.pt"))
     if not found:
-        raise FileNotFoundError(f"no Zerg {kind} model in runs/{kind}: python -m train.{kind} --race Z")
+        raise FileNotFoundError(f"no Zerg {kind} model for {matchup} in runs/{kind}: python -m train.{kind} --matchup {matchup} --race Z")
     return found[-1]
 
 
@@ -153,10 +154,14 @@ def load_plans() -> tuple[list[str], list[float]] | None:
 
 
 class GaryZ(ZergV3):
-    def __init__(self, hi, mapinfo, seed: int = 0, model: str | Path | None = None, plan: int | None = None):
+    def __init__(self, hi, mapinfo, seed: int = 0, model: str | Path | None = None, plan: int | None = None,
+                 matchup: str = "TvZ"):
+        """matchup: whose models and pro tables (ZvZ for a mirror); the enemy's race is its other letter."""
         super().__init__(hi, mapinfo, seed)
-        self.model = MacroModel.load(model or latest_model())
-        plans = load_plans()
+        self.matchup = matchup
+        self.enemy = enemy_of(matchup, "Z")              # (its buildings and fighters by race: gary/races.py)
+        self.model = MacroModel.load(model or latest_model("macro", matchup))
+        plans = load_plans() if matchup == "TvZ" else None
         rng = random.Random(seed)
         styles = self.model.spec.styles
         if plan is None and styles:
@@ -176,7 +181,7 @@ class GaryZ(ZergV3):
         hist = os.environ.get("GARY_Z_HISTORY", "pro")      # pro (fading to its own over HISTORY_FADE minutes), pro_all
         if hist != "own":                                    # (the pros' all game), own, or a constant share (0.5)
             from gary.policy.macro import pro_history
-            self.tracker.history = pro_history("Z", plan)      # (its own rolled style's pros)
+            self.tracker.history = pro_history("Z", plan, matchup)      # (its own rolled style's pros)
             self.tracker.history_weight = 1.0 if hist in ("pro", "pro_all") else float(hist)
             self.tracker.history_until = HISTORY_FADE if hist == "pro" else 0
         # where the groups go: the Zerg army model (runs/army/TvZ_Z_*), as the Terran's army; v1's
@@ -185,8 +190,8 @@ class GaryZ(ZergV3):
         # every 5 s per cluster, given its commitment), the commit model also choosing destinations
         commit = os.environ.get("GARY_Z_COMMIT")
         self.army_commit = bool(commit)
-        self.army_model = ArmyModel.load(latest_model("commit") if commit == "latest" else commit) if commit \
-            else ArmyModel.load(latest_model("army"))
+        self.army_model = ArmyModel.load(latest_model("commit", matchup) if commit == "latest" else commit) if commit \
+            else ArmyModel.load(latest_model("army", matchup))
         self.commitments: list[tuple[int, int, int, int]] = []   # (frame, from cell, to cell, 1 engage / 2 move)
         self.army_tracker = ArmyTracker(self.army_model.spec, hi.slot, mapinfo.size, self.home)
         self.sizes = dict(GROUND)
@@ -582,7 +587,7 @@ class GaryZ(ZergV3):
         for u in enemy:                                    # (anti-air, remembered: v3's air_seen, 90 s)
             if u["type"] in V3.AIR_THREAT:
                 self.air_seen[u["tag"]] = (hi.frame, u["x"], u["y"], u["type"])
-            elif u["type"] == T.CC:
+            elif u["type"] in self.enemy.town_halls:
                 self.seen_halls[u["tag"]] = (u["x"], u["y"])
         self.air_seen = {t: v for t, v in self.air_seen.items() if hi.frame - v[0] < RAID_MEMORY}
         flock = [mutas[t] for t in self.flock]
@@ -905,12 +910,12 @@ class GaryZ(ZergV3):
         # (what ends a game first: Command Centers, then production, then the rest; the nearest within each. On
         # heartbreak seed 5002 the nearest-first press cleared the Terran's SCVs and army by 22:00 and left 18
         # buildings, turrets among them, standing at the 25-minute limit)
-        rank = lambda t: 0 if t == T.CC else 1 if t in T.PRODUCTION else 2
+        rank = lambda t: 0 if t in self.enemy.town_halls else 1 if t in self.enemy.production else 2
         x, y, t = min(self.enemy_buildings.values(), key=lambda v: (rank(v[2]), math.dist(v[:2], mid)))
         self.press_after = hi.frame + PRESS_AGAIN
         LOG.decision("Z", "army", hi.frame, f"attack to ({x // 32},{y // 32})",
-                     inputs={"units": len(members), "ours": own / 2, "theirs_seen": seen / 2, "target": T.NAMES.get(t, str(t))},
-                     by=f"rule: {PRESS_RATIO:g}x the Terran fighters seen, nothing at home: presses the nearest building", then="sent")
+                     inputs={"units": len(members), "ours": own / 2, "theirs_seen": seen / 2, "target": self.enemy.names.get(t, str(t))},
+                     by=f"rule: {PRESS_RATIO:g}x the enemy fighters seen, nothing at home: presses the nearest building", then="sent")
         self.army_job = {"tags": [u["tag"] for u in members], "point": (int(x), int(y)), "kind": "attack",
                          "selecting": False, "tries": 0}
         return self._army_job_step(obs, mine)
@@ -937,7 +942,7 @@ class GaryZ(ZergV3):
         if theirs > INTERCEPT_ODDS * ours:
             return False
         at = (sum(e["x"] for e in near) / len(near), sum(e["y"] for e in near) / len(near))
-        static = [u for u in obs["units"] if u["owner"] not in (hi.slot, 11) and u["type"] in (T.TURRET, T.BUNKER)]
+        static = [u for u in obs["units"] if u["owner"] not in (hi.slot, 11) and u["type"] in self.enemy.static]
         if any(math.dist((b["x"], b["y"]), at) < 9 * 32 for b in static):
             return False
         self.intercept_after = hi.frame + INTERCEPT_AGAIN
@@ -1199,7 +1204,7 @@ class GaryZ(ZergV3):
         # (fighters away from the Terran's known Command Centers only: the overlord outside its natural sees its home
         # army, which outweighs a Zerg's most of the game, and the alarm starved Gary-Z of drones for minutes: round
         # g11, Gary-T won 13 of 24 against 8, 5 on Fighting Spirit against 1. Pros react to an army moving out)
-        ccs = [(x, y) for x, y, t in self.enemy_buildings.values() if t == T.CC]
+        ccs = [(x, y) for x, y, t in self.enemy_buildings.values() if t in self.enemy.town_halls]
         threat = sum(v[1] for v in self.enemy_fighters.values()
                      if not any(math.dist(v[2:4], c) < ALARM_HOME for c in ccs))
         own_army = sum(_sx2(u["type"]) for u in mine if u["type"] in Z.ARMY and u["completed"])
