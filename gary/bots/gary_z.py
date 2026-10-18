@@ -63,6 +63,7 @@ PRESS_AGAIN = 20 * 24            # the press re-aimed this often
 INTERCEPT_FAR = 24 * 32          # the main body sweeps a Terran packet in sight this near...
 INTERCEPT_ODDS = 0.7             # ...with under this share of its own supply, away from turrets and bunkers
 INTERCEPT_AGAIN = 8 * 24         # a sweep ordered at most this often
+SAVE_MIN_P = 0.20                # while saving for the flock, a decision that isn't an overlord needs this much odds
 RAID_FLOCK = 5                   # mutalisks at home before the flock forms and goes out (v3: 7)
 RAID_MEMORY = 90 * 24            # anti-air seen is remembered this long
 RAID_POST = 7 * 32               # px beyond a mineral line (out from the map's middle) where the flock waits
@@ -1142,6 +1143,13 @@ class GaryZ(ZergV3):
         order = [k for _, k in sorted(((self.rng.random() ** (1 / p), k) for k, p in enumerate(probs[0])
                                         if p >= DICE_FLOOR), reverse=True)]
         larva = any(u["type"] == Z.LARVA for u in mine)
+        # larvae banked while the Spire morphs (as the gas is: pros flock 7-9 mutalisks the moment it stands; Gary-Z
+        # had 0-3 larvae free then, no mutalisk in the next minute and 5 in two, round g8): no larva morph but an
+        # overlord until the larvae are at their cap, where one more would be lost anyway
+        n_larvae = sum(1 for u in mine if u["type"] == Z.LARVA)
+        saving = (any(u["type"] == Z.SPIRE and not u["completed"] for u in mine)
+                  and sum(1 for u in mine if u["type"] == Z.MUTALISK) < MUTA_FLOCK_SAVE
+                  and n_larvae < 3 * sum(1 for u in mine if u["type"] in Z.TOWN_HALLS and u["completed"]))
         waiting = False
         # (the record: the model's top odds, what it saw, and each option drawn ahead of the choice and why
         # it was set aside; gary/decision_log.py)
@@ -1182,6 +1190,13 @@ class GaryZ(ZergV3):
                 waiting = True  # (no larva free yet: that one waits for the next, as the Terran's macro waits for
                 over.append([name(k), "no larva free: waits for one"])     # a busy building)
                 continue
+            if saving and not (act == MORPH and uid == Z.OVERLORD):
+                if act == MORPH and uid in Z.FROM_LARVA:
+                    over.append([name(k), "rule: larvae saved for the Spire's flock"])
+                    continue
+                if probs[0, k] < SAVE_MIN_P:          # (the minerals too: with the larvae held, the dice drained 600
+                    over.append([name(k), f"rule: under {SAVE_MIN_P:.0%} while saving for the flock"])   # into six creep
+                    continue                          # colonies and three sunkens at 8%, and the mutalisks waited for money)
             if act == BUILD and uid in TECH_PATH and probs[0, k] < TECH_MIN_P:
                 over.append([name(k), f"rule: a tech path under {TECH_MIN_P:.0%}"])
                 continue        # (a tech path opened only on the model's real odds: drawn at 1-6% across dozens of
