@@ -44,6 +44,8 @@ MIN_P = 0.05                    # never take a decision the model gives less tha
                                 # choices lead into states pros rarely reach, where it knows less
 BUSY = {T.ORDER_RESEARCH, T.ORDER_UPGRADE, T.ORDER_BUILD_ADDON}
 WAIT = {"kind": "wait"}         # plan(): possible, but not right now
+ONE_OFF_BUILDINGS = {T.REFINERY, T.ACADEMY, T.EBAY, T.FACTORY, T.STARPORT, T.ARMORY, T.SCIENCE_FACILITY, T.COMSAT,
+                     T.MACHINE_SHOP, T.CONTROL_TOWER, T.COVERT_OPS, T.PHYSICS_LAB}   # odds_mass: built once (or so)
 KEEP_BUSY = {T.RAX, T.FACTORY, T.STARPORT}   # producers that keep making their last unit (keep_busy)
 NAT_BUNKER_ALONG = 0.45         # the natural's bunker: this far from its Command Center toward its way out
 NAT_BUNKER_TILES = 5            # ...or this far toward the enemy where the natural has no choke
@@ -94,6 +96,15 @@ class LearnedMacro:
         self.expand_mass: float | None = None
         self.answers = None                                 # answers.py Answers (option answers): the zerg's plan answered
         self.expand_odds = 0.0
+        # odds_mass (option mass): the same for every one-off decision (a tech building, an add-on, research,
+        # an upgrade): its odds summed over the decisions taken while it was possible; at this much it is the
+        # next decision. Taking the favorite each time never gets to them: held-out, the model's first
+        # Factory by 8:00 came in 4% of games against the pros' 62%; in human game 3 the Refinery came at 7:26
+        # and the Academy at 7:39 (pros ~4:10) with odds of 4-11% a decision for minutes
+        self.odds_mass: float | None = None
+        self.one_off = [k for k, (act, uid) in enumerate(model.spec.decisions)
+                        if act in (RESEARCH, UPGRADE) or (act == BUILD and uid in ONE_OFF_BUILDINGS)]
+        self.odds: dict[int, float] = {}                    # one-off decision -> its odds summed since possible
         self._bases_by_walk: list | None = None             # free_base: the bases by a worker's walk from the natural
         self.p_expand = 0.0                                 # the model's odds of expanding at its last query
         self.halls = 0                                      # Command Centers Gary has had, built or building
@@ -250,6 +261,17 @@ class LearnedMacro:
                 g.say(f"next: expand ({self.expand_odds:.2f} expansions' odds since the last)")
                 record(k_exp, f"rule: expansion odds summed to {self.expand_odds:.2f} since the last")
                 return
+            if self.odds_mass is not None:
+                due = [(self.odds[k], k) for k in self.one_off if self.odds.get(k, 0.0) >= self.odds_mass]
+                for mass, k in sorted(due, reverse=True):
+                    plan = self.plan(*self.model.spec.decisions[k], obs, mine, done, me)
+                    if plan is not None and plan is not WAIT:
+                        act, uid = self.model.spec.decisions[k]
+                        self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(act, uid)}
+                        self.odds[k] = 0.0
+                        g.say(f"next: {self.goal['name']} ({mass:.2f} odds summed since it was possible)")
+                        record(k, f"rule: its odds summed to {mass:.2f} since it was possible")
+                        return
             if self.force is not None and hi.frame >= self.force[0]:
                 # a branch (train/macro_rl.py): another decision at this moment of the same game
                 k = self.force[1]
@@ -294,6 +316,12 @@ class LearnedMacro:
             self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame,
                          "name": describe(act, uid)}
             self.expand_odds += float(probs[0, k_exp])
+            if self.odds_mass is not None:              # (summed per decision taken, while possible or waiting)
+                for j in self.one_off:
+                    if j == k:
+                        self.odds[j] = 0.0
+                    elif probs[0, j] >= 0.01 and self.plan(*self.model.spec.decisions[j], obs, mine, done, me) is not None:
+                        self.odds[j] = self.odds.get(j, 0.0) + float(probs[0, j])
             g.say(f"next: {self.goal['name']} ({self.goal['p']:.0%})")
         goal = self.goal
         plan = self.plan(goal["act"], goal["id"], obs, mine, done, me)   # still possible?

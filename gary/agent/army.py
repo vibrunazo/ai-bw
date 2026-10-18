@@ -181,6 +181,7 @@ class LearnedArmy:
         self.scout_resends = 0
 
     def remember(self, obs: dict) -> None:
+        self.tracker.hidden = set().union(set(), *self.g.loaded.values())   # (marines in a bunker aren't lost)
         self.tracker.remember(obs)
         if self.belief_mem is not None:
             seen = np.zeros(228, np.float32)
@@ -443,9 +444,12 @@ class LearnedArmy:
         if self.force_commit is not None:
             k, self.force_commit = int(self.force_commit), None
             by = "forced (a paired arm)"
-        else:
+        elif self.draw:                        # training (the league): sampled, logged with its odds
             k = int(self.rng.choice(3, p=q / q.sum()))
             by = "draw"
+        else:                                  # play: the likeliest (human game 3 was played drawn: the two
+            k = int(q.argmax())                # retreats that threw it were 4.8% and 5.1% draws)
+            by = "favorite"
         if self.then_rng is not None:          # (an arm's first decision drawn its own way, the rest shared)
             self.rng, self.then_rng = self.then_rng, None
         names = ["keep", "engage", "move"]
@@ -474,7 +478,7 @@ class LearnedArmy:
             LOG.decision("T", "commit", hi.frame, names[k], q[k], options, self._seen, by,
                          then="no cell on that side: its commitment stands", rl=rl, why=why)
             return None
-        best = int(self.rng.choice(len(p), p=p / p.sum()))
+        best = int(self.rng.choice(len(p), p=p / p.sum())) if self.draw else int(p.argmax())
         self.commitments.append((hi.frame, here, best, k))
         LOG.decision("T", "commit", hi.frame, f"{names[k]} to {self._cell_name(best)}", q[k], options, self._seen, by,
                      then="sent", rl=rl, why=why)

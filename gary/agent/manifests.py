@@ -503,7 +503,13 @@ OPTIONS = {
     # army.py: commitments (train/commit.py: keep / engage / move every 5 s per cluster, given its commitment,
     # learned from the pros' armies between orders too); the army model replaced by the commit model, whose
     # destination head was trained along (GARY_TCOMMIT_MODEL pins it)
-    "commit": lambda m: m["army"].update(draw=True, commit=True, model="commit/latest"),
+    # In play the likeliest of keep / engage / move and the likeliest cell; drawn only with +draw (the league's
+    # training): human game 3 was played drawn, and the two retreats that threw it were 4.8% and 5.1% draws
+    "commit": lambda m: m["army"].update(commit=True, model="commit/latest"),
+    # army.py: no hunt (v0.16's scripted attack once no enemy army was seen for a minute): with commitments the
+    # engage choice decides when the army goes for the enemy's buildings. In human game 3 the hunt sent 23
+    # marines into three sunkens at "100% sure", one by one, twice
+    "nohunt": lambda m: m["army"].update(hunt=False),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
@@ -563,6 +569,9 @@ OPTIONS = {
     # 11 (11); Zerg v3 games at 20:00 on 3+ Command Centers 31 of 48 (5 of 49). Forcing the natural too
     # (at 4:00-6:00, under pressure) lost 15. In v0.23
     "expand": lambda m: m["macro"].update(expand_mass=1.0),
+    # macro.py odds_mass: every one-off decision (a tech building, an add-on, research, an upgrade) once its odds,
+    # summed over the decisions taken while it was possible, reach one (as expand_mass for expansions)
+    "mass": lambda m: m["macro"].update(odds_mass=1.0),
     # answers.py: the zerg's plan read from what Gary saw (a tech scan of its main at 6:30 if nothing is
     # known), and the pros' answer to it as macro goals (against lurkers: Siege Mode, tanks, vessels,
     # Irradiate, turrets one a base; against mutalisks nothing: the model's own turrets do). On v0.23 (432
@@ -736,6 +745,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False),
                                m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0))
         g.macro.expand_mass = m["macro"].get("expand_mass")
+        g.macro.odds_mass = m["macro"].get("odds_mass")
         if m["macro"].get("answers"):
             from gary.agent.answers import Answers
             g.macro.answers = Answers(g, **m["macro"].get("answer_options", {}))

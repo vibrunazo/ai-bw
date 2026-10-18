@@ -92,8 +92,16 @@ import math
 import numpy as np
 
 from gary import terran as T
+from gary import zerg as Z
 from gary.agent.intents import Intent
 from gary.policy.army import is_building, is_worker, supply_x2
+
+# flyers: units the ground army can't catch. Away from home the rules don't close in on a group of them
+# alone (human game 3: "1 Marine -> close in" on 3 mutalisks, across the map, dying alone, five times);
+# in range they are fired at, at home they are closed in on over the mineral line as before
+FLYERS = {Z.MUTALISK, Z.SCOURGE, Z.GUARDIAN, Z.DEVOURER, Z.QUEEN, Z.OVERLORD,
+          T.WRAITH, T.VALKYRIE, T.BC, T.VESSEL, T.DROPSHIP}
+FOLLOW = 6 * 32                      # medics this close to a group that fires or closes in go with it
 
 ATTACK = {10, 12, 14}
 MOVE = {6}
@@ -367,7 +375,11 @@ class RoleRules:
         # fire: an enemy in range, not attacking
         held = {HOLD} if self.holds or self.gap_post else set()
         firing = held | ({HOLD} if self.fire == "hold" else set())
-        idle = [u for u in mine if u.get("order") not in ATTACK | firing and in_range(u) and fresh(u, "FIRE")]
+        # (medics don't fire or close in on their own: human game 3 had "1 Medic -> fire" at mutalisks, dying
+        # alone; they go with the group that does, and retreat or pull back with everyone)
+        medics = [u for u in mine if u["type"] == T.MEDIC]
+        idle = [u for u in mine if u["type"] != T.MEDIC and u.get("order") not in ATTACK | firing and in_range(u)
+                and fresh(u, "FIRE")]
         if self.volley:
             idle = self._volley_ready(idle, mine, enemy, in_range, targeted)
         if idle:
@@ -377,6 +389,7 @@ class RoleRules:
                     self.told[u["tag"]] = ("FIRE", now)
                 tags = [u["tag"] for u in group]
                 return Intent("FIRE", tags, None, {"key": ("hold",), "tags": tags, "center": _mid(group)}, "roles")
+            group = self._with_medics(group, medics, fresh)
             if self.fire == "here":
                 mid = _mid(group)
                 return self._intent("FIRE", group, (int(mid[0]), int(mid[1])), "attack_move")
@@ -403,7 +416,10 @@ class RoleRules:
                                  and min(math.dist((u["x"], u["y"]), a) for a in anchors) <= ANCHOR_OUT}
                 prey = [e for e in enemy if e.get("order_target") in mine_tags
                         or any(math.dist((e["x"], e["y"]), (b["x"], b["y"])) < LEASH for b in built)]
-            far = [u for u in mine if not in_range(u) and u.get("order") not in ATTACK | held and fresh(u, "CLOSE_IN")]
+            if prey and not home and all(e["type"] in FLYERS for e in prey):
+                prey = []                                 # (flyers out in the open: they pick the fight)
+            far = [u for u in mine if u["type"] != T.MEDIC and not in_range(u) and u.get("order") not in ATTACK | held
+                   and fresh(u, "CLOSE_IN")]
             if self.gap_post and home:                    # (zerg at the wall, outside it: hold the door)
                 gap = self._gap(enemy)
                 if gap is not None:
@@ -439,7 +455,8 @@ class RoleRules:
                 group = far[:MAX_GROUP]
                 target = min(prey, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
                 if not self.volley:
-                    return self._intent("CLOSE_IN", group, (int(target["x"]), int(target["y"])), "attack_move")
+                    return self._intent("CLOSE_IN", self._with_medics(group, medics, fresh),
+                                        (int(target["x"]), int(target["y"])), "attack_move")
                 point = self._edge_of_range(group, target)
                 intent = self._intent("CLOSE_IN", group, point, "move")
                 if intent is not None:
@@ -659,6 +676,16 @@ class RoleRules:
             return int(target["x"]), int(target["y"])
         f = (reach + 24) / d
         return int(target["x"] + (mid[0] - target["x"]) * f), int(target["y"] + (mid[1] - target["y"]) * f)
+
+    @staticmethod
+    def _with_medics(group: list[dict], medics: list[dict], fresh) -> list[dict]:
+        """The group plus the medics near it (an attack-move keeps them healing along), within MAX_GROUP."""
+        if not medics or len(group) >= MAX_GROUP:
+            return group
+        mid = _mid(group)
+        near = sorted((m for m in medics if math.dist((m["x"], m["y"]), mid) <= FOLLOW and fresh(m, "FIRE")),
+                      key=lambda m: math.dist((m["x"], m["y"]), mid))
+        return group + near[:MAX_GROUP - len(group)]
 
     def _intent(self, role: str, group: list[dict], point, order: str) -> Intent | None:
         if point is None:
