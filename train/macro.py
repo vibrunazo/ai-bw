@@ -215,12 +215,11 @@ def main() -> None:
     t0 = time.time()
 
     jobs = player_games(args.matchup, args.race, keep)
-    if args.test_era:                       # every game of one era is the test set; the rest train
+    if args.test_era:                       # every game of one era is the test set; the rest (or --era) train
         test_keep = GameFilter(args.test_era, args.source, args.bots)
-        test = {j[0] for j in player_games(args.matchup, args.race, test_keep)}
-        jobs = [(p, i, s, p in test) for p, i, s, _ in jobs if p in test or keep.era != args.test_era]
-        if keep.era is None:
-            jobs = [j for j in jobs]        # (--era unset: the training set is every other era)
+        test = [(p, i, s, True) for p, i, s, _ in player_games(args.matchup, args.race, test_keep)]
+        held = {j[0] for j in test}
+        jobs = [(p, i, s, False) for p, i, s, _ in jobs if p not in held] + test
     if args.games:
         train = [j for j in jobs if not j[3]]
         random.Random(0).shuffle(train)
