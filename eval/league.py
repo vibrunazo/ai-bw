@@ -85,11 +85,12 @@ def side_rows(replays: list[str], race: str, workers: int) -> dict[str, list[dic
     return {p: rows for p, rows in got.items() if rows}
 
 
-def gaps(rows: dict[str, list[dict]], race: str, workers: int) -> list:
-    """The side's gap score per minute range (eval/humanlike.py), against the cached pros."""
+def gaps(rows: dict[str, list[dict]], race: str, workers: int, era: str = "old") -> list:
+    """The side's gap score per minute range (eval/humanlike.py), against the cached pros (era "modern":
+    the pros on the current ladder maps, for rounds there)."""
     from eval.humanlike import _names, gap_score, matrix, pro_rows
     names = _names(race)
-    pros = pro_rows(race, 300, workers)
+    pros = pro_rows(race, 300, workers, era)
     Xg, _, _ = matrix(rows, names)
     Xp, _, _ = matrix(pros, names)
     return gap_score(Xg, Xp)
@@ -144,6 +145,7 @@ def main() -> None:
     ap.add_argument("--regrade", action="store_true", help="an existing round: grade its games at time by who is ahead (no games played)")
     args = ap.parse_args()
     maps = MAPS if args.maps == "fixtures" else ladder_maps(None if args.maps == "ladder" else args.maps.split(","))
+    era = "old" if args.maps == "fixtures" else "modern"     # (the pros the gap score compares with: the same maps')
     priority.apply(args.priority)
     out = REPO / "runs" / "league" / args.round
     if args.regrade:
@@ -175,14 +177,14 @@ def main() -> None:
              "graded": dict(Counter(g["graded"] for g in games)),
              "by_map": {m: dict(Counter(g["result"] for g in games if g["map"] == m)) for m in maps},
              "decisions": {k: sum(g["decisions"].get(k, 0) for g in games) for k in ("army_t", "roles_t", "army_z", "roles_z")},
-             "gap": {"T": gaps(rows_t, "T", args.parallel), "Z": gaps(rows_z, "Z", args.parallel)},
+             "gap": {"T": gaps(rows_t, "T", args.parallel, era), "Z": gaps(rows_z, "Z", args.parallel, era)},
              "decided": sum(1 for g in games if g["result"] in ("won", "lost")) / max(1, len(games))}
     if args.candidate:                    # (the layer's side's gap, its candidate's games against the incumbent's)
         side = "Z" if args.layer == "roles_z" else "T"
         for who, model in (("candidate", args.candidate), ("incumbent", args.incumbent)):
             mine = [g["replay"] for g in games if g["result"] != "error" and g["zroles"] == str(model)]
             rows = rows_z if side == "Z" else rows_t
-            table["gap"][f"{side}_{who}"] = gaps({r: rows[r] for r in mine if r in rows}, side, args.parallel) if mine else None
+            table["gap"][f"{side}_{who}"] = gaps({r: rows[r] for r in mine if r in rows}, side, args.parallel, era) if mine else None
     if args.pairs:
         from eval.pairs import summarize
         files = sorted(glob.glob(str(out / "*" / "*.pairs.npz")))

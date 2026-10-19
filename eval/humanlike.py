@@ -54,6 +54,7 @@ MINUTES = 20                    # the first this many minutes of a game
 PRO_GAMES = 300                 # pro games, a third per map
 PRO_MIN_S = 600
 MAPS = ("python", "fighting spirit", "heartbreak")
+MODERN_MAP_MIN = 20             # modern pros: a ladder map with at least this many TvZ games of the race
 IDLE = {2, 3}                   # Guard, PlayerGuard: standing
 GAS = {81, 82, 83, 84}
 NEUTRAL = 11
@@ -461,11 +462,13 @@ def clean_replays() -> dict[str, int]:
     return out
 
 
-def pro_rows(race: str, games: int, workers: int) -> dict[str, list[dict]]:
-    """{rel_path: rows} for pro games on Gary's maps (cached per game)."""
+def pro_rows(race: str, games: int, workers: int, era: str = "old") -> dict[str, list[dict]]:
+    """{rel_path: rows} for pro games on Gary's maps (cached per game). era "old": the 1.16 fixture maps
+    (Python, Fighting Spirit, Heartbreak Ridge); "modern": the current ladder maps, from the cwal games (what
+    rounds on the ladder maps are judged against: the 2026 meta, not the 2010s')."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
     from inventory import data_root
-    cache = data_root() / "interim" / "humanlike" / f"pro_{race}.jsonl"
+    cache = data_root() / "interim" / "humanlike" / f"pro_{race}{'_modern' if era == 'modern' else ''}.jsonl"
     cache.parent.mkdir(parents=True, exist_ok=True)
     have = {}
     if cache.exists():
@@ -475,18 +478,26 @@ def pro_rows(race: str, games: int, workers: int) -> dict[str, list[dict]]:
     clean = clean_replays()
     recs = [json.loads(line) for line in open(data_root() / "interim" / "build_orders.jsonl", encoding="utf-8")]
     recs = [r for r in recs if r["rel_path"] in clean]
-    by_map: dict[str, list] = {m: [] for m in MAPS}
+    by_map: dict[str, list] = {m: [] for m in MAPS} if era != "modern" else {}
+    if era == "modern":
+        from ladder_maps import clean_name
     for r in recs:
         if r["matchup"] != "TvZ" or r["race"] != race or r.get("duration_s", 0) < PRO_MIN_S:
+            continue
+        if era == "modern":
+            if r["rel_path"].startswith("cwal/"):
+                by_map.setdefault(clean_name(r.get("map", "")), []).append(r["rel_path"])
             continue
         name = re.sub(r"[^a-z ]", "", r.get("map", "").lower())
         for m in MAPS:
             if m in name:
                 by_map[m].append(r["rel_path"])
+    if era == "modern":                              # (the maps of the pool: enough games each)
+        by_map = {m: ps for m, ps in by_map.items() if len(ps) >= MODERN_MAP_MIN}
     chosen = []
-    for m in MAPS:
+    for m in sorted(by_map):
         random.Random(0).shuffle(by_map[m])
-        chosen += by_map[m][:games // len(MAPS)]
+        chosen += by_map[m][:games // len(by_map)]
     todo = [p for p in chosen if p not in have]
     if todo:
         with ProcessPoolExecutor(workers) as pool, open(cache, "a", encoding="utf-8") as out:
@@ -552,6 +563,8 @@ def main() -> None:
                     help="globs of Gary's replays, each optionally labeled by its opponent: label=glob "
                          "(league, human; unlabeled: league). Not the replayed-pro fixture's: they don't re-simulate")
     ap.add_argument("--pros", type=int, default=PRO_GAMES)
+    ap.add_argument("--pros-era", choices=("old", "modern"), default="old",
+                    help="old: pros on the 1.16 fixture maps; modern: pros on the current ladder maps (cwal)")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--frozen", help="also score Gary's games with this earlier model.pkl (did the old tells go?)")
     ap.add_argument("--tells", type=int, default=12, help="tells found by dropping the top one in turn")
@@ -575,7 +588,7 @@ def main() -> None:
         got = list(monitor.track(pool.map(_job, [(p, args.race, gary_end(p)) for p in paths]), len(paths),
                                  f"Gary {args.race} games"))
     gary = {p: rows for p, rows in got if rows}
-    pros = pro_rows(args.race, args.pros, args.workers)
+    pros = pro_rows(args.race, args.pros, args.workers, args.pros_era)
     print(f"{len(gary)} Gary games ({sum(map(len, gary.values()))} minutes), "
           f"{len(pros)} pro games ({sum(map(len, pros.values()))} minutes), side {args.race}")
     Xg, gg, gkeys = matrix(gary, names)
