@@ -8,8 +8,11 @@ compatibility layers, no forwarding scripts: each step replaces what it supersed
 Read first: RACES.md (the audit this plan executes), CONTROL.md (the layers as providers and the
 manifest contract), ARCHITECTURE.md §6.4-6.7, HANDOFF.md (state of the data and models). The other
 session is giving the macro model a matchup input (gary/policy/macro.py `FeatureSpec.matchups`,
-uncommitted at the time of writing): that is the model side of sharing and is not part of this
-plan; coordinate before touching gary/policy/macro.py or train/macro.py.
+landed 2026-10-19 as the shared per-race macro models, runs/macro_shared/<race>_all_*, chosen by
+`gary.policy.macro.macro_model_path(matchup, race)` and on by default): that is the model side of
+sharing and is not part of this plan. Models today: macro, army and commit for all nine
+matchup-races; fight, belief, plan and engage for TvZ Terran only. A Gary of another race or
+matchup therefore plays with the fight and roles providers that have models, or with rules.
 
 ## What is shared and what is a plug
 
@@ -57,8 +60,15 @@ games (the seeds in tests/test_smoke_game.py and two league seeds) before and af
   comment now so Phase 1 is a grep.
 - `g.enemy = enemy_of(matchup, race)` from `gary/races.py` (it exists: the enemy's town halls,
   production, static defense, fighters, names). The matchup comes from the game: the lobby's races
-  are in `obs["players"]`; `manifests._newest(kind, matchup, race)` gets both from `g`, so a
-  Gary-T in TvT loads TvT models and fails loudly if there are none.
+  are in `obs["players"]`. One lookup for every model kind, `manifests.model_for(kind, g)`,
+  built on `macro_model_path`'s rule (the race's shared model when it covers the matchup, else the
+  matchup's own newest), so a Gary-T in TvT loads TvT models and fails loudly where there are
+  none (fight, belief, plan, engage: TvZ Terran only today; the manifest then has to name a
+  rules provider or the game does not start).
+- `gary/protoss.py` with the same names as the other two data modules (unit and building ids,
+  costs, sizes, requirements, production, research, upgrades, army, names, supply) and
+  `Race.of("P")`, so the race object is proven on three races from the start. No Protoss
+  executor yet: that is Phase 4. Protoss ids already in `gary/races.py` move here.
 
 ## Phase 1: the executor as a race plug (two to three days)
 
@@ -144,12 +154,28 @@ the placement rule, gateway/robotics/stargate production, archon merges as a mor
 as transports), the PvT/PvZ/PvP models (the datasets exist for the modern pack). Not in this
 plan's scope; the plan above must leave nothing that assumes two races (no `"T" if ... else "Z"`).
 
+## Tests across matchups
+
+tests/test_parity.py (Phase 0) and tests/test_smoke_game.py are parametrized over the matchups
+that can be played: the game's races from the manifests, the map one of the ladder maps
+(`eval/league.py ladder_maps`), a few minutes headless. In Phase 0 that is TvZ (Gary-T against
+Gary-Z); after Phase 1, ZvZ (two Zerg executors) and TvT (two Terran executors with the TvT macro,
+army and commit models and rules for the fight layer); after Phase 4, the Protoss matchups. A
+matchup without a model for some kind is a skipped test with the missing kind in its reason, not a
+failure, so the table of what plays is readable from the test output. A short league round per
+matchup (eval/match.py, 8 games) is the manual gate for Phases 2 and 3, judged as the current
+rounds are: paired games on the ladder maps, the gap score against modern pros, who is ahead at
+the limit.
+
 ## Rules for the build
 
 - One phase per pull request-sized commit series; each phase ends green on its gate before the
   next starts. The gates are the tests: add the byte-identical check as a test
   (tests/test_parity.py: a fixed manifest, map and seed, the POV log's hash before and after;
-  the "before" hash recorded in the test when Phase 0 starts).
+  the "before" hash recorded in the test when Phase 0 starts). The current defaults are the
+  shared macro models, no bunker at the natural (option nonatbunker) and a depot ahead of
+  production (option depots) for Gary-T, and Gary-Z with its commitment floor off: the parity
+  games use exactly the default manifests of the day the phase starts.
 - Never edit the agent while a league round runs (the round imports the live code).
 - Keep PROGRESS.md updated per phase (a line in the components table, a dated entry).
 - Nothing new is learned in this refactor. If a behavior of Gary-Z cannot be reproduced through
