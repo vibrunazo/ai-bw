@@ -175,9 +175,11 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 def shared_macro() -> bool:
-    """GARY_MACRO_SHARED: play with the race's shared macro model (one for all its matchups, the matchup an
-    input: train/macro.py --matchup all; runs/macro_shared) and its history tables (..._shared)."""
-    return os.environ.get("GARY_MACRO_SHARED", "") not in ("", "0")
+    """The race's shared macro model (one for all its matchups, the matchup an input: train/macro.py --matchup all;
+    runs/macro_shared) and its history tables (..._shared): the default since L4 (48 games each on the ladder
+    maps: results even, Gary-Z's gap score 0.34 against 0.36, its army at 12 minutes 23 against 17; better on the
+    held-out games in all nine matchup-races). GARY_MACRO_SHARED=0: each matchup's own model."""
+    return os.environ.get("GARY_MACRO_SHARED", "1") != "0"
 
 
 def macro_model_path(matchup: str, race: str) -> Path:

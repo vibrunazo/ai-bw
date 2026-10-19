@@ -550,8 +550,14 @@ plan and the full log).
   0.41 (0.30 / 0.39): no clear difference on 24 games; a larger paired comparison decides.
 - **Army and commit models for TvT, PvT, PvZ and PvP** (for the one-Gary refactor): commit order vs keep
   AUC 0.76-0.80.
-- **Next:** the shared models against the separate ones on 48 more games each; a human game with the
-  current Gary-T.
+- **The shared macro models are the default (L4, 48 games each, the same seeds and maps):** separate /
+  shared: Gary-T won 13 / 12, Gary-Z 1 / 1 (its first wins against a Gary-T that plays), at the limit even
+  14 / 20, Terran ahead 12 / 11, Zerg ahead 8 / 4; gap scores against modern pros Gary-T 0.30 / 0.30,
+  Gary-Z 0.36 / 0.34 (2-4 minutes 0.48 / 0.41); Gary-Z's army at 12 and 15 minutes 17 and 28 / 23 and
+  34.5. Even in results, closer to the pros for Gary-Z, better on held-out games in all nine
+  matchup-races, and the layout later training builds on. GARY_MACRO_SHARED=0 plays each matchup's own.
+- **Next:** a human game with the current Gary-T (the shared macro model, on a current ladder map); the
+  one-Gary refactor; Gary-Z's 8-10 minutes (its clearest gap against modern pros).
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
