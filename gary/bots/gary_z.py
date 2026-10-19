@@ -175,7 +175,7 @@ class GaryZ(ZergV3):
         # and without it Gary-Z had seen no Terran army by 6:00 in 8 games of 8 (pros: 4 units by 5:00,
         # only 4% none) and kept droning while pros switch to army (57% of larvae at 6:00)
         self.plan, self.poke, self.pressing = "mutas", True, False
-        self.tracker = MacroTracker(self.model.spec, hi.slot, plan)
+        self.tracker = MacroTracker(self.model.spec, hi.slot, plan, mapinfo.hash)
         # GARY_Z_HISTORY (default pro; own: this player's): the decision history the macro model sees (gary/policy/macro.py
         # MacroTracker.history): the pros' mean per minute, so its own drone-heavy past doesn't feed back on itself
         hist = os.environ.get("GARY_Z_HISTORY", "pro")      # pro (fading to its own over HISTORY_FADE minutes), pro_all

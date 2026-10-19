@@ -7,11 +7,12 @@ frame 0 from the map itself.
 
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass
 
 from gary import commands as C
-from gary.env import Game
+from gary.env import Game, map_chk
 
 GEYSER = 188
 GEYSERS = {GEYSER, 110, 149, 157}    # a geyser, or the Refinery / Extractor / Assimilator on it
@@ -31,6 +32,8 @@ class MapInfo:
     size: tuple[int, int]        # pixels
     bases: list[Base]
     starts: list[tuple[int, int]]
+    hash: str | None = None      # the map data's SHA-1, as replays' MapDataHash (ingest/inventory.py), when the
+                                 # map file is known (a headless game; not the live client): the macro model's map
 
     @classmethod
     def from_game(cls, game: Game) -> "MapInfo":
@@ -49,7 +52,8 @@ class MapInfo:
             near = min(bases, key=lambda b: math.dist(b.center, s), default=None)
             if near and math.dist(near.center, s) < 320:
                 near.center, near.tile, near.start = s, ((s[0] - 64) // 32, (s[1] - 48) // 32), True
-        return cls(size, bases, starts)
+        path = getattr(game, "map_path", None)
+        return cls(size, bases, starts, hashlib.sha1(map_chk(path)).hexdigest() if path else None)
 
     def base_near(self, xy: tuple[int, int]) -> Base:
         return min(self.bases, key=lambda b: math.dist(b.center, xy))

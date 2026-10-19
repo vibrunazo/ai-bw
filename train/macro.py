@@ -35,6 +35,7 @@ import torch.nn.functional as F
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
 from inventory import data_root  # noqa: E402
+from eval import monitor, priority  # noqa: E402
 from train.select import GameFilter  # noqa: E402
 
 from gary.policy.macro import OTHER, FeatureSpec, MacroModel, MacroNet, encode  # noqa: E402
@@ -78,7 +79,24 @@ def scan(job: tuple) -> tuple[set, set, Counter]:
     return own, seen, Counter(zip(c[:, 2].tolist(), c[:, 3].tolist()))
 
 
-def build_spec(race: str, jobs: list, workers: int) -> FeatureSpec:
+MIN_MAP_GAMES = 50              # a map gets its own input slot with this many training player-games
+
+
+def game_meta(rows: dict, path: str) -> tuple[str, float]:
+    """(map data hash, year) of a game from the inventory (a 1.21+ game with no date counts as 2026, an old
+    one as 2011, the 1.16 era's median)."""
+    r = rows.get(Path(path).stem, {})
+    modern = r.get("version") == "1.21+"
+    try:
+        year = float(str(r.get("start_time", ""))[:4])
+    except ValueError:
+        year = 2026.0 if modern else 2011.0
+    if not 1998 <= year <= 2030:
+        year = 2026.0 if modern else 2011.0
+    return r.get("map_hash") or "", year
+
+
+def build_spec(race: str, jobs: list, workers: int, era_inputs: bool = True) -> FeatureSpec:
     own, seen, counts = set(), set(), Counter()
     with ProcessPoolExecutor(workers) as pool:
         for o, s, c in pool.map(scan, [j for j in jobs if not j[3]], chunksize=32):
@@ -87,8 +105,12 @@ def build_spec(race: str, jobs: list, workers: int) -> FeatureSpec:
             counts.update(c)
     decisions = sorted(d for d, n in counts.items() if n >= MIN_CLASS_COUNT) + [OTHER]
     styles = sorted({j[2] for j in jobs if j[2] is not None and j[2] >= 0})
+    maps = []
+    if era_inputs:                                  # (the maps with enough training games; the rest: unknown)
+        played = Counter(j[5] for j in jobs if not j[3] and j[5])
+        maps = sorted(h for h, n in played.items() if n >= MIN_MAP_GAMES)
     return FeatureSpec(race=race, own_types=sorted(own), seen_types=sorted(seen),
-                       decisions=decisions, styles=styles)
+                       decisions=decisions, styles=styles, maps=maps, year=era_inputs)
 
 
 def max_counts(job: tuple) -> np.ndarray:
@@ -117,12 +139,13 @@ def samples(args: tuple) -> tuple[np.ndarray, ...]:
     """Features and targets for one player-game."""
     (path, i, style, _, *rest), spec_d = args
     weight = rest[0] if rest else 1.0                 # the game's weight in the loss (--weight-modern)
+    map_hash, year = (rest[1], rest[2]) if len(rest) > 2 else ("", 2011.0)
     spec = FeatureSpec(**spec_d)
     d = np.load(path)
     frames, cmds = d["frames"], d["cmds"]
     c = cmds[cmds[:, 1] == i]
     empty = (np.zeros((0, spec.size), np.float16), np.zeros(0, np.int16), np.zeros(0, np.float32),
-             np.zeros(0, np.int8), np.zeros(0, np.float32))
+             np.zeros(0, np.int8), np.zeros(0, np.float32), np.zeros(0, bool))
     if len(c) == 0:
         return empty
     cls = np.array([spec.decision_index(a, u) for a, u in c[:, 2:4].tolist()], dtype=np.int64)
@@ -138,10 +161,11 @@ def samples(args: tuple) -> tuple[np.ndarray, ...]:
     last = np.where(nxt > 0, c[np.maximum(nxt - 1, 0), 0], 0)
     seen_max = np.maximum.accumulate(d["seen"][:, i].astype(np.float32), axis=0)[ts]
     x = encode(spec, f, d["eco"][ts, i].astype(np.float32), d["units"][ts, i].astype(np.float32),
-               d["seen"][ts, i].astype(np.float32), seen_max, cum[nxt], (f - last) / 24.0, style)
+               d["seen"][ts, i].astype(np.float32), seen_max, cum[nxt], (f - last) / 24.0, style, map_hash, year)
     delay = np.minimum((c[nxt, 0] - f) / 24.0, MAX_DELAY_S).astype(np.float32)
     minute = np.minimum(f // (24 * 60), 30).astype(np.int8)
-    return x.astype(np.float16), cls[nxt].astype(np.int16), delay, minute, np.full(len(ts), weight, np.float32)
+    return (x.astype(np.float16), cls[nxt].astype(np.int16), delay, minute, np.full(len(ts), weight, np.float32),
+            np.full(len(ts), year >= 2020))
 
 
 def load_split(jobs: list, spec: FeatureSpec, workers: int) -> dict:
@@ -152,7 +176,7 @@ def load_split(jobs: list, spec: FeatureSpec, workers: int) -> dict:
     out = {}
     for held, rs in parts.items():
         if rs:                                      # (an evaluation may pass held-out jobs alone)
-            out["test" if held else "train"] = tuple(np.concatenate([r[k] for r in rs]) for k in range(5))
+            out["test" if held else "train"] = tuple(np.concatenate([r[k] for r in rs]) for k in range(6))
     return out
 
 
@@ -205,7 +229,12 @@ def main() -> None:
                     "loss relative to an old one (the meta moved: let fewer new games count more)")
     ap.add_argument("--games", type=int, help="train on a random subset of this many player-games (learning curves)")
     ap.add_argument("--out", help="save the run here instead of runs/macro/<matchup>_<race>_<time> (experiments that must not become the newest model)")
+    ap.add_argument("--no-era-inputs", action="store_true", help="without the year and map inputs (the models before them)")
+    ap.add_argument("--compare", metavar="RUN_DIR", help="also score this trained model on the same held-out games "
+                    "(all, and the modern ones alone)")
+    priority.add_argument(ap)
     args = ap.parse_args()
+    priority.apply(args.priority)
     keep = GameFilter.from_args(args)
     if args.caps_only:
         caps = count_caps(player_games(args.matchup, args.race, keep), args.workers)
@@ -225,15 +254,17 @@ def main() -> None:
         train = [j for j in jobs if not j[3]]
         random.Random(0).shuffle(train)
         jobs = train[:args.games] + [j for j in jobs if j[3]]
-    if args.weight_modern != 1.0:
-        modern = {sha for sha, r in keep.rows.items() if r.get("version") == "1.21+"}
-        jobs = [(p, i, s, h, args.weight_modern if Path(p).stem in modern else 1.0) for p, i, s, h in jobs]
+    modern = {sha for sha, r in keep.rows.items() if r.get("version") == "1.21+"}
+    # each job: (path, player, style, held out, its weight in the loss, map hash, year)
+    jobs = [(p, i, s, h, args.weight_modern if Path(p).stem in modern else 1.0, *game_meta(keep.rows, p))
+            for p, i, s, h in jobs]
     print(f"{len(jobs)} player-games ({sum(j[3] for j in jobs)} held out; {keep.describe()}"
           f"{'; test era ' + args.test_era if args.test_era else ''}{f'; modern x{args.weight_modern:g}' if args.weight_modern != 1.0 else ''})", flush=True)
-    spec = build_spec(args.race, jobs, args.workers)
-    print(f"features {spec.size}, decision classes {len(spec.decisions)}, styles {len(spec.styles)}", flush=True)
+    spec = build_spec(args.race, jobs, args.workers, not args.no_era_inputs)
+    print(f"features {spec.size}, decision classes {len(spec.decisions)}, styles {len(spec.styles)}, maps {len(spec.maps)}, "
+          f"year {spec.year}", flush=True)
     data = load_split(jobs, spec, args.workers)
-    xtr, ytr, dtr, mtr, wtr = data["train"]
+    xtr, ytr, dtr, mtr, wtr, _ = data["train"]
     print(f"samples: train {len(ytr):,}, test {len(data['test'][1]):,}  ({time.time() - t0:.0f} s)", flush=True)
 
     # baseline: the most common next decision at each game minute (training games)
@@ -253,7 +284,7 @@ def main() -> None:
     yt = torch.from_numpy(ytr.astype(np.int64)).to(device)
     dt = torch.from_numpy(dtr).to(device)
     wt = torch.from_numpy(wtr).to(device)
-    for epoch in range(args.epochs):
+    for epoch in monitor.track(range(args.epochs), args.epochs, "epochs"):
         net.train()
         perm = torch.randperm(len(yt), device=device)
         total = 0.0
@@ -272,6 +303,18 @@ def main() -> None:
               f"top3 {res['top3']}  non-routine top1 {res['top1_nonroutine']}  "
               f"timing median err {res['timing_median_err_s']} s", flush=True)
 
+    test_modern = data["test"][5]
+    res_modern = evaluate(net, tuple(a[test_modern] for a in data["test"]), spec, prior, device) if test_modern.any() else None
+    print(f"modern held-out: {res_modern}", flush=True)
+    compared = None
+    if args.compare:                                # (another model on the same held-out games, its own encoding)
+        other = MacroModel.load(Path(args.compare) / "model.pt")
+        od = load_split([j for j in jobs if j[3]], other.spec, args.workers)["test"]
+        onet = other.net.to(device)
+        compared = {"run": args.compare, "test": evaluate(onet, od, other.spec, np.zeros(31, np.int64), device),
+                    "test_modern": evaluate(onet, tuple(a[od[5]] for a in od), other.spec, np.zeros(31, np.int64), device)
+                    if od[5].any() else None}
+        print(f"compared ({args.compare}): {compared}", flush=True)
     out = Path(args.out) if args.out else REPO_ROOT / "runs" / "macro" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
     out.mkdir(parents=True, exist_ok=True)
     MacroModel(spec, net.cpu(), config).save(out / "model.pt")
@@ -279,7 +322,8 @@ def main() -> None:
     report = {"matchup": args.matchup, "race": args.race, "player_games": len(jobs), "games": keep.describe(),
               "train_samples": int(len(ytr)), "features": spec.size, "classes": len(spec.decisions),
               "epochs": args.epochs, "minutes": round((time.time() - t0) / 60, 1), "test": res,
-              "test_era": args.test_era, "weight_modern": args.weight_modern, "train_games": int(sum(1 for j in jobs if not j[3]))}
+              "test_era": args.test_era, "weight_modern": args.weight_modern, "train_games": int(sum(1 for j in jobs if not j[3])),
+              "test_modern": res_modern, "maps": len(spec.maps), "year": spec.year, "compared": compared}
     (out / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
     print(f"saved {out / 'model.pt'}")

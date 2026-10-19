@@ -463,9 +463,26 @@ plan and the full log).
   data, enemy army next to the player's buildings with the cluster away isn't a trigger (pros re-decide
   as often as anywhere, 0.22 / 0.20; the model matches), because the inputs have nothing for what a pro
   reacts to: losses. The grid shows where the workers are, not that they are dying.
-- **Next:** losses as an input (own units lost in the last seconds, per cell) in the commit data and
-  model, judged on the same pro-data probe (do pros re-decide when they lose workers, and does the
-  model?); then c11 on the same seeds; a human game with the current Gary-T.
+- **Losses as an input (army dataset v3, the commit model's 10th channel):** gary_resim's deaths now carry
+  the owner and place, and the army trackers count their own units gone (an SCV in a refinery, a marine
+  in a bunker aren't). The pros' labels answer the question first: losing units away from a cluster,
+  pros re-decide less, not more (Terran 17% of 5-s ticks against 22% with no losses; Zerg 15% against
+  28%), and only ~7% of their orders go toward the losses. The model learns exactly that. So losses
+  aren't the trigger: Gary-Z's c10 loss was its whole army far from home, a placement fault, not a
+  timing one; Gary-T has the same tell (home 0.24 of 8-10 minutes, pros 0.63).
+- **Who steers Gary-T's army away (c10, 8-20 minutes, from the records):** commitments 63% of the time,
+  fights, home guard or no army 24%, the scripted hunt 13% (21 of 24 games; 38-65% of the time in four).
+- **Year and map as macro inputs (2026-10-19):** the macro model's FeatureSpec takes the game's year and
+  its map (the map data's SHA-1, as replays' MapDataHash; a slot for each of the 41 maps with 50+
+  training games, else unknown); in play the year is 2026 and MapInfo hashes the loaded map (headless
+  games; the live client has no map file: unknown). Retrained TvZ Terran and Zerg on both eras with the
+  modern games weighted ten to one; on the modern held-out tenth (~19,800 samples each), against the
+  same recipe without the inputs: Terran top-1 50.6% (51.2%), non-routine 43.2% (43.3%), Zerg 57.1%
+  (56.2%), non-routine 49.0% (47.6%). The weighting already carried the modern meta; the inputs add a
+  point for Zerg, nothing for Terran on next-decision accuracy. Both are the newest models (the
+  defaults); the pros' history tables rebuilt for their decision index (train/macro_history.py).
+- **Next:** the new replay packs; where Gary's armies go (destinations, the hunt) rather
+  than when; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 

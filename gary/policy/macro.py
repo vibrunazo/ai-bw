@@ -8,7 +8,10 @@ Inputs (all from the player's own point of view):
   game time; minerals, gas, supply used and max; own units by type (all / completed);
   enemy units visible now, and the most of each type seen so far (what was scouted);
   every production decision made so far (counts per decision type), seconds since the last one;
-  the player's build style (taxonomy cluster), when known, for steering.
+  the player's build style (taxonomy cluster), when known, for steering;
+  the game's year and map (the map's data hash, one of the maps with enough games, else unknown), when
+  the spec has them: the meta moved between the 1.16 era and Remastered (docs/DATA_ERAS.md), and
+  builds differ by map. In play the year is now and the map is the game's (MapInfo.hash).
 
 One model per race. The feature layout (FeatureSpec) is saved with the weights, so a checkpoint
 encodes states the same way in training and in play.
@@ -35,6 +38,8 @@ class FeatureSpec:
     seen_types: list[int]                    # enemy unit type ids that get seen
     decisions: list[tuple[int, int]]         # class vocabulary: (act, id); the last is OTHER
     styles: list[int] = field(default_factory=list)   # build-style clusters (unknown = extra slot)
+    maps: list[str] = field(default_factory=list)     # map data hashes with their own slot (unknown = extra)
+    year: bool = False                                # the game's year as an input
 
     def __post_init__(self):
         self.decisions = [tuple(d) for d in self.decisions]
@@ -43,7 +48,7 @@ class FeatureSpec:
     @property
     def size(self) -> int:
         return (7 + 2 * len(self.own_types) + 2 * len(self.seen_types) + len(self.decisions)
-                + len(self.styles) + 1)
+                + len(self.styles) + 1 + (len(self.maps) + 1 if self.maps else 0) + (1 if self.year else 0))
 
     def decision_index(self, act: int, uid: int) -> int:
         return self._index.get((act, uid), self._index[OTHER])
@@ -56,7 +61,8 @@ class FeatureSpec:
 
 def encode(spec: FeatureSpec, frame: np.ndarray, eco: np.ndarray, units: np.ndarray,
            seen_now: np.ndarray, seen_max: np.ndarray, decided: np.ndarray,
-           since_last_s: np.ndarray, style: int | None) -> np.ndarray:
+           since_last_s: np.ndarray, style: int | None, map_hash: str | None = None,
+           year: float | np.ndarray | None = None) -> np.ndarray:
     """Features for n moments of one player. Shapes: frame (n,), eco (n, 4) [minerals, gas,
     supply used x2, supply max x2], units (n, 228, 2), seen_now / seen_max (n, 228),
     decided (n, len(spec.decisions)) counts so far, since_last_s (n,)."""
@@ -75,9 +81,19 @@ def encode(spec: FeatureSpec, frame: np.ndarray, eco: np.ndarray, units: np.ndar
         np.log1p(decided),
         style_onehot,
     ]
+    if spec.maps:
+        map_onehot = np.zeros((n, len(spec.maps) + 1), dtype=np.float32)
+        map_onehot[:, spec.maps.index(map_hash) if map_hash in spec.maps else len(spec.maps)] = 1
+        parts.append(map_onehot)
+    if spec.year:
+        parts.append(np.broadcast_to(np.asarray((PLAY_YEAR if year is None else year) - 2000.0, np.float32) / 30.0,
+                                     (n,))[:, None])
     x = np.concatenate([p.astype(np.float32) for p in parts], axis=1)
     assert x.shape[1] == spec.size, (x.shape, spec.size)
     return x
+
+
+PLAY_YEAR = 2026.0               # the year in play (the meta Gary plays)
 
 
 class MacroNet(nn.Module):
@@ -175,8 +191,8 @@ class MacroTracker:
     Enemy units count only while visible; the most of each type ever seen at once is kept, which
     is what the replay data's seen_max holds."""
 
-    def __init__(self, spec: FeatureSpec, slot: int, style: int | None = None):
-        self.spec, self.slot, self.style = spec, slot, style
+    def __init__(self, spec: FeatureSpec, slot: int, style: int | None = None, map_hash: str | None = None):
+        self.spec, self.slot, self.style, self.map_hash = spec, slot, style, map_hash
         self.seen_max = np.zeros(228, dtype=np.float32)
         self.decided = np.zeros(len(spec.decisions), dtype=np.float32)
         self.last_decision_frame = 0
@@ -224,4 +240,5 @@ class MacroTracker:
             w = self.history_weight * (max(0.0, 1.0 - obs["frame"] / (self.history_until * 1440)) if self.history_until else 1.0)
             decided = w * pro + (1.0 - w) * self.decided
         return encode(self.spec, frame, eco, units, seen[None], self.seen_max[None], decided[None],
-                      np.array([(obs["frame"] - self.last_decision_frame) / 24.0], dtype=np.float32), self.style)
+                      np.array([(obs["frame"] - self.last_decision_frame) / 24.0], dtype=np.float32), self.style,
+                      self.map_hash)

@@ -168,7 +168,9 @@ class Game:
                                       n, race_arr, name_arr, seed)
         if not h:
             raise GameError(_dll.gary_env_error(None).decode(errors="replace"))
-        return cls(h, command_delay)
+        game = cls(h, command_delay)
+        game.map_path = str(map_path)        # (the map's data hash: MapInfo.from_game)
+        return game
 
     @classmethod
     def custom(cls, chk: bytes, map_name: str, slots: list[int], races: list[str], names: list[str],
