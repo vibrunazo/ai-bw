@@ -497,8 +497,16 @@ plan and the full log).
   destinations are right too: Gary's home deficit (0.24 of 8-10 minutes against 0.63) comes from the
   states its games drift into and from the scripted layers (the hunt's 13%, fights), not from the
   model's choice of when or where.
-- **Next:** the second pack into the datasets (all six matchups); the macro models retrained on it;
-  a human game with the current Gary-T.
+- **The second pack in the datasets and the macro models (2026-10-19 night):** macro, army (v3) and
+  fight datasets for all six matchups and the build orders now hold 2,160-2,850 modern games per
+  matchup (TvZ 1,401 -> 2,463). Macro models trained for every matchup and race (both eras where the old
+  one exists, modern x10, year and map inputs; candidates promoted only if at least as good on the
+  modern held-out games): non-routine top-1 TvZ Terran 44.6% (the model before 43.7%), TvZ Zerg 47.4%
+  (47.2%), ZvZ Zerg 63.5% (62.2%); first models for TvT Terran 36.4%, PvT Protoss 28.0% and Terran
+  31.6%, PvZ Protoss 29.1% and Zerg 53.0%, PvP Protoss 46.6% (modern games only for the Protoss
+  matchups). The pros' history tables rebuilt for all nine.
+- **Next:** c11 (c10's seeds and setup, the new macro models alone); a human game with the current
+  Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
