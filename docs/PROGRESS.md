@@ -623,9 +623,19 @@ plan and the full log).
   gary/protoss.py, all three checked against the game's unit data), its matchup and enemy from the
   game's players, and every model through one lookup by matchup and race. No behavior change:
   tests/test_parity.py, three games' logs hashed before and after, byte-identical.
-- **Next:** the one-Gary refactor's Phase 1 (docs/REFACTOR.md); then the attack's execution (regroup, retreat, call
-  off); production against turrets; then mutalisk vision, vessels, building placement (a later phase in
-  docs/REFACTOR.md), late game.
+- **Next:** the one-Gary refactor's Phase 1 (docs/REFACTOR.md). After the refactor, human game 4's list
+  (above), in this order; the workers' part is done (workers off their work, the main's miners drawn under
+  mutalisks):
+  1. the attack's execution: medics with the bio, no attack-move into sunkens, a regroup in front of the
+     natural, a retreat when hit, called off when outnumbered; plans that adapt to what is seen;
+  2. SCVs pulled into fights (3 pulls at 7:47-7:53) and SCVs and marines that felt AFK against the early
+     zerglings;
+  3. micro of single units in a group, not only group orders;
+  4. turrets overbuilt (16) at the army's cost;
+  5. vision: mutalisks hiding behind the natural's cliff (a scan or a floating building), Comsat energy
+     kept for lurkers (the hold-position trick at 14:40), Science Vessels;
+  6. the late game: expansions past the natural, hunting the Zerg's expansions, tech;
+  7. building placement (packed depots, room to build and move; a later phase in docs/REFACTOR.md).
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
