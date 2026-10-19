@@ -114,6 +114,38 @@ Gate: byte-identical Terran games again; the Zerg executor passes the mirror smo
   option exist in `LearnedMacro` as manifest options (`decoder`, `odds_mass`). Whatever Gary-Z's
   `_decide` does that `LearnedMacro` does not becomes a manifest option, not a Zerg special case.
 
+**Done 2026-10-19/20.** As built, against the list above:
+
+- `Executor` (gary/agent/executor.py) is the race-neutral hands; `TerranExecutor`
+  (gary/agent/terran_executor.py) and `ZergExecutor` (gary/agent/zerg_executor.py) plug in through
+  hooks rather than overriding the flow: `carry_out(act, uid, ...)` (what a decision means for the
+  race: `LearnedMacro.plan` keeps the shared gates and asks it), `basic` / `commands` (the task kinds
+  a race adds: Terran's resume, Zerg's produce, morph and hatchery rally), `site_ok` (placement rule),
+  `command_build` (Terran add-ons), `build_order` (a drone's), `supply_due` (a depot or an overlord
+  ahead of production, option depots), `in_production` and `count` (eggs hide what they'll be; the
+  pros' caps count what stands), `burst` (a larva's decisions come in bursts), `box_extras` /
+  `box_orders` / `click_blockers` (what a box around workers may take, and the overlords over the
+  fields), `in_flight`, `rerally`, `refill_gas` (Zerg: the gas float).
+- One build path for every race: a drone's building goes through the shared build task (pick, walk,
+  place, the reservations), with its order (DroneStartBuild) and its orders counted as busy (DroneLand,
+  70: a drone re-sent while landing never started). Gary-Z's jobs are not ported.
+- `TRAIN` did not become "produce": the model's own acts stay (TRAIN for Terran, MORPH for a larva's
+  unit or a unit's morph, BMORPH for a building's morph), and the executor's plan says which task
+  kind carries one out; the macro makes a task of the plan's kind (Terran's are all "command").
+- Gary-Z's `_decide` as `LearnedMacro` options (manifest gz1): `decoder` dice, `odds_mass` with the
+  Zerg one-offs, `hatch_mass`, `park` (a decision the money doesn't cover is parked with its money
+  kept; a larva's that waits for money or a larva is no goal, the dice again next look; a building's
+  drone sets out 100 short), `pace` (the timing head's tempo, bursts), `tech_min_p`, `wait_min_p`,
+  `supply_ahead`, `history` pro, `style` roll. The caps now apply to morphs too, and a rule's goal
+  (the overlord) ignores them. Not yet: the alarm (Phase 2 with the army), the flock's saving.
+- The gate: `python -m eval.zerg_opening` plays gz1 against Gary-Z in ZvZ mirrors on two ladder maps,
+  each seed with the sides swapped, and compares the openings re-simulated. 32 games of 4 minutes,
+  medians, gz1 / Gary-Z: drones at 4:00 12 / 12, Spawning Pool started 1:35 / 1:54, Extractor 1:17 /
+  1:24, larva-seconds unused 290 / 283, drone-seconds off work 113 / 125. Still apart: the second
+  hatchery by 4:00 in 14 games of 32 / 21 (the first hatchery decision at a median 3:38 / 1:55: Gary-Z
+  rolls the dice more often, its macro not sharing the hands with the chores), and supply-blocked
+  36 s / 26. tests/test_zerg_smoke.py holds one such opening; tests/test_parity.py byte-identical.
+
 ## Phase 2: posture, army and roles providers from Gary-Z (two days)
 
 Gate: the new Zerg manifest ("gz1") in the league against Gary-T v029 with c13's seeds and setup

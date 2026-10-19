@@ -43,6 +43,15 @@ WAIT = {"kind": "wait"}         # plan(): possible, but not right now
 ONE_OFF_BUILDINGS = {T.REFINERY, T.ACADEMY, T.EBAY, T.FACTORY, T.STARPORT, T.ARMORY, T.SCIENCE_FACILITY, T.COMSAT,
                      T.MACHINE_SHOP, T.CONTROL_TOWER, T.COVERT_OPS, T.PHYSICS_LAB}   # odds_mass: built once (or so)
 KEEP_BUSY = {T.RAX, T.FACTORY, T.STARPORT}   # producers that keep making their last unit (keep_busy)
+# Zerg's one-offs (Gary-Z's mass): a tech building, Lair / Hive / Greater Spire, research, an upgrade, a hatchery
+# or an expansion; and the buildings that open a tech path (option tech_min_p)
+Z_ONE_OFF_BUILDINGS = {135, 141, 138, 136, 140, 139, 131}    # Den, Spire, Queen's Nest, Defiler Mound, Ultralisk Cavern,
+                                                             # Evolution Chamber, Hatchery
+Z_ONE_OFF_MORPHS = {132, 133, 137}                           # Lair, Hive, Greater Spire
+TECH_PATH = {"Z": {135, 141, 138, 136, 140}}
+PACE_MAX = 10 * 24              # option pace: the longest wait for the next decision
+QUERY_EVERY = 12                # frames between the macro's looks at the model
+PARK_AHEAD = 100                # option park: a building's worker sets out this many minerals short of its cost
 NAT_BUNKER_ALONG = 0.45         # the natural's bunker: this far from its Command Center toward its way out
 NAT_BUNKER_TILES = 5            # ...or this far toward the enemy where the natural has no choke
 NAT_BUNKER_RETRY = 20 * 24
@@ -64,7 +73,9 @@ def describe(race, act: int, uid: int) -> str:
 class LearnedMacro:
     def __init__(self, g: Gary, model: MacroModel, style: int | None = None, builds: dict | None = None,
                  natural_bunker: bool = False, rax_by: int = 90 * 24, keep_busy: bool = False,
-                 decoder: str = "favorite", seed: int = 0, temperature: float = 1.0):
+                 decoder: str = "favorite", seed: int = 0, temperature: float = 1.0, park: bool = False,
+                 pace: bool = False, tech_min_p: float | None = None, hatch_mass: float | None = None,
+                 wait_min_p: float | None = None):
         self.g = g
         self.temperature = temperature                      # decoder "sample": the draw's temperature
         self.draws: list[dict] = []                         # decoder "sample", or log: every decision (training)
@@ -75,7 +86,17 @@ class LearnedMacro:
         # less than 2 supply left. Pros are almost never supply-blocked, so the model has hardly seen the state
         # and gives the depot under its floor once there: Gary-T was blocked in 42 of 48 games at 4-8 minutes, 437
         # of its 749 decisions while blocked "nothing it can do" (eval/why.py records, L5b)
-        self.depot_ahead = False
+        self.supply_ahead = False                           # (option depots; for Zerg an overlord: g.executor.supply_due)
+        # option park (Gary-Z's): a decision the money doesn't cover yet, other than a larva's, is parked with its
+        # money kept, and the larvae go on meanwhile (a decision at a time held every larva: 8 drones at 2:00)
+        self.park = park
+        self.saved: dict | None = None                      # the parked decision
+        # option pace (Gary-Z's): the next look at the model when the pros' next decision would come (the
+        # model's timing head), a larva's decisions in bursts (pros spend a hatchery's larvae at once)
+        self.pace = pace
+        self.tech_min_p = tech_min_p                        # option: a tech path opened only on odds of this or more
+        self.hatch_mass = hatch_mass                        # option: a town hall's odds summed to this (else odds_mass)
+        self.wait_min_p = wait_min_p                        # option: while a decision waits, others at these odds
         self.queued: dict[tuple[int, int], int] = {}        # units decided whose producer is busy -> since
         self.keep_busy = keep_busy
         self.decoder = decoder                              # "favorite" (the most likely), "dice" or "sample"
@@ -104,11 +125,17 @@ class LearnedMacro:
         # Factory by 8:00 came in 4% of games against the pros' 62%; in human game 3 the Refinery came at 7:26
         # and the Academy at 7:39 (pros ~4:10) with odds of 4-11% a decision for minutes
         self.odds_mass: float | None = None
-        self.one_off = [k for k, (act, uid) in enumerate(model.spec.decisions)
-                        if act in (RESEARCH, UPGRADE) or (act == BUILD and uid in ONE_OFF_BUILDINGS)]
+        self.one_off = [k for k, (act, uid) in enumerate(model.spec.decisions) if self._one_off(act, uid)]
         self.odds: dict[int, float] = {}                    # one-off decision -> its odds summed since possible
         self.p_expand = 0.0                                 # the model's odds of expanding at its last query
         self.halls = 0                                      # Command Centers Gary has had, built or building
+
+    def _one_off(self, act: int, uid: int) -> bool:
+        """A decision made once in a while (option mass sums its odds)."""
+        if self.g.race.letter == "Z":
+            return act in (RESEARCH, UPGRADE, EXPAND) or (act == BMORPH and uid in Z_ONE_OFF_MORPHS) or \
+                (act == BUILD and uid in Z_ONE_OFF_BUILDINGS)
+        return act in (RESEARCH, UPGRADE) or (act == BUILD and uid in ONE_OFF_BUILDINGS)
 
     def step(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> None:
         g = self.g
@@ -190,27 +217,35 @@ class LearnedMacro:
         # an early pool: the bunker needs it (4 of v0.11's 9 losses to a 9-pool)
         # (a second by 3:45, as the pros of the standard style have it at 3:31, lost 12 of 144 to the
         # replayed pros, 8 without)
-        rax = sum(1 for u in mine if u["type"] == T.RAX) + sum(1 for r, *_ in g.reserved if r == T.RAX) + g.building(T.RAX)
-        if hi.frame >= self.rax_by and not rax and (self.goal is None or self.goal["id"] != T.RAX):
+        rax = sum(1 for u in mine if u["type"] == T.RAX) + sum(1 for r, *_ in g.reserved if r == T.RAX) + g.building(T.RAX) \
+            if self.rax_by is not None else 1
+        if not rax and hi.frame >= self.rax_by and (self.goal is None or self.goal["id"] != T.RAX):
             self.goal = {"act": BUILD, "id": T.RAX, "p": 1.0, "since": hi.frame, "name": "Barracks"}
             g.say(f"next: Barracks (none by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d})")
             LOG.decision(g.hi.side, "macro", hi.frame, "Barracks", inputs=self._seen(obs, mine, me),
                          by=f"rule: a Barracks by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d}")
-        if self.depot_ahead and (self.goal is None or self.goal["id"] != T.DEPOT) and me["supply_max"] < 200:
-            producers = sum(1 for u in done if u["type"] in (T.CC, T.RAX, T.FACTORY, T.STARPORT))
-            coming = any(u["type"] == T.DEPOT and not u["completed"] for u in mine) or \
-                any(ut == T.DEPOT for ut, *_ in g.reserved) or g.building(T.DEPOT)
-            if me["supply_max"] - me["supply_used"] < 2 * producers and not coming \
-                    and self.plan(BUILD, T.DEPOT, obs, mine, done, me) not in (None, WAIT):
-                self.goal = {"act": BUILD, "id": T.DEPOT, "p": 1.0, "since": hi.frame, "name": "Supply Depot"}
-                g.say("next: Supply Depot (ahead of production)")
-                LOG.decision(g.hi.side, "macro", hi.frame, "Supply Depot", inputs=self._seen(obs, mine, me),
-                             by=f"rule: a depot ahead of production ({me['supply_max'] - me['supply_used']} left, "
-                                f"{producers} producers)")
+        if self.supply_ahead and (self.goal is None or self.goal["id"] != g.race.supply_provider) and me["supply_max"] < 200 \
+                and (due := g.executor.supply_due(obs, mine, done, me)) is not None:
+            act, by, uncapped = due
+            name = describe(g.race, act, g.race.supply_provider)
+            self.goal = {"act": act, "id": g.race.supply_provider, "p": 1.0, "since": hi.frame, "name": name}
+            if uncapped:
+                self.goal["uncapped"] = True
+            g.say(f"next: {name} (ahead of production)")
+            LOG.decision(g.hi.side, "macro", hi.frame, name, inputs=self._seen(obs, mine, me), by=by)
         if self.goal and hi.frame - self.goal["since"] > GOAL_TIMEOUT:
             g.say(f"gives up on {self.goal['name']}")
             LOG.order(g.hi.side, hi.frame, self.goal["name"], "dropped", f"not carried out in {GOAL_TIMEOUT // 24} s", by="macro")
             self.goal = None
+        if self.saved is not None and hi.frame - self.saved["since"] > GOAL_TIMEOUT:
+            g.say(f"gives up on {self.saved['name']}")
+            LOG.order(g.hi.side, hi.frame, self.saved["name"], "dropped", f"parked: not carried out in {GOAL_TIMEOUT // 24} s",
+                      by="macro")
+            self.saved = None
+        if self.goal is None and self.saved is not None and self._affordable(self.saved, obs, mine, done, me, own=True):
+            self.goal, self.saved = self.saved, None            # (its money is there: it goes first)
+            LOG.decision(g.hi.side, "macro", hi.frame, self.goal["name"], self.goal["p"], inputs=self._seen(obs, mine, me),
+                         by="parked", then="unparked: its money is there")
         halls = sum(1 for u in mine if u["type"] in g.race.town_halls)
         if halls > self.halls:
             self.expand_odds = 0.0          # (only once one stands: a Command Center that didn't start is asked again)
@@ -220,11 +255,13 @@ class LearnedMacro:
         if self.goal is None:
             if hi.frame < self.next_query:
                 return
-            self.next_query = hi.frame + 12
+            self.next_query = hi.frame + QUERY_EVERY
             # the most likely decision Gary can carry out now; if none can, wait for the most
             # likely one that only needs a busy building to free up
             x = self.tracker.features(obs, self.in_production(mine))
-            probs, _ = self.model.probs(x)
+            probs, secs = self.model.probs(x)
+            if self.pace:
+                self.next_query = hi.frame + int(min(PACE_MAX, max(QUERY_EVERY, float(secs[0]) * 24)))
             pick = waiting = None
             # (the record: the model's top odds, what it saw, the options ahead of the choice and why they were
             # passed over; gary/decision_log.py)
@@ -274,7 +311,7 @@ class LearnedMacro:
                 record(k_exp, f"rule: expansion odds summed to {self.expand_odds:.2f} since the last")
                 return
             if self.odds_mass is not None:
-                due = [(self.odds[k], k) for k in self.one_off if self.odds.get(k, 0.0) >= self.odds_mass]
+                due = [(self.odds[k], k) for k in self.one_off if self.odds.get(k, 0.0) >= self._mass_of(k)]
                 for mass, k in sorted(due, reverse=True):
                     plan = self.plan(*self.model.spec.decisions[k], obs, mine, done, me)
                     if plan is not None and plan is not WAIT:
@@ -302,13 +339,43 @@ class LearnedMacro:
             for k in order:
                 if probs[0, k] < floor:
                     break
+                if self.tech_min_p is not None and self.model.spec.decisions[k][0] == BUILD \
+                        and self.model.spec.decisions[k][1] in TECH_PATH.get(g.race.letter, ()) and probs[0, k] < self.tech_min_p:
+                    over.append([name(k), f"rule: a tech path under {self.tech_min_p:.0%}"])
+                    continue
                 plan = self.plan(*self.model.spec.decisions[k], obs, mine, done, me)
+                if self.park and isinstance(plan, dict) and plan is not WAIT:
+                    act, uid = self.model.spec.decisions[k]
+                    affordable = self._affordable({"act": act, "id": uid}, obs, mine, done, me, plan=plan)
+                    if g.executor.burst(act, uid) and not affordable:
+                        # (a larva's the money doesn't cover yet: no goal, the dice again at the next look, as
+                        # Gary-Z's; held as the goal until the money came, nothing else was rolled meanwhile: 32
+                        # decisions a game in the first 4 minutes to Gary-Z's 83, the Extractor at 3:05 to 1:22)
+                        record(None, "dice" if self.decoder == "dice" else "favorite", f"waits: {name(k)} needs money")
+                        return
+                    if not g.executor.burst(act, uid) and not affordable:
+                        if self.saved is None:
+                            self.saved = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame,
+                                          "name": describe(g.race, act, uid)}
+                            over.append([name(k), "parked for its money"])
+                            record(k, "dice" if self.decoder == "dice" else "favorite", "parked for its money")
+                        else:
+                            over.append([name(k), "one already parked: meanwhile only larvae"])
+                        continue
                 if plan is WAIT:
                     over.append([name(k), "its building is busy: waits for it" if waiting is None else "busy building"])
                     waiting = waiting if waiting is not None else k
                 elif plan is not None:
                     # something doable now, unless the likelier decision is worth waiting for
                     # (a pro saves for the expansion rather than spend on whatever is possible)
+                    if self.wait_min_p is not None and waiting is not None:
+                        # (option wait_min_p, Gary-Z's: meanwhile anything at these odds; half the waited one's kept
+                        # every Extractor behind the drones a larva was awaited for, to 3:15 against Gary-Z's 1:20)
+                        if probs[0, k] >= self.wait_min_p:
+                            pick = k
+                            break
+                        over.append([name(k), f"rule: under {self.wait_min_p:.0%} while {name(waiting)} waits"])
+                        continue
                     if waiting is None or probs[0, k] >= 0.5 * probs[0, waiting] or me["minerals"] > 400:
                         pick = k
                     else:
@@ -316,6 +383,11 @@ class LearnedMacro:
                     break
                 else:
                     over.append([name(k), "can't now"])
+            if self.park and pick is None and waiting is not None and g.executor.burst(*self.model.spec.decisions[waiting]):
+                # (a larva awaited: no goal, the dice again at the next look, as Gary-Z's; held as the goal, nothing
+                # else was rolled until a larva came: 5 rolls at 1:00-1:30 to Gary-Z's 7, half its Extractors)
+                record(None, "dice" if self.decoder == "dice" else "favorite", f"waits: no larva for {name(waiting)}")
+                return
             k = pick if pick is not None else waiting
             if self.log:
                 logged["k"] = None if k is None else int(k)
@@ -327,6 +399,8 @@ class LearnedMacro:
             act, uid = self.model.spec.decisions[k]
             self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame,
                          "name": describe(self.g.race, act, uid)}
+            if self.pace and g.executor.burst(act, uid):
+                self.next_query = hi.frame + QUERY_EVERY      # (a larva's: the next soon, as pros spend them at once)
             self.expand_odds += float(probs[0, k_exp])
             if self.odds_mass is not None:              # (summed per decision taken, while possible or waiting)
                 for j in self.one_off:
@@ -336,7 +410,7 @@ class LearnedMacro:
                         self.odds[j] = self.odds.get(j, 0.0) + float(probs[0, j])
             g.say(f"next: {self.goal['name']} ({self.goal['p']:.0%})")
         goal = self.goal
-        plan = self.plan(goal["act"], goal["id"], obs, mine, done, me)   # still possible?
+        plan = self.plan(goal["act"], goal["id"], obs, mine, done, me, capped=not goal.get("uncapped"))   # still possible?
         if plan is None:
             LOG.order(g.hi.side, hi.frame, goal["name"], "dropped", "no longer possible", by="macro")
             self.goal = None
@@ -352,11 +426,15 @@ class LearnedMacro:
                 self.goal = None
             return
         minerals, gas = plan["cost"]
-        budget = me["minerals"] - g.committed()
+        budget = me["minerals"] - g.committed() - self._saved_cost()[0]
         # a building's worker sets out WALK_AHEAD seconds of income early: it walks while the money comes
         workers = sum(1 for u in mine if u["type"] == g.race.worker)
         walk_ahead = int(WALK_AHEAD * MINING * workers) if plan["kind"] == "build" else 0
-        if budget < minerals - walk_ahead or me["gas"] < gas:
+        if self.park and plan["kind"] == "build":
+            # (Gary-Z's: its drone sets out at the cost less PARK_AHEAD, the larvae going on meanwhile; held until
+            # 6 s of income short, nothing else decided, the second hatchery came by 4:00 in 13 of 32 games, 21)
+            walk_ahead = max(walk_ahead, PARK_AHEAD)
+        if budget < minerals - walk_ahead or me["gas"] - self._saved_cost()[1] < gas:
             return
         if plan["kind"] == "build" and g.parked is not None:
             return                          # one builder walking ahead at a time (the parked build)
@@ -366,7 +444,7 @@ class LearnedMacro:
                 data.update(near=goal["near"], level_at=goal.get("level_at"), avoid=goal.get("avoid"))
             g.task = Task("build", goal["id"], goal.get("where", plan["where"]), data=data, started=hi.frame)
         else:
-            g.task = Task("command", data=plan, started=hi.frame)
+            g.task = Task(plan["kind"], data=plan, started=hi.frame)
             g.spend(minerals)
             self._note_unit(goal["act"], goal["id"])
         self.tracker.note_decision(goal["act"], goal["id"], obs["frame"])
@@ -380,6 +458,33 @@ class LearnedMacro:
                 "scvs": sum(1 for u in mine if u["type"] == g.race.worker), "bases": sum(1 for u in mine if u["type"] in g.race.town_halls),
                 "army": sum(1 for u in mine if u["type"] in g.army_types), "posture": getattr(g.posture, "build", None),
                 "parked": g.race.names.get(g.parked.unit_type) if g.parked is not None else None}
+
+    def _mass_of(self, k: int) -> float:
+        """The summed odds at which this one-off is due: a town hall's hatch_mass, if set."""
+        act, uid = self.model.spec.decisions[k]
+        if self.hatch_mass is not None and (act == EXPAND or uid == self.g.race.town_hall):
+            return self.hatch_mass
+        return self.odds_mass
+
+    def _saved_cost(self) -> tuple[int, int]:
+        """The parked decision's money, kept for it (option park)."""
+        if self.saved is None:
+            return 0, 0
+        return self.g.executor.cost_of(self.saved["act"], self.saved["id"])
+
+    def _affordable(self, goal: dict, obs: dict, mine: list[dict], done: list[dict], me: dict, own: bool = False,
+                    plan: dict | None = None) -> bool:
+        """Its money is there, less what is spoken for and the parked decision's (unless it is that one). A
+        building's always is: its worker walks while the money comes, and the executor waits for it."""
+        g = self.g
+        if goal["act"] in (BUILD, EXPAND):
+            return True
+        plan = plan or self.plan(goal["act"], goal["id"], obs, mine, done, me)
+        if not isinstance(plan, dict) or plan is WAIT:
+            return False
+        minerals, gas = plan["cost"]
+        sm, sg = (0, 0) if own else self._saved_cost()
+        return me["minerals"] - g.committed() - sm >= minerals and me["gas"] - sg >= gas
 
     def _train_queued(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> bool:
         """A decided unit whose producer is free now: trained (first, as pros keep production going).
@@ -450,7 +555,8 @@ class LearnedMacro:
             return True
         return False
 
-    def plan(self, act: int, uid: int, obs: dict, mine: list[dict], done: list[dict], me: dict) -> dict | None:
+    def plan(self, act: int, uid: int, obs: dict, mine: list[dict], done: list[dict], me: dict,
+             capped: bool = True) -> dict | None:
         """How to carry out this decision now; WAIT if Gary will be able to soon (the building that
         makes it is busy); None if Gary can't (a requirement is missing, nothing can make it, Gary
         doesn't know how, or the posture forbids it). Gary waits for a busy building rather than
@@ -465,11 +571,14 @@ class LearnedMacro:
         if self.answers is not None and not self.answers.allows(act, uid, mine):
             return None
         have = {u["type"] for u in done}
-        if any(r not in have for r in g.race.requires.get(uid, [])):
+        if not g.race.meets(have, uid):
             return None
         if self.failed_until.get((act, uid), 0) > g.hi.frame:
             return None                       # just failed (e.g. no room): not again right away
-        cap = self.model.cap(uid, obs["frame"]) if act in (TRAIN, BUILD, EXPAND) else None
+        # (a larva's unit and a morph too: without, gz1 made drones past the pros' cap at 1:00, and its
+        # Extractor came at 3:05 where Gary-Z's dice, the drones capped, came to it by 1:25)
+        # (capped: not a rule's goal that ignores the caps, as Gary-Z's overlord rule did)
+        cap = self.model.cap(uid, obs["frame"]) if capped and act in (TRAIN, MORPH, BMORPH, BUILD, EXPAND) else None
         if cap is not None and self.count(mine, uid) >= cap:
             return None                       # already as many as nine pros in ten ever had by now
         return g.executor.carry_out(act, uid, obs, mine, done, me)
@@ -489,21 +598,12 @@ class LearnedMacro:
     # --- what Gary has -------------------------------------------------------------------------
 
     def in_production(self, mine: list[dict]) -> Counter:
-        """Units being made right now (the game counts them, observations don't list them)."""
-        out: Counter = Counter()
-        for b in mine:
-            if b["completed"] and b.get("queue", 0) > 0 and b["tag"] in self.g.producing:
-                out[self.g.producing[b["tag"]]] += 1
-        return out
+        """Units being made right now (the game counts them, observations don't list them): the executor's."""
+        return self.g.executor.in_production(mine)
 
     def count(self, mine: list[dict], unit_type: int) -> int:
-        """Own units of a type, counting ones in production and buildings about to be placed."""
-        g = self.g
-        n = sum(1 for u in mine if u["type"] == unit_type) + self.in_production(mine)[unit_type]
-        n += sum(1 for ut, *_ in g.reserved if ut == unit_type)
-        if g.building(unit_type):
-            n += 1
-        return n
+        """Own units of a type, as the pros' caps count them: the executor's."""
+        return self.g.executor.count(mine, unit_type)
 
 
 # --- scripted builds a posture switches to --------------------------------------------------

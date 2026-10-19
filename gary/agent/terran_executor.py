@@ -85,6 +85,21 @@ class TerranExecutor(Executor):
         return next((u for u in mine if u["type"] in T.ADDON_PARENT and math.dist((u["x"], u["y"]), (ax, ay)) < 24),
                     None)
 
+    def supply_due(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> tuple[int, str, bool] | None:
+        """A depot ahead of production, as the scripted builds do: started while each producer has less
+        than 2 supply left. Pros are almost never supply-blocked, so the model has hardly seen the state
+        and gives the depot under its floor once there: Gary-T was blocked in 42 of 48 games at 4-8
+        minutes, 437 of its 749 decisions while blocked "nothing it can do" (eval/why.py records, L5b)."""
+        g = self.g
+        producers = sum(1 for u in done if u["type"] in (T.CC, T.RAX, T.FACTORY, T.STARPORT))
+        coming = any(u["type"] == T.DEPOT and not u["completed"] for u in mine) or \
+            any(ut == T.DEPOT for ut, *_ in g.reserved) or g.building(T.DEPOT)
+        if me["supply_max"] - me["supply_used"] < 2 * producers and not coming \
+                and g.macro.plan(BUILD, T.DEPOT, obs, mine, done, me) not in (None, WAIT):
+            return BUILD, f"rule: a depot ahead of production ({me['supply_max'] - me['supply_used']} left, {producers} producers)", \
+                False
+        return None
+
     def site_ok(self, unit_type: int, tx: int, ty: int) -> bool:
         """No creep under it, and off the spot of an add-on to come."""
         return not self.on_addon_spot(unit_type, tx, ty) and not self.creep_coming(unit_type, tx, ty)

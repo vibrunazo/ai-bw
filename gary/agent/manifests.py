@@ -17,6 +17,7 @@ from pathlib import Path
 from gary.agent.army import LearnedArmy, WaveArmy
 from gary.agent.arbiter import DrillArbiter, FixedPriority
 from gary.agent.terran_executor import TerranExecutor
+from gary.agent.zerg_executor import ZergExecutor
 from gary.agent.fight import RULES, FightLayer, PullRule
 from gary.agent.gary import Gary
 from gary.agent.macro import LearnedMacro, LingFloodDefense, OneBaseDefense
@@ -313,6 +314,14 @@ MANIFESTS: dict[str, dict] = {
     "v09roleml": {"version": "v0.9", "posture": "early_pool/v1", "leases": "enforced",
                   "macro": {**_LEARNED, "builds": ["one_base_defense"]}, "army": _ARMY,
                   "fight": {**_V09_FIGHT, "provider": "roles", "model": "roles/latest"}, "arbiter": "fixed_priority/v1"},
+    # the one Gary playing Zerg (docs/REFACTOR.md Phase 1): the shared agent with the Zerg executor and Gary-Z's
+    # macro options (the dice; one-offs and hatcheries by summed odds; a decision parked for its money while
+    # the larvae go on; the model's tempo; no tech path under 10%; an overlord ahead; the pros' history; a rolled
+    # style). Its army, posts and fights come from Gary-Z in Phase 2: none yet
+    "gz1": {"version": "gz0.1", "race": "Z", "posture": "normal", "leases": "enforced", "balance": True,
+            "macro": {**_LEARNED, "decoder": "dice", "odds_mass": 1.0, "hatch_mass": 0.5, "park": True, "pace": True,
+                      "tech_min_p": 0.10, "wait_min_p": 0.05, "supply_ahead": True, "rax_by": None, "history": "pro", "style": "roll"},
+            "army": None, "fight": None, "arbiter": "fixed_priority/v1"},
     # the fight layer alone, for micro drills (gary/drills.py)
     "drill": {"version": "drill", "posture": "normal", "macro": None, "army": None,
               "fight": {"provider": "command", "model": "fight_cmd/latest_memory", "workers": False},
@@ -398,6 +407,31 @@ def _learned_posture(g, m: dict, models: dict):
     model = PlanModel.load(model_path(m.get("plan_model", "plan/latest"), g.matchup, g.race.letter))
     g.plan_model = model.path            # (not in the start-of-game chat: one more line shifts the game)
     return LearnedPosture(g, model, m.get("plan_temperature", 0.0))
+
+
+HISTORY_FADE = 12                    # option history: minutes over which the pros' history fades to the player's own
+
+
+def rolled_style(model, matchup: str, race: str, seed: int) -> int | None:
+    """A build style rolled among the model's, by the pros' shares of them where the taxonomy is here
+    (data/interim/taxonomy/<matchup>_<race>_plan.json), else evenly (Gary-Z's plan roll)."""
+    import json
+    import random
+    styles = model.spec.styles
+    if not styles:
+        return None
+    shares = None
+    try:
+        from ingest.inventory import data_root
+        d = json.loads((data_root() / "interim" / "taxonomy" / f"{matchup}_{race}_plan.json").read_text(encoding="utf-8"))
+        counts = [0] * len(d["names"])
+        for k in d["assignments"].values():
+            counts[k] += 1
+        shares = [c / max(1, sum(counts)) for c in counts]
+    except Exception:                         # (no taxonomy here)
+        pass
+    weights = [shares[s] if shares and s < len(shares) else 1.0 for s in styles]
+    return random.Random(seed).choices(styles, weights=weights)[0]
 
 
 def model_path(ref: str, matchup: str, race: str) -> Path:
@@ -589,7 +623,7 @@ OPTIONS = {
     "nonatbunker": lambda m: m["macro"].update(natural_bunker=False),
     # macro.py: a depot ahead of production (each producer under 2 supply left), as the scripted builds: the model
     # leaves Gary-T supply-blocked (42 of 48 games at 4-8 minutes, L5b; pros almost never are)
-    "depots": lambda m: m["macro"].update(depot_ahead=True),
+    "depots": lambda m: m["macro"].update(supply_ahead=True),
     # answers.py: the zerg's plan read from what Gary saw (a tech scan of its main at 6:30 if nothing is
     # known), and the pros' answer to it as macro goals (against lurkers: Siege Mode, tanks, vessels,
     # Irradiate, turrets one a base; against mutalisks nothing: the model's own turrets do). On v0.23 (432
@@ -731,7 +765,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     g.motor = DirectMotor(g)
     g.leases.enforced = m.get("leases") == "enforced"
     if m["macro"] is not None or m["army"] is not None:
-        g.executor = {"T": TerranExecutor}[g.race.letter](g)
+        g.executor = {"T": TerranExecutor, "Z": ZergExecutor}[g.race.letter](g)
         g.rally_plan = m.get("rally")
         g.home_scvs = m.get("home_scvs", False)
         g.builder_back = m.get("builder_back", False)
@@ -759,12 +793,24 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             explore = m["macro"]["selector"] == "explore"
             style = StrategySelector().choose(map_key(mapinfo), explore, random.Random(seed * 7919 + int(map_key(mapinfo), 16) % 1000))
             g.selected_style = style
+        if style is None and m["macro"].get("style") == "roll":
+            style = rolled_style(macro, g.matchup, g.race.letter, seed)
+            g.selected_style = style
         g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
                                m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False),
-                               m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0))
+                               m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0),
+                               m["macro"].get("park", False), m["macro"].get("pace", False), m["macro"].get("tech_min_p"),
+                               m["macro"].get("hatch_mass"), m["macro"].get("wait_min_p"))
         g.macro.expand_mass = m["macro"].get("expand_mass")
         g.macro.odds_mass = m["macro"].get("odds_mass")
-        g.macro.depot_ahead = m["macro"].get("depot_ahead", False)
+        g.macro.supply_ahead = m["macro"].get("supply_ahead", False)
+        if m["macro"].get("history") == "pro":
+            # (Gary-Z's: the pros' decision history in the model's inputs, fading to its own over HISTORY_FADE
+            # minutes, so its own drone-heavy past doesn't feed back on itself)
+            from gary.policy.macro import pro_history
+            g.macro.tracker.history = pro_history(g.race.letter, style, g.matchup)
+            g.macro.tracker.history_weight = 1.0
+            g.macro.tracker.history_until = HISTORY_FADE
         if m["macro"].get("answers"):
             from gary.agent.answers import Answers
             g.macro.answers = Answers(g, **m["macro"].get("answer_options", {}))

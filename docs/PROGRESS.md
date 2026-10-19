@@ -623,7 +623,14 @@ plan and the full log).
   gary/protoss.py, all three checked against the game's unit data), its matchup and enemy from the
   game's players, and every model through one lookup by matchup and race. No behavior change:
   tests/test_parity.py, three games' logs hashed before and after, byte-identical.
-- **Next:** the one-Gary refactor's Phase 1 (docs/REFACTOR.md). After the refactor, human game 4's list
+- **The one-Gary refactor, Phase 1 (2026-10-20): the executor as a race plug.** The shared Executor with
+  a Terran and a Zerg executor plugged in; the macro asks the executor what a decision means; Gary-Z's
+  decision rules as macro options; the manifest gz1 is the one Gary playing Zerg (no army or fights of
+  its own yet: Phase 2). Its openings against Gary-Z's in 32 ZvZ mirror games of 4 minutes
+  (eval/zerg_opening.py): drones 12 / 12, the Pool 1:35 / 1:54, the Extractor 1:17 / 1:24, larvae and
+  mining alike; the second hatchery later (by 4:00 in 14 games / 21) and supply blocks a little longer
+  (36 s / 26). Terran games still byte-identical (tests/test_parity.py).
+- **Next:** the one-Gary refactor's Phase 2 (docs/REFACTOR.md). After the refactor, human game 4's list
   (above), in this order; the workers' part is done (workers off their work, the main's miners drawn under
   mutalisks):
   1. the attack's execution: medics with the bio, no attack-move into sunkens, a regroup in front of the

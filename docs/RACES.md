@@ -85,6 +85,11 @@ ids are in gary/orders.py. Every `T.` left in gary/agent is Terran mechanics by 
 Terran executor in Phase 1: macro.py 96 (production buildings, depots, add-ons, bunkers), answers.py
 19, roles.py 10, posture.py 8, executor.py and fight.py 5, the rest 1-3.
 
+Since Phase 1 (2026-10-20) the hands are a race plug: gary/agent/executor.py (shared),
+terran_executor.py and zerg_executor.py, and the macro's decision loop is shared, Gary-Z's rules as
+its options. The manifest gz1 plays Zerg on the shared agent (its army and fights come from Gary-Z in
+Phase 2); eval/mirror.py --sides gz1 garyz plays it against Gary-Z.
+
 ## The Zerg player (gary/bots)
 
 Gary playing Zerg is a separate stack: `zerg_rush.py` (319 lines) → `zerg_v2.py` (393) →

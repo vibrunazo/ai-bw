@@ -171,7 +171,8 @@ class Gary:
         research ordered in the last 2 s (the game takes them a moment later: two marines each
         checked against the same 472 minerals took a Command Center's 400 as its SCV arrived)."""
         costs = self.race.costs
-        self.in_flight = [(f, c) for f, c in self.in_flight if self.hi.frame - f < IN_FLIGHT]
+        held = getattr(self.executor, "in_flight", IN_FLIGHT)
+        self.in_flight = [(f, c) for f, c in self.in_flight if self.hi.frame - f < held]
         return sum(costs[ut][0] for ut, *_ in self.reserved) + (costs[self.parked.unit_type][0] if self.parked else 0) \
             + sum(c for _, c in self.in_flight)
 

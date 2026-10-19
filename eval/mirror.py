@@ -4,8 +4,11 @@ Zerg today: two Gary-Z (gary/bots/gary_z.py) with the ZvZ models (runs/macro/ZvZ
 train it with --matchup ZvZ --race Z). Both sides' POVs and the shared decision records are saved
 next to the replay (eval/why.py reads them). Prints who is ahead every 30 s and the result.
 
+Each side is Gary-Z ("garyz") or the one Gary from a manifest (e.g. "gz1", docs/REFACTOR.md): --sides A B.
+
 Usage:
   python -m eval.mirror --map tests/fixtures/replays/stardata_tvz_standard_ozp3w.rep --seed 5001 --minutes 20
+  python -m eval.mirror --map <map> --seed 5001 --minutes 4 --sides gz1 garyz
   python -m eval.mirror --map "<your StarCraft folder>/Maps/(4)Fighting Spirit.scx" --seed 5001
 """
 
@@ -27,7 +30,8 @@ from gary.mapinfo import MapInfo  # noqa: E402
 FIGHTERS = {37, 38, 39, 40, 42, 43, 44, 45, 46, 47, 50, 62, 103}   # zerg fighting units (no drones, overlords, larvae)
 
 
-def play(map_path: str, minutes: float, seed: int, save: str, matchup: str = "ZvZ") -> str:
+def play(map_path: str, minutes: float, seed: int, save: str, matchup: str = "ZvZ",
+         sides: tuple[str, str] = ("garyz", "garyz")) -> str:
     race = matchup[0]
     with Game.new(map_path, [race, race], ["Gary A", "Gary B"], seed=seed, command_delay=LIVE_COMMAND_DELAY) as game:
         mapinfo = MapInfo.from_game(game)
@@ -38,12 +42,18 @@ def play(map_path: str, minutes: float, seed: int, save: str, matchup: str = "Zv
         LOG.clear_records()
         bots = {}
         from gary.bots.gary_z import GaryZ
-        for s in slots:
+        for s, side in zip(slots, sides):
             his[s].side = race
-            bot = GaryZ(his[s], mapinfo, seed, matchup=matchup)
-            other = next(u for u in halls if u["owner"] != s)
-            bot.target = (other["x"], other["y"])             # (where the scripted waves would go: the enemy main)
-            bot.attack_after = 0
+            if side == "garyz":
+                bot = GaryZ(his[s], mapinfo, seed, matchup=matchup)
+                other = next(u for u in halls if u["owner"] != s)
+                bot.target = (other["x"], other["y"])         # (where the scripted waves would go: the enemy main)
+                bot.attack_after = 0
+            else:
+                from gary.agent.manifests import build_gary
+                LOG.slot = s
+                bot = build_gary(his[s], mapinfo, side, seed=seed)
+                LOG.slot = None
             bots[s] = bot
         end = int(minutes * 60 * 24)
         result = "time"
@@ -83,6 +93,9 @@ def play(map_path: str, minutes: float, seed: int, save: str, matchup: str = "Zv
         for name, s in zip("ab", slots):
             his[s].save_pov(f"{base}.{name}pov.jsonl")
         LOG.save_records(base + ".records.jsonl")
+        for name, s in zip("ab", slots):
+            if hasattr(bots[s], "save_trace"):
+                bots[s].save_trace(f"{base}.{name}trace.jsonl")
         print(f"{result}; saved {save} (POVs and records beside it)")
         return result
 
@@ -94,8 +107,10 @@ def main() -> None:
     ap.add_argument("--minutes", type=float, default=20)
     ap.add_argument("--matchup", default="ZvZ", choices=["ZvZ"])
     ap.add_argument("--save", default="mirror.rep")
+    ap.add_argument("--sides", nargs=2, default=["garyz", "garyz"], metavar=("A", "B"),
+                    help="garyz, or a manifest name (gary/agent/manifests.py) for the one Gary")
     args = ap.parse_args()
-    play(args.map, args.minutes, args.seed, args.save, args.matchup)
+    play(args.map, args.minutes, args.seed, args.save, args.matchup, tuple(args.sides))
 
 
 if __name__ == "__main__":

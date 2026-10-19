@@ -106,7 +106,7 @@ class FixedPriority:
                         self.suspended = task
                     return who
                 g.task = task
-        if g.army.remembers and not hi.pending:  # whatever Gary looks at, it remembers
+        if g.army is not None and g.army.remembers and not hi.pending:  # whatever Gary looks at, it remembers
             g.army.remember(hi.observe())
         if hi.pending:
             return None
@@ -166,6 +166,8 @@ class FixedPriority:
             if g.fight.center is not None:   # the army layer leaves units in a fight alone
                 cx, cy = g.fight.center
                 done = [u for u in done if math.dist((u["x"], u["y"]), (cx, cy)) > 12 * 32]
+        if g.army is None:
+            return None
         LOG.owner[g.hi.side] = "army"
         return g.army.step(obs, mine, done)
 

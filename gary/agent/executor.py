@@ -12,7 +12,9 @@ gary/agent/terran_executor.py, gary/agent/zerg_executor.py.
 from __future__ import annotations
 
 import math
+from collections import Counter
 
+from gary import commands as C
 from gary import orders as O
 from gary.agent.gary import LOC_NATURAL, Gary, Task
 from gary.agent.macro import TOWN_HALLS, WAIT
@@ -43,7 +45,8 @@ RALLY_DOWN, RALLY_OUT = 285 * 24, 450 * 24   # rally_ramp: inside the main's ram
                                              # its bottom 30-34%, the natural 17-19%; Gary's rally in front
                                              # of the natural from the start put a quarter of its marines in
                                              # the open)
-BUSY_ORDERS = {30, 31, 33}            # placing / constructing a building
+BUSY_ORDERS = {25, 26, 30, 31, 33, 70}   # placing / constructing a building (a drone: walking to its spot, landing
+                                         # there, morphing: 70 is DroneLand, and a drone re-sent then never started)
 BAD_FOR = 60 * 24                     # a spot where a build failed (not for money) isn't tried again for this long
 LOST_ORDER = 6 * 24                   # a reserved spot with no SCV on its way after this: the order was lost
 RESUME_AFTER = 24                     # an unfinished building nobody has built for a second gets an SCV
@@ -90,6 +93,9 @@ def _to_segment(p: tuple[float, float], a: tuple[float, float], b: tuple[float, 
     return math.dist(p, (ax + t * dx, ay + t * dy))
 
 class Executor:
+    build_order = C.ORDER_PLACE_BUILDING          # the order a worker places a building with
+    box_extras: frozenset = frozenset()           # units a box around workers may take that a mining order leaves be
+    box_orders: frozenset = frozenset()           # ...and orders of other free workers in it, sent mining with them
     """The race-neutral hands (docs/REFACTOR.md Phase 1): reservations, workers to mining and gas,
     transfers, picking and selecting a worker, placement, hotkeys and rallies, commands to a building,
     and a worker's build (walk, place). A race's executor adds what only it does: its task kinds
@@ -110,8 +116,9 @@ class Executor:
                       "rerally": self._task_rerally, "transfer": self._task_transfer}
         for kind in self.basic:
             g.task_runners[kind] = self._run_basic
-        g.task_runners["command"] = self._run_command
-        g.task_runners["gas"] = self._run_command
+        self.commands = {"command": self._task_command, "gas": self._task_gas}   # (the runs with COMMAND_TIMEOUT)
+        for kind in self.commands:
+            g.task_runners[kind] = self._run_command
 
     # --- chores, in the arbiter's order ------------------------------------------------------
 
@@ -387,7 +394,7 @@ class Executor:
         sel = [u for u in mine if u["tag"] in obs["selection"]]
         base = next(b for b in g.map.bases if b.center == tuple(t.data["to"]))
         if t.stage == "gather":                       # (the camera at the base: its field, a gather order)
-            fields = [m for m in base.minerals if screen_of(obs, *m)]
+            fields = self._clear_fields(mine, [m for m in base.minerals if screen_of(obs, *m)])
             if fields and sel:
                 hi.right_click(*field_click(obs, min(fields, key=lambda m: math.dist(m, base.center)), base.center))
             elif sel:
@@ -500,6 +507,45 @@ class Executor:
         return len(alive)
 
     # --- what Gary has to carry out decisions with ------------------------------------------------
+
+    def in_production(self, mine: list[dict]) -> Counter:
+        """Units being made right now (the game counts them, observations don't list them): by its
+        buildings' queues and what Gary last started in each."""
+        out: Counter = Counter()
+        for b in mine:
+            if b["completed"] and b.get("queue", 0) > 0 and b["tag"] in self.g.producing:
+                out[self.g.producing[b["tag"]]] += 1
+        return out
+
+    def count(self, mine: list[dict], unit_type: int) -> int:
+        """Own units of a type, counting ones in production and buildings about to be placed."""
+        g = self.g
+        n = sum(1 for u in mine if u["type"] == unit_type) + self.in_production(mine)[unit_type]
+        n += sum(1 for ut, *_ in g.reserved if ut == unit_type)
+        if g.building(unit_type):
+            n += 1
+        return n
+
+    def cost_of(self, act: int, uid: int) -> tuple[int, int]:
+        """A decision's money (minerals, gas)."""
+        from gary.agent.macro import EXPAND, RESEARCH, UPGRADE
+        race = self.g.race
+        if act == EXPAND:
+            return race.costs[race.town_hall]
+        if act == RESEARCH:
+            return race.research[uid][1]
+        if act == UPGRADE:
+            return race.upgrade[uid][1]
+        return race.costs.get(uid, (0, 0))
+
+    def burst(self, act: int, uid: int) -> bool:
+        """A decision a player makes several of at once (Zerg: a larva's): the macro's next look comes soon."""
+        return False
+
+    def supply_due(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> tuple[int, str, bool] | None:
+        """Supply ahead of production (option depots): (the act that makes the race's supply provider, why, whether
+        it goes past the pros' caps), when one is due; None."""
+        return None
 
     def saturation(self, mine: list[dict]) -> int:
         """SCVs enough for Gary's bases (with a Command Center, finished or not): 2 per mineral field,
@@ -717,7 +763,7 @@ class Executor:
             LOG.order(self.g.hi.side, self.g.hi.frame, t.kind, "dropped", f"not done in {COMMAND_TIMEOUT // 24} s", by="executor")
             self.g.task = None
             return
-        (self._task_command if t.kind == "command" else self._task_gas)(obs, mine, t)
+        self.commands[t.kind](obs, mine, t)
 
     def fail_build(self, t: Task, why: str = "") -> None:
         """A building Gary decided on couldn't be placed: the macro layer hears of it (and why: the game's
@@ -916,7 +962,7 @@ class Executor:
                 t.data["unhooked"] = True
                 hi.right_click(*p)
                 return
-            if hi.build(t.unit_type, *p).accepted:
+            if hi.build(t.unit_type, *p, order=self.build_order).accepted:
                 g.reserved.append((t.unit_type, *spot))
                 g.reserved_at[(t.unit_type, *spot)] = hi.frame
                 g.builder_of[(t.unit_type, *spot)] = t.data["worker"]
@@ -1025,11 +1071,22 @@ class Executor:
         busy = builders | {g.scout} | g.pulled | g.block_units
         for tag in obs["selection"]:
             u = by_tag.get(tag)
+            if u is not None and u["type"] in self.box_extras:
+                continue
             if u is None or u["type"] != g.race.worker or tag in busy:
                 return False
-            if tag not in tags and u["order"] not in GATHERING:
+            if tag not in tags and u["order"] not in GATHERING | self.box_orders:
                 return False
         return True
+
+    def click_blockers(self, mine: list[dict]) -> list[tuple[int, int]]:
+        """Own units a right-click on a mineral field may hit instead (a race's flyers kept over its bases)."""
+        return []
+
+    def _clear_fields(self, mine: list[dict], fields: list) -> list:
+        """The fields with none of click_blockers over them (all of them if every one has)."""
+        blockers = self.click_blockers(mine)
+        return [m for m in fields if not any(math.dist(m, b) < 40 for b in blockers)] or fields
 
     def _mine_gather(self, obs: dict, mine: list[dict], t: Task, tags: set) -> None:
         """The selected workers right-click a mineral field of the base chosen for them (the closest to its
@@ -1040,8 +1097,8 @@ class Executor:
         g, hi = self.g, self.g.hi
         base = next((b for b in g.map.bases if b.center == tuple(t.data["base"])), None) or g.main
         bases = self.my_bases(mine) or [g.main]
-        fields = [m for m in base.minerals if screen_of(obs, *m)] or \
-                 [m for b in bases for m in b.minerals if screen_of(obs, *m)]
+        fields = self._clear_fields(mine, [m for m in base.minerals if screen_of(obs, *m)] or
+                                    [m for b in bases for m in b.minerals if screen_of(obs, *m)])
         if fields:
             m = min(fields, key=lambda m: math.dist(m, base.center))
             hi.right_click(*field_click(obs, m, base.center))
