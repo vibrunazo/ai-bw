@@ -74,6 +74,11 @@ class LearnedMacro:
         self.log = False                                    # training: log the favorite's decisions too
         self.force: tuple[int, int] | None = None           # training: (frame, decision) taken instead there
         self.rax_by = rax_by
+        # option (depots): a depot ahead of production, as the scripted builds do: started while each producer has
+        # less than 2 supply left. Pros are almost never supply-blocked, so the model has hardly seen the state
+        # and gives the depot under its floor once there: Gary-T was blocked in 42 of 48 games at 4-8 minutes, 437
+        # of its 749 decisions while blocked "nothing it can do" (eval/why.py records, L5b)
+        self.depot_ahead = False
         self.queued: dict[tuple[int, int], int] = {}        # units decided whose producer is busy -> since
         self.keep_busy = keep_busy
         self.decoder = decoder                              # "favorite" (the most likely), "dice" or "sample"
@@ -195,6 +200,17 @@ class LearnedMacro:
             g.say(f"next: Barracks (none by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d})")
             LOG.decision("T", "macro", hi.frame, "Barracks", inputs=self._seen(obs, mine, me),
                          by=f"rule: a Barracks by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d}")
+        if self.depot_ahead and (self.goal is None or self.goal["id"] != T.DEPOT) and me["supply_max"] < 200:
+            producers = sum(1 for u in done if u["type"] in (T.CC, T.RAX, T.FACTORY, T.STARPORT))
+            coming = any(u["type"] == T.DEPOT and not u["completed"] for u in mine) or \
+                any(ut == T.DEPOT for ut, *_ in g.reserved) or g.building(T.DEPOT)
+            if me["supply_max"] - me["supply_used"] < 2 * producers and not coming \
+                    and self.plan(BUILD, T.DEPOT, obs, mine, done, me) not in (None, WAIT):
+                self.goal = {"act": BUILD, "id": T.DEPOT, "p": 1.0, "since": hi.frame, "name": "Supply Depot"}
+                g.say("next: Supply Depot (ahead of production)")
+                LOG.decision("T", "macro", hi.frame, "Supply Depot", inputs=self._seen(obs, mine, me),
+                             by=f"rule: a depot ahead of production ({me['supply_max'] - me['supply_used']} left, "
+                                f"{producers} producers)")
         if self.goal and hi.frame - self.goal["since"] > GOAL_TIMEOUT:
             g.say(f"gives up on {self.goal['name']}")
             LOG.order("T", hi.frame, self.goal["name"], "dropped", f"not carried out in {GOAL_TIMEOUT // 24} s", by="macro")

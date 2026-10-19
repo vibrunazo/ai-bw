@@ -584,6 +584,9 @@ OPTIONS = {
     # macro.py: no bunker at the natural (the 2010s TvZ habit: against the modern pros on the ladder maps Gary-T
     # had 2 bunkers at 5-10 minutes where they have 0-1, its biggest tell there; eval/humanlike.py --pros-era modern)
     "nonatbunker": lambda m: m["macro"].update(natural_bunker=False),
+    # macro.py: a depot ahead of production (each producer under 2 supply left), as the scripted builds: the model
+    # leaves Gary-T supply-blocked (42 of 48 games at 4-8 minutes, L5b; pros almost never are)
+    "depots": lambda m: m["macro"].update(depot_ahead=True),
     # answers.py: the zerg's plan read from what Gary saw (a tech scan of its main at 6:30 if nothing is
     # known), and the pros' answer to it as macro goals (against lurkers: Siege Mode, tanks, vessels,
     # Irradiate, turrets one a base; against mutalisks nothing: the model's own turrets do). On v0.23 (432
@@ -758,6 +761,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0))
         g.macro.expand_mass = m["macro"].get("expand_mass")
         g.macro.odds_mass = m["macro"].get("odds_mass")
+        g.macro.depot_ahead = m["macro"].get("depot_ahead", False)
         if m["macro"].get("answers"):
             from gary.agent.answers import Answers
             g.macro.answers = Answers(g, **m["macro"].get("answer_options", {}))
