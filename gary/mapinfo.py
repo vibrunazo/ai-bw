@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,7 +55,7 @@ class MapInfo:
             if near and math.dist(near.center, s) < 320:
                 near.center, near.tile, near.start = s, ((s[0] - 64) // 32, (s[1] - 48) // 32), True
         path = getattr(game, "map_path", None)
-        h = None
+        h = os.environ.get("GARY_MAP_HASH") or None   # (a live game has no map file: its hash given)
         if path:                     # (a map converted from a Remastered replay keeps the original's hash beside it)
             side = Path(path).with_suffix(".maphash")
             h = side.read_text().strip() if side.exists() else hashlib.sha1(map_chk(path)).hexdigest()
