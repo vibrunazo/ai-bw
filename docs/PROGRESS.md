@@ -481,8 +481,15 @@ plan and the full log).
   (56.2%), non-routine 49.0% (47.6%). The weighting already carried the modern meta; the inputs add a
   point for Zerg, nothing for Terran on next-decision accuracy. Both are the newest models (the
   defaults); the pros' history tables rebuilt for their decision index (train/macro_history.py).
-- **Next:** the new replay packs; where Gary's armies go (destinations, the hunt) rather
-  than when; a human game with the current Gary-T.
+- **The second modern pack (cwal 2026-10-19):** 12,752 new replays (6,100 more were the first pack's,
+  byte for byte), August to October 2026, all 1v1 between humans on the 9-map ladder pool, none the
+  same game as an earlier file. 13% flagged as bot games (the first pack 20%), leaving 11,048 usable,
+  2.3 times the first pack's 4,875, and spread evenly over the six matchups (1,790-1,890 each; the
+  first pack leaned ZvZ and was short of PvT). Longer games (median 14.5 minutes, as the 1.16 era's
+  14.6; the first pack 10.5) and more players (3,991, the top ten 5% of games; the first 1,593 and 14%).
+  Re-simulation (the clean share) not run yet.
+- **Next:** the second pack re-simulated and into the datasets; where Gary's armies go (destinations,
+  the hunt) rather than when; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
