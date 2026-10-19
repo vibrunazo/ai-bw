@@ -581,6 +581,9 @@ OPTIONS = {
     # macro.py odds_mass: every one-off decision (a tech building, an add-on, research, an upgrade) once its odds,
     # summed over the decisions taken while it was possible, reach one (as expand_mass for expansions)
     "mass": lambda m: m["macro"].update(odds_mass=1.0),
+    # macro.py: no bunker at the natural (the 2010s TvZ habit: against the modern pros on the ladder maps Gary-T
+    # had 2 bunkers at 5-10 minutes where they have 0-1, its biggest tell there; eval/humanlike.py --pros-era modern)
+    "nonatbunker": lambda m: m["macro"].update(natural_bunker=False),
     # answers.py: the zerg's plan read from what Gary saw (a tech scan of its main at 6:30 if nothing is
     # known), and the pros' answer to it as macro goals (against lurkers: Siege Mode, tanks, vessels,
     # Irradiate, turrets one a base; against mutalisks nothing: the model's own turrets do). On v0.23 (432
