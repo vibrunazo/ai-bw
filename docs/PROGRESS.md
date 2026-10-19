@@ -530,7 +530,28 @@ plan and the full log).
   model's map input: KnockOut 1.4, Octagon SE 2.0, Backrooms 1.1, Attitude SE 2.1, Radeon 1.2, Fighting
   Spirit 1.4, Colorless Fate 1.1, Odyssey-RE 2.0. eval/league.py --maps ladder. L1 is the first round
   on them.
-- **Next:** L1, the baseline on the ladder maps; a human game with the current Gary-T.
+- **L1, the first round on the ladder maps, and the scout:** Gary-T lost all three games on Odyssey-RE
+  by never playing past 1:06: there the miners stand stacked (7 of 9 SCVs on one spot), the scout's
+  10-pixel box caught several, the scout task was given up and asked for again every 6 frames ahead of
+  the macro (the arbiter trace). Now a click picks the scout and a failed pick waits 3 s. L2 (L1 again):
+  Gary-T won 10 of 24 (Odyssey 3 of 3), at the limit 9 even, 4 Terran ahead, 1 Zerg ahead.
+- **The gap score against modern pros on the ladder maps:** it compared Gary with 1.16-era pros on the
+  fixture maps. eval/humanlike.py --pros-era modern (cwal TvZ games on the current maps; league rounds
+  on --maps ladder use them). L2 against them: Gary-T 0.30 (against the old pros 0.36), Gary-Z 0.39;
+  Gary-Z's 2-4 minutes 0.46, not 0.70: most of its early "gap" was the old pros. Its 8-10 minutes (0.56)
+  is now its clearest gap.
+- **Model spec v2, one macro model per race (Fable's order: before any self-play training):** the
+  matchup is an input (one-hot) besides era and map; train/macro.py --matchup all, judged per matchup
+  against each matchup's own model (--compare-separate) on its modern held-out games. Non-routine top-1,
+  shared / separate: Terran TvZ 44.8 / 44.6, TvT 37.5 / 36.4, PvT 37.3 / 31.6; Protoss PvT 32.1 /
+  28.0, PvZ 31.3 / 29.1, PvP 47.7 / 46.6; Zerg TvZ 47.7 / 47.4, ZvZ 64.0 / 63.5, PvZ 55.2 / 53.0: better
+  everywhere, most where a matchup has fewest games. In play behind GARY_MACRO_SHARED (L3, L2's seeds):
+  Gary-T won 10 (10), at the limit 6 even, 8 Terran ahead, 0 Zerg ahead (9 / 4 / 1), gap scores 0.31 /
+  0.41 (0.30 / 0.39): no clear difference on 24 games; a larger paired comparison decides.
+- **Army and commit models for TvT, PvT, PvZ and PvP** (for the one-Gary refactor): commit order vs keep
+  AUC 0.76-0.80.
+- **Next:** the shared models against the separate ones on 48 more games each; a human game with the
+  current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 

@@ -644,8 +644,9 @@ def main() -> None:
                      "gap_score": score}, f)
 
     lines = [f"# Humanlikeness: Gary's {args.race} side against the pros'", "",
-             f"{len(gary)} Gary games, {len(pros)} pro games (TvZ, 10 min or more, Python / Fighting Spirit / "
-             f"Heartbreak Ridge); out-of-fold, 5 folds by game.", "",
+             f"{len(gary)} Gary games, {len(pros)} pro games (TvZ, 10 min or more, "
+             f"{'the current ladder maps, 2026' if args.pros_era == 'modern' else 'Python / Fighting Spirit / Heartbreak Ridge'}); "
+             f"out-of-fold, 5 folds by game.", "",
              f"**AUC {auc:.3f}** (0.5: it can't tell Gary from the pros)", "",
              "| minute | " + " | ".join(str(m) for m in per_min) + " |",
              "|---|" + "---|" * len(per_min),
