@@ -152,8 +152,8 @@ def unit_limit(data: bytes) -> int:
     return struct.unpack_from("<I", lmts, 0x0C)[0] if len(lmts) >= 0x10 else 1700
 
 
-def to_flat(data: bytes) -> bytes:
-    """Decode a 1.18+ replay into the flat stream gary_resim reads with --flat."""
+def _sections(data: bytes) -> tuple[bytes, bytes, bytes]:
+    """A 1.18+ replay's header, commands and map data (the map as the replay holds it)."""
     fmt = replay_format(data)
     if fmt == "legacy":
         raise NotModern("legacy replay: OpenBW reads it directly")
@@ -165,7 +165,34 @@ def to_flat(data: bytes) -> bytes:
         r.int32()  # encoded length between the first sections (1.21+)
     header = r.section(HEADER_SIZE)
     commands = r.section(struct.unpack("<I", r.section(4))[0])
-    map_data = remastered_map_to_bw(r.section(struct.unpack("<I", r.section(4))[0]))
+    map_data = r.section(struct.unpack("<I", r.section(4))[0])
+    return header, commands, map_data
+
+
+def map_data(data: bytes) -> bytes:
+    """A 1.18+ replay's map (CHK) as recorded: its SHA-1 is the replay's MapDataHash (ingest/inventory.py)."""
+    return _sections(data)[2]
+
+
+def to_legacy(data: bytes) -> bytes:
+    """A 1.18+ replay rewritten in the 1.16 replay format, which OpenBW (gary/env.py Game.new) loads with its
+    map: each section stored uncompressed (a segment of its full size is read raw), the map made readable
+    (remastered_map_to_bw). For games on the current ladder maps (ingest/ladder_maps.py)."""
+    import zlib
+
+    def section(b: bytes) -> bytes:   # (OpenBW's checksum: CRC-32 without the final inversion)
+        segs = [b[i:i + 8192] for i in range(0, len(b), 8192)]
+        return struct.pack("<II", zlib.crc32(b) ^ 0xFFFFFFFF, len(segs)) + b"".join(struct.pack("<I", len(s)) + s for s in segs)
+    header, commands, chk = _sections(data)
+    chk = remastered_map_to_bw(chk)
+    return b"".join(section(x) for x in (b"reRS", header, struct.pack("<I", len(commands)), commands,
+                                         struct.pack("<I", len(chk)), chk))
+
+
+def to_flat(data: bytes) -> bytes:
+    """Decode a 1.18+ replay into the flat stream gary_resim reads with --flat."""
+    header, commands, map_data = _sections(data)
+    map_data = remastered_map_to_bw(map_data)
     if len(header) != HEADER_SIZE:
         raise ValueError("truncated header")
     return (b"reRS" + header + struct.pack("<I", len(commands)) + commands

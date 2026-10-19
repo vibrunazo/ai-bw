@@ -115,11 +115,23 @@ def grade(games: list[dict], rows_t: dict, rows_z: dict) -> None:
         g["graded"] = "time, T ahead" if st >= AHEAD * sz else "time, Z ahead" if sz >= AHEAD * st else "time, even"
 
 
+def ladder_maps(names: list[str] | None = None) -> dict[str, Path]:
+    """The current ladder maps (data/maps/ladder/<name>.rep, ingest/ladder_maps.py), all or these."""
+    sys.path.insert(0, str(REPO / "ingest"))
+    from inventory import data_root
+    found = {p.stem: p for p in sorted((data_root() / "maps" / "ladder").glob("*.rep"))}
+    if not found:
+        sys.exit("no ladder maps: python ingest/ladder_maps.py")
+    return found if names is None else {n: found[n] for n in names}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--round", required=True, help="the round's name (its folder in runs/league)")
     ap.add_argument("--vs", default="v029", help="the Terran Gary")
     ap.add_argument("--seeds", type=int, default=8, help="seeds per map")
+    ap.add_argument("--maps", default="fixtures", help="fixtures (the three 1.16 maps), ladder (every current ladder map "
+                    "written by ingest/ladder_maps.py) or ladder names, comma-separated (e.g. KnockOut,Attitude SE)")
     ap.add_argument("--first", type=int, default=101)
     ap.add_argument("--minutes", type=float, default=20)
     ap.add_argument("--parallel", type=int, default=4)
@@ -131,6 +143,7 @@ def main() -> None:
     priority.add_argument(ap)
     ap.add_argument("--regrade", action="store_true", help="an existing round: grade its games at time by who is ahead (no games played)")
     args = ap.parse_args()
+    maps = MAPS if args.maps == "fixtures" else ladder_maps(None if args.maps == "ladder" else args.maps.split(","))
     priority.apply(args.priority)
     out = REPO / "runs" / "league" / args.round
     if args.regrade:
@@ -140,7 +153,7 @@ def main() -> None:
         rows_t, rows_z = side_rows(done, "T", args.parallel), side_rows(done, "Z", args.parallel)
         grade(games, rows_t, rows_z)
         table["graded"] = dict(Counter(g["graded"] for g in games))
-        table["graded_by_map"] = {m: dict(Counter(g["graded"] for g in games if g["map"] == m)) for m in MAPS}
+        table["graded_by_map"] = {m: dict(Counter(g["graded"] for g in games if g["map"] == m)) for m in maps}
         (out / "round.json").write_text(json.dumps(table, indent=1), encoding="utf-8")
         print(f"round {args.round}: {table['results']}")
         print(f"graded (games at time by who is ahead at the end, supply used {AHEAD:g}x): {table['graded']}")
@@ -148,7 +161,7 @@ def main() -> None:
             print(f"  {m}: {c}")
         return
     jobs = [(args.vs, name, path, s, args.minutes, out, args.pairs, args.incumbent, args.candidate, args.layer)
-            for name, path in MAPS.items() for s in range(args.first, args.first + args.seeds)]
+            for name, path in maps.items() for s in range(args.first, args.first + args.seeds)]
     with ThreadPoolExecutor(args.parallel) as pool:
         games = list(monitor.track(pool.map(play, jobs), len(jobs), "games"))
     for g in games:
@@ -160,7 +173,7 @@ def main() -> None:
     table = {"round": args.round, "terran": args.vs, "minutes": args.minutes, "games": games,
              "results": dict(Counter(g["result"] for g in games)),
              "graded": dict(Counter(g["graded"] for g in games)),
-             "by_map": {m: dict(Counter(g["result"] for g in games if g["map"] == m)) for m in MAPS},
+             "by_map": {m: dict(Counter(g["result"] for g in games if g["map"] == m)) for m in maps},
              "decisions": {k: sum(g["decisions"].get(k, 0) for g in games) for k in ("army_t", "roles_t", "army_z", "roles_z")},
              "gap": {"T": gaps(rows_t, "T", args.parallel), "Z": gaps(rows_z, "Z", args.parallel)},
              "decided": sum(1 for g in games if g["result"] in ("won", "lost")) / max(1, len(games))}

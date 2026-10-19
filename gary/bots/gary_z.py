@@ -49,6 +49,7 @@ USED_LARVA = 2 * 24             # a larva just morphed shows as a larva a moment
 IN_FLIGHT = 24                  # money just spent shows in the bank a moment later: counted as spent
 GOAL_TIMEOUT = 30 * 24          # a decision not carried out in 30 s is dropped
 COMMIT_TICK = 5 * 24            # commit mode: each cluster asked this often (ingest/army_dataset.py TICK)
+CLEAR_PX = 16                   # _select_one: a unit with another of Gary-Z's this close may be under it
 QUERY_EVERY = 12
 GAS_FLOAT, GAS_LOW = 400, 300   # gas above this (and above the minerals): its drones go back to minerals;
                                 # below this, back to gas (150 trapped it: no gas mined from 4:00 to 8:00
@@ -190,6 +191,7 @@ class GaryZ(ZergV3):
         # every 5 s per cluster, given its commitment), the commit model also choosing destinations
         commit = os.environ.get("GARY_Z_COMMIT")
         self.army_commit = bool(commit)
+        self.select_misses = 0                          # _select_one: clicks so far that selected something else
         self.army_model = ArmyModel.load(latest_model("commit", matchup) if commit == "latest" else commit) if commit \
             else ArmyModel.load(latest_model("army", matchup))
         self.commitments: list[tuple[int, int, int, int]] = []   # (frame, from cell, to cell, 1 engage / 2 move)
@@ -1032,10 +1034,10 @@ class GaryZ(ZergV3):
     walk_timeout = 45 * 24
 
     def _walk_failed(self, job: Job) -> None:
-        """Walked past walk_timeout: picked and sent again; an expansion whose drones twice never arrived is
+        """Walked past walk_timeout: picked and sent again; an expansion whose drone never arrived is
         dropped and its base left for the game (on Heartbreak Ridge the bases at the map's top and bottom edge,
         decided 7 times in c7's 8 games there, were never reached)."""
-        if job.step.startswith("expand") and job.tries >= 2:
+        if job.step.startswith("expand") and job.tries >= 1:
             self.unreached.add(self.map.base_near(self._spot(job)).center)
             self._fate(job, "dropped", f"its drones never arrived ({job.tries} walks): that base left for this game")
             self.jobs.pop(job.step, None)
@@ -1520,12 +1522,20 @@ class GaryZ(ZergV3):
         sel = set(obs["selection"])
         if len(sel) == 1 and any(u["tag"] in sel for u in units):
             return True
-        u = min(units, key=lambda u: math.dist((u["x"], u["y"]), self.home))
+        # one with nothing of Gary-Z's on top of it, the nearest home first, another after each miss: an
+        # overlord hovering over the hydralisks took every click, 68 in 30 s, and the Lurker decision held
+        # the macro for 30 s each time with 6 larvae and 3,800 minerals idle (eval/why.py, c11 seed 3001)
+        tags = {u["tag"] for u in units}
+        own = [o for o in obs["units"] if o["owner"] == self.hi.slot and o["tag"] not in tags]
+        clear = [u for u in units if not any(abs(o["x"] - u["x"]) < CLEAR_PX and abs(o["y"] - u["y"]) < CLEAR_PX for o in own)]
+        pool = sorted(clear or units, key=lambda u: math.dist((u["x"], u["y"]), self.home))
+        u = pool[self.select_misses % len(pool)]
         if self._look(obs, (u["x"], u["y"])):
             return False
         p = screen_of(obs, u["x"], u["y"])
         if p is not None:
             self.hi.click(*p)
+            self.select_misses += 1
         return False
 
     def _larva_morph(self, obs: dict, mine: list[dict], uid: int) -> bool:
