@@ -517,8 +517,20 @@ plan and the full log).
 - **The first ZvZ mirror games (12, the new ZvZ macro and commit models):** they play to the end; 11 of 12
   reach 20 minutes undecided, both sides banking 1,000-5,000 minerals: the larva limit c11 showed
   against Terran, in Gary-Z's shared execution.
-- **Next:** Gary-Z's banking (drones made, minerals unspent: hatcheries and larvae); a human game with
-  the current Gary-T.
+- **Gary-Z's banking, read from the records (c11's worst game, 3,800 minerals at 12 minutes):** not larvae
+  there (6 free) but its macro making 11 decisions a minute: each Lurker decision held it 30 s and was
+  given up, because an overlord over the hydralisks took every click (68 in 30 s, the screen log).
+  Gary-Z now picks a unit with nothing of its own on top and another after each miss; an expansion
+  whose drone never arrives is given up after one walk. c13 (c11's seeds and setup): alive at 12
+  minutes in 23 games (21), at 15 in 21 (18), Zerg ahead at the limit 4 (2), Gary-T won 6 (6),
+  minerals at 12 minutes 806 (1,083). The typical game is still larva-bound (2 free at 10-15 minutes).
+- **The current ladder maps for headless games (ingest/ladder_maps.py):** every round so far played
+  three 1.16 maps nobody plays now. A Remastered replay rewritten in the 1.16 format loads in OpenBW
+  with its map (resim/scr_format.py to_legacy), and the original hash rides beside it for the macro
+  model's map input: KnockOut 1.4, Octagon SE 2.0, Backrooms 1.1, Attitude SE 2.1, Radeon 1.2, Fighting
+  Spirit 1.4, Colorless Fate 1.1, Odyssey-RE 2.0. eval/league.py --maps ladder. L1 is the first round
+  on them.
+- **Next:** L1, the baseline on the ladder maps; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
