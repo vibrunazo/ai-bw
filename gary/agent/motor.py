@@ -605,8 +605,10 @@ class DirectMotor:
                 if w is None:
                     g.task = None
                     return
-                x, y = hi.aim(obs, w)
-                hi.box(max(0, x - 5), max(0, y - 5), min(hi.p.viewport[0] - 1, x + 5), min(hi.p.viewport[1] - 1, y + 5))
+                # a click, not a tiny box: on the current ladder maps the miners stand stacked (7 of 9 SCVs on
+                # one spot on Odyssey-RE), a box caught several, the scout was given up and asked for again
+                # every 6 frames, and the macro never got a turn again from 1:06 (L1, 3 games lost of 3)
+                hi.click(*hi.aim(obs, w))
                 t.stage = "picked"
                 return
             sel = [u for u in mine if u["tag"] in obs["selection"] and u["type"] == T.SCV]

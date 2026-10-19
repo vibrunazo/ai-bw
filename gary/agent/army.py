@@ -40,6 +40,7 @@ from gary.policy.belief import ARMY_SUPPLY
 
 WAVE = 16
 ASK_EVERY = 24 * 2                  # how often Gary asks the model about its army
+SCOUT_RETRY = 24 * 3               # a scout's worker not picked: asked again this much later
 COMMIT_TICK = 24 * 5                # commit: each cluster asked this often (the pros' data: ingest/army_dataset.py TICK)
 MOVE_CELLS = 2                      # destinations closer than this are "stay"
 MOVE_P = 0.5                        # move when the model puts more belief than this away from here
@@ -187,6 +188,7 @@ class LearnedArmy:
         self.ordered_to = None
         self.scout_check = None     # (frame, (scout, target)) at the last check
         self.scout_resends = 0
+        self.next_scout_try = 0
 
     def remember(self, obs: dict) -> None:
         self.tracker.hidden = set().union(set(), *self.g.loaded.values())   # (marines in a bunker aren't lost)
@@ -644,7 +646,8 @@ class LearnedArmy:
         hi = g.hi
         if g.scout is None:
             workers = sum(1 for u in mine if u["type"] == T.SCV)
-            if hi.frame >= SCOUT_AT and workers >= SCOUT_WORKERS:
+            if hi.frame >= max(SCOUT_AT, self.next_scout_try) and workers >= SCOUT_WORKERS:
+                self.next_scout_try = hi.frame + SCOUT_RETRY   # (a failed pick doesn't hold the hands every turn)
                 if not self.scout_targets:                 # (a new scout keeps the starts ruled out)
                     self.scout_targets = sorted(g.enemy_starts, key=lambda p: math.dist(p, g.main.center))
                 g.motor.start(Intent("SCOUT", [], self.scout_targets[0], {"to": self.scout_targets[0]}, "scout"))
