@@ -154,6 +154,34 @@ the placement rule, gateway/robotics/stargate production, archon merges as a mor
 as transports), the PvT/PvZ/PvP models (the datasets exist for the modern pack). Not in this
 plan's scope; the plan above must leave nothing that assumes two races (no `"T" if ... else "Z"`).
 
+## Later: building placement (after the refactor and attack execution)
+
+Human game 4 (docs/PROGRESS.md): Gary-T's buildings stood spread out around the main, it ran out
+of room, and some builds likely failed. Today's placement (gary/agent/executor.py `spot`,
+`_base_spot`, `spot_near`) takes the free tile closest to a point on the side away from the
+minerals, with a one-tile gap all round; gary/agent/simcity.py only places the buildings of a
+wall. Gary-Z has its own (`gary/bots/gary_z.py` `_building_spot`), which the refactor retires.
+
+Placement belongs to the race plug (the executor, above), behind one shared interface:
+`spot(kind, base, builder) -> tile | None`, where the shared part keeps the rules every race has
+(clear of the mineral and gas paths, a lane kept from production to the base's way out, the
+town-hall and add-on tiles reserved, the map edge, fogged creep) and the race hook adds its own:
+
+- **Terran:** Supply Depots packed in blocks against the main's edges and cliffs; Barracks,
+  Factories and Starports in columns with the two add-on tiles kept free to the right and a
+  walkable row between columns; turrets and bunkers where the fight layer asks.
+- **Zerg:** on creep only, off the drones' paths, the creep colonies at the front of the creep.
+- **Protoss:** inside a pylon's power field, pylons placed to power the next buildings, the gaps
+  a probe and a dragoon walk through.
+
+The layouts are not to be invented: the pros' replays give each building's position relative to
+its base (the town hall, the minerals, the way out) per map and start, so a placement prior can be
+read or learned from them, as the walls were (gary/walls.py, PROGRESS.md "Which maps and starts
+pros wall"). Measured before and after in the league like the rest: failed builds (`bad_spots`
+entries), how far the buildings spread from their town hall against the pros', how many fit in
+the main before it is full, and whether a ground path from each production building to the
+base's way out stays open.
+
 ## Tests across matchups
 
 tests/test_parity.py (Phase 0) and tests/test_smoke_game.py are parametrized over the matchups
