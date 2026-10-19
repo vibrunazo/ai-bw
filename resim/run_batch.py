@@ -39,6 +39,8 @@ sys.path.insert(0, str(REPO_ROOT / "ingest"))
 from inventory import data_root, load_inventory  # noqa: E402
 
 import scr_format  # noqa: E402  (same folder)
+sys.path.insert(0, str(REPO_ROOT))
+from eval import monitor, priority  # noqa: E402
 
 SNAPSHOT_EVERY = 240          # frames (10 s)
 FRAMES_PER_MIN = 24 * 60
@@ -161,7 +163,7 @@ def build(args: argparse.Namespace) -> None:
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_one, exe, gamedata, out_root, g) for g in games]
-        for n, fut in enumerate(as_completed(futures), 1):
+        for n, fut in enumerate(monitor.track(as_completed(futures), len(futures), "replays re-simulated"), 1):
             row = fut.result()
             done[row["sha1"]] = row
             if n % 500 == 0 or n == len(games):
@@ -214,7 +216,9 @@ def main() -> None:
     ap.add_argument("--retry-failed", action="store_true", help="re-simulate replays that failed before")
     ap.add_argument("--data", help="game data folder (default: data/gamedata/scr)")
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4)
+    priority.add_argument(ap)
     args = ap.parse_args()
+    priority.apply(args.priority)
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     report(args) if args.report else build(args)
 

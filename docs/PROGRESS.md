@@ -487,9 +487,18 @@ plan and the full log).
   2.3 times the first pack's 4,875, and spread evenly over the six matchups (1,790-1,890 each; the
   first pack leaned ZvZ and was short of PvT). Longer games (median 14.5 minutes, as the 1.16 era's
   14.6; the first pack 10.5) and more players (3,991, the top ten 5% of games; the first 1,593 and 14%).
-  Re-simulation (the clean share) not run yet.
-- **Next:** the second pack re-simulated and into the datasets; where Gary's armies go (destinations,
-  the hunt) rather than when; a human game with the current Gary-T.
+  Re-simulated (the 11,048 usable): 92.4% clean (the first pack 93.4%), 1.7% failed (mostly the "map
+  version 64" maps), 5.9% desynced, the same matchups as before: ZvZ 99%, PvP 98%, PvZ 97%, TvZ 90%,
+  PvT 87%, TvT 83% (the SC:R movement difference, docs/DATA_ERAS.md). Modern clean games now 2,150-2,830
+  per matchup (both packs), near the ~3,000 where the curve flattens.
+- **Where the commitments send the army (held-out pro ticks, army v3):** the commit model's destination
+  draw goes home as often as the pros' orders do (move: Terran 26% against 29%, Zerg 17% against 19%;
+  engage alike), with the cluster already home 44% (Zerg 30%) when the order comes. So on pro states the
+  destinations are right too: Gary's home deficit (0.24 of 8-10 minutes against 0.63) comes from the
+  states its games drift into and from the scripted layers (the hunt's 13%, fights), not from the
+  model's choice of when or where.
+- **Next:** the second pack into the datasets (all six matchups); the macro models retrained on it;
+  a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
