@@ -213,6 +213,7 @@ KNOWN_BOT_NAMES = {
     "krasimir krystev", "ximp", "ualbertabot", "andrew smith", "marian devecka", "mariandevecka",
     "icecraft", "skynet", "aiur", "steamhammer", "purplewave", "mcrave",
     "pluto--ai", "pluto_promax", "plutopromax",  # cwal-tagged ladder accounts; not plain "pluto"
+    "namepen99", "morokei1", "morokei2", "morokei3", "dreamdawn",  # 2026 ladder bots (flagged on their cwal.gg profiles, confirmed by watching)
 }
 
 
