@@ -505,8 +505,15 @@ plan and the full log).
   (47.2%), ZvZ Zerg 63.5% (62.2%); first models for TvT Terran 36.4%, PvT Protoss 28.0% and Terran
   31.6%, PvZ Protoss 29.1% and Zerg 53.0%, PvP Protoss 46.6% (modern games only for the Protoss
   matchups). The pros' history tables rebuilt for all nine.
-- **Next:** c11 (c10's seeds and setup, the new macro models alone); a human game with the current
-  Gary-T.
+- **c11: the new macro models in play (c10's seeds and setup, the commit models pinned to c10's):**
+  Gary-Z drones 24 at 8 minutes (c10 15, pros 25), 28 at 10, 44 at 15; army units 12 / 19 / 33.5 at 8 /
+  12 / 15 minutes (5 / 7.5 / 12); alive at 15 minutes in 18 games of 24 (13); its gap score 0.33
+  (0.39). Gary-T won 6 (13); at the 20-minute limit 10 games even, 6 Terran ahead, 2 Zerg ahead.
+  Gary-Z still wins none outright and banks ~1,000 minerals at 12 minutes on 4 hatcheries (larvae).
+  Its first ZvZ commit model: order vs keep AUC 0.80, rates within 0.3 of the pros', hysteresis
+  0.26 / 0.12 / 0.06 (pros 0.25 / 0.11 / 0.05).
+- **Next:** c12 (c11 with the newest commit models, losses) and the first ZvZ mirror games with the
+  ZvZ models; a human game with the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
