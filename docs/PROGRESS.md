@@ -579,8 +579,12 @@ plan and the full log).
   in every minute range; army home 64% of 8-10 minutes (72%; pros 19%), in the field 27% (17%; pros
   69%), standing 63% of 5-7 minutes (85%; pros 19%); ahead at the limit in 11 games (3); Gary-T won 18
   (21). The default now.
-- **Next:** a human game with that Gary-T on a current ladder map; the one-Gary refactor; Gary-Z's army
-  placement (still home 3 times the pros') and mutalisk timing; Gary-T's own floor.
+- **Gary-T's floor (L8 against L7, 48 games):** off, its gap score against modern pros 0.29 either way:
+  closer at 5-7 minutes (0.33 against 0.40: its army standing 39% of the time, pros 25%, with the floor
+  80%) and further at 8-10 (0.45 against 0.38: home 31%, pros 53%, with the floor 38%); Gary-T won 22
+  (18). No clearer humanlikeness, only strength: the floor stays.
+- **Next:** a human game with Gary-T v029+commit+draw+floor+mass+nonatbunker+depots on a current ladder
+  map; the one-Gary refactor; Gary-Z's army placement (still home 3 times the pros') and mutalisk timing.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
