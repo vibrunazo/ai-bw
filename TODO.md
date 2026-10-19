@@ -107,6 +107,26 @@ What to do, in order:
 
 Items 3, 5 and 7 below wait for the skeleton's opponent; 6 (the engine edge error) stands.
 
+## Map mechanics on the current ladder maps (2026-10-18)
+
+Colorless Fate has an egg wall and a half-mineral wall, Odyssey stacked minerals, Attitude SE
+critters; the 2026 pros' builds, placements and fights on these maps depend on them. Today Gary
+cannot see any of it: the re-simulation emits no neutral units except minerals and geysers (the eggs
+are in no dataset), the army grid skips neutral units, and no model has a map input. The plan
+(docs/RACES.md principle: inputs rich enough for the per-map pro data to teach it, no rule per map):
+
+1. Neutral units become first-class in the re-simulation, the macro features and the army grid;
+   chokes and ramps recomputed from current walkability when a wall dies or is mined out.
+2. The map hash as a conditioning input, like the build style and the era input (one change).
+3. A per-map placement prior from the pros' building positions, replacing the hand-made walls table.
+4. Executor abilities the behaviors need: attack a neutral unit, gather from a chosen patch,
+   saturation counted by position (stacked minerals).
+5. The league and self-play on the current ladder pool, extracted from the replays' map data; every
+   new map gets a re-simulation check first (Aiolos fails with "unsupported map version 64").
+
+Do 2 together with the era input and 1 when the one-Gary refactor touches the re-simulation; 3 to 5
+after the modern data is the training set.
+
 ## 3. The army model's fight estimate, from Gary's own fights
 
 The fight estimate is trained on what the pro got: the change in army share in the 45 s after the
