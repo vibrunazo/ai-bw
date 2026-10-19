@@ -1,0 +1,20 @@
+{
+ "KnockOut 1.4 4004": {
+  ".pov.jsonl": "90110a7c2a417d8b58effe17e8c789f4e7566c8187bae043299a97dce770b4c0",
+  ".zpov.jsonl": "a85d4347eec45b812fb5c047119ecd6a1948bc34391c02430e2b1a88160220e4",
+  ".trace.jsonl": "aa80651391ab0a9395c7e4b649b8d59cb19d6aec16112eb41093de506705278a",
+  ".records.jsonl": "6da4e5fb235f8ab8467ca496b9692c9e5536884f9d257a5e957076910167126d"
+ },
+ "Fighting Spirit 1.4 4005": {
+  ".pov.jsonl": "b08506a07f4b3f00cf1dfc7d97e67f061b123b02afdddedc8613905af1ae3b89",
+  ".zpov.jsonl": "c3ef9343be130408d73d79b31ee18590cb515b74fd1be48bc7cdc0f622cb98b9",
+  ".trace.jsonl": "26eeb0eb34d7be04662696277af5b28acd364fe0cb532ddc6c168decaa8c00ff",
+  ".records.jsonl": "10e8d7cfbb952cf3ffe9a7dcde5cafa4a4f71d8cee73cbde63aef6f7bae5729a"
+ },
+ "Odyssey-RE 2.0 4006": {
+  ".pov.jsonl": "bdb6744e0436980e8b063161bc144768bb2d4d7a27c29b41e58da9ad0abb93cb",
+  ".zpov.jsonl": "196bf6571295b02b7bbf8952dec7f424c75fab34b064881e934e166fe2c8fb0f",
+  ".trace.jsonl": "9fa1d36b5d80db6bf1e938d9ea25a5695a68024f0cfeba0bef5119ded817b80b",
+  ".records.jsonl": "493aae245211c47dd68d921481bd943046236295276512be6da896bbaca61b05"
+ }
+}
