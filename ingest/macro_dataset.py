@@ -233,12 +233,12 @@ def build_game(rec: dict, styles: dict[str, int]) -> dict:
     return row
 
 
-def select(matchup: str) -> list[dict]:
+def select(matchup: str, source: str | None = None) -> list[dict]:
     games = []
     with open(data_root() / "interim" / "resim_index.jsonl", encoding="utf-8") as f:
         for line in f:
             r = json.loads(line)
-            if (r.get("matchup") == matchup and r.get("ok") and r.get("desync_minute") is None
+            if ((source is None or r.get("rel_path", "").split("/")[0] == source) and r.get("matchup") == matchup and r.get("ok") and r.get("desync_minute") is None
                     and r.get("frames_match") is not False):
                 games.append(r)
     return games
@@ -276,6 +276,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int)
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4)
     ap.add_argument("--force", action="store_true", help="rebuild games already in the index")
+    ap.add_argument("--source", help="only games from this raw source folder (e.g. cwal), e.g. with --force after they were re-simulated")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--restyle", action="store_true", help="only rewrite the index's styles from the taxonomy")
     args = ap.parse_args()
@@ -286,7 +287,7 @@ def main() -> None:
         restyle(args.matchup)
         return
     done = {} if args.force else load_index()
-    todo = [r for r in select(args.matchup) if r["sha1"] not in done]
+    todo = [r for r in select(args.matchup, args.source) if r["sha1"] not in done]
     if args.limit:
         todo = todo[:args.limit]
     styles = load_styles(args.matchup)

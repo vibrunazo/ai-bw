@@ -38,8 +38,13 @@ struct scr_replay : Base {
 		int index1 = raw & 0x1fff;  // index + 1; 0 = no unit
 		int generation = raw >> 13;
 		if (!index1) return 0;
-		int sim_index1 = index1 - (unit_limit - 1700);
-		bwgame::unit_t* u = sim_index1 > 0 ? this->get_unit((size_t)(sim_index1 - 1)) : nullptr;
+		// Both engines hand the first unit created (the map's first UNIT entry) slot 0 and then
+		// allocate from the top of the table down, so an index in the bottom half is the same in
+		// both; the top half is shifted by the extra slots. (KnockOut's first entry is a main's
+		// geyser: every command aimed at it was lost, and 29 of 29 desyncs there followed.)
+		int shift = unit_limit - 1700;
+		int sim_index1 = index1 <= shift ? index1 : index1 - shift;
+		bwgame::unit_t* u = this->get_unit((size_t)(sim_index1 - 1));
 		if (!u || (int)(u->unit_id_generation % 8) != generation) {
 			if (debug_rejects)
 				fprintf(stderr, "unit id miss frame %d raw %u index1 %d gen %d sim %s type %d gen %d" "\n",

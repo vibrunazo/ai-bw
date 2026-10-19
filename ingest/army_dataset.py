@@ -333,6 +333,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int)
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4)
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--source", help="only games from this raw source folder (e.g. cwal), e.g. with --force after they were re-simulated")
     ap.add_argument("--report", action="store_true")
     priority.add_argument(ap)
     args = ap.parse_args()
@@ -341,7 +342,7 @@ def main() -> None:
         report()
         return
     done = {} if args.force else load_index()
-    todo = [r for r in select(args.matchup) if r["sha1"] not in done]
+    todo = [r for r in select(args.matchup, args.source) if r["sha1"] not in done]
     if args.limit:
         todo = todo[:args.limit]
     print(f"{len(todo)} games to build ({len(done)} already done)", flush=True)
