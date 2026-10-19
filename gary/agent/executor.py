@@ -15,6 +15,7 @@ import math
 
 from gary import orders as O
 from gary.agent.gary import LOC_NATURAL, Gary, Task
+from gary.agent.macro import TOWN_HALLS, WAIT
 from gary.decision_log import LOG
 from gary.interface import screen_of
 from gary.mapinfo import Base
@@ -62,6 +63,8 @@ RESET_HARVEST = 151                   # the order of a worker stepping out of a 
 TRAVEL_FOR = 24 * 40                  # ...and one walking to another base, after this at most
 RESEND_TRIES = 3                      # a build's SCV stopped on its way to another base: sent again this often
 PARK_FOR = 24 * 20                    # a build's SCV walks to the spot ahead of the money: back to it after this at most
+BUILDERS = 3                          # saturation: workers past the bases' minerals and gas, for building
+BUSY_BUILDING = {O.ORDER_RESEARCH, O.ORDER_UPGRADE, O.ORDER_BUILD_ADDON}   # a building busy with these makes nothing
 TASK_TIMEOUT = 24 * 40                # build, hotkey, mine and resume tasks give up after 40 s
 COMMAND_TIMEOUT = 24 * 20             # commands and gas after 20 s
 CREEP_BUILDINGS = {131, 132, 133, 143, 144, 146}   # Hatchery, Lair, Hive, Creep, Spore and Sunken Colony
@@ -99,6 +102,7 @@ class Executor:
         self._ramp = None                             # rerally: (spot inside the main's ramp, its bottom), or False
         self.danger: dict[tuple, int] = {}            # balance: base center -> frame zerg fighters were last seen near it
         self.next_transfer = 0
+        self._bases_by_walk: list | None = None       # free_base: the bases by a worker's walk from the natural
         # the map's own creep (map knowledge, read now: at the start of a game, before any zerg's)
         creep = getattr(g.hi.game, "creep", None)
         self._map_creep = creep() if creep else None
@@ -494,6 +498,77 @@ class Executor:
                   and u.get("order_target") == refinery}
         g.gas_workers[refinery] = alive
         return len(alive)
+
+    # --- what Gary has to carry out decisions with ------------------------------------------------
+
+    def saturation(self, mine: list[dict]) -> int:
+        """SCVs enough for Gary's bases (with a Command Center, finished or not): 2 per mineral field,
+        3 per geyser, and builders. Pros have 39 at 12:00 on two bases; Gary, making SCVs to 60, had
+        42-51 there, the minerals of the army it lacked."""
+        halls = [u for u in mine if u["type"] in self.g.race.town_halls]
+        bases = [b for b in self.g.map.bases if any(math.dist(b.center, (h["x"], h["y"])) < 6 * 32 for h in halls)]
+        return sum(2 * len(b.minerals) + 3 * len(b.geysers) for b in bases) + BUILDERS
+
+    def free_building(self, obs: dict, mine: list[dict], done: list[dict], kind: int,
+                      addon: int | None = None) -> dict | None:
+        g = self.g
+        blind = round(g.hi.p.reaction_ms / 42) + g.hi.act_latency_frames + 4
+        for b in done:
+            if b["type"] != kind or b.get("queue", 0) > 0 or b["order"] in BUSY_BUILDING:
+                continue
+            if obs["now"] - g.ordered_at.get(b["tag"], -10**9) <= blind:
+                continue
+            if g.unselectable.get(b["tag"], -1) > g.hi.frame:
+                continue                        # (its clicks select nothing: executor.py select)
+            if addon is not None:
+                a = self.addon_of(b, mine)
+                if a is None or a["type"] != addon or not a["completed"]:
+                    continue
+            return b
+        return None
+
+    def _command_or_wait(self, b: dict | None, done: list[dict], kind: int, act: int, uid: int,
+                         cost: tuple[int, int]) -> dict | None:
+        if b is not None:
+            return {"kind": "command", "act": act, "id": uid, "building": b, "cost": cost}
+        return WAIT if any(u["type"] == kind for u in done) else None
+
+    def free_geyser(self, obs: dict, mine: list[dict]):
+        g = self.g
+        refineries = [u for u in mine if u["type"] == g.race.gas_building] + \
+                     [{"x": tx * 32 + 64, "y": ty * 32 + 32} for ut, tx, ty in g.reserved if ut == g.race.gas_building]
+        for base in self.my_bases(mine):
+            for gx, gy in base.geysers:
+                if any(math.dist((r["x"], r["y"]), (gx, gy)) < 32 for r in refineries):
+                    continue
+                where = "main" if base is g.main else "natural" if base is g.natural else base
+                return where, ((gx - 64) // 32, (gy - 32) // 32)
+        return None
+
+    def free_base(self, obs: dict):
+        """The nearest base nobody has taken (the natural first), as far as Gary has seen: nearest by a
+        worker's walk from the natural (terrain.py), not as the crow flies."""
+        g = self.g
+        halls = [u for u in obs["units"] if u["type"] in TOWN_HALLS]
+        reserved = [(tx * 32 + 64, ty * 32 + 48) for ut, tx, ty in g.reserved if ut == g.race.town_hall]
+        enemy = [tuple(s) for s in g.enemy_starts]
+        free = [b for b in g.map.bases if b is not g.main
+                and not any(math.dist(b.center, (h["x"], h["y"])) < 10 * 32 for h in halls)
+                and not any(math.dist(b.center, r) < 10 * 32 for r in reserved)
+                and not any(math.dist(b.center, s) < 10 * 32 for s in enemy)]
+        if g.natural in free:
+            return g.natural
+        if not free:
+            return None
+        if self._bases_by_walk is None:
+            from gary.agent.block import _analysis
+            try:
+                self._bases_by_walk = [tuple(c) for c in _analysis(g).get("bases_by_walk", [])]
+            except Exception:                    # (no terrain in this game)
+                self._bases_by_walk = []
+        walk = self._bases_by_walk
+        return min(free, key=lambda b: (walk.index(tuple(b.center)) if tuple(b.center) in walk else len(walk),
+                                        math.dist(b.center, g.main.center)))
 
     # --- placement ------------------------------------------------------------------------------
 

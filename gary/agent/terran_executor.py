@@ -9,9 +9,12 @@ import math
 
 from gary import orders as O
 from gary import terran as T
-from gary.agent.executor import BUSY_ORDERS, RESUME_AFTER, RESUME_RETRY, Executor
+from gary.agent.executor import BUSY_BUILDING, BUSY_ORDERS, RESUME_AFTER, RESUME_RETRY, Executor
+from gary.agent.macro import BUILD, EXPAND, RESEARCH, TRAIN, UPGRADE, WAIT
 from gary.agent.gary import Gary, Task
 from gary.interface import screen_of
+
+MAX_SCVS = 60                        # SCVs at most, whatever the bases' saturation
 
 
 class TerranExecutor(Executor):
@@ -20,6 +23,67 @@ class TerranExecutor(Executor):
         self.stalled_since: dict[int, int] = {}       # unfinished building -> since when nobody builds it
         self.basic["resume"] = self._task_resume
         g.task_runners["resume"] = self._run_basic
+
+    def carry_out(self, act: int, uid: int, obs: dict, mine: list[dict], done: list[dict], me: dict) -> dict | None:
+        """What a macro decision means for Terran hands now (LearnedMacro.plan's gates passed): a command
+        to a building (a unit, an add-on, research, an upgrade), a build task for an SCV, WAIT (the
+        building that makes it is busy, or a depot is coming), or None (Gary can't)."""
+        g = self.g
+        have = {u["type"] for u in done}
+        if act == TRAIN and uid in g.race.producer:
+            if me["supply_used"] + g.race.supply[uid] > me["supply_max"]:
+                # supply blocked: wait if a depot is on its way, else let a depot come next
+                coming = any(u["type"] == T.DEPOT and not u["completed"] for u in mine) or \
+                    any(ut == T.DEPOT for ut, *_ in g.reserved) or \
+                    g.building(T.DEPOT)
+                return WAIT if coming else None
+            if uid == g.race.worker and sum(1 for u in mine if u["type"] == g.race.worker) >= min(MAX_SCVS, self.saturation(mine)):
+                return None
+            addon = T.NEEDS_ADDON.get(uid)
+            if addon is not None and not any(u["type"] == addon for u in done):
+                return None                       # e.g. tanks: no Machine Shop yet
+            b = self.free_building(obs, mine, done, g.race.producer[uid], addon)
+            return self._command_or_wait(b, done, g.race.producer[uid], act, uid, g.race.costs[uid])
+        if act == BUILD and uid in T.ADDON_PARENT:
+            ox, oy = T.ADDON_OFFSET                      # (only where the add-on fits)
+            fits = lambda b: g.hi.game.can_place(g.slot, uid, (b["x"] - g.race.sizes[b["type"]][0] * 16) // 32 + ox,
+                                                 (b["y"] - g.race.sizes[b["type"]][1] * 16) // 32 + oy, 0)
+            bare = [b for b in done if b["type"] == T.ADDON_PARENT[uid] and self.addon_of(b, mine) is None and fits(b)]
+            if not bare:
+                return None
+            free = [b for b in bare if b.get("queue", 0) == 0 and b["order"] not in BUSY_BUILDING]
+            return {"kind": "command", "act": act, "id": uid, "building": free[0], "cost": g.race.costs[uid]} \
+                if free else WAIT
+        if act == BUILD and uid == g.race.gas_building:
+            spot = self.free_geyser(obs, mine)
+            return {"kind": "build", "where": spot[0], "data": {"spot": spot[1]}, "cost": g.race.costs[uid]} \
+                if spot else None
+        if act == BUILD and uid in g.race.sizes and uid != g.race.town_hall:
+            return {"kind": "build", "where": "main", "cost": g.race.costs[uid]}
+        if act == EXPAND and uid == g.race.town_hall:
+            base = self.free_base(obs)
+            return {"kind": "build", "where": "natural" if base is g.natural else base,
+                    "cost": g.race.costs[g.race.town_hall]} if base else None
+        if act == RESEARCH and uid in g.race.research and uid not in g.researched:
+            where, cost = g.race.research[uid]
+            b = self.free_building(obs, mine, done, where)
+            return self._command_or_wait(b, done, where, act, uid, cost)
+        if act == UPGRADE and uid in g.race.upgrade:
+            where, cost, levels = g.race.upgrade[uid]
+            level = g.upgraded[uid]
+            if level >= levels or (level >= 1 and T.UPGRADE_LEVEL_2_NEEDS not in have):
+                return None
+            b = self.free_building(obs, mine, done, where)
+            cost = (cost[0] + 75 * level, cost[1] + 75 * level)
+            return self._command_or_wait(b, done, where, act, uid, cost)
+        return None
+
+    @staticmethod
+    def addon_of(b: dict, mine: list[dict]) -> dict | None:
+        """The add-on attached to a building (it sits just right of the building's lower half)."""
+        ax, ay = b["x"] + 96, b["y"] + 16
+        return next((u for u in mine if u["type"] in T.ADDON_PARENT and math.dist((u["x"], u["y"]), (ax, ay)) < 24),
+                    None)
 
     def site_ok(self, unit_type: int, tx: int, ty: int) -> bool:
         """No creep under it, and off the spot of an add-on to come."""

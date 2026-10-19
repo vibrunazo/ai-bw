@@ -25,24 +25,20 @@ from collections import Counter
 
 import numpy as np
 
-from gary import orders as O
 from gary import terran as T
 from gary.agent.gary import Gary, Task
 from gary.decision_log import LOG, top
 from gary.policy.attribution import explain_macro
 from gary.policy.macro import ACT_NAMES, MacroModel, MacroTracker
 
-TRAIN, BUILD, RESEARCH, UPGRADE, EXPAND = 0, 3, 4, 5, 6
+TRAIN, MORPH, BMORPH, BUILD, RESEARCH, UPGRADE, EXPAND = range(7)   # (ACT_NAMES' order)
 TOWN_HALLS = {106, 131, 132, 133, 154}
-MAX_SCVS = 60
-BUILDERS = 3                    # SCVs past the bases' saturation, for building
 WALK_AHEAD = 6                  # seconds: a building's worker sets out this much income before the money is there
 MINING = 1.0                    # minerals a second an SCV mines (about)
 GOAL_TIMEOUT = 24 * 30          # a decision Gary can't afford or do within 30 s is dropped
 DICE_FLOOR = 0.01               # decoder "dice": decisions less likely than this are never rolled
 MIN_P = 0.05                    # never take a decision the model gives less than this: unlikely
                                 # choices lead into states pros rarely reach, where it knows less
-BUSY = {O.ORDER_RESEARCH, O.ORDER_UPGRADE, O.ORDER_BUILD_ADDON}
 WAIT = {"kind": "wait"}         # plan(): possible, but not right now
 ONE_OFF_BUILDINGS = {T.REFINERY, T.ACADEMY, T.EBAY, T.FACTORY, T.STARPORT, T.ARMORY, T.SCIENCE_FACILITY, T.COMSAT,
                      T.MACHINE_SHOP, T.CONTROL_TOWER, T.COVERT_OPS, T.PHYSICS_LAB}   # odds_mass: built once (or so)
@@ -111,7 +107,6 @@ class LearnedMacro:
         self.one_off = [k for k, (act, uid) in enumerate(model.spec.decisions)
                         if act in (RESEARCH, UPGRADE) or (act == BUILD and uid in ONE_OFF_BUILDINGS)]
         self.odds: dict[int, float] = {}                    # one-off decision -> its odds summed since possible
-        self._bases_by_walk: list | None = None             # free_base: the bases by a worker's walk from the natural
         self.p_expand = 0.0                                 # the model's odds of expanding at its last query
         self.halls = 0                                      # Command Centers Gary has had, built or building
 
@@ -386,14 +381,6 @@ class LearnedMacro:
                 "army": sum(1 for u in mine if u["type"] in g.army_types), "posture": getattr(g.posture, "build", None),
                 "parked": g.race.names.get(g.parked.unit_type) if g.parked is not None else None}
 
-    def saturation(self, mine: list[dict]) -> int:
-        """SCVs enough for Gary's bases (with a Command Center, finished or not): 2 per mineral field,
-        3 per geyser, and builders. Pros have 39 at 12:00 on two bases; Gary, making SCVs to 60, had
-        42-51 there, the minerals of the army it lacked."""
-        halls = [u for u in mine if u["type"] in self.g.race.town_halls]
-        bases = [b for b in self.g.map.bases if any(math.dist(b.center, (h["x"], h["y"])) < 6 * 32 for h in halls)]
-        return sum(2 * len(b.minerals) + 3 * len(b.geysers) for b in bases) + BUILDERS
-
     def _train_queued(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> bool:
         """A decided unit whose producer is free now: trained (first, as pros keep production going).
         True if this turn is spent."""
@@ -485,59 +472,7 @@ class LearnedMacro:
         cap = self.model.cap(uid, obs["frame"]) if act in (TRAIN, BUILD, EXPAND) else None
         if cap is not None and self.count(mine, uid) >= cap:
             return None                       # already as many as nine pros in ten ever had by now
-        if act == TRAIN and uid in g.race.producer:
-            if me["supply_used"] + g.race.supply[uid] > me["supply_max"]:
-                # supply blocked: wait if a depot is on its way, else let a depot come next
-                coming = any(u["type"] == T.DEPOT and not u["completed"] for u in mine) or \
-                    any(ut == T.DEPOT for ut, *_ in g.reserved) or \
-                    g.building(T.DEPOT)
-                return WAIT if coming else None
-            if uid == g.race.worker and sum(1 for u in mine if u["type"] == g.race.worker) >= min(MAX_SCVS, self.saturation(mine)):
-                return None
-            addon = T.NEEDS_ADDON.get(uid)
-            if addon is not None and not any(u["type"] == addon for u in done):
-                return None                       # e.g. tanks: no Machine Shop yet
-            b = self.free_building(obs, mine, done, g.race.producer[uid], addon)
-            return self._command_or_wait(b, done, g.race.producer[uid], act, uid, g.race.costs[uid])
-        if act == BUILD and uid in T.ADDON_PARENT:
-            ox, oy = T.ADDON_OFFSET                      # (only where the add-on fits)
-            fits = lambda b: g.hi.game.can_place(g.slot, uid, (b["x"] - g.race.sizes[b["type"]][0] * 16) // 32 + ox,
-                                                 (b["y"] - g.race.sizes[b["type"]][1] * 16) // 32 + oy, 0)
-            bare = [b for b in done if b["type"] == T.ADDON_PARENT[uid] and self.addon_of(b, mine) is None and fits(b)]
-            if not bare:
-                return None
-            free = [b for b in bare if b.get("queue", 0) == 0 and b["order"] not in BUSY]
-            return {"kind": "command", "act": act, "id": uid, "building": free[0], "cost": g.race.costs[uid]} \
-                if free else WAIT
-        if act == BUILD and uid == g.race.gas_building:
-            spot = self.free_geyser(obs, mine)
-            return {"kind": "build", "where": spot[0], "data": {"spot": spot[1]}, "cost": g.race.costs[uid]} \
-                if spot else None
-        if act == BUILD and uid in g.race.sizes and uid != g.race.town_hall:
-            return {"kind": "build", "where": "main", "cost": g.race.costs[uid]}
-        if act == EXPAND and uid == g.race.town_hall:
-            base = self.free_base(obs)
-            return {"kind": "build", "where": "natural" if base is g.natural else base,
-                    "cost": g.race.costs[g.race.town_hall]} if base else None
-        if act == RESEARCH and uid in g.race.research and uid not in g.researched:
-            where, cost = g.race.research[uid]
-            b = self.free_building(obs, mine, done, where)
-            return self._command_or_wait(b, done, where, act, uid, cost)
-        if act == UPGRADE and uid in g.race.upgrade:
-            where, cost, levels = g.race.upgrade[uid]
-            level = g.upgraded[uid]
-            if level >= levels or (level >= 1 and T.UPGRADE_LEVEL_2_NEEDS not in have):
-                return None
-            b = self.free_building(obs, mine, done, where)
-            cost = (cost[0] + 75 * level, cost[1] + 75 * level)
-            return self._command_or_wait(b, done, where, act, uid, cost)
-        return None
-
-    def _command_or_wait(self, b: dict | None, done: list[dict], kind: int, act: int, uid: int,
-                         cost: tuple[int, int]) -> dict | None:
-        if b is not None:
-            return {"kind": "command", "act": act, "id": uid, "building": b, "cost": cost}
-        return WAIT if any(u["type"] == kind for u in done) else None
+        return g.executor.carry_out(act, uid, obs, mine, done, me)
 
     def build_failed(self, t: Task) -> None:
         """A building Gary decided on couldn't be placed: it didn't happen, and it isn't retried
@@ -569,68 +504,6 @@ class LearnedMacro:
         if g.building(unit_type):
             n += 1
         return n
-
-    @staticmethod
-    def addon_of(b: dict, mine: list[dict]) -> dict | None:
-        """The add-on attached to a building (it sits just right of the building's lower half)."""
-        ax, ay = b["x"] + 96, b["y"] + 16
-        return next((u for u in mine if u["type"] in T.ADDON_PARENT and math.dist((u["x"], u["y"]), (ax, ay)) < 24),
-                    None)
-
-    def free_building(self, obs: dict, mine: list[dict], done: list[dict], kind: int,
-                      addon: int | None = None) -> dict | None:
-        g = self.g
-        blind = round(g.hi.p.reaction_ms / 42) + g.hi.act_latency_frames + 4
-        for b in done:
-            if b["type"] != kind or b.get("queue", 0) > 0 or b["order"] in BUSY:
-                continue
-            if obs["now"] - g.ordered_at.get(b["tag"], -10**9) <= blind:
-                continue
-            if g.unselectable.get(b["tag"], -1) > g.hi.frame:
-                continue                        # (its clicks select nothing: executor.py select)
-            if addon is not None:
-                a = self.addon_of(b, mine)
-                if a is None or a["type"] != addon or not a["completed"]:
-                    continue
-            return b
-        return None
-
-    def free_geyser(self, obs: dict, mine: list[dict]):
-        g = self.g
-        refineries = [u for u in mine if u["type"] == g.race.gas_building] + \
-                     [{"x": tx * 32 + 64, "y": ty * 32 + 32} for ut, tx, ty in g.reserved if ut == g.race.gas_building]
-        for base in g.executor.my_bases(mine):
-            for gx, gy in base.geysers:
-                if any(math.dist((r["x"], r["y"]), (gx, gy)) < 32 for r in refineries):
-                    continue
-                where = "main" if base is g.main else "natural" if base is g.natural else base
-                return where, ((gx - 64) // 32, (gy - 32) // 32)
-        return None
-
-    def free_base(self, obs: dict):
-        """The nearest base nobody has taken (the natural first), as far as Gary has seen: nearest by a
-        worker's walk from the natural (terrain.py), not as the crow flies."""
-        g = self.g
-        halls = [u for u in obs["units"] if u["type"] in TOWN_HALLS]
-        reserved = [(tx * 32 + 64, ty * 32 + 48) for ut, tx, ty in g.reserved if ut == g.race.town_hall]
-        enemy = [tuple(s) for s in g.enemy_starts]
-        free = [b for b in g.map.bases if b is not g.main
-                and not any(math.dist(b.center, (h["x"], h["y"])) < 10 * 32 for h in halls)
-                and not any(math.dist(b.center, r) < 10 * 32 for r in reserved)
-                and not any(math.dist(b.center, s) < 10 * 32 for s in enemy)]
-        if g.natural in free:
-            return g.natural
-        if not free:
-            return None
-        if self._bases_by_walk is None:
-            from gary.agent.block import _analysis
-            try:
-                self._bases_by_walk = [tuple(c) for c in _analysis(g).get("bases_by_walk", [])]
-            except Exception:                    # (no terrain in this game)
-                self._bases_by_walk = []
-        walk = self._bases_by_walk
-        return min(free, key=lambda b: (walk.index(tuple(b.center)) if tuple(b.center) in walk else len(walk),
-                                        math.dist(b.center, g.main.center)))
 
 
 # --- scripted builds a posture switches to --------------------------------------------------
