@@ -91,6 +91,7 @@ class LearnedMacro:
         # money kept, and the larvae go on meanwhile (a decision at a time held every larva: 8 drones at 2:00)
         self.park = park
         self.saved: dict | None = None                      # the parked decision
+        self.why_not: str | None = None                     # why plan's last None or WAIT (the records say it)
         # option pace (Gary-Z's): the next look at the model when the pros' next decision would come (the
         # model's timing head), a larva's decisions in bursts (pros spend a hatchery's larvae at once)
         self.pace = pace
@@ -262,7 +263,7 @@ class LearnedMacro:
             probs, secs = self.model.probs(x)
             if self.pace:
                 self.next_query = hi.frame + int(min(PACE_MAX, max(QUERY_EVERY, float(secs[0]) * 24)))
-            pick = waiting = None
+            pick = waiting = waiting_why = None
             # (the record: the model's top odds, what it saw, the options ahead of the choice and why they were
             # passed over; gary/decision_log.py)
             name = lambda k: describe(g.race, *self.model.spec.decisions[k])
@@ -363,8 +364,10 @@ class LearnedMacro:
                             over.append([name(k), "one already parked: meanwhile only larvae"])
                         continue
                 if plan is WAIT:
-                    over.append([name(k), "its building is busy: waits for it" if waiting is None else "busy building"])
-                    waiting = waiting if waiting is not None else k
+                    over.append([name(k), f"waits: {self.why_not or 'its building is busy'}" if waiting is None
+                                 else f"also waits: {self.why_not or 'its building is busy'}"])
+                    if waiting is None:
+                        waiting, waiting_why = k, self.why_not or "its building is busy"
                 elif plan is not None:
                     # something doable now, unless the likelier decision is worth waiting for
                     # (a pro saves for the expansion rather than spend on whatever is possible)
@@ -382,17 +385,17 @@ class LearnedMacro:
                         over.append([name(k), f"under half the odds of {name(waiting)}, which it waits for"])
                     break
                 else:
-                    over.append([name(k), "can't now"])
+                    over.append([name(k), f"can't now: {self.why_not}" if self.why_not else "can't now"])
             if self.park and pick is None and waiting is not None and g.executor.burst(*self.model.spec.decisions[waiting]):
                 # (a larva awaited: no goal, the dice again at the next look, as Gary-Z's; held as the goal, nothing
                 # else was rolled until a larva came: 5 rolls at 1:00-1:30 to Gary-Z's 7, half its Extractors)
-                record(None, "dice" if self.decoder == "dice" else "favorite", f"waits: no larva for {name(waiting)}")
+                record(None, "dice" if self.decoder == "dice" else "favorite", f"waits: {waiting_why} for {name(waiting)}")
                 return
             k = pick if pick is not None else waiting
             if self.log:
                 logged["k"] = None if k is None else int(k)
             record(k, "dice" if self.decoder == "dice" else "favorite",
-                   "waits for its building" if k is not None and pick is None else None if k is not None else
+                   f"waits: {waiting_why}" if k is not None and pick is None else None if k is not None else
                    "nothing it can do now")
             if k is None:
                 return
@@ -455,7 +458,7 @@ class LearnedMacro:
         """What the macro saw, in brief, for its records."""
         g = self.g
         return {"m": me["minerals"], "gas": me["gas"], "supply": f"{me['supply_used']}/{me['supply_max']}",
-                "scvs": sum(1 for u in mine if u["type"] == g.race.worker), "bases": sum(1 for u in mine if u["type"] in g.race.town_halls),
+                "workers": sum(1 for u in mine if u["type"] == g.race.worker), "bases": sum(1 for u in mine if u["type"] in g.race.town_halls),
                 "army": sum(1 for u in mine if u["type"] in g.army_types), "posture": getattr(g.posture, "build", None),
                 "parked": g.race.names.get(g.parked.unit_type) if g.parked is not None else None}
 
@@ -564,24 +567,32 @@ class LearnedMacro:
         time yet."""
         g = self.g
         posture = g.posture
+        self.why_not = None                   # (why None or WAIT, for the records: the gates' or the executor's)
         if posture.allowed is not None and (act == EXPAND or act not in (TRAIN, BUILD) or uid not in posture.allowed):
-            return None
+            return self._no("the posture allows it not")
         if posture.no_expand and act == EXPAND:
-            return None
+            return self._no("the posture: no expansion")
         if self.answers is not None and not self.answers.allows(act, uid, mine):
-            return None
+            return self._no("an answer to the enemy's plan says no")
         have = {u["type"] for u in done}
         if not g.race.meets(have, uid):
-            return None
+            return self._no("what it needs isn't there")
         if self.failed_until.get((act, uid), 0) > g.hi.frame:
-            return None                       # just failed (e.g. no room): not again right away
+            return self._no("it just failed")      # (e.g. no room): not again right away
         # (a larva's unit and a morph too: without, gz1 made drones past the pros' cap at 1:00, and its
         # Extractor came at 3:05 where Gary-Z's dice, the drones capped, came to it by 1:25)
         # (capped: not a rule's goal that ignores the caps, as Gary-Z's overlord rule did)
         cap = self.model.cap(uid, obs["frame"]) if capped and act in (TRAIN, MORPH, BMORPH, BUILD, EXPAND) else None
         if cap is not None and self.count(mine, uid) >= cap:
-            return None                       # already as many as nine pros in ten ever had by now
-        return g.executor.carry_out(act, uid, obs, mine, done, me)
+            return self._no(f"the pros' cap for this minute ({cap})")   # as many as nine pros in ten ever had by now
+        g.executor.why = None
+        plan = g.executor.carry_out(act, uid, obs, mine, done, me)
+        self.why_not = g.executor.why if plan is None or plan is WAIT else None
+        return plan
+
+    def _no(self, why: str) -> None:
+        self.why_not = why
+        return None
 
     def build_failed(self, t: Task) -> None:
         """A building Gary decided on couldn't be placed: it didn't happen, and it isn't retried

@@ -36,12 +36,12 @@ class TerranExecutor(Executor):
                 coming = any(u["type"] == T.DEPOT and not u["completed"] for u in mine) or \
                     any(ut == T.DEPOT for ut, *_ in g.reserved) or \
                     g.building(T.DEPOT)
-                return WAIT if coming else None
+                return self.wait("supply: a depot is coming") if coming else self.no("supply")
             if uid == g.race.worker and sum(1 for u in mine if u["type"] == g.race.worker) >= min(MAX_SCVS, self.saturation(mine)):
-                return None
+                return self.no("SCVs enough for its bases")
             addon = T.NEEDS_ADDON.get(uid)
             if addon is not None and not any(u["type"] == addon for u in done):
-                return None                       # e.g. tanks: no Machine Shop yet
+                return self.no(f"no {T.NAMES[addon]}")    # e.g. tanks: no Machine Shop yet
             b = self.free_building(obs, mine, done, g.race.producer[uid], addon)
             return self._command_or_wait(b, done, g.race.producer[uid], act, uid, g.race.costs[uid])
         if act == BUILD and uid in T.ADDON_PARENT:
@@ -50,20 +50,20 @@ class TerranExecutor(Executor):
                                                  (b["y"] - g.race.sizes[b["type"]][1] * 16) // 32 + oy, 0)
             bare = [b for b in done if b["type"] == T.ADDON_PARENT[uid] and self.addon_of(b, mine) is None and fits(b)]
             if not bare:
-                return None
+                return self.no(f"no {T.NAMES[T.ADDON_PARENT[uid]]} without an add-on, with room for one")
             free = [b for b in bare if b.get("queue", 0) == 0 and b["order"] not in BUSY_BUILDING]
             return {"kind": "command", "act": act, "id": uid, "building": free[0], "cost": g.race.costs[uid]} \
-                if free else WAIT
+                if free else self.wait(f"its {T.NAMES[T.ADDON_PARENT[uid]]} is busy")
         if act == BUILD and uid == g.race.gas_building:
             spot = self.free_geyser(obs, mine)
             return {"kind": "build", "where": spot[0], "data": {"spot": spot[1]}, "cost": g.race.costs[uid]} \
-                if spot else None
+                if spot else self.no("no free geyser")
         if act == BUILD and uid in g.race.sizes and uid != g.race.town_hall:
             return {"kind": "build", "where": "main", "cost": g.race.costs[uid]}
         if act == EXPAND and uid == g.race.town_hall:
             base = self.free_base(obs)
             return {"kind": "build", "where": "natural" if base is g.natural else base,
-                    "cost": g.race.costs[g.race.town_hall]} if base else None
+                    "cost": g.race.costs[g.race.town_hall]} if base else self.no("no free base")
         if act == RESEARCH and uid in g.race.research and uid not in g.researched:
             where, cost = g.race.research[uid]
             b = self.free_building(obs, mine, done, where)
@@ -71,12 +71,16 @@ class TerranExecutor(Executor):
         if act == UPGRADE and uid in g.race.upgrade:
             where, cost, levels = g.race.upgrade[uid]
             level = g.upgraded[uid]
-            if level >= levels or (level >= 1 and T.UPGRADE_LEVEL_2_NEEDS not in have):
-                return None
+            if level >= levels:
+                return self.no("done already")
+            if level >= 1 and T.UPGRADE_LEVEL_2_NEEDS not in have:
+                return self.no(f"no {T.NAMES[T.UPGRADE_LEVEL_2_NEEDS]} for its next level")
             b = self.free_building(obs, mine, done, where)
             cost = (cost[0] + 75 * level, cost[1] + 75 * level)
             return self._command_or_wait(b, done, where, act, uid, cost)
-        return None
+        if act == RESEARCH and uid in g.researched:
+            return self.no("done already")
+        return self.no("not a decision Gary-T carries out")
 
     @staticmethod
     def addon_of(b: dict, mine: list[dict]) -> dict | None:

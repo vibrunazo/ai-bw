@@ -81,37 +81,38 @@ class ZergExecutor(Executor):
         have = {u["type"] for u in done}
         cost = self.cost_of(act, uid)
         if uid == Z.CREEP and self._colonies_capped(obs, mine):
-            return None
+            return self.no("the pros' cap of colonies for this minute")
         if act == MORPH and uid in Z.FROM_LARVA:
             if uid != Z.OVERLORD and me["supply_used"] + Z.SUPPLY.get(uid, 1) > me["supply_max"]:
                 # supply blocked: wait if an overlord is on its way, else let one come next
-                return WAIT if self.in_production(mine)[Z.OVERLORD] else None
+                return self.wait("supply: an overlord is coming") if self.in_production(mine)[Z.OVERLORD] else self.no("supply")
             if not self._fresh_larvae(mine):
-                return WAIT if any(u["type"] in Z.TOWN_HALLS for u in mine) else None
+                return self.wait("no larva") if any(u["type"] in Z.TOWN_HALLS for u in mine) else self.no("no hatchery")
             return {"kind": "produce", "act": act, "id": uid, "cost": cost}
         if act == MORPH and uid in Z.UNIT_MORPH:
             if uid == Z.LURKER and Z.LURKER_ASPECT not in g.researched:
-                return None
+                return self.no("no Lurker Aspect")
             units = [u for u in done if u["type"] == Z.UNIT_MORPH[uid]]
             if not units:
-                return None
+                return self.no(f"no {Z.NAMES[Z.UNIT_MORPH[uid]]} to morph")
             if me["supply_used"] + Z.SUPPLY.get(uid, 1) - Z.SUPPLY.get(Z.UNIT_MORPH[uid], 1) > me["supply_max"]:
-                return None
+                return self.no("supply")
             return {"kind": "morph", "act": act, "id": uid, "of": Z.UNIT_MORPH[uid], "cost": cost}
         if act == BMORPH and uid in Z.BUILDING_MORPH:
             parent = Z.BUILDING_MORPH[uid]
             parents = [u for u in done if u["type"] == parent]
             if not parents:
-                return None
+                return self.no(f"no {Z.NAMES[parent]} to morph")
             if not any(u.get("queue", 0) == 0 and u["order"] not in (O.ORDER_RESEARCH, O.ORDER_UPGRADE) for u in parents):
-                return WAIT
+                return self.wait(f"its {Z.NAMES[parent]} is busy")
             return {"kind": "morph", "act": act, "id": uid, "of": parent, "cost": cost}
         if act == BUILD and uid in Z.DRONE_BUILDS:
             if any(ut == uid for ut, *_ in g.reserved) or g.building(uid):
-                return None                              # (one of a kind on its way at a time)
+                return self.no("one already on its way")     # (one of a kind on its way at a time)
             if uid == Z.EXTRACTOR:
                 spot = self.free_geyser(obs, mine)
-                return {"kind": "build", "where": spot[0], "data": {"spot": spot[1]}, "cost": cost} if spot else None
+                return {"kind": "build", "where": spot[0], "data": {"spot": spot[1]}, "cost": cost} if spot \
+                    else self.no("no free geyser")
             if uid == Z.CREEP and self._holds_natural(mine):
                 nat, front = g.natural.center, g.rally
                 near = (int(nat[0] + (front[0] - nat[0]) * CREEP_FRONT), int(nat[1] + (front[1] - nat[1]) * CREEP_FRONT))
@@ -119,21 +120,25 @@ class ZergExecutor(Executor):
             return {"kind": "build", "where": "main", "cost": cost}
         if act == EXPAND:
             base = self.free_base(obs)
-            return {"kind": "build", "where": "natural" if base is g.natural else base, "cost": cost} if base else None
+            return {"kind": "build", "where": "natural" if base is g.natural else base, "cost": cost} if base \
+                else self.no("no free base")
         if act == RESEARCH and uid in Z.RESEARCH and uid not in g.researched:
             if not all(Z.has(have, r) for r in Z.RESEARCH_NEEDS.get(uid, [])):
-                return None
+                return self.no("what it needs isn't there")
             return self._at_building(obs, mine, done, Z.RESEARCH[uid][0], act, uid, cost)
         if act == UPGRADE and uid in Z.UPGRADE:
             where, _, levels = Z.UPGRADE[uid]
             level = g.upgraded[uid] + 1
             need = Z.UPGRADE_LEVEL_NEEDS.get(level) if levels > 1 else None
-            if level > levels or not all(Z.has(have, r) for r in Z.UPGRADE_NEEDS.get(uid, [])) \
-                    or (need is not None and not Z.has(have, need)):
-                return None
+            if level > levels:
+                return self.no("done already")
+            if not all(Z.has(have, r) for r in Z.UPGRADE_NEEDS.get(uid, [])) or (need is not None and not Z.has(have, need)):
+                return self.no("what its next level needs isn't there")
             cost = (cost[0] + 75 * (level - 1), cost[1] + 75 * (level - 1))
             return self._at_building(obs, mine, done, where, act, uid, cost)
-        return None
+        if act == RESEARCH and uid in g.researched:
+            return self.no("done already")
+        return self.no("not a decision Gary-Z carries out")
 
     def _at_building(self, obs, mine, done, where: int, act: int, uid: int, cost) -> dict | None:
         """A command to an idle building of this kind (a Lair or Hive counts as a Hatchery), WAIT if all are busy."""
@@ -142,7 +147,8 @@ class ZergExecutor(Executor):
             b = self.free_building(obs, mine, done, kind)
             if b is not None:
                 return {"kind": "command", "act": act, "id": uid, "building": b, "cost": cost}
-        return WAIT if any(u["type"] in kinds for u in done) else None
+        name = Z.NAMES.get(where, str(where))
+        return self.wait(f"its {name} is busy") if any(u["type"] in kinds for u in done) else self.no(f"no {name}")
 
     def _base_spot(self, unit_type: int, base, builder: int) -> tuple[int, int] | None:
         """The first spot in rings around the base's hatchery that fits (on its creep, which the game's check
@@ -272,6 +278,8 @@ class ZergExecutor(Executor):
         # the macro decides again
         t.data["boxes"] = t.data.get("boxes", 0) + 1
         if t.data["boxes"] > LARVA_BOXES:
+            LOG.order(g.hi.side, hi.frame, g.race.names.get(uid, str(uid)), "dropped",
+                      f"{LARVA_BOXES} boxes on a larva took something else too", by="executor")
             g.task = None
             return
         others = [u for u in mine if u["type"] != Z.LARVA or u["tag"] in self.used_larva]
@@ -287,11 +295,16 @@ class ZergExecutor(Executor):
         units = [u for u in mine if u["type"] == d["of"] and u["completed"]
                  and (not building or (u.get("queue", 0) == 0 and u["order"] not in (O.ORDER_RESEARCH, O.ORDER_UPGRADE)))]
         if not units:
+            LOG.order(g.hi.side, hi.frame, g.race.names.get(d["id"], str(d["id"])), "dropped",
+                      f"no {g.race.names.get(d['of'], d['of'])} free to morph", by="executor")
             g.task = None
             return
         if not self._select_one(obs, mine, units):
             return
         ok = hi.morph_building(d["id"]).accepted if building else hi.morph(d["id"]).accepted
+        if not ok:
+            LOG.order(g.hi.side, hi.frame, g.race.names.get(d["id"], str(d["id"])), "dropped", "the morph wasn't taken",
+                      by="executor")
         if ok and not building:
             self.morphs.append((hi.frame, d["id"], self._frames_to_make(d["id"])))
         g.task = None

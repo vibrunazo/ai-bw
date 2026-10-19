@@ -109,6 +109,7 @@ class Executor:
         self.danger: dict[tuple, int] = {}            # balance: base center -> frame zerg fighters were last seen near it
         self.next_transfer = 0
         self._bases_by_walk: list | None = None       # free_base: the bases by a worker's walk from the natural
+        self.why: str | None = None                   # why carry_out's last None or WAIT (no, wait)
         # the map's own creep (map knowledge, read now: at the start of a game, before any zerg's)
         creep = getattr(g.hi.game, "creep", None)
         self._map_creep = creep() if creep else None
@@ -517,6 +518,16 @@ class Executor:
                 out[self.g.producing[b["tag"]]] += 1
         return out
 
+    def no(self, why: str) -> None:
+        """carry_out can't: why, in words (the macro's records say it of each option passed over)."""
+        self.why = why
+        return None
+
+    def wait(self, why: str) -> dict:
+        """carry_out will be able to soon: what it waits for, in words."""
+        self.why = why
+        return WAIT
+
     def count(self, mine: list[dict], unit_type: int) -> int:
         """Own units of a type, counting ones in production and buildings about to be placed."""
         g = self.g
@@ -577,7 +588,8 @@ class Executor:
                          cost: tuple[int, int]) -> dict | None:
         if b is not None:
             return {"kind": "command", "act": act, "id": uid, "building": b, "cost": cost}
-        return WAIT if any(u["type"] == kind for u in done) else None
+        name = self.g.race.names.get(kind, str(kind))
+        return self.wait(f"its {name} is busy") if any(u["type"] == kind for u in done) else self.no(f"no {name}")
 
     def free_geyser(self, obs: dict, mine: list[dict]):
         g = self.g
