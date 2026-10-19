@@ -14,16 +14,30 @@ data is worth and how to weigh it. The trainers select on era with `--era` and w
 | Replays | 6,098, about 1,015 per matchup | 65,354 |
 | Flagged as bot games (inventory heuristic) | 1,187 (19%) | under 0.2% |
 | Human 1v1 games | 4,907 | 65,288 |
-| Re-simulated cleanly (no desync) | 3,961 (81% of the human games) | about 95% |
+| Re-simulated cleanly (no desync) | 4,586 (93% of the human games) | about 95% |
 | Median game length | 11 min | 15 min |
 | Median APM | 348 | 229 |
 | Distinct player names | 1,770 | thousands |
 | Maps | 9 current ladder maps | the maps of 2007-2016 |
 
-Clean games per matchup: ZvZ 918, PvP 721, PvZ 675, TvZ 615, TvT 538, PvT 494. The desync rate
-differs by matchup (ZvZ 6%, TvT 30%, PvT 27%) and by map (KnockOut 36%, Octagon 7%): something in
-the Remastered command stream the re-simulation handles wrong, worth fixing before more TvT and PvT
-data is collected. 111 games failed with "unsupported map version 64".
+Clean games per matchup: ZvZ 958 (98%), PvZ 829 (98%), PvP 807 (97%), TvZ 733 (92%), TvT 658
+(85%), PvT 601 (88%). 111 games failed with "unsupported map version 64" (Aiolos).
+
+The first re-simulation had 81% clean, with KnockOut at 36% desync. The cause was ours: a
+Remastered replay numbers units in a 3,400-slot table and our translation to OpenBW's 1,700 slots
+shifted every id, but both engines give the first unit created (the map's first UNIT entry) slot
+0 and only allocate the rest from the top down. On KnockOut that first entry is a main's geyser,
+so every command aimed at it was lost (resim/scr_replay.h, 2026-10-18). Of the remaining 4%
+(321 games) most are TvT and PvT on Attitude SE (15%) and Colorless Fate (6%); other maps are at
+1%. Ruled out for those: the unit-id translation (no misses before the flagged minute), the maps'
+critters and extra text trigger (removing them from the map changes nothing), the active bug-fix
+flags (identical in every replay), the Remastered add-to-control-group hotkey (OpenBW handles it),
+and a systematic mining deficit (clean Attitude games refuse short-money trains no more often
+than clean Octagon games). In the sample studied (Dapenda vs lllII!lllI!llIl, 2026-08-12), the
+first symptom is both players' SCV trains refused at 2:29-2:33 with the simulation 10-25 minerals
+short: a discrete, early divergence that needs the real game's state to place. Watching that
+replay at 2:31 in StarCraft settles it: the top-left Terran has 224 minerals in the simulation
+just before its Factory is placed.
 
 The bot flag: 589 flagged players are at 800+ effective APM, which no human reaches. The other 899
 sit at a 98%+ effective-to-total APM ratio between 300 and 800 APM, a rule calibrated on the old
