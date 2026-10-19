@@ -556,8 +556,17 @@ plan and the full log).
   Gary-Z 0.36 / 0.34 (2-4 minutes 0.48 / 0.41); Gary-Z's army at 12 and 15 minutes 17 and 28 / 23 and
   34.5. Even in results, closer to the pros for Gary-Z, better on held-out games in all nine
   matchup-races, and the layout later training builds on. GARY_MACRO_SHARED=0 plays each matchup's own.
-- **Next:** a human game with the current Gary-T (the shared macro model, on a current ladder map); the
-  one-Gary refactor; Gary-Z's 8-10 minutes (its clearest gap against modern pros).
+- **What the modern pros show (L2 against them):** Gary-T's biggest tell is the natural bunker (2 at 5-10
+  minutes; modern pros 0-1), then fewer refineries after 8 minutes (1, pros 2) and supply blocks at 5-7
+  minutes (35% of the time, pros 0). Gary-Z's: its army at home (80% of 8-10 minutes, pros 19%), half the
+  pros' drones on gas, no mutalisks by 10:00 in 19 of 48 games (a late Lair: the Spire's summed odds
+  reach one at 10-14 minutes), 3 hatcheries to their 4.
+- **Without the natural bunker (L5, 48 games each, the human-play default v029+commit+draw+floor+mass
+  against it +nonatbunker):** Gary-T won 18 / 21 (lost 0 / 1), its gap score against modern pros 0.29 /
+  0.25; Gary-Z ahead at the limit 3 / 6. Closer to the pros and stronger: the recommended version for
+  human play is now v029+commit+draw+floor+mass+nonatbunker.
+- **Next:** a human game with that Gary-T on a current ladder map; the one-Gary refactor; Gary-Z's army
+  placement and mutalisk timing against modern pros.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
