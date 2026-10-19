@@ -477,6 +477,9 @@ def main() -> None:
     ap.add_argument("--start", action="store_true",
                     help="lobby (host): post Alt+O to start the game (5s countdown)")
     ap.add_argument("--delay", type=float, default=2.0, help="seconds to wait after each key")
+    ap.add_argument("--focus-after", type=int, metavar="PID", default=0,
+                    help="with --start: bring this client (the human's) to the front right after Alt+O, before the "
+                         "countdown ends, so its player never sees Gary's screen")
     ap.add_argument("--foreground-keys", action="store_true",
                     help="focus the game and use real input instead of posted messages")
     args = ap.parse_args()
@@ -538,6 +541,11 @@ def main() -> None:
         if args.start:
             send_key(hwnd, "Alt+O", background=not args.foreground_keys)
             print("Alt+O posted (host start, 5s countdown) — waiting for the simulation...")
+            if args.focus_after:          # (the human's client in front before the map shows: they mustn't see Gary's)
+                other = find_game_window(args.focus_after)
+                if other:
+                    raise_window(other)
+                    print(f"focused pid {args.focus_after}'s window")
             deadline = time.time() + 25
             while time.time() < deadline:
                 if match_started():

@@ -583,8 +583,27 @@ plan and the full log).
   closer at 5-7 minutes (0.33 against 0.40: its army standing 39% of the time, pros 25%, with the floor
   80%) and further at 8-10 (0.45 against 0.38: home 31%, pros 53%, with the floor 38%); Gary-T won 22
   (18). No clearer humanlikeness, only strength: the floor stays.
-- **Next:** a human game with Gary-T v029+commit+draw+floor+mass+nonatbunker+depots on a current ladder
-  map; the one-Gary refactor; Gary-Z's army placement (still home 3 times the pros') and mutalisk timing.
+- **Human game 4 (2026-10-19, Fighting Spirit 1.3, the user's Zerg overpool against v029+commit+draw+
+  floor+mass+nonatbunker+depots; the user won at 18:30).** "Much better than last time, more attentive,
+  fewer mistakes": the early zergling harass held, turrets well placed and repaired quickly, marines
+  stimmed to chase mutalisks, the trades in its favor; a deliberate timing attack just before the
+  mutalisks. What still read as a bot, the user's list:
+  - the attack carried out as an attack-move from home: no medics, into sunkens, no regroup in front of
+    the natural, no retreat when hit, not called off when outnumbered; plans that don't adapt;
+  - no micro of single units in a group (APM after 5:00: 15% camera clicks, 24% selection boxes, 11% SCVs
+    picked one by one; few orders to units, none per unit);
+  - workers: idle SCVs all over its bases, mining SCVs walked to stand idle in the main, workers moved
+    main -> natural when mutalisks hit the natural (8 at 6:38, 8 more by 11:14, 11 back by 12:57), SCVs
+    pulled into fights (3 pulls at 7:47-7:53);
+  - turrets overbuilt (16) at the army's cost; mutalisks hiding behind the natural's cliff never spotted
+    (no scan or floating building for vision there); one Comsat, no energy for the lurker hold-position
+    trick at 14:40 (it walked into lurkers it saw burrow); no Science Vessels;
+  - late game: no expansion past the natural, no hunting the Zerg's expansions, no tech;
+  - building placement: buildings spread out, no packed depots: by late game no room to build or to move.
+  Also: the start must focus the human's client before the countdown ends (auto_game.py --start
+  --focus-after PID).
+- **Next:** worker management (idle SCVs, transfers, pulls); the attack's execution (regroup, retreat, call
+  off); production against turrets; then mutalisk vision, vessels, building placement, late game.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
