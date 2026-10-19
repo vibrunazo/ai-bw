@@ -618,7 +618,12 @@ plan and the full log).
   draw the main's workers under them). Against modern pros (their workers_off 7% at 8-10 minutes, 9% at
   11-14, 14% at 15-20): Gary-T 18% / 23% / 30% before, 9% / 11% / 13% after; minutes with 3+ off at 8-10,
   100% before, 60% after (pros 43%). Gary-T won 30 (21), lost none (2); gap score 0.27 (0.29).
-- **Next:** the one-Gary refactor (docs/REFACTOR.md); then the attack's execution (regroup, retreat, call
+- **The one-Gary refactor, Phase 0 (2026-10-19): the race object.** Gary takes a race; the agent reads
+  its race's facts through `g.race` (gary/race.py over gary/terran.py, gary/zerg.py and the new
+  gary/protoss.py, all three checked against the game's unit data), its matchup and enemy from the
+  game's players, and every model through one lookup by matchup and race. No behavior change:
+  tests/test_parity.py, three games' logs hashed before and after, byte-identical.
+- **Next:** the one-Gary refactor's Phase 1 (docs/REFACTOR.md); then the attack's execution (regroup, retreat, call
   off); production against turrets; then mutalisk vision, vessels, building placement (a later phase in
   docs/REFACTOR.md), late game.
 

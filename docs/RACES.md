@@ -77,6 +77,14 @@ So: the macro carry-out and the hands are Terran; the fight, posture and answers
 in their constants; everything above them is race-neutral. The order ids and map helpers that
 `gary/terran.py` also exports are race-neutral and belong in a shared module.
 
+Since the refactor's Phase 0 (docs/REFACTOR.md, 2026-10-19) the agent reads its own race through
+`g.race` (gary/race.py: worker, town halls, costs, sizes, names, producer, requires, research,
+upgrades, supply, for T, Z and P), knows its matchup from the game's players (`g.matchup`) and its
+enemy (`g.enemy`), and finds every model with `manifests.model_for(kind, matchup, race)`. The order
+ids are in gary/orders.py. Every `T.` left in gary/agent is Terran mechanics by nature, for the
+Terran executor in Phase 1: macro.py 96 (production buildings, depots, add-ons, bunkers), answers.py
+19, roles.py 10, posture.py 8, executor.py and fight.py 5, the rest 1-3.
+
 ## The Zerg player (gary/bots)
 
 Gary playing Zerg is a separate stack: `zerg_rush.py` (319 lines) → `zerg_v2.py` (393) →

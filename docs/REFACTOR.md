@@ -70,6 +70,17 @@ games (the seeds in tests/test_smoke_game.py and two league seeds) before and af
   `Race.of("P")`, so the race object is proven on three races from the start. No Protoss
   executor yet: that is Phase 4. Protoss ids already in `gary/races.py` move here.
 
+**Done 2026-10-19.** tests/test_parity.py holds the gate: three 8-minute games on the ladder maps
+(KnockOut, Fighting Spirit, Odyssey; seeds 4004-4006) with the day's defaults, the hashes of both
+screens, Gary-T's trace and the records, recorded before the first change. As built, against the
+list above: `model_for(kind, matchup, race)` takes the matchup and race rather than the Gary (the
+training scripts call it too), and kinds trained for TvZ Terran only (roles, macro_rl, fight_cmd_rl)
+refuse any other matchup; no `# terran` comments, since every `T.` left in gary/agent is Terran
+mechanics (a grep for `T\.` is Phase 1's list); the records' side is `hi.side` (what the interface's
+own records use; it holds in a mirror, where a race letter doesn't). gary/races.py's Protoss ids
+were wrong (165 and 166 are the Templar Archives and the Forge; the Photon Cannon is 162): fixed by
+reading gary/protoss.py. Still a `"T"`: gary/play.py's live sides (Phase 3, the launcher).
+
 ## Phase 1: the executor as a race plug (two to three days)
 
 Gate: byte-identical Terran games again; the Zerg executor passes the mirror smoke
