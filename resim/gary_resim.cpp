@@ -316,10 +316,38 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 		}
 	}
 
+	// Debug: GARY_TRACE_UNIT=<raw unit id>[,from_frame[,to_frame]] prints that unit's position, order
+	// and order state every frame (stderr), to follow one unit through a suspected divergence.
+	void trace_unit() {
+		static const char* env = getenv("GARY_TRACE_UNIT");
+		if (!env) return;
+		static unsigned raw = 0; static int from = 0, to = 1 << 30; static bool parsed = false;
+		if (!parsed) { parsed = true; sscanf(env, "%u,%d,%d", &raw, &from, &to); }
+		if (st.current_frame < from || st.current_frame > to) return;
+		static const char* order_env = getenv("GARY_TRACE_ORDER");   // GARY_TRACE_ORDER=<order id>: every unit holding it
+		if (order_env) {
+			int want = atoi(order_env);
+			for (unit_t* v : ptr(st.visible_units)) {
+				if ((int)v->order_type->id == want)
+					fprintf(stderr, "trace frame %d unit %u owner %d type %d at %d,%d order %d state %d target %d,%d\n",
+					        st.current_frame, (unsigned)get_unit_id(v).raw_value, v->owner, (int)v->unit_type->id,
+					        v->sprite->position.x, v->sprite->position.y, want, v->order_state, v->order_target.pos.x, v->order_target.pos.y);
+			}
+			return;
+		}
+		unit_t* u = get_unit(unit_id((uint16_t)raw));
+		if (!u) { fprintf(stderr, "trace frame %d unit %u: none\n", st.current_frame, raw); return; }
+		fprintf(stderr, "trace frame %d unit %u type %d at %d,%d order %d state %d timer %d target %d,%d queue %d\n",
+		        st.current_frame, raw, (int)u->unit_type->id, u->sprite->position.x, u->sprite->position.y,
+		        (int)u->order_type->id, u->order_state, u->main_order_timer, u->order_target.pos.x, u->order_target.pos.y,
+		        (int)(u->order_queue.empty() ? 0 : 1));
+	}
+
 	void next_frame_counted() {
 		if (st.current_frame == replay_st.end_frame) error("replay: attempt to play past end");
 		execute_actions_counted();
 		state_functions::next_frame();
+		trace_unit();
 		track_units();
 		print_fights();
 		print_reactions();
