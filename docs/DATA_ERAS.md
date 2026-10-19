@@ -34,10 +34,17 @@ critters and extra text trigger (removing them from the map changes nothing), th
 flags (identical in every replay), the Remastered add-to-control-group hotkey (OpenBW handles it),
 and a systematic mining deficit (clean Attitude games refuse short-money trains no more often
 than clean Octagon games). In the sample studied (Dapenda vs lllII!lllI!llIl, 2026-08-12), the
-first symptom is both players' SCV trains refused at 2:29-2:33 with the simulation 10-25 minerals
-short: a discrete, early divergence that needs the real game's state to place. Watching that
-replay at 2:31 in StarCraft settles it: the top-left Terran has 224 minerals in the simulation
-just before its Factory is placed.
+economy matched the real game to the mineral at 2:31 (224 before the Factory, 24 after, in
+StarCraft and in the cwal.gg viewer). The first real divergence is at 2:53: Dapenda orders a
+second Factory while one of their own SCVs stands on the site. OpenBW's build action drops such
+an order silently (BW refuses placement over any unit except for add-ons), but the real client
+sent it, which means the real SCV was not on the site at that frame: it had been ordered there
+75 frames earlier and in the simulation had arrived and stopped 21 frames before. So the
+remaining cause is a difference in unit movement (worker collision or pathing, SC:R versus
+1.16), not in command decoding; it shows on maps and races where units are sent through busy
+mineral lines to cramped build spots. Making own units never block placement was tried and
+rejected: it fixed nothing and desynced 4 of 30 clean control games. The debug traces that
+found this are GARY_TRACE_UNIT and GARY_TRACE_ORDER in resim/gary_resim.cpp.
 
 The bot flag: 589 flagged players are at 800+ effective APM, which no human reaches. The other 899
 sit at a 98%+ effective-to-total APM ratio between 300 and 800 APM, a rule calibrated on the old
