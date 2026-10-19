@@ -219,9 +219,12 @@ class GaryZ(ZergV3):
         # seeds, at home 47% at 5-7 min (groups 78%, pros 38%), in the field 47% (20%, 52%), Gary-Z's gap
         # score 0.34 (0.45), decided 38% (17%), lone units moving away 10% (3%, pros 18%)
         self.cluster_army = os.environ.get("GARY_Z_ARMY", "clusters") == "clusters"
-        # GARY_Z_FLOOR (default 0.15; 0: off): no keep / engage / move drawn under these odds, the destination
-        # among the 5 likeliest cells (as the Terran's option floor: the drawn variety without the 5% draws)
-        self.commit_floor = float(os.environ.get("GARY_Z_FLOOR", "0.15")) or None
+        # GARY_Z_FLOOR (default 0: off): no keep / engage / move drawn under these odds, the destination among the
+        # 5 likeliest cells. Off since L7 (48 games on the ladder maps against L6's 0.15): a cluster's engage odds
+        # are 5.5% a tick (median) and the floor cut most engages (7% of draws at 8-10 minutes, pros 12%); off,
+        # Gary-Z's gap score against the modern pros 0.31 (0.33), lower in every minute range, its army home 64%
+        # of 8-10 minutes (72%; pros 19%), ahead at the limit in 11 games (3)
+        self.commit_floor = float(os.environ.get("GARY_Z_FLOOR", "0")) or None
         # GARY_Z_MASS (default on; 0: off): every one-off decision (a hatchery or an expansion, a tech building,
         # Lair / Hive / Greater Spire, research, an upgrade) once its odds, summed over the decisions taken
         # while it was possible, reach one (the Terran macro's expand_mass and option mass). The dice roll

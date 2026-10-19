@@ -573,8 +573,14 @@ plan and the full log).
   exactly (68 and 108 before); workers 38 at 8-10 (pros 36, before 34). Gary-T won 21 / 21, lost 2 / 1;
   the overall gap score 0.27 / 0.25 against the same pros, within the noise of 48 games. Kept: the
   recommended version for human play is v029+commit+draw+floor+mass+nonatbunker+depots.
+- **Gary-Z's commitment floor off (L7 against L6, 48 games):** Gary-Z drew no keep / engage / move under
+  15% odds; a cluster's engage odds are 5.5% a tick (median), so it engaged at 7% of its draws at 8-10
+  minutes (pros 12%) and moved 18% (pros 13%). Off: its gap score against modern pros 0.31 (0.33), lower
+  in every minute range; army home 64% of 8-10 minutes (72%; pros 19%), in the field 27% (17%; pros
+  69%), standing 63% of 5-7 minutes (85%; pros 19%); ahead at the limit in 11 games (3); Gary-T won 18
+  (21). The default now.
 - **Next:** a human game with that Gary-T on a current ladder map; the one-Gary refactor; Gary-Z's army
-  placement and mutalisk timing against modern pros.
+  placement (still home 3 times the pros') and mutalisk timing; Gary-T's own floor.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
