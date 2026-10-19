@@ -512,8 +512,13 @@ plan and the full log).
   Gary-Z still wins none outright and banks ~1,000 minerals at 12 minutes on 4 hatcheries (larvae).
   Its first ZvZ commit model: order vs keep AUC 0.80, rates within 0.3 of the pros', hysteresis
   0.26 / 0.12 / 0.06 (pros 0.25 / 0.11 / 0.05).
-- **Next:** c12 (c11 with the newest commit models, losses) and the first ZvZ mirror games with the
-  ZvZ models; a human game with the current Gary-T.
+- **c12 (c11 with the commit models that see losses):** about c11: Gary-T won 7 (6), at the limit 8 even,
+  7 Terran ahead, 2 Zerg ahead. No gain from the losses input, as the pro data said.
+- **The first ZvZ mirror games (12, the new ZvZ macro and commit models):** they play to the end; 11 of 12
+  reach 20 minutes undecided, both sides banking 1,000-5,000 minerals: the larva limit c11 showed
+  against Terran, in Gary-Z's shared execution.
+- **Next:** Gary-Z's banking (drones made, minerals unspent: hatcheries and larvae); a human game with
+  the current Gary-T.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 
