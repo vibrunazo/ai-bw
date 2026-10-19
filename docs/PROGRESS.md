@@ -565,6 +565,14 @@ plan and the full log).
   against it +nonatbunker):** Gary-T won 18 / 21 (lost 0 / 1), its gap score against modern pros 0.29 /
   0.25; Gary-Z ahead at the limit 3 / 6. Closer to the pros and stronger: the recommended version for
   human play is now v029+commit+draw+floor+mass+nonatbunker.
+- **A depot ahead of production (L6, option depots, against L5b on the same 48 games):** the macro model
+  left Gary-T supply-blocked at 4-8 minutes in 42 of 48 games: pros almost never are, so the model gives the
+  depot under its floor once there, and 437 of its 749 decisions while blocked were "nothing it can do"
+  (the records). With the scripted builds' rule (a depot while each producer has under 2 supply left):
+  30 such decisions in 15 games; its supply cap at 8-10 and 11-14 minutes 76 and 116, the modern pros'
+  exactly (68 and 108 before); workers 38 at 8-10 (pros 36, before 34). Gary-T won 21 / 21, lost 2 / 1;
+  the overall gap score 0.27 / 0.25 against the same pros, within the noise of 48 games. Kept: the
+  recommended version for human play is v029+commit+draw+floor+mass+nonatbunker+depots.
 - **Next:** a human game with that Gary-T on a current ladder map; the one-Gary refactor; Gary-Z's army
   placement and mutalisk timing against modern pros.
 
