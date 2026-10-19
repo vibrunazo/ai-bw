@@ -64,7 +64,7 @@ class Sightings:
     def for_gary(cls, g) -> "Sightings":
         """Gary-T's: its army types, bunker loads, leases and the army layer's belief model (set later)."""
         from gary.policy.army import is_worker
-        return cls(g.hi, "T", g.map, g.main.center if g.main is not None else None,
+        return cls(g.hi, g.hi.side, g.map, g.main.center if g.main is not None else None,
                    lambda u: u["type"] in g.army_types and not is_worker(u["type"]),
                    loaded=lambda: g.loaded, leases=lambda: g.leases,
                    belief=lambda: (getattr(g.army, "belief", None), getattr(g.army, "belief_mem", None)))

@@ -11,15 +11,13 @@ from __future__ import annotations
 
 import math
 
+from gary import orders as O
 from gary import terran as T
 from gary.agent.gary import LOC_NATURAL, Gary, Task
 from gary.decision_log import LOG
 from gary.interface import screen_of
 from gary.mapinfo import Base
 
-CC, SCV = T.CC, T.SCV
-COST = {unit: minerals for unit, (minerals, _gas) in T.COST.items()}
-SIZE = T.SIZE                                              # tiles
 SELECT_TRIES = 6                      # clicks on a building that select nothing before it's left alone...
 UNSELECTABLE_FOR = 60 * 24            # ...for this long (live, one took 1,335 clicks and froze production)
 HK_CC = [4, 5]                        # one hotkey per Command Center (buildings can't share one)
@@ -116,10 +114,10 @@ class ScriptedExecutor:
         me = g.hi.observe()["me"]
         for r in g.reserved:
             ut, tx, ty = r
-            cx, cy = tx * 32 + SIZE[ut][0] * 16, ty * 32 + SIZE[ut][1] * 16
+            cx, cy = tx * 32 + g.race.sizes[ut][0] * 16, ty * 32 + g.race.sizes[ut][1] * 16
             built = any(u["type"] == ut and math.dist((u["x"], u["y"]), (cx, cy)) < 48 for u in mine)
             age = g.hi.frame - g.reserved_at.get(r, 0)
-            heading = any(u["type"] == SCV and u["order"] in BUSY_ORDERS and "tx" in u
+            heading = any(u["type"] == g.race.worker and u["order"] in BUSY_ORDERS and "tx" in u
                           and math.dist((u["tx"], u["ty"]), (cx, cy)) < 96 for u in mine)
             # its builder stopped placing it and nothing was started: the build failed (the money
             # was spent meanwhile, or the game wouldn't place it there: its pathfinder left the
@@ -132,26 +130,26 @@ class ScriptedExecutor:
                 continue
             if failed:
                 g.build_failed[ut] = g.hi.frame
-                if me is not None and me["minerals"] < T.COST[ut][0]:
-                    g.say(f"its {T.NAMES.get(ut, ut)} failed for money: again")
-                    LOG.order("T", g.hi.frame, f"{T.NAMES.get(ut, ut)} at {(tx, ty)}", "retried", "failed for money",
+                if me is not None and me["minerals"] < g.race.costs[ut][0]:
+                    g.say(f"its {g.race.names.get(ut, ut)} failed for money: again")
+                    LOG.order(g.hi.side, g.hi.frame, f"{g.race.names.get(ut, ut)} at {(tx, ty)}", "retried", "failed for money",
                               by="executor")
                 elif g.hi.frame - g.failed_at.get(r, -10 ** 9) < BAD_FOR:
                     g.bad_spots[r] = g.hi.frame              # (twice: somewhere else)
-                    g.say(f"couldn't place its {T.NAMES.get(ut, ut)} there twice: elsewhere")
-                    LOG.order("T", g.hi.frame, f"{T.NAMES.get(ut, ut)} at {(tx, ty)}", "retried",
+                    g.say(f"couldn't place its {g.race.names.get(ut, ut)} there twice: elsewhere")
+                    LOG.order(g.hi.side, g.hi.frame, f"{g.race.names.get(ut, ut)} at {(tx, ty)}", "retried",
                               "the game wouldn't place it there twice: elsewhere", by="executor")
                 else:
                     # the game's pathfinder can leave an SCV stuck short of the spot (the order then
                     # fails): the same SCV again from where it stands, a new order clears that
                     g.failed_at[r] = g.hi.frame
                     g.retry_with[ut] = builder["tag"]
-                    g.say(f"its {T.NAMES.get(ut, ut)} didn't start: again, with the same SCV")
-                    LOG.order("T", g.hi.frame, f"{T.NAMES.get(ut, ut)} at {(tx, ty)}", "retried",
+                    g.say(f"its {g.race.names.get(ut, ut)} didn't start: again, with the same SCV")
+                    LOG.order(g.hi.side, g.hi.frame, f"{g.race.names.get(ut, ut)} at {(tx, ty)}", "retried",
                               "its SCV stopped and nothing started: again, the same SCV", by="executor")
             elif not built and age < 24 * 40:
-                g.say(f"its {T.NAMES.get(ut, ut)} order was lost: again")
-                LOG.order("T", g.hi.frame, f"{T.NAMES.get(ut, ut)} at {(tx, ty)}", "retried",
+                g.say(f"its {g.race.names.get(ut, ut)} order was lost: again")
+                LOG.order(g.hi.side, g.hi.frame, f"{g.race.names.get(ut, ut)} at {(tx, ty)}", "retried",
                           "no SCV on its way to it: the order was lost", by="executor")
             g.reserved_at.pop(r, None)
             g.builder_of.pop(r, None)
@@ -162,7 +160,7 @@ class ScriptedExecutor:
         to finish it, as players do. True if Gary acted."""
         g = self.g
         now = g.hi.frame
-        building = {u.get("order_target") for u in mine if u["type"] == SCV}
+        building = {u.get("order_target") for u in mine if u["type"] == g.race.worker}
         stalled = None
         for b in mine:
             if not (106 <= b["type"] <= 175) or b["completed"] or b["type"] in T.ADDON_PARENT or b["tag"] in building:
@@ -188,13 +186,13 @@ class ScriptedExecutor:
         if not g.home_scvs or u["order"] not in (ATTACK_MOVE_ORDER, PATROL_ORDER) or g.leases.holder(u["tag"]) \
                 or g.hi.frame - g.calm_since < FIGHT_CALM:
             return False                              # (a fight at home lately: they may be its defenders)
-        ccs = [(c["x"], c["y"]) for c in mine if c["type"] == CC]
+        ccs = [(c["x"], c["y"]) for c in mine if c["type"] in g.race.town_halls]
         return bool(ccs) and min(math.dist((u["x"], u["y"]), c) for c in ccs) > STRAY
 
     def idle_mining(self, obs: dict, done: list[dict]) -> bool:
         """Idle workers on screen go back to mining (game start, after building something)."""
         g = self.g
-        idle = [u for u in done if u["type"] == SCV and self._idle(u, done) and screen_of(obs, u["x"], u["y"])
+        idle = [u for u in done if u["type"] == g.race.worker and self._idle(u, done) and screen_of(obs, u["x"], u["y"])
                 and g.ignore_idle_until.get(u["tag"], 0) <= g.hi.frame and u["tag"] != g.scout
                 and u["tag"] not in g.block_units]
         if idle:
@@ -209,7 +207,7 @@ class ScriptedExecutor:
         if hi.frame < self.next_sweep:
             return False
         busy = {g.scout} | (g.pulled if not g.home_scvs or g.hi.frame - g.calm_since < FIGHT_CALM else set()) | g.block_units
-        away = [u for u in done if u["type"] == SCV and self._idle(u, done) and u["tag"] not in busy
+        away = [u for u in done if u["type"] == g.race.worker and self._idle(u, done) and u["tag"] not in busy
                 and not screen_of(obs, u["x"], u["y"]) and g.ignore_idle_until.get(u["tag"], 0) <= hi.frame]
         self.next_sweep = hi.frame + 24 * 10
         if not away:
@@ -239,7 +237,7 @@ class ScriptedExecutor:
             g.rally = spot
         for b in done:
             hk = g.hotkeyed.get(b["tag"])
-            if b["type"] in g.production_types and b["type"] != CC and hk is not None and hk >= 0 \
+            if b["type"] in g.production_types and b["type"] not in g.race.town_halls and hk is not None and hk >= 0 \
                     and g.rallied.get(b["tag"]) != g.rally:
                 g.task = Task("rerally", b["type"], data={"tag": b["tag"], "hk": hk}, started=g.hi.frame)
                 return True
@@ -283,7 +281,7 @@ class ScriptedExecutor:
         """A finished refinery with fewer than three workers gets more."""
         g = self.g
         for r in done:
-            if r["type"] == T.REFINERY and self.on_gas(obs, r["tag"]) < 3 and \
+            if r["type"] == g.race.gas_building and self.on_gas(obs, r["tag"]) < 3 and \
                     g.ignore_idle_until.get(r["tag"], 0) <= g.hi.frame:
                 g.task = Task("gas", data={"tag": r["tag"], "x": r["x"], "y": r["y"]}, started=g.hi.frame)
                 return True
@@ -300,7 +298,7 @@ class ScriptedExecutor:
             if b["type"] not in g.production_types:
                 continue
             used = set(g.hotkeyed.values())
-            hk = next((k for k in (HK_CC if b["type"] == CC else HK_RAX) if k not in used), -1)
+            hk = next((k for k in (HK_CC if b["type"] in g.race.town_halls else HK_RAX) if k not in used), -1)
             g.hotkeyed[b["tag"]] = hk
             if hk >= 0:
                 g.hi.hotkeys[hk] = [b["tag"]]
@@ -309,7 +307,7 @@ class ScriptedExecutor:
 
     def my_bases(self, mine: list[dict]) -> list[Base]:
         """Bases with one of Gary's finished Command Centers."""
-        halls = [u for u in mine if u["type"] == CC and u["completed"]]
+        halls = [u for u in mine if u["type"] in self.g.race.town_halls and u["completed"]]
         return [b for b in self.g.map.bases if any(math.dist(b.center, (h["x"], h["y"])) < 6 * 32 for h in halls)]
 
     def mine_base(self, mine: list[dict], at, obs: dict | None = None):
@@ -328,7 +326,7 @@ class ScriptedExecutor:
 
     def saturation_at(self, base, mine: list[dict]) -> float:
         """Workers gathering at this base per mineral patch."""
-        n = sum(1 for u in mine if u["type"] == SCV and u["order"] in GATHERING and math.dist((u["x"], u["y"]), base.center) < 10 * 32)
+        n = sum(1 for u in mine if u["type"] == self.g.race.worker and u["order"] in GATHERING and math.dist((u["x"], u["y"]), base.center) < 10 * 32)
         return n / max(1, len(base.minerals))
 
     def note_danger(self, obs: dict) -> None:
@@ -362,7 +360,7 @@ class ScriptedExecutor:
         if k < 3:
             return False
         line = (sum(x for x, _ in src.minerals) / len(src.minerals), sum(y for _, y in src.minerals) / len(src.minerals))
-        miners = sorted((u for u in mine if u["type"] == SCV and u["order"] in GATHERING and u["tag"] not in g.pulled | g.block_units
+        miners = sorted((u for u in mine if u["type"] == g.race.worker and u["order"] in GATHERING and u["tag"] not in g.pulled | g.block_units
                          and math.dist((u["x"], u["y"]), src.center) < 10 * 32),
                         key=lambda u: math.dist((u["x"], u["y"]), line))[:k]
         g.task = Task("transfer", data={"tags": [u["tag"] for u in miners], "to": dst.center}, started=hi.frame)
@@ -401,7 +399,7 @@ class ScriptedExecutor:
                 hi.minimap_right_click(*min(base.minerals, key=lambda m: math.dist(m, base.center)))
             g.task = None
             return
-        if sel and all(u["type"] == SCV for u in sel) and len(sel) >= 2:
+        if sel and all(u["type"] == g.race.worker for u in sel) and len(sel) >= 2:
             # the camera to the other base, the field clicked next turn: a minimap right-click on its minerals
             # was a move, and the workers stood idle there (human game 4: "SCVs mining fine on one base go stand
             # idle in the main for no reason")
@@ -418,7 +416,7 @@ class ScriptedExecutor:
         # (nor one just given a build: the order takes a few frames to show in its state, and the
         # next build's task took it as free and sent it walking elsewhere: the first build lost)
         builders = {g.builder_of.get(r) for r in g.reserved}
-        return u["type"] == SCV and u["completed"] and u["order"] not in BUSY_ORDERS \
+        return u["type"] == g.race.worker and u["completed"] and u["order"] not in BUSY_ORDERS \
             and bool(screen_of(obs, u["x"], u["y"])) and u["tag"] != g.scout and u["tag"] not in g.pulled | g.block_units \
             and (g.parked is None or g.parked.data["worker"] != u["tag"]) and u["tag"] not in builders
 
@@ -448,8 +446,8 @@ class ScriptedExecutor:
                 self.fail_build(t, "its SCV didn't get to the base")
                 return False
         else:
-            budget = obs["me"]["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
-            if budget < COST[t.unit_type] and g.hi.frame - t.data["walking"] < PARK_FOR:
+            budget = obs["me"]["minerals"] - sum(g.race.minerals[ut] for ut, *_ in g.reserved)
+            if budget < g.race.minerals[t.unit_type] and g.hi.frame - t.data["walking"] < PARK_FOR:
                 return False
             # just about there: until it stops (a box finds a standing SCV where Gary saw it; one
             # slowing down at its spot was missed 7 times a game)
@@ -488,7 +486,7 @@ class ScriptedExecutor:
         hi = self.g.hi
         x, y = hi.aim(obs, w)
         sel = [u for u in obs["units"] if u["tag"] in set(obs["selection"])]
-        if len(sel) > 1 and all(u["type"] == SCV for u in sel):
+        if len(sel) > 1 and all(u["type"] == self.g.race.worker for u in sel):
             hi.click(x, y)
             return
         hi.box(max(0, x - 4), max(0, y - 4), min(hi.p.viewport[0] - 1, x + 4), min(hi.p.viewport[1] - 1, y + 4))
@@ -500,8 +498,8 @@ class ScriptedExecutor:
         g = self.g
         seen = {u["tag"]: u for u in obs["units"] if u["owner"] == g.slot}
         alive = {w for w in g.gas_workers.get(refinery, set())
-                 if w not in seen or seen[w]["order"] in T.GAS_ORDERS or seen[w]["order"] == RESET_HARVEST}
-        alive |= {t for t, u in seen.items() if u["type"] == T.SCV and u["order"] in T.GAS_ORDERS
+                 if w not in seen or seen[w]["order"] in O.GAS_ORDERS or seen[w]["order"] == RESET_HARVEST}
+        alive |= {t for t, u in seen.items() if u["type"] == g.race.worker and u["order"] in O.GAS_ORDERS
                   and u.get("order_target") == refinery}
         g.gas_workers[refinery] = alive
         return len(alive)
@@ -526,13 +524,13 @@ class ScriptedExecutor:
         my = sum(y for _, y in base.minerals) / len(base.minerals)
         ax = base.center[0] + (base.center[0] - mx) * 0.9
         ay = base.center[1] + (base.center[1] - my) * 0.9
-        w, h = SIZE[unit_type]
+        w, h = self.g.race.sizes[unit_type]
         cands = []
         for ty in range(int(ay // 32) - 16, int(ay // 32) + 16):
             for tx in range(int(ax // 32) - 16, int(ax // 32) + 16):
                 cands.append((math.dist((tx * 32 + w * 16, ty * 32 + h * 16), (ax, ay)), tx, ty))
         for _, tx, ty in sorted(cands):
-            if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.g.reserved) \
+            if any(abs(tx - rx) < self.g.race.sizes[rt][0] + 1 and abs(ty - ry) < self.g.race.sizes[rt][1] + 1 for rt, rx, ry in self.g.reserved) \
                     or self._bad(unit_type, tx, ty):
                 continue
             # keep a walkable gap around buildings: the bigger footprint must fit too
@@ -548,7 +546,7 @@ class ScriptedExecutor:
         bottom). On a flat map every tile is on that level; if no spot on it fits, any level does.
         avoid: segments the building stands clear of (a Command Center to each of its mineral fields:
         the SCVs' paths)."""
-        w, h = SIZE[unit_type]
+        w, h = self.g.race.sizes[unit_type]
         cx, cy = near[0] // 32, near[1] // 32
         terrain = self.terrain()
         level = int(terrain[1][level_at[1] // 8, level_at[0] // 8]) if terrain and level_at else None
@@ -560,7 +558,7 @@ class ScriptedExecutor:
         cands = [c for c in cands if 1 <= c[1] and 1 <= c[2] and c[1] + w <= mw - 1 and c[2] + h <= mh - 1]
         for same_level in ((True, False) if level is not None else (False,)):
             for _, tx, ty in cands:
-                if any(abs(tx - rx) < SIZE[rt][0] + 1 and abs(ty - ry) < SIZE[rt][1] + 1 for rt, rx, ry in self.g.reserved) \
+                if any(abs(tx - rx) < self.g.race.sizes[rt][0] + 1 and abs(ty - ry) < self.g.race.sizes[rt][1] + 1 for rt, rx, ry in self.g.reserved) \
                         or self._bad(unit_type, tx, ty):
                     continue
                 if same_level and (terrain[1][ty * 4:(ty + h) * 4, tx * 4:(tx + w) * 4] != level).any():
@@ -591,16 +589,16 @@ class ScriptedExecutor:
         terrain = self.terrain()
         if terrain is None:
             return True
-        w, h = SIZE[unit_type]
+        w, h = self.g.race.sizes[unit_type]
         return bool(terrain[0][ty:ty + h, tx:tx + w].all())
 
     def on_addon_spot(self, unit_type: int, tx: int, ty: int) -> bool:
         """The building would stand where one of Gary's buildings' add-on goes (a Comsat Station by
         the natural's Command Center was asked for every second for minutes: its bunker stood there)."""
         g = self.g
-        w, h = SIZE[unit_type]
+        w, h = g.race.sizes[unit_type]
         parents = set(T.ADDON_PARENT.values())
-        spots = [((u["x"] - SIZE[u["type"]][0] * 16) // 32, (u["y"] - SIZE[u["type"]][1] * 16) // 32)
+        spots = [((u["x"] - g.race.sizes[u["type"]][0] * 16) // 32, (u["y"] - g.race.sizes[u["type"]][1] * 16) // 32)
                  for u in g.hi.observe()["units"] if u["owner"] == g.slot and u["type"] in parents]
         spots += [(rx, ry) for rt, rx, ry in g.reserved if rt in parents]
         ox, oy = T.ADDON_OFFSET
@@ -611,7 +609,7 @@ class ScriptedExecutor:
         seen, and it fails once the SCV gets there. The map's own creep (Colosseum II has a strip of
         it across each natural's choke) is map knowledge, read at the start; the zerg's spreads
         around its creep buildings, as seen (the ellipse it can reach)."""
-        w, h = SIZE[unit_type]
+        w, h = self.g.race.sizes[unit_type]
         if self._map_creep is not None and self._map_creep[ty:ty + h, tx:tx + w].any():
             return True
         seen = [(u["x"], u["y"]) for u in self.g.hi.observe()["units"]
@@ -639,7 +637,7 @@ class ScriptedExecutor:
         tx, ty = base.tile
         near = sorted(((dx, dy) for dx in range(-2, 3) for dy in range(-2, 3)), key=lambda d: abs(d[0]) + abs(d[1]))
         for dx, dy in near:
-            if self.fits(CC, tx + dx, ty + dy, builder):
+            if self.fits(self.g.race.town_hall, tx + dx, ty + dy, builder):
                 return tx + dx, ty + dy
         return base.tile
 
@@ -659,7 +657,7 @@ class ScriptedExecutor:
 
     def _run_command(self, obs: dict, mine: list[dict], t: Task) -> None:
         if self.g.hi.frame - t.started > COMMAND_TIMEOUT:
-            LOG.order("T", self.g.hi.frame, t.kind, "dropped", f"not done in {COMMAND_TIMEOUT // 24} s", by="executor")
+            LOG.order(self.g.hi.side, self.g.hi.frame, t.kind, "dropped", f"not done in {COMMAND_TIMEOUT // 24} s", by="executor")
             self.g.task = None
             return
         (self._task_command if t.kind == "command" else self._task_gas)(obs, mine, t)
@@ -725,7 +723,7 @@ class ScriptedExecutor:
                     tries.clear()
                     w = self.pick_worker(obs, mine, t.data.get("near"))
             if not w and t.data.get("from", "main") == "main" and \
-                    any(u["type"] == CC and math.dist((u["x"], u["y"]), g.natural.center) < 4 * 32 for u in mine):
+                    any(u["type"] in g.race.town_halls and math.dist((u["x"], u["y"]), g.natural.center) < 4 * 32 for u in mine):
                 # no free SCV in the main (they mine at the natural, or died there): one from the
                 # natural (13 Barracks in a row failed for it in one game)
                 t.data["from"] = "natural"
@@ -816,7 +814,7 @@ class ScriptedExecutor:
             if "spot" not in t.data:
                 if not g.look_at(obs, t.where):
                     return
-                spot = self.town_hall_spot(base, t.data["worker"]) if t.unit_type == CC else \
+                spot = self.town_hall_spot(base, t.data["worker"]) if t.unit_type == g.race.town_hall else \
                     self.spot_near(t.unit_type, t.data["near"], t.data["worker"], t.data.get("level_at"),
                                    t.data.get("avoid")) if "near" in t.data else \
                     self.spot(t.unit_type, base, t.data["worker"])
@@ -825,7 +823,7 @@ class ScriptedExecutor:
                     return
                 t.data["spot"] = spot
             spot = t.data["spot"]
-            w, h = SIZE[t.unit_type]
+            w, h = g.race.sizes[t.unit_type]
             p = screen_of(obs, spot[0] * 32 + 16, spot[1] * 32 + 16)
             if not p:                                   # the spot is off screen: look there first
                 if t.data.get("looked"):
@@ -834,14 +832,14 @@ class ScriptedExecutor:
                 t.data["looked"] = True
                 hi.camera_minimap(spot[0] * 32 + w * 16, spot[1] * 32 + h * 16)
                 return
-            budget = obs["me"]["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
-            if budget < COST[t.unit_type]:
+            budget = obs["me"]["minerals"] - sum(g.race.minerals[ut] for ut, *_ in g.reserved)
+            if budget < g.race.minerals[t.unit_type]:
                 # the worker walks there while the money comes (as pros send it: it arrives with
                 # the money, not after it)
                 if not t.data.get("money_wait"):
                     t.data["money_wait"] = True
                     t.data["walking"] = hi.frame
-                    if t.unit_type == T.REFINERY:
+                    if t.unit_type == g.race.gas_building:
                         # beside the geyser, not on it: a right-click on a geyser is a gas order, and
                         # the SCV then refused the refinery (it came a minute late, 3 games in 4)
                         cx, cy = spot[0] * 32 + w * 16, spot[1] * 32 + h * 16
@@ -865,7 +863,7 @@ class ScriptedExecutor:
                 g.reserved.append((t.unit_type, *spot))
                 g.reserved_at[(t.unit_type, *spot)] = hi.frame
                 g.builder_of[(t.unit_type, *spot)] = t.data["worker"]
-                if getattr(g, "builder_back", False) and t.unit_type != T.REFINERY:
+                if getattr(g, "builder_back", False) and t.unit_type != g.race.gas_building:
                     t.stage = "back"            # (a Refinery's builder goes on to gas by itself)
                 else:
                     g.task = None
@@ -876,7 +874,7 @@ class ScriptedExecutor:
         where = "natural" if math.dist((t.data["x"], t.data["y"]), g.natural.center) < 10 * 32 else "main"
         if obs["selection"] == [tag]:
             if t.stage == "start":
-                pool = HK_CC if t.unit_type == CC else HK_RAX
+                pool = HK_CC if t.unit_type == g.race.town_hall else HK_RAX
                 used = set(g.hotkeyed.values())
                 hk = next((k for k in pool if k not in used), None)
                 if hk is None:
@@ -888,7 +886,7 @@ class ScriptedExecutor:
                 t.stage = "rally"
                 return
             if t.stage == "rally":                      # CCs rally to minerals (auto-mine), barracks forward
-                if t.unit_type == CC:
+                if t.unit_type == g.race.town_hall:
                     base = g.main if where == "main" else g.natural
                     m = base.minerals[len(base.minerals) // 2]
                     p = screen_of(obs, *m)
@@ -914,7 +912,7 @@ class ScriptedExecutor:
         if not workers:
             g.task = None
             return
-        ccs = [(c["x"], c["y"]) for c in mine if c["type"] == CC]
+        ccs = [(c["x"], c["y"]) for c in mine if c["type"] in g.race.town_halls]
         if t.stage == "start" and g.balance and ccs and \
                 all(min(math.dist((u["x"], u["y"]), c) for c in ccs) > STRAY for u in workers):
             hi.ctrl_click(*hi.aim(obs, workers[0]))   # (out in the field: every worker on the screen, at once)
@@ -970,7 +968,7 @@ class ScriptedExecutor:
         busy = builders | {g.scout} | g.pulled | g.block_units
         for tag in obs["selection"]:
             u = by_tag.get(tag)
-            if u is None or u["type"] != SCV or tag in busy:
+            if u is None or u["type"] != g.race.worker or tag in busy:
                 return False
             if tag not in tags and u["order"] not in GATHERING:
                 return False
@@ -1012,7 +1010,7 @@ class ScriptedExecutor:
             if not screen_of(obs, b["x"], b["y"]):
                 hi.camera_minimap(b["x"], b["y"])
                 return
-            scvs = [u for u in mine if u["type"] == SCV and u["completed"] and u["tag"] not in g.pulled | g.block_units
+            scvs = [u for u in mine if u["type"] == g.race.worker and u["completed"] and u["tag"] not in g.pulled | g.block_units
                     and u["order"] not in BUSY_ORDERS and screen_of(obs, u["x"], u["y"])]
             if not scvs:
                 g.task = None
@@ -1026,7 +1024,7 @@ class ScriptedExecutor:
         p = screen_of(obs, b["x"], b["y"])
         if d.get("scv") in obs["selection"] and p:
             hi.right_click(*p)
-            g.say(f"sends an SCV to finish the {T.NAMES.get(b['type'], 'building')}")
+            g.say(f"sends an SCV to finish the {g.race.names.get(b['type'], 'building')}")
         g.task = None
 
     def select(self, obs: dict, b: dict) -> bool:
@@ -1047,7 +1045,7 @@ class ScriptedExecutor:
             if g.select_misses[b["tag"]] > SELECT_TRIES:
                 g.select_misses.pop(b["tag"], None)
                 g.unselectable[b["tag"]] = hi.frame + UNSELECTABLE_FOR
-                g.say(f"can't select its {T.NAMES.get(b['type'], b['type'])} at ({b['x']}, {b['y']}): left alone for a while")
+                g.say(f"can't select its {g.race.names.get(b['type'], b['type'])} at ({b['x']}, {b['y']}): left alone for a while")
                 g.task = None
                 return False
             hi.click(*p)
@@ -1061,7 +1059,7 @@ class ScriptedExecutor:
         g, hi, d = self.g, self.g.hi, t.data
         b = next((u for u in mine if u["tag"] == d["building"]["tag"]), None)
         if b is None:
-            LOG.order("T", hi.frame, f"{d['act']}:{d['id']}", "dropped", "its building is gone", by="executor")
+            LOG.order(g.hi.side, hi.frame, f"{d['act']}:{d['id']}", "dropped", "its building is gone", by="executor")
             g.task = None
             return
         if not self.select(obs, b):
@@ -1084,7 +1082,7 @@ class ScriptedExecutor:
             if not p:
                 hi.camera_minimap(b["x"], b["y"])
                 return
-            hi.build(uid, *p, order=T.ORDER_PLACE_ADDON)
+            hi.build(uid, *p, order=O.ORDER_PLACE_ADDON)
         g.task = None
 
     def _task_gas(self, obs: dict, mine: list[dict], t: Task) -> None:
@@ -1099,7 +1097,7 @@ class ScriptedExecutor:
             hi.camera_minimap(ref["x"], ref["y"])
             return
         if t.stage == "send":
-            picked = [u["tag"] for u in mine if u["tag"] in obs["selection"] and u["type"] == T.SCV]
+            picked = [u["tag"] for u in mine if u["tag"] in obs["selection"] and u["type"] == g.race.worker]
             # the box may have caught a busy worker too (an SCV walking past to place a building:
             # sent to gas, its build was lost; 120 of 176 games had a turret that didn't start):
             # then select again
@@ -1114,7 +1112,7 @@ class ScriptedExecutor:
                 g.ignore_idle_until[d["tag"]] = hi.frame + 24 * 20
                 g.task = None
             return
-        workers = [u for u in mine if self.free_worker(obs, u) and u["order"] not in T.GAS_ORDERS]
+        workers = [u for u in mine if self.free_worker(obs, u) and u["order"] not in O.GAS_ORDERS]
         if not workers:                         # (asked again every turn, it took Gary's hands for good)
             g.ignore_idle_until[d["tag"]] = hi.frame + 24 * 20
             g.task = None

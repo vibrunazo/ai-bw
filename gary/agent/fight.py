@@ -35,6 +35,7 @@ from pathlib import Path
 import numpy as np
 
 from gary import terran as T
+from gary.races import ENEMY
 from gary.agent.gary import Gary
 from gary.agent.intents import Intent
 from gary.interface import screen_of
@@ -104,9 +105,12 @@ def enemy_fighters(obs: dict, slot: int) -> list[dict]:
             and not is_worker(u["type"]) and not is_building(u["type"])]
 
 
+HOME_TYPES = frozenset().union(*(e.town_halls for e in ENEMY.values())) | {T.BUNKER}   # (any race's town halls)
+
+
 def near_home(mine: list[dict], fighters: list[dict]) -> list[dict]:
-    """The enemy fighters at Gary's base: near a Command Center or a bunker."""
-    home = [(u["x"], u["y"]) for u in mine if u["type"] in (T.CC, T.BUNKER)]
+    """The enemy fighters at Gary's base: near a town hall or a bunker."""
+    home = [(u["x"], u["y"]) for u in mine if u["type"] in HOME_TYPES]
     return [e for e in fighters if any(math.dist((e["x"], e["y"]), h) < HOME for h in home)]
 
 
@@ -311,7 +315,7 @@ class FightLayer:
             key = (a, int(center[0] + dx), int(center[1] + dy))
         else:
             key = (a,)
-        chosen = [tags[i] for i in cmd["select"] if self.workers or by_tag[tags[i]]["type"] != T.SCV]
+        chosen = [tags[i] for i in cmd["select"] if self.workers or by_tag[tags[i]]["type"] != g.race.worker]
         chosen = [t for t in chosen if not self._already(a, by_tag[t]) and not self._just_told(t, key)
                   and not (len(key) == 2 and by_tag[t].get("order_target") == key[1])]
         chosen = g.leases.free(chosen, "fight")
@@ -382,12 +386,12 @@ class PullRule:
         hi = g.hi
         enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0
                  and not (self.ground_only and u["type"] in ZERG_FLYERS)]
-        for cc in (u for u in mine if u["type"] == T.CC and u["completed"]):
+        for cc in (u for u in mine if u["type"] in g.race.town_halls and u["completed"]):
             near = [u for u in enemy if math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < THREAT_PX]
             if self.attacked_only and not any(u.get("order_target") in {m["tag"] for m in mine} for u in near):
                 near = []
             if self.mineral_line:
-                scvs = {m["tag"] for m in mine if m["type"] == T.SCV}
+                scvs = {m["tag"] for m in mine if m["type"] == g.race.worker}
                 fields = [(r["x"], r["y"]) for r in obs["units"] if r["type"] in MINERALS
                           and math.dist((r["x"], r["y"]), (cc["x"], cc["y"])) < THREAT_PX]
                 near = [u for u in near if u.get("order_target") in scvs
@@ -407,7 +411,7 @@ class PullRule:
                 self.threat_since = hi.frame
             n = self.per_enemy * len(near) + 1
             if self.max_share is not None:
-                workers = sum(1 for u in mine if u["type"] == T.SCV and (u["tag"] in g.pulled
+                workers = sum(1 for u in mine if u["type"] == g.race.worker and (u["tag"] in g.pulled
                               or math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < 8 * 32))
                 n = min(n, max(1, int(self.max_share * workers)))
             if threat and hi.frame - self.threat_since >= self.delay and len(g.pulled) < n and hi.frame >= self.next_pull:
@@ -514,7 +518,7 @@ class RepairRule:
                     continue
                 if not any(math.dist((e["x"], e["y"]), (u["x"], u["y"])) < REPAIR_THREAT for e in fighters):
                     continue
-                busy = sum(1 for s in mine if s["type"] == T.SCV and s.get("order") == REPAIR_ORDER
+                busy = sum(1 for s in mine if s["type"] == g.race.worker and s.get("order") == REPAIR_ORDER
                            and s.get("order_target") == u["tag"])
                 if busy < want:
                     bunker, n = u, want
@@ -523,9 +527,9 @@ class RepairRule:
                 break
         if not bunker:
             return False
-        repairing = [u for u in mine if u["type"] == T.SCV and u.get("order") == REPAIR_ORDER
+        repairing = [u for u in mine if u["type"] == g.race.worker and u.get("order") == REPAIR_ORDER
                      and u.get("order_target") == bunker["tag"]]
-        scvs = sorted((u for u in mine if u["type"] == T.SCV and u["completed"] and u["tag"] not in {r["tag"] for r in repairing}),
+        scvs = sorted((u for u in mine if u["type"] == g.race.worker and u["completed"] and u["tag"] not in {r["tag"] for r in repairing}),
                       key=lambda u: math.dist((u["x"], u["y"]), (bunker["x"], bunker["y"])))[:n - len(repairing)]
         if not scvs:
             return False
@@ -600,7 +604,7 @@ class ReinforceRule:
     def _mineral_line(self, obs: dict, mine: list[dict]) -> tuple[int, int] | None:
         """Between the main's Command Center and its minerals: the SCVs mining there are a wall."""
         g = self.g
-        ccs = [u for u in mine if u["type"] == T.CC and u["completed"]]
+        ccs = [u for u in mine if u["type"] in g.race.town_halls and u["completed"]]
         if not ccs:
             return None
         cc = min(ccs, key=lambda u: math.dist((u["x"], u["y"]), g.main.center))
@@ -690,7 +694,7 @@ class BlockRule:
         c = self.ramp
         top = c.through[0]
         d_top = math.dist(top, g.main.center)
-        one_base = not any(u["type"] == T.CC and math.dist((u["x"], u["y"]), g.main.center) > d_top for u in mine)
+        one_base = not any(u["type"] in g.race.town_halls and math.dist((u["x"], u["y"]), g.main.center) > d_top for u in mine)
         if one_base and any(math.dist((e["x"], e["y"]), top) < AUTO_RAMP_NEAR or
                             math.dist((e["x"], e["y"]), c.outside) < AUTO_RAMP_NEAR for e in fighters):
             g.blocks.setdefault(c.name, c)
@@ -801,7 +805,7 @@ class DetectRule:
         comsat = next((u for u in mine if u["type"] == T.COMSAT and u["completed"] and (u.get("energy") or 0) >= SCAN_ENERGY), None)
         if comsat is None:
             return False
-        fighters = [u for u in ours if u["type"] in g.army_types or u["type"] == T.SCV]
+        fighters = [u for u in ours if u["type"] in g.army_types or u["type"] == g.race.worker]
         spots = [(x, y) for _, x, y in self.buried.values()
                  if any(math.dist((x, y), (u["x"], u["y"])) < DETECT_NEAR for u in fighters)
                  and not any(math.dist((x, y), (sx, sy)) < SCAN_RADIUS for _, sx, sy in self.scanned)]

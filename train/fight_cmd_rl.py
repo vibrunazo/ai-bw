@@ -35,7 +35,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from gary.agent.manifests import latest_command_model
+from gary.agent.manifests import model_for
 from gary.drills import behavior, make_drill, run_drill
 from gary.policy.fight import tensors
 from gary.policy.fight_cmd import HANDS_FEATURES, MOVES, POINTER, CommandModel, CommandNet
@@ -233,13 +233,13 @@ def main() -> None:
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    init = Path(args.init or latest_command_model(memory=True))
+    init = Path(args.init or model_for("fight_cmd_memory", "TvZ", "T"))
     model = CommandModel.load(init, device)
     if not args.no_hands and not model.hands:     # a hand-state input, at zero: the same model to start
         net = CommandNet(**{**model.config["net"], "hands": HANDS_FEATURES}).to(device)
         net.load_state_dict(model.net.state_dict(), strict=False)
         model.net, model.config = net.eval(), {**model.config, "net": {**model.config["net"], "hands": HANDS_FEATURES}}
-    ref_path = Path(args.ref or latest_command_model(memory=True))
+    ref_path = Path(args.ref or model_for("fight_cmd_memory", "TvZ", "T"))
     ref = CommandModel.load(ref_path, device).net.eval()
     for p in ref.parameters():
         p.requires_grad_(False)

@@ -33,7 +33,7 @@ import torch
 import torch.nn.functional as F
 
 from eval import monitor, priority
-from gary.agent.manifests import latest_role_model
+from gary.agent.manifests import model_for
 from gary.policy.roles import EXTRA, RoleModel, tensors
 from train.fight_cmd_rl import decisions, real_splits
 
@@ -153,7 +153,7 @@ def main() -> None:
         args.manifest = "v017override"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    init = Path(args.init or latest_role_model())
+    init = Path(args.init or model_for("roles", "TvZ", "T"))
     model = RoleModel.load(init, device)
     if "keep" not in model.config.get("roles", []):
         raise SystemExit(f"{init} isn't a model of decisions (no 'keep'): train one with --decisions or distill the rules")

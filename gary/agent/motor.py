@@ -228,7 +228,7 @@ class DirectMotor:
         # skill takes whichever it got, and sends for more if they're too few)
         types = lambda tags: sorted(next((u["type"] for u in obs["units"] if u["tag"] == x), -1) for x in tags)
         if d.get("any_scv") and sel and len(sel) <= len(want) + 1 and not sel & set(d.get("exclude", ())) and \
-                all(next((u["type"] for u in obs["units"] if u["tag"] == x), -1) == T.SCV for x in sel):
+                all(next((u["type"] for u in obs["units"] if u["tag"] == x), -1) == g.race.worker for x in sel):
             d["tags"] = sorted(sel)
             if t.intent is not None:
                 t.intent.units = sorted(sel)
@@ -331,7 +331,7 @@ class DirectMotor:
     def _pull(self, obs: dict, mine: list[dict], t: Task) -> None:
         g, hi, d = self.g, self.g.hi, t.data
         if t.stage == "selected":
-            workers = [u["tag"] for u in mine if u["tag"] in obs["selection"] and u["type"] == T.SCV]
+            workers = [u["tag"] for u in mine if u["tag"] in obs["selection"] and u["type"] == g.race.worker]
             if workers:
                 hi.minimap_command(C.ORDER_ATTACK_MOVE, *d["to"])
                 g.pulled.update(workers)
@@ -344,7 +344,7 @@ class DirectMotor:
             return
         # (not the ones placing or constructing a building, nor the scout: a builder pulled is a
         # build lost)
-        miners = [u for u in mine if u["type"] == T.SCV and u["tag"] not in g.pulled
+        miners = [u for u in mine if u["type"] == g.race.worker and u["tag"] not in g.pulled
                   and math.dist((u["x"], u["y"]), (cx, cy)) < 8 * 32 and screen_of(obs, u["x"], u["y"])
                   and u["order"] not in (30, 31, 33) and u["tag"] != g.scout
                   and (g.parked is None or g.parked.data.get("worker") != u["tag"])
@@ -611,7 +611,7 @@ class DirectMotor:
                 hi.click(*hi.aim(obs, w))
                 t.stage = "picked"
                 return
-            sel = [u for u in mine if u["tag"] in obs["selection"] and u["type"] == T.SCV]
+            sel = [u for u in mine if u["tag"] in obs["selection"] and u["type"] == g.race.worker]
             if len(sel) != 1:
                 g.task = None                              # try again later
                 return

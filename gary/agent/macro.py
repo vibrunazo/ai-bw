@@ -25,8 +25,8 @@ from collections import Counter
 
 import numpy as np
 
+from gary import orders as O
 from gary import terran as T
-from gary.agent.executor import COST
 from gary.agent.gary import Gary, Task
 from gary.decision_log import LOG, top
 from gary.policy.attribution import explain_macro
@@ -42,7 +42,7 @@ GOAL_TIMEOUT = 24 * 30          # a decision Gary can't afford or do within 30 s
 DICE_FLOOR = 0.01               # decoder "dice": decisions less likely than this are never rolled
 MIN_P = 0.05                    # never take a decision the model gives less than this: unlikely
                                 # choices lead into states pros rarely reach, where it knows less
-BUSY = {T.ORDER_RESEARCH, T.ORDER_UPGRADE, T.ORDER_BUILD_ADDON}
+BUSY = {O.ORDER_RESEARCH, O.ORDER_UPGRADE, O.ORDER_BUILD_ADDON}
 WAIT = {"kind": "wait"}         # plan(): possible, but not right now
 ONE_OFF_BUILDINGS = {T.REFINERY, T.ACADEMY, T.EBAY, T.FACTORY, T.STARPORT, T.ARMORY, T.SCIENCE_FACILITY, T.COMSAT,
                      T.MACHINE_SHOP, T.CONTROL_TOWER, T.COVERT_OPS, T.PHYSICS_LAB}   # odds_mass: built once (or so)
@@ -52,16 +52,17 @@ NAT_BUNKER_TILES = 5            # ...or this far toward the enemy where the natu
 NAT_BUNKER_RETRY = 20 * 24
 
 
-def describe(act: int, uid: int) -> str:
+def describe(race, act: int, uid: int) -> str:
+    """A decision's name in this race's (gary/race.py) words."""
     if act == TRAIN:
-        return T.NAMES.get(uid, f"unit {uid}")
+        return race.names.get(uid, f"unit {uid}")
     if act == RESEARCH:
-        return T.TECH_NAMES.get(uid, f"tech {uid}")
+        return race.tech_names.get(uid, f"tech {uid}")
     if act == UPGRADE:
-        return T.UPGRADE_NAMES.get(uid, f"upgrade {uid}")
+        return race.upgrade_names.get(uid, f"upgrade {uid}")
     if act == EXPAND:
         return "expand"
-    return T.NAMES.get(uid, f"{ACT_NAMES[act]} {uid}")
+    return race.names.get(uid, f"{ACT_NAMES[act]} {uid}")
 
 
 class LearnedMacro:
@@ -88,7 +89,7 @@ class LearnedMacro:
         self.next_nat_bunker = 0
         self._nat_bunker_spot = None
         self.model = model
-        self.tracker = MacroTracker(model.spec, g.slot, style, getattr(g.map, "hash", None), getattr(g, "matchup", "TvZ"))
+        self.tracker = MacroTracker(model.spec, g.slot, style, getattr(g.map, "hash", None), g.matchup)
         self.goal: dict | None = None
         self.next_query = 0
         self.decisions: list[tuple[int, str, float]] = []   # (frame, decision, model probability)
@@ -125,7 +126,7 @@ class LearnedMacro:
                 if self.goal is None:
                     return
                 g.say(f"next: {self.goal['name']} ({build.label})")
-                LOG.decision("T", "macro", g.hi.frame, self.goal["name"], inputs=self._seen(obs, mine, me),
+                LOG.decision(g.hi.side, "macro", g.hi.frame, self.goal["name"], inputs=self._seen(obs, mine, me),
                              by=f"posture's build: {build.label}")
         if self.natural_bunker and self._natural_bunker(mine, me):
             return
@@ -136,7 +137,7 @@ class LearnedMacro:
             if self.goal is None and (goal := self.answers.next_goal(obs, mine, done, me)) is not None:
                 self.goal = goal
                 g.say(f"next: {goal['name']}")
-                LOG.decision("T", "macro", g.hi.frame, goal["name"], inputs=self._seen(obs, mine, me),
+                LOG.decision(g.hi.side, "macro", g.hi.frame, goal["name"], inputs=self._seen(obs, mine, me),
                              by="rule: an answer to the zerg's plan (answers.py)")
         self._learned(obs, mine, done, me)
 
@@ -149,13 +150,13 @@ class LearnedMacro:
         nat = g.natural.center
         if g.hi.frame < self.next_nat_bunker or g.task is not None:
             return False
-        if not any(u["type"] == T.CC and math.dist((u["x"], u["y"]), nat) < 4 * 32 for u in mine) or \
+        if not any(u["type"] in g.race.town_halls and math.dist((u["x"], u["y"]), nat) < 4 * 32 for u in mine) or \
                 not any(u["type"] == T.RAX and u["completed"] for u in mine):
             return False
         if any(u["type"] == T.BUNKER and math.dist((u["x"], u["y"]), nat) < 8 * 32 for u in mine) or \
                 any(r == T.BUNKER for r, *_ in g.reserved):
             return False
-        if me["minerals"] - g.committed() < T.COST[T.BUNKER][0]:
+        if me["minerals"] - g.committed() < g.race.costs[T.BUNKER][0]:
             return False
         self.next_nat_bunker = g.hi.frame + NAT_BUNKER_RETRY
         g.task = Task("build", T.BUNKER, "natural", data={"near": self.nat_bunker_spot(), "level_at": nat},
@@ -198,7 +199,7 @@ class LearnedMacro:
         if hi.frame >= self.rax_by and not rax and (self.goal is None or self.goal["id"] != T.RAX):
             self.goal = {"act": BUILD, "id": T.RAX, "p": 1.0, "since": hi.frame, "name": "Barracks"}
             g.say(f"next: Barracks (none by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d})")
-            LOG.decision("T", "macro", hi.frame, "Barracks", inputs=self._seen(obs, mine, me),
+            LOG.decision(g.hi.side, "macro", hi.frame, "Barracks", inputs=self._seen(obs, mine, me),
                          by=f"rule: a Barracks by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d}")
         if self.depot_ahead and (self.goal is None or self.goal["id"] != T.DEPOT) and me["supply_max"] < 200:
             producers = sum(1 for u in done if u["type"] in (T.CC, T.RAX, T.FACTORY, T.STARPORT))
@@ -208,14 +209,14 @@ class LearnedMacro:
                     and self.plan(BUILD, T.DEPOT, obs, mine, done, me) not in (None, WAIT):
                 self.goal = {"act": BUILD, "id": T.DEPOT, "p": 1.0, "since": hi.frame, "name": "Supply Depot"}
                 g.say("next: Supply Depot (ahead of production)")
-                LOG.decision("T", "macro", hi.frame, "Supply Depot", inputs=self._seen(obs, mine, me),
+                LOG.decision(g.hi.side, "macro", hi.frame, "Supply Depot", inputs=self._seen(obs, mine, me),
                              by=f"rule: a depot ahead of production ({me['supply_max'] - me['supply_used']} left, "
                                 f"{producers} producers)")
         if self.goal and hi.frame - self.goal["since"] > GOAL_TIMEOUT:
             g.say(f"gives up on {self.goal['name']}")
-            LOG.order("T", hi.frame, self.goal["name"], "dropped", f"not carried out in {GOAL_TIMEOUT // 24} s", by="macro")
+            LOG.order(g.hi.side, hi.frame, self.goal["name"], "dropped", f"not carried out in {GOAL_TIMEOUT // 24} s", by="macro")
             self.goal = None
-        halls = sum(1 for u in mine if u["type"] == T.CC)
+        halls = sum(1 for u in mine if u["type"] in g.race.town_halls)
         if halls > self.halls:
             self.expand_odds = 0.0          # (only once one stands: a Command Center that didn't start is asked again)
         self.halls = halls
@@ -232,11 +233,11 @@ class LearnedMacro:
             pick = waiting = None
             # (the record: the model's top odds, what it saw, the options ahead of the choice and why they were
             # passed over; gary/decision_log.py)
-            name = lambda k: describe(*self.model.spec.decisions[k])
+            name = lambda k: describe(g.race, *self.model.spec.decisions[k])
             over: list[list] = []
 
             def record(k, by, then=None):
-                LOG.decision("T", "macro", hi.frame, None if k is None else name(k),
+                LOG.decision(g.hi.side, "macro", hi.frame, None if k is None else name(k),
                              None if k is None else float(probs[0, k]), top(name, probs[0]),
                              self._seen(obs, mine, me), by, over[:8], then,
                              why=explain_macro(self.model, x, k) if k is not None else None)
@@ -251,7 +252,7 @@ class LearnedMacro:
                 k = int(cands[int(self.rng.choices(range(len(cands)), weights=(q / q.sum()).tolist())[0])])
                 self.draws.append({"frame": hi.frame, "x": x[0], "cands": [int(c) for c in cands], "k": k})
                 act, uid = self.model.spec.decisions[k]
-                self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(act, uid)}
+                self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(self.g.race, act, uid)}
                 g.say(f"next: {self.goal['name']} ({self.goal['p']:.0%}, drawn)")
                 record(k, f"sample (temperature {self.temperature:g})")
                 return
@@ -273,7 +274,7 @@ class LearnedMacro:
             if (self.expand_mass is not None and self.expand_odds >= self.expand_mass and self.halls >= 2
                     and self.plan(*self.model.spec.decisions[k_exp], obs, mine, done, me) is not None):
                 act, uid = self.model.spec.decisions[k_exp]
-                self.goal = {"act": act, "id": uid, "p": float(probs[0, k_exp]), "since": hi.frame, "name": describe(act, uid)}
+                self.goal = {"act": act, "id": uid, "p": float(probs[0, k_exp]), "since": hi.frame, "name": describe(self.g.race, act, uid)}
                 g.say(f"next: expand ({self.expand_odds:.2f} expansions' odds since the last)")
                 record(k_exp, f"rule: expansion odds summed to {self.expand_odds:.2f} since the last")
                 return
@@ -283,7 +284,7 @@ class LearnedMacro:
                     plan = self.plan(*self.model.spec.decisions[k], obs, mine, done, me)
                     if plan is not None and plan is not WAIT:
                         act, uid = self.model.spec.decisions[k]
-                        self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(act, uid)}
+                        self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(self.g.race, act, uid)}
                         self.odds[k] = 0.0
                         g.say(f"next: {self.goal['name']} ({mass:.2f} odds summed since it was possible)")
                         record(k, f"rule: its odds summed to {mass:.2f} since it was possible")
@@ -294,7 +295,7 @@ class LearnedMacro:
                 self.force = None
                 if self.plan(*self.model.spec.decisions[k], obs, mine, done, me) is not None:
                     act, uid = self.model.spec.decisions[k]
-                    self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(act, uid)}
+                    self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame, "name": describe(self.g.race, act, uid)}
                     g.say(f"next: {self.goal['name']} ({self.goal['p']:.0%}, forced)")
                     record(k, "forced (a branch)")
                     return
@@ -330,7 +331,7 @@ class LearnedMacro:
                 return
             act, uid = self.model.spec.decisions[k]
             self.goal = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame,
-                         "name": describe(act, uid)}
+                         "name": describe(self.g.race, act, uid)}
             self.expand_odds += float(probs[0, k_exp])
             if self.odds_mass is not None:              # (summed per decision taken, while possible or waiting)
                 for j in self.one_off:
@@ -342,7 +343,7 @@ class LearnedMacro:
         goal = self.goal
         plan = self.plan(goal["act"], goal["id"], obs, mine, done, me)   # still possible?
         if plan is None:
-            LOG.order("T", hi.frame, goal["name"], "dropped", "no longer possible", by="macro")
+            LOG.order(g.hi.side, hi.frame, goal["name"], "dropped", "no longer possible", by="macro")
             self.goal = None
             return
         if plan is WAIT:                    # e.g. the building is still busy: wait for it
@@ -358,7 +359,7 @@ class LearnedMacro:
         minerals, gas = plan["cost"]
         budget = me["minerals"] - g.committed()
         # a building's worker sets out WALK_AHEAD seconds of income early: it walks while the money comes
-        workers = sum(1 for u in mine if u["type"] == T.SCV)
+        workers = sum(1 for u in mine if u["type"] == g.race.worker)
         walk_ahead = int(WALK_AHEAD * MINING * workers) if plan["kind"] == "build" else 0
         if budget < minerals - walk_ahead or me["gas"] < gas:
             return
@@ -381,15 +382,15 @@ class LearnedMacro:
         """What the macro saw, in brief, for its records."""
         g = self.g
         return {"m": me["minerals"], "gas": me["gas"], "supply": f"{me['supply_used']}/{me['supply_max']}",
-                "scvs": sum(1 for u in mine if u["type"] == T.SCV), "bases": sum(1 for u in mine if u["type"] == T.CC),
+                "scvs": sum(1 for u in mine if u["type"] == g.race.worker), "bases": sum(1 for u in mine if u["type"] in g.race.town_halls),
                 "army": sum(1 for u in mine if u["type"] in g.army_types), "posture": getattr(g.posture, "build", None),
-                "parked": T.NAMES.get(g.parked.unit_type) if g.parked is not None else None}
+                "parked": g.race.names.get(g.parked.unit_type) if g.parked is not None else None}
 
     def saturation(self, mine: list[dict]) -> int:
         """SCVs enough for Gary's bases (with a Command Center, finished or not): 2 per mineral field,
         3 per geyser, and builders. Pros have 39 at 12:00 on two bases; Gary, making SCVs to 60, had
         42-51 there, the minerals of the army it lacked."""
-        halls = [u for u in mine if u["type"] == T.CC]
+        halls = [u for u in mine if u["type"] in self.g.race.town_halls]
         bases = [b for b in self.g.map.bases if any(math.dist(b.center, (h["x"], h["y"])) < 6 * 32 for h in halls)]
         return sum(2 * len(b.minerals) + 3 * len(b.geysers) for b in bases) + BUILDERS
 
@@ -415,8 +416,8 @@ class LearnedMacro:
         return False
 
     def _note_unit(self, act: int, uid: int) -> None:
-        if act == TRAIN and T.PRODUCER.get(uid) in KEEP_BUSY:
-            self.last_unit[T.PRODUCER[uid]] = uid
+        if act == TRAIN and self.g.race.producer.get(uid) in KEEP_BUSY:
+            self.last_unit[self.g.race.producer[uid]] = uid
 
     def _keep_busy(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> bool:
         """An idle Barracks, Factory or Starport trains the unit the model last chose for it again,
@@ -436,7 +437,7 @@ class LearnedMacro:
         if self.goal is not None and self.goal["act"] == EXPAND and self.halls >= 2:
             # (but a third base is saved for: production spent every mineral, the bank at 20-40, and the
             # Command Center's 400 never came; on two bases 400 is about 10 s of mining)
-            reserve = T.COST[T.CC][0]
+            reserve = g.race.costs[g.race.town_hall][0]
         elif self.goal is not None and self.goal["act"] not in (BUILD, EXPAND):
             p = self.plan(self.goal["act"], self.goal["id"], obs, mine, done, me)
             reserve = p["cost"][0] if isinstance(p, dict) and p is not WAIT else 0
@@ -477,53 +478,53 @@ class LearnedMacro:
         if self.answers is not None and not self.answers.allows(act, uid, mine):
             return None
         have = {u["type"] for u in done}
-        if any(r not in have for r in T.REQUIRES.get(uid, [])):
+        if any(r not in have for r in g.race.requires.get(uid, [])):
             return None
         if self.failed_until.get((act, uid), 0) > g.hi.frame:
             return None                       # just failed (e.g. no room): not again right away
         cap = self.model.cap(uid, obs["frame"]) if act in (TRAIN, BUILD, EXPAND) else None
         if cap is not None and self.count(mine, uid) >= cap:
             return None                       # already as many as nine pros in ten ever had by now
-        if act == TRAIN and uid in T.PRODUCER:
-            if me["supply_used"] + T.SUPPLY[uid] > me["supply_max"]:
+        if act == TRAIN and uid in g.race.producer:
+            if me["supply_used"] + g.race.supply[uid] > me["supply_max"]:
                 # supply blocked: wait if a depot is on its way, else let a depot come next
                 coming = any(u["type"] == T.DEPOT and not u["completed"] for u in mine) or \
                     any(ut == T.DEPOT for ut, *_ in g.reserved) or \
                     g.building(T.DEPOT)
                 return WAIT if coming else None
-            if uid == T.SCV and sum(1 for u in mine if u["type"] == T.SCV) >= min(MAX_SCVS, self.saturation(mine)):
+            if uid == g.race.worker and sum(1 for u in mine if u["type"] == g.race.worker) >= min(MAX_SCVS, self.saturation(mine)):
                 return None
             addon = T.NEEDS_ADDON.get(uid)
             if addon is not None and not any(u["type"] == addon for u in done):
                 return None                       # e.g. tanks: no Machine Shop yet
-            b = self.free_building(obs, mine, done, T.PRODUCER[uid], addon)
-            return self._command_or_wait(b, done, T.PRODUCER[uid], act, uid, T.COST[uid])
+            b = self.free_building(obs, mine, done, g.race.producer[uid], addon)
+            return self._command_or_wait(b, done, g.race.producer[uid], act, uid, g.race.costs[uid])
         if act == BUILD and uid in T.ADDON_PARENT:
             ox, oy = T.ADDON_OFFSET                      # (only where the add-on fits)
-            fits = lambda b: g.hi.game.can_place(g.slot, uid, (b["x"] - T.SIZE[b["type"]][0] * 16) // 32 + ox,
-                                                 (b["y"] - T.SIZE[b["type"]][1] * 16) // 32 + oy, 0)
+            fits = lambda b: g.hi.game.can_place(g.slot, uid, (b["x"] - g.race.sizes[b["type"]][0] * 16) // 32 + ox,
+                                                 (b["y"] - g.race.sizes[b["type"]][1] * 16) // 32 + oy, 0)
             bare = [b for b in done if b["type"] == T.ADDON_PARENT[uid] and self.addon_of(b, mine) is None and fits(b)]
             if not bare:
                 return None
             free = [b for b in bare if b.get("queue", 0) == 0 and b["order"] not in BUSY]
-            return {"kind": "command", "act": act, "id": uid, "building": free[0], "cost": T.COST[uid]} \
+            return {"kind": "command", "act": act, "id": uid, "building": free[0], "cost": g.race.costs[uid]} \
                 if free else WAIT
-        if act == BUILD and uid == T.REFINERY:
+        if act == BUILD and uid == g.race.gas_building:
             spot = self.free_geyser(obs, mine)
-            return {"kind": "build", "where": spot[0], "data": {"spot": spot[1]}, "cost": T.COST[uid]} \
+            return {"kind": "build", "where": spot[0], "data": {"spot": spot[1]}, "cost": g.race.costs[uid]} \
                 if spot else None
-        if act == BUILD and uid in T.SIZE and uid != T.CC:
-            return {"kind": "build", "where": "main", "cost": T.COST[uid]}
-        if act == EXPAND and uid == T.CC:
+        if act == BUILD and uid in g.race.sizes and uid != g.race.town_hall:
+            return {"kind": "build", "where": "main", "cost": g.race.costs[uid]}
+        if act == EXPAND and uid == g.race.town_hall:
             base = self.free_base(obs)
             return {"kind": "build", "where": "natural" if base is g.natural else base,
-                    "cost": T.COST[T.CC]} if base else None
-        if act == RESEARCH and uid in T.RESEARCH and uid not in g.researched:
-            where, cost = T.RESEARCH[uid]
+                    "cost": g.race.costs[g.race.town_hall]} if base else None
+        if act == RESEARCH and uid in g.race.research and uid not in g.researched:
+            where, cost = g.race.research[uid]
             b = self.free_building(obs, mine, done, where)
             return self._command_or_wait(b, done, where, act, uid, cost)
-        if act == UPGRADE and uid in T.UPGRADE:
-            where, cost, levels = T.UPGRADE[uid]
+        if act == UPGRADE and uid in g.race.upgrade:
+            where, cost, levels = g.race.upgrade[uid]
             level = g.upgraded[uid]
             if level >= levels or (level >= 1 and T.UPGRADE_LEVEL_2_NEEDS not in have):
                 return None
@@ -545,8 +546,8 @@ class LearnedMacro:
             act, uid = t.data["decision"]
             self.tracker.unnote_decision(act, uid)
             self.failed_until[(act, uid)] = self.g.hi.frame + 24 * 10
-            self.g.say(f"couldn't build {describe(act, uid)}")
-            LOG.order("T", self.g.hi.frame, describe(act, uid), "dropped",
+            self.g.say(f"couldn't build {describe(self.g.race, act, uid)}")
+            LOG.order(self.g.hi.side, self.g.hi.frame, describe(self.g.race, act, uid), "dropped",
                       f"couldn't be built ({t.data.get('failed', 'see the executor')}): not decided again for 10 s",
                       by="executor")
 
@@ -596,8 +597,8 @@ class LearnedMacro:
 
     def free_geyser(self, obs: dict, mine: list[dict]):
         g = self.g
-        refineries = [u for u in mine if u["type"] == T.REFINERY] + \
-                     [{"x": tx * 32 + 64, "y": ty * 32 + 32} for ut, tx, ty in g.reserved if ut == T.REFINERY]
+        refineries = [u for u in mine if u["type"] == g.race.gas_building] + \
+                     [{"x": tx * 32 + 64, "y": ty * 32 + 32} for ut, tx, ty in g.reserved if ut == g.race.gas_building]
         for base in g.executor.my_bases(mine):
             for gx, gy in base.geysers:
                 if any(math.dist((r["x"], r["y"]), (gx, gy)) < 32 for r in refineries):
@@ -611,7 +612,7 @@ class LearnedMacro:
         worker's walk from the natural (terrain.py), not as the crow flies."""
         g = self.g
         halls = [u for u in obs["units"] if u["type"] in TOWN_HALLS]
-        reserved = [(tx * 32 + 64, ty * 32 + 48) for ut, tx, ty in g.reserved if ut == T.CC]
+        reserved = [(tx * 32 + 64, ty * 32 + 48) for ut, tx, ty in g.reserved if ut == g.race.town_hall]
         enemy = [tuple(s) for s in g.enemy_starts]
         free = [b for b in g.map.bases if b is not g.main
                 and not any(math.dist(b.center, (h["x"], h["y"])) < 10 * 32 for h in halls)
@@ -658,7 +659,7 @@ class OneBaseDefense:
         budget = me["minerals"] - g.committed()
         if g.build_failed.get(T.BUNKER, -1) > self.next_bunker - BUNKER_RETRY:   # one just failed: again now
             self.next_bunker = 0
-        if budget >= T.COST[T.BUNKER][0] - 40 and g.hi.frame >= self.next_bunker:
+        if budget >= g.race.costs[T.BUNKER][0] - 40 and g.hi.frame >= self.next_bunker:
             self.next_bunker = g.hi.frame + BUNKER_RETRY
             g.task = Task("build", T.BUNKER, "main", data={"near": g.posture.bunker_spot, "level_at": g.main.center},
                           started=g.hi.frame)
@@ -680,9 +681,9 @@ class OneBaseDefense:
         if not any(u["type"] == T.RAX for u in mine) and not coming(T.RAX):
             return goal(BUILD, T.RAX, "Barracks") if doable(BUILD, T.RAX) else None
         # (an ordered bunker's money is held by its reservation until it starts)
-        keep = T.COST[T.BUNKER][0] if not any(u["type"] == T.BUNKER for u in mine) and \
+        keep = g.race.costs[T.BUNKER][0] if not any(u["type"] == T.BUNKER for u in mine) and \
             not any(r == T.BUNKER for r, *_ in g.reserved) else 0
-        spare = lambda ut: me["minerals"] - g.committed() - keep >= T.COST[ut][0]
+        spare = lambda ut: me["minerals"] - g.committed() - keep >= g.race.costs[ut][0]
         # a depot takes longer than a marine or an SCV: start it while each producer has 2 left
         producers = sum(1 for u in done if u["type"] in (T.CC, T.RAX))
         if me["supply_max"] - me["supply_used"] < 2 * producers and me["supply_max"] < 200 and \
@@ -690,8 +691,8 @@ class OneBaseDefense:
             return goal(BUILD, T.DEPOT, "Supply Depot")
         if doable(TRAIN, T.MARINE) and spare(T.MARINE):
             return goal(TRAIN, T.MARINE, "Marine")
-        if sum(1 for u in mine if u["type"] == T.SCV) < RUSH_SCVS and doable(TRAIN, T.SCV) and spare(T.SCV):
-            return goal(TRAIN, T.SCV, "SCV")
+        if sum(1 for u in mine if u["type"] == g.race.worker) < RUSH_SCVS and doable(TRAIN, g.race.worker) and spare(g.race.worker):
+            return goal(TRAIN, g.race.worker, "SCV")
         budget = me["minerals"] - g.committed()
         if not keep and budget >= RAX_MONEY and sum(1 for u in mine if u["type"] == T.RAX) < RUSH_RAX and not coming(T.RAX) and \
                 doable(BUILD, T.RAX):
@@ -736,8 +737,8 @@ class LingFloodDefense:
             return goal(BUILD, T.DEPOT, "Supply Depot")
         if count(T.RAX) < 2 and not coming(T.RAX) and doable(BUILD, T.RAX):
             return goal(BUILD, T.RAX, "Barracks")
-        if not count(T.REFINERY) and doable(BUILD, T.REFINERY):
-            return goal(BUILD, T.REFINERY, "Refinery")
+        if not count(g.race.gas_building) and doable(BUILD, g.race.gas_building):
+            return goal(BUILD, g.race.gas_building, "Refinery")
         if not count(T.ACADEMY) and doable(BUILD, T.ACADEMY):
             return goal(BUILD, T.ACADEMY, "Academy")
         if STIM not in g.researched and doable(RESEARCH, STIM):
@@ -751,6 +752,6 @@ class LingFloodDefense:
             return goal(TRAIN, T.MARINE, "Marine")
         if count(T.RAX) < FLOOD_RAX and not coming(T.RAX) and budget >= RAX_MONEY and doable(BUILD, T.RAX):
             return goal(BUILD, T.RAX, "Barracks")
-        if doable(TRAIN, T.SCV) and budget >= T.COST[T.SCV][0] + 50:
-            return goal(TRAIN, T.SCV, "SCV")
+        if doable(TRAIN, g.race.worker) and budget >= g.race.costs[g.race.worker][0] + 50:
+            return goal(TRAIN, g.race.worker, "SCV")
         return None

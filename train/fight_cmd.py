@@ -39,7 +39,7 @@ import torch.nn.functional as F
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "ingest"))
 
-from gary.agent.manifests import latest_fight_model  # noqa: E402
+from gary.agent.manifests import model_for  # noqa: E402
 from gary.policy.fight import ACTIONS, OTARGET, SIDE, X, Y, tensors  # noqa: E402
 from gary.policy.fight_cmd import GRID, MAX_UNITS, MOVES, POINTER, CommandModel, CommandNet, cell_of  # noqa: E402
 from gary.policy.fight_memory import HIST_K, history_inputs  # noqa: E402
@@ -230,8 +230,7 @@ def warm_start(net: CommandNet, args, device: str, config: dict) -> None:
     """Memory models start from the latest command model (the new inputs' weights at zero: the
     same model, until it learns to use them); others from the per-unit fight model's encoder."""
     if args.memory:
-        from gary.agent.manifests import latest_command_model
-        init = latest_command_model(args.matchup, args.race)
+        init = model_for("fight_cmd", args.matchup, args.race)
         state = torch.load(init, map_location=device, weights_only=True)["state"]
         own = net.state_dict()
         w = state.pop("inp.weight")
@@ -240,7 +239,7 @@ def warm_start(net: CommandNet, args, device: str, config: dict) -> None:
         state["inp.weight"] = new_w
         net.load_state_dict(state, strict=False)
     else:
-        init = latest_fight_model(args.matchup, args.race)
+        init = model_for("fight", args.matchup, args.race)
         state = torch.load(init, map_location=device, weights_only=True)["state"]
         enc = {k: v for k, v in state.items() if k.split(".")[0] in ("type_emb", "side_emb", "order_emb", "inp", "body")}
         net.load_state_dict(enc, strict=False)

@@ -407,7 +407,7 @@ class LearnedArmy:
         other = None
         if self.shadow is not None:
             other = float(self.shadow.predict(grid, glob)[1][0, int(eng)])
-        LOG.decision("T", "engage", hi.frame, f"{'engage' if eng else 'hold'}: to {self._cell_name(best)}",
+        LOG.decision(g.hi.side, "engage", hi.frame, f"{'engage' if eng else 'hold'}: to {self._cell_name(best)}",
                      pe if eng else 1 - pe, [["engage", round(pe, 3)], ["hold", round(1 - pe, 3)]], self._seen,
                      "forced (a paired arm)" if forced else "draw",
                      then="stays: the cell drawn is near" if cell_dist(best, here) < MOVE_CELLS else "sent",
@@ -480,7 +480,7 @@ class LearnedArmy:
         (self.record.append(item) if self.record is not None else LOG.add("commit_t", **item))
         rl = self._rl_row("commit_t")
         if k == 0:
-            LOG.decision("T", "commit", hi.frame, "keep", q[0], options, self._seen, by, then="its commitment stands",
+            LOG.decision(g.hi.side, "commit", hi.frame, "keep", q[0], options, self._seen, by, then="its commitment stands",
                          rl=rl, why=why)
             return None
         m = np.asarray(grid[0]).reshape(-1, GRID, GRID)
@@ -493,7 +493,7 @@ class LearnedArmy:
         mask = far & (near.reshape(-1) if k == 1 else ~near.reshape(-1))
         p = where[0] * mask
         if p.sum() <= 0:
-            LOG.decision("T", "commit", hi.frame, names[k], q[k], options, self._seen, by,
+            LOG.decision(g.hi.side, "commit", hi.frame, names[k], q[k], options, self._seen, by,
                          then="no cell on that side: its commitment stands", rl=rl, why=why)
             return None
         if self.draw and self.commit_floor is not None:          # (among the 5 likeliest cells on that side)
@@ -503,7 +503,7 @@ class LearnedArmy:
             p = pf
         best = int(self.rng.choice(len(p), p=p / p.sum())) if self.draw else int(p.argmax())
         self.commitments.append((hi.frame, here, best, k))
-        LOG.decision("T", "commit", hi.frame, f"{names[k]} to {self._cell_name(best)}", q[k], options, self._seen, by,
+        LOG.decision(g.hi.side, "commit", hi.frame, f"{names[k]} to {self._cell_name(best)}", q[k], options, self._seen, by,
                      then="sent", rl=rl, why=why)
         x, y = self.tracker.center(best)
         attack = k == 1
@@ -522,7 +522,7 @@ class LearnedArmy:
         """An army decision in the game's records (gary/decision_log.py): the likeliest cells, what was
         chosen and by whom (the draw, a rule), what came of it."""
         from gary.decision_log import LOG, top
-        LOG.decision("T", "army", self.g.hi.frame, choice, p, top(self._cell_name, where[0], 3), self._seen, by, then=then,
+        LOG.decision(self.g.hi.side, "army", self.g.hi.frame, choice, p, top(self._cell_name, where[0], 3), self._seen, by, then=then,
                      rl=rl, p_other=p_other, why=why)
 
     def _rl_row(self, layer: str) -> int | None:
@@ -539,9 +539,9 @@ class LearnedArmy:
         if self.belief is None or not self.belief_hold:
             return None
         x, y = self.tracker.center(dest)
-        if any(u["type"] == T.CC and math.dist((u["x"], u["y"]), (x, y)) < HOME_PX for u in mine):
+        if any(u["type"] in self.g.race.town_halls and math.dist((u["x"], u["y"]), (x, y)) < HOME_PX for u in mine):
             return None
-        workers = sum(1 for u in mine if u["type"] == T.SCV)
+        workers = sum(1 for u in mine if u["type"] == self.g.race.worker)
         b = self.belief.predict(self.belief_mem.vector(obs["frame"], obs["me"]["supply_used"] * 2, workers))
         known = 0.0
         if self.tracker.seen_hist and not self.belief_total:
@@ -581,7 +581,7 @@ class LearnedArmy:
             # not seeing their army isn't their having none: the hunt only with an army at least what the
             # Zerg likely has (the belief's 80th percentile). At 8:30 against Zerg v3's zergling pressure,
             # 19 supply hunted into 16 (belief 17, q80 28) and was lost, then the game to the 11:00 all-in
-            workers = sum(1 for u in mine if u["type"] == T.SCV)
+            workers = sum(1 for u in mine if u["type"] == g.race.worker)
             b = self.belief.predict(self.belief_mem.vector(obs["frame"], obs["me"]["supply_used"] * 2, workers))
             if sum(supply_x2(u["type"]) for u in army) < b["q80"]:
                 return None
@@ -645,7 +645,7 @@ class LearnedArmy:
             return False
         hi = g.hi
         if g.scout is None:
-            workers = sum(1 for u in mine if u["type"] == T.SCV)
+            workers = sum(1 for u in mine if u["type"] == g.race.worker)
             if hi.frame >= max(SCOUT_AT, self.next_scout_try) and workers >= SCOUT_WORKERS:
                 self.next_scout_try = hi.frame + SCOUT_RETRY   # (a failed pick doesn't hold the hands every turn)
                 if not self.scout_targets:                 # (a new scout keeps the starts ruled out)

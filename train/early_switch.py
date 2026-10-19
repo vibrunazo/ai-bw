@@ -59,11 +59,11 @@ REPEATS = 3                                    # reshufflings of the 4 folds by 
 
 
 def _critic():
-    from gary.agent.manifests import model_path
+    from gary.agent.manifests import model_for
     from gary.policy.belief import BeliefModel
     from gary.policy.value import ValueModel
     newest = max((REPO_ROOT / "runs" / "value").glob("*/model.pt"))
-    return ValueModel.load(newest), BeliefModel.load(model_path("belief/latest"))
+    return ValueModel.load(newest), BeliefModel.load(model_for("belief", "TvZ", "T"))
 
 
 def _zerglings_home(m) -> bool:

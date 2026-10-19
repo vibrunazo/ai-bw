@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 
 from gary import commands as C
-from gary import terran as T
+from gary import orders as O
 from gary import zerg as Z
 from gary.bots import zerg_v3 as V3
 from gary.decision_log import LOG, top
@@ -1450,7 +1450,7 @@ class GaryZ(ZergV3):
         """A finished building of this kind (a Lair or Hive counts as a Hatchery...) not busy."""
         kinds = Z.HAS_TECH.get(kind, {kind})
         return next((u for u in mine if u["type"] in kinds and u["completed"] and u.get("queue", 0) == 0
-                     and u.get("order") not in (T.ORDER_RESEARCH, T.ORDER_UPGRADE)), None)
+                     and u.get("order") not in (O.ORDER_RESEARCH, O.ORDER_UPGRADE)), None)
 
     # --- carrying it out -------------------------------------------------------------------------
 

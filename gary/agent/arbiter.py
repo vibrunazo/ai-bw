@@ -80,7 +80,7 @@ class FixedPriority:
             self._posture_record(mode)
         if g.fight is not None:
             if g.macro_turn and g.task is None and not hi.pending:
-                LOG.owner["T"] = "macro"
+                LOG.owner[g.hi.side] = "macro"
                 g.macro_turn = False             # fights don't starve production: this turn goes
                 obs = hi.observe()               # to buildings and production, not to chores
                 mine = [u for u in obs["units"] if u["owner"] == g.slot]   # (refilling gas, mining)
@@ -97,7 +97,7 @@ class FixedPriority:
                 mine = [u for u in obs["units"] if u["owner"] == g.slot]
                 task = g.task
                 g.task, g.task_aside = None, task        # (a rule can let its own task finish: block.py)
-                LOG.owner["T"] = "fight"
+                LOG.owner[g.hi.side] = "fight"
                 who = g.fight.block(obs, mine)
                 if who:
                     self.interrupted = task
@@ -121,14 +121,14 @@ class FixedPriority:
         ex.release_reservations(mine)
         if g.task is None and self.suspended is not None:     # v2: the build a fight put aside
             g.task, self.suspended = self.suspended, None
-            LOG.owner["T"] = getattr(g.task, "by", "macro")
+            LOG.owner[g.hi.side] = getattr(g.task, "by", "macro")
             g.run_task(obs, mine)
             return "macro:resumed"
-        LOG.owner["T"] = "executor:parked"
+        LOG.owner[g.hi.side] = "executor:parked"
         if ex.resume_parked(obs, mine):
             return "executor:parked"
         if g.task:
-            LOG.owner["T"] = getattr(g.task, "by", "?")
+            LOG.owner[g.hi.side] = getattr(g.task, "by", "?")
             g.run_task(obs, mine)
             return None
         for who, chore in (("executor:resume", lambda: ex.resume_construction(mine)),
@@ -138,13 +138,13 @@ class FixedPriority:
                            ("executor:rerally", lambda: ex.rerally(obs, mine, done)),
                            ("executor:transfer", lambda: ex.transfer(obs, mine)),
                            ("executor:gas", lambda: ex.refill_gas(obs, done))):
-            LOG.owner["T"] = who
+            LOG.owner[g.hi.side] = who
             if chore():
                 return who
         who = self._army(obs, mine, done)
         if who:
             return who
-        LOG.owner["T"] = "macro"
+        LOG.owner[g.hi.side] = "macro"
         g.macro.step(obs, mine, done, me)
         return "macro"
 
@@ -159,14 +159,14 @@ class FixedPriority:
         if g.block_units:                # closing a choke (block.py)
             done = [u for u in done if u["tag"] not in g.block_units]
         if g.fight is not None:
-            LOG.owner["T"] = "fight"
+            LOG.owner[g.hi.side] = "fight"
             who = g.fight.decide(obs, mine)
             if who:
                 return who
             if g.fight.center is not None:   # the army layer leaves units in a fight alone
                 cx, cy = g.fight.center
                 done = [u for u in done if math.dist((u["x"], u["y"]), (cx, cy)) > 12 * 32]
-        LOG.owner["T"] = "army"
+        LOG.owner[g.hi.side] = "army"
         return g.army.step(obs, mine, done)
 
     def _posture_record(self, before: str) -> None:
@@ -181,9 +181,9 @@ class FixedPriority:
             seen = None
         model = getattr(g.posture, "model", None)
         said = next((r["text"] for r in reversed(LOG.records[-8:]) if r["kind"] == "note" and r["f"] == now
-                     and r["side"] == "T"), None)
+                     and r["side"] == g.hi.side), None)
         p = g.posture.decisions[-1]["p"] if model is not None and getattr(g.posture, "decisions", None) else None
-        LOG.decision("T", "posture", now, posture_mode(g.posture), p, inputs=seen,
+        LOG.decision(g.hi.side, "posture", now, posture_mode(g.posture), p, inputs=seen,
                      by="model" if model is not None else f"rule: {said}" if said else "rule", then=f"from {before}")
 
     # --- the trace -------------------------------------------------------------------------------
@@ -200,7 +200,7 @@ class FixedPriority:
                 task.by = who or "?"
                 g.event("arbiter", granted_to=task.by, task=task.kind,
                         interrupted=self.interrupted.kind if self.interrupted is not None else None)
-            LOG.hands("T", now, f"{task.by} ({task.kind})" if task is not None else "free")
+            LOG.hands(g.hi.side, now, f"{task.by} ({task.kind})" if task is not None else "free")
         busy = task.kind if task is not None else None
         self._wait("macro", g.macro is not None and g.macro.goal is not None and busy is not None
                    and busy not in ("build", "command"), busy, now,
@@ -252,7 +252,7 @@ class DrillArbiter:
         self.attention = random.Random(seed * 7919 + 1)
         self.interruptions = interruptions
         self.next_away = hi.frame + self.attention.randint(*AWAY_EVERY)
-        cc = next((u for u in hi.observe()["units"] if u["owner"] == g.slot and u["type"] == T.CC), None)
+        cc = next((u for u in hi.observe()["units"] if u["owner"] == g.slot and u["type"] in g.race.town_halls), None)
         self.cc = cc["tag"] if cc else None
         if self.cc:
             hi.hotkeys[HK_CC] = [self.cc]        # as a player has their Command Center on a key
@@ -302,5 +302,5 @@ class DrillArbiter:
             hi.hotkey_recall(HK_CC)
         else:
             if me["supply_used"] < me["supply_max"]:
-                hi.train(T.SCV)
+                hi.train(g.race.worker)
             g.task = None

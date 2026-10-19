@@ -288,10 +288,10 @@ def _fight_model(path: str | None):
     if path not in _models:
         import torch
         torch.set_num_threads(1)
-        from gary.agent.manifests import latest_command_model
+        from gary.agent.manifests import model_for
         from gary.policy.fight_cmd import load_fight_policy
         _models.clear()
-        _models[path] = load_fight_policy(path or latest_command_model(memory=True))
+        _models[path] = load_fight_policy(path or model_for("fight_cmd_memory", "TvZ", "T"))
     return _models[path]
 
 

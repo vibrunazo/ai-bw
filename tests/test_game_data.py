@@ -1,5 +1,5 @@
-"""Gary's Terran and Zerg tables (gary/terran.py, gary/zerg.py) against the game's own data: costs,
-footprints, supply.
+"""Gary's Terran, Zerg and Protoss tables (gary/terran.py, gary/zerg.py, gary/protoss.py) against the
+game's own data: costs, footprints, supply.
 
 A wrong cost is silent: the game refuses a build it can't pay for without a word, and Gary waits
 and orders it again (the Refinery said 75 minerals, the game's is 100: in about 40% of games gas
@@ -15,6 +15,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
+from gary import protoss as P  # noqa: E402
 from gary import terran as T  # noqa: E402
 from gary import zerg as Z  # noqa: E402
 
@@ -36,7 +37,7 @@ def test_tables_match_the_game():
         return
     with game:
         wrong = []
-        for R in (T, Z):
+        for R in (T, Z, P):
             pairs = getattr(R, "PAIRS", set())          # (Zerg: one order makes two, the table has the pair's)
             for ut, cost in R.COST.items():
                 info = game.unit_type_info(ut)

@@ -57,9 +57,9 @@ _belief = None
 def _belief_model():
     global _belief
     if _belief is None:
-        from gary.agent.manifests import model_path
+        from gary.agent.manifests import model_for
         from gary.policy.belief import BeliefModel
-        _belief = BeliefModel.load(model_path("belief/latest"))
+        _belief = BeliefModel.load(model_for("belief", "TvZ", "T"))
     return _belief
 
 

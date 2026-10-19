@@ -7,13 +7,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from gary import protoss as P
 from gary import terran as T
 from gary import zerg as Z
-
-# Protoss ids (gary/protoss.py when Gary plays it)
-NEXUS, ROBOTICS, GATEWAY, FORGE, CANNON, STARGATE = 154, 155, 160, 165, 166, 167
-CORSAIR, DARK_TEMPLAR, DARK_ARCHON, PROBE, ZEALOT, DRAGOON, HIGH_TEMPLAR, ARCHON = 60, 61, 63, 64, 65, 66, 67, 68
-SHUTTLE, SCOUT, ARBITER, CARRIER, REAVER, OBSERVER = 69, 70, 71, 72, 83, 84
 
 
 @dataclass(frozen=True)
@@ -31,14 +27,8 @@ ENEMY = {
                T.NAMES),
     "Z": Enemy("Z", frozenset(Z.TOWN_HALLS), frozenset(Z.TOWN_HALLS), frozenset({Z.SUNKEN, Z.SPORE}), frozenset(Z.ARMY),
                Z.NAMES),
-    "P": Enemy("P", frozenset({NEXUS}), frozenset({NEXUS, GATEWAY, ROBOTICS, STARGATE}), frozenset({CANNON}),
-               frozenset({CORSAIR, DARK_TEMPLAR, DARK_ARCHON, ZEALOT, DRAGOON, HIGH_TEMPLAR, ARCHON, SCOUT, ARBITER,
-                          CARRIER, REAVER}),
-               {NEXUS: "Nexus", ROBOTICS: "Robotics Facility", GATEWAY: "Gateway", FORGE: "Forge", CANNON: "Photon Cannon",
-                STARGATE: "Stargate", CORSAIR: "Corsair", DARK_TEMPLAR: "Dark Templar", DARK_ARCHON: "Dark Archon",
-                PROBE: "Probe", ZEALOT: "Zealot", DRAGOON: "Dragoon", HIGH_TEMPLAR: "High Templar", ARCHON: "Archon",
-                SHUTTLE: "Shuttle", SCOUT: "Scout", ARBITER: "Arbiter", CARRIER: "Carrier", REAVER: "Reaver",
-                OBSERVER: "Observer"}),
+    "P": Enemy("P", frozenset(P.TOWN_HALLS), frozenset(P.PRODUCTION), frozenset({P.CANNON}), frozenset(P.ARMY),
+               P.NAMES),
 }
 
 

@@ -85,7 +85,7 @@ def _belief_model(race: str = "T"):
         from gary.agent.manifests import _newest
         from gary.policy.belief import BeliefModel
         torch.set_num_threads(1)
-        _belief[race] = BeliefModel.load(_newest("belief", race=race))
+        _belief[race] = BeliefModel.load(_newest("belief", "TvZ", race))
     return _belief[race]
 
 
@@ -213,7 +213,7 @@ def main() -> None:
     keep = GameFilter.from_args(args)
     from gary.agent.manifests import _newest
     from gary.policy.macro import MacroModel
-    spec = MacroModel.load(str(_newest("macro", race=args.race))).spec
+    spec = MacroModel.load(str(_newest("macro", args.matchup, args.race))).spec
     run = REPO_ROOT / "runs" / "value" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
     run.mkdir(parents=True, exist_ok=True)
     src = Path(args.reuse) if args.reuse else run

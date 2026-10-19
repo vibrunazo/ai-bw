@@ -221,7 +221,7 @@ class RoleRules:
                     self._ground = False
         own = [u for u in obs["units"] if u["owner"] == g.slot]
         extra[:, 6:] = terrain_features(tags, positions, self._ground or None,
-                                        [(u["x"], u["y"]) for u in own if u["type"] == T.CC],
+                                        [(u["x"], u["y"]) for u in own if u["type"] in g.race.town_halls],
                                         [(u["x"], u["y"]) for u in own if u["type"] == T.BUNKER and u["completed"]],
                                         g.flip)
 
@@ -304,15 +304,15 @@ class RoleRules:
             vultures = [u for u in mine if u["type"] == VULTURE]
             mine = [u for u in mine if u["type"] != VULTURE]
             self.friends = _mid(mine) if mine else None
-            self.scvs = [(u["x"], u["y"]) for u in by_tag.values() if u["owner"] == g.slot and u["type"] == T.SCV]
+            self.scvs = [(u["x"], u["y"]) for u in by_tag.values() if u["owner"] == g.slot and u["type"] == g.race.worker]
             if not mine:
                 return self._skirmish(vultures, enemy, urgent=False)
         now = g.hi.frame
         mx, my = _mid(mine)
-        workers = [u for u in by_tag.values() if u["owner"] == g.slot and u["type"] == T.SCV
+        workers = [u for u in by_tag.values() if u["owner"] == g.slot and u["type"] == g.race.worker
                    and (u.get("order") in ATTACK or u["tag"] in g.pulled)]
         ours = sum(supply_x2(u["type"]) for u in mine + workers if math.dist((u["x"], u["y"]), (mx, my)) < NEAR)
-        home = any(u["owner"] == g.slot and u["type"] == T.CC and math.dist((u["x"], u["y"]), (mx, my)) < HOME
+        home = any(u["owner"] == g.slot and u["type"] in g.race.town_halls and math.dist((u["x"], u["y"]), (mx, my)) < HOME
                    for u in by_tag.values())
         theirs = sum(supply_x2(u["type"]) for u in enemy if math.dist((u["x"], u["y"]), (mx, my)) < NEAR)
         fresh = lambda u, role: not (self.told.get(u["tag"], ("", -10**9))[0] == role
@@ -321,8 +321,8 @@ class RoleRules:
                                  for e in enemy)
 
         # anchor: at home, units out in the open with zerg near fall back to the nearest anchor
-        anchors = [(u["x"], u["y"]) for u in by_tag.values() if u["owner"] == g.slot and u["type"] in (T.CC, T.BUNKER)
-                   and u["completed"]] if self.anchor and home else []
+        anchors = [(u["x"], u["y"]) for u in by_tag.values() if u["owner"] == g.slot
+                   and (u["type"] in g.race.town_halls or u["type"] == T.BUNKER) and u["completed"]] if self.anchor and home else []
         if anchors:
             out = [u for u in mine if min(math.dist((u["x"], u["y"]), a) for a in anchors) > ANCHOR_OUT
                    and any(math.dist((u["x"], u["y"]), (e["x"], e["y"])) < ANCHOR_DANGER for e in enemy)
@@ -553,7 +553,7 @@ class RoleRules:
         if built != self._gaps_for:
             fr = g.simcity._frontier_now(obs) if g.simcity is not None else None
             if fr is None:
-                ccs = [(u["x"], u["y"]) for u in obs["units"] if u["owner"] == g.slot and u["type"] == T.CC]
+                ccs = [(u["x"], u["y"]) for u in obs["units"] if u["owner"] == g.slot and u["type"] in g.race.town_halls]
                 fr = frontier(g.hi.game, obs, ccs, list(g.enemy_starts)) if ccs and g.enemy_starts else None
             self._gaps_for, self._frontier = built, fr
             self._gap_posts = [w["post"] for w in wall_gaps(g.hi.game, obs, g.slot, fr)] if fr and "inside" in fr else []
@@ -566,7 +566,7 @@ class RoleRules:
 
     def _post(self, by_tag: dict, at, enemy: list[dict]):
         """post: by the Command Center nearest the group, POST_FROM_CC toward the zerg (walkable)."""
-        ccs = [u for u in by_tag.values() if u["owner"] == self.g.slot and u["type"] == T.CC]
+        ccs = [u for u in by_tag.values() if u["owner"] == self.g.slot and u["type"] in self.g.race.town_halls]
         if not ccs:
             return None
         cc = min(ccs, key=lambda u: math.dist((u["x"], u["y"]), at))
@@ -877,7 +877,7 @@ class RoleLearned(RoleRules):
             decided[u["tag"]] = names[k]
             roles.setdefault(names[k].upper(), []).append(u)
         mx, my = _mid(mine)
-        home = any(u["owner"] == g.slot and u["type"] == T.CC and math.dist((u["x"], u["y"]), (mx, my)) < HOME
+        home = any(u["owner"] == g.slot and u["type"] in g.race.town_halls and math.dist((u["x"], u["y"]), (mx, my)) < HOME
                    for u in by_tag.values())
         fresh = lambda u, role: not (self.told.get(u["tag"], ("", -10**9))[0] == role
                                      and now - self.told[u["tag"]][1] < REPEAT)
@@ -953,7 +953,7 @@ class RoleAhead(RoleRules):
         if self.choice:                     # (the game's records: the roles chosen, the model's mean odds)
             from collections import Counter
             chosen = Counter(names[k] for k in self.choice.values())
-            LOG.decision("T", "roles", g.hi.frame, ", ".join(f"{r} {c}" for r, c in chosen.most_common()),
+            LOG.decision(g.hi.side, "roles", g.hi.frame, ", ".join(f"{r} {c}" for r, c in chosen.most_common()),
                          top=top(lambda k: names[k], probs[[index[t] for t in self.choice]].mean(0)),
                          inputs={"units": len(self.choice), "enemy": len(enemy)}, by="draw" if self.draw else "favorite",
                          then="orders: " + (", ".join(f"{r.lower()} {len(v)}" for r, v in groups.items()) or "none"))

@@ -14,7 +14,6 @@ import os
 import copy
 from pathlib import Path
 
-from gary import terran as T
 from gary.agent.army import LearnedArmy, WaveArmy
 from gary.agent.arbiter import DrillArbiter, FixedPriority
 from gary.agent.executor import ScriptedExecutor
@@ -323,87 +322,91 @@ MANIFESTS: dict[str, dict] = {
 
 # --- models ------------------------------------------------------------------------------------
 
-def _newest(kind: str, matchup: str = "TvZ", race: str = "T") -> Path:
+def _newest(kind: str, matchup: str, race: str) -> Path:
     found = sorted((REPO_ROOT / "runs" / kind).glob(f"{matchup}_{race}_*/model.pt"))
     if not found:
-        raise SystemExit(f"no trained {kind} model in runs/{kind} (python -m train.{kind} --race {race})")
+        raise SystemExit(f"no trained {kind} model for {race} in {matchup} in runs/{kind} "
+                         f"(python -m train.{kind} --matchup {matchup} --race {race})")
     return found[-1]
 
 
-def latest_macro_model() -> Path:
-    from gary.policy.macro import macro_model_path
-    return macro_model_path("TvZ", "T")
-
-
-def latest_army_model() -> Path:
-    return _newest("army")
-
-
-def latest_fight_model() -> Path:
-    """The newest per-unit fight model (gary/policy/fight.py)."""
-    return _newest("fight")
-
-
-def latest_command_model(memory: bool = False) -> Path:
+def _command_model(matchup: str, race: str, memory: bool) -> Path:
     """The newest fight command model, with or without memory of its own recent commands."""
     import torch
-    for path in sorted((REPO_ROOT / "runs" / "fight_cmd").glob("TvZ_T_*/model.pt"), reverse=True):
+    for path in sorted((REPO_ROOT / "runs" / "fight_cmd").glob(f"{matchup}_{race}_*/model.pt"), reverse=True):
         if torch.load(path, map_location="cpu", weights_only=True)["config"]["net"].get("memory", False) == memory:
             return path
-    raise SystemExit(f"no trained command model{' with memory' if memory else ''} in runs/fight_cmd "
-                     f"(python -m train.fight_cmd --race T{' --memory --data v3' if memory else ''})")
+    raise SystemExit(f"no trained command model{' with memory' if memory else ''} for {race} in {matchup} in "
+                     f"runs/fight_cmd (python -m train.fight_cmd --matchup {matchup} --race {race}"
+                     f"{' --memory --data v3' if memory else ''})")
 
 
-def latest_rl_fight_model() -> Path:
-    """v0.8's fight model, or (on a machine without it) the newest one trained by reinforcement
-    learning (runs/fight_cmd_rl)."""
-    if V08_FIGHT_MODEL.exists():
-        return V08_FIGHT_MODEL
-    found = sorted((REPO_ROOT / "runs" / "fight_cmd_rl").glob("*/model.pt"), key=lambda p: p.stat().st_mtime)
+def _tvz_terran(kind: str, matchup: str, race: str, find) -> Path:
+    """A kind trained for Gary-T in TvZ only (its runs aren't named by matchup)."""
+    if (matchup, race) != ("TvZ", "T"):
+        raise SystemExit(f"no {kind} model for {race} in {matchup}: there are only TvZ Terran ones (runs/{kind})")
+    found = find()
     if not found:
-        raise SystemExit("no RL-trained fight model in runs/fight_cmd_rl (python -m train.fight_cmd_rl)")
+        raise SystemExit(f"no trained {kind} model in runs/{kind}")
     return found[-1]
 
 
-def latest_role_model() -> Path:
-    """The newest role model (train/roles.py)."""
-    found = sorted((REPO_ROOT / "runs" / "roles").glob("*/model.pt"))
-    if not found:
-        raise SystemExit("no trained role model in runs/roles (python -m ingest.role_dataset, python -m train.roles)")
-    return found[-1]
+def _runs(kind: str, key=None) -> list[Path]:
+    return sorted((REPO_ROOT / "runs" / kind).glob("*/model.pt"), key=key)
 
 
-MODEL_PATHS = {"roles/latest": latest_role_model, "macro/latest": latest_macro_model, "army/latest": latest_army_model,
-               "fight/latest": latest_fight_model, "fight_cmd/latest": lambda: latest_command_model(False),
-               "fight_cmd/latest_memory": lambda: latest_command_model(True), "fight_cmd_rl/v08": latest_rl_fight_model,
-               "belief/latest": lambda: _newest("belief"), "plan/latest": lambda: _newest("plan"),
-               "army_rl/latest": lambda: _newest("army_rl"), "engage/latest": lambda: _newest("engage"),
-               "commit/latest": lambda: _newest("commit"),
-               "macro_rl/latest": lambda: sorted((REPO_ROOT / "runs" / "macro_rl").glob("*/model.pt"))[-1]}
+def model_for(kind: str, matchup: str, race: str) -> Path:
+    """The model of this kind a player of this race uses in this matchup: the race's shared model where
+    one covers the matchup (macro: gary.policy.macro.macro_model_path), else the matchup's own newest.
+    None for the matchup: SystemExit (a manifest then has to name a rules provider). Kinds: macro,
+    army, commit, engage, belief, plan, fight, army_rl, fight_cmd and fight_cmd_memory (the command model
+    without and with memory), and TvZ Terran's own roles, macro_rl and fight_cmd_rl (v0.8's fight
+    model, or else the newest trained by reinforcement learning)."""
+    if kind == "macro":
+        from gary.policy.macro import macro_model_path
+        return macro_model_path(matchup, race)
+    if kind in ("fight_cmd", "fight_cmd_memory"):
+        return _command_model(matchup, race, kind == "fight_cmd_memory")
+    if kind == "roles":
+        return _tvz_terran(kind, matchup, race, lambda: _runs("roles"))
+    if kind == "macro_rl":
+        return _tvz_terran(kind, matchup, race, lambda: _runs("macro_rl"))
+    if kind == "fight_cmd_rl":
+        return _tvz_terran(kind, matchup, race, lambda: [V08_FIGHT_MODEL] if V08_FIGHT_MODEL.exists() else
+                           _runs("fight_cmd_rl", key=lambda p: p.stat().st_mtime))
+    return _newest(kind, matchup, race)
 
 
-def _engage_model(m: dict):
+# a manifest's model references: "<kind>/latest", and these
+REFS = {"fight_cmd/latest_memory": "fight_cmd_memory", "fight_cmd_rl/v08": "fight_cmd_rl"}
+
+
+def _engage_model(g, m: dict):
     """The attack-or-hold model for the army layer (option engage; GARY_TENGAGE_MODEL pins it: the
     league loop's incumbent or candidate)."""
     ref = m["army"].get("engage")
     if not ref:
         return None
     from gary.policy.army import ArmyModel
-    return ArmyModel.load(os.environ.get("GARY_TENGAGE_MODEL") or model_path(ref))
+    return ArmyModel.load(os.environ.get("GARY_TENGAGE_MODEL") or model_path(ref, g.matchup, g.race.letter))
 
 
 def _learned_posture(g, m: dict, models: dict):
     """The plan policy deciding the posture's mode (gary/policy/plan.py; docs/CONTROL.md step 7)."""
     from gary.agent.posture import LearnedPosture
     from gary.policy.plan import PlanModel
-    model = PlanModel.load(model_path(m.get("plan_model", "plan/latest")))
+    model = PlanModel.load(model_path(m.get("plan_model", "plan/latest"), g.matchup, g.race.letter))
     g.plan_model = model.path            # (not in the start-of-game chat: one more line shifts the game)
     return LearnedPosture(g, model, m.get("plan_temperature", 0.0))
 
 
-def model_path(ref: str) -> Path:
-    """A manifest's model reference ("macro/latest", ...) or a checkpoint path."""
-    return MODEL_PATHS[ref]() if ref in MODEL_PATHS else Path(ref)
+def model_path(ref: str, matchup: str, race: str) -> Path:
+    """A manifest's model reference ("macro/latest", ...) for this matchup and race, or a checkpoint path."""
+    if ref in REFS:
+        return model_for(REFS[ref], matchup, race)
+    if ref.endswith("/latest"):
+        return model_for(ref[:-len("/latest")], matchup, race)
+    return Path(ref)
 
 
 def load_model(kind: str, path: str | Path):
@@ -719,9 +722,9 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     import torch
     torch.set_num_threads(1)       # its models are small: games run side by side (14 at once: 2.7x faster)
     m = manifest_of(manifest)
-    g = Gary(hi, mapinfo, m["version"], verbose)
-    g.army_types = set(T.ARMY)
-    g.production_types = T.PRODUCTION if mapinfo is not None else (T.CC,)
+    g = Gary(hi, mapinfo, m["version"], verbose, m.get("race", "T"))
+    g.army_types = set(g.race.army)
+    g.production_types = g.race.production if mapinfo is not None else tuple(g.race.town_halls)
     if flip is not None:
         g.flip = flip
     models: dict[str, str] = {}
@@ -744,7 +747,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     if m.get("defend_early") and hasattr(g.posture, "force_at"):
         g.posture.force_at = m["defend_early"]          # (option defend_early: the rush defense from then)
     if m["macro"] is not None:
-        path = model_path(m["macro"]["model"])
+        path = model_path(m["macro"]["model"], g.matchup, g.race.letter)
         macro = load("macro", str(path))
         models["macro"] = getattr(macro, "path", "?")
         builds = {k: c(g) for k, c in (("one_base_defense", OneBaseDefense), ("ling_flood_defense", LingFloodDefense))
@@ -770,12 +773,12 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.army = WaveArmy(g)
         else:
             pinned = os.environ.get("GARY_TCOMMIT_MODEL" if m["army"].get("commit") else "GARY_TARMY_MODEL")                 if m["army"].get("draw") else None                                               # (the league loop's)
-            army = load("army", pinned or str(model_path(m["army"]["model"])))
+            army = load("army", pinned or str(model_path(m["army"]["model"], g.matchup, g.race.letter)))
             models["army"] = getattr(army, "path", "?")
             belief = None
             if m["army"].get("belief") or m["army"].get("hunt_belief"):
                 from gary.policy.belief import BeliefModel
-                belief = BeliefModel.load(model_path(m["army"].get("belief") or "belief/latest"))
+                belief = BeliefModel.load(model_path(m["army"].get("belief") or "belief/latest", g.matchup, g.race.letter))
                 models["belief"] = belief.path
             g.army = LearnedArmy(g, army, PullRule(g) if m["army"].get("pull") else None, hunt=m["army"].get("hunt", False),
                                  scan=m["army"].get("scan", False), belief=belief,
@@ -783,7 +786,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                  home_guard=m["army"].get("home_guard", False),
                                  belief_hold=bool(m["army"].get("belief")), hunt_belief=m["army"].get("hunt_belief", False),
                                  hold_moves=m["army"].get("hold_moves", True), hold_margin=m["army"].get("hold_margin"),
-                                 draw=m["army"].get("draw", False), engage=_engage_model(m),
+                                 draw=m["army"].get("draw", False), engage=_engage_model(g, m),
                                  commit=m["army"].get("commit", False), commit_act=m["army"].get("commit_act"))
             g.army.commit_floor = m["army"].get("commit_floor")
     if m["fight"] is not None:
@@ -793,10 +796,10 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             models["fight"] = "roles/rules_v1"   # (the chat says so: as many lines as with a model)
         elif f["provider"] in ("roles", "role_override", "role_ahead"):
             from gary.policy.roles import RoleModel
-            fight = fight_model or RoleModel.load(fight_path or model_path(f["model"]))
+            fight = fight_model or RoleModel.load(fight_path or model_path(f["model"], g.matchup, g.race.letter))
             models["fight"] = fight.path
         else:
-            fight = fight_model or load("fight", str(fight_path or model_path(f["model"])))
+            fight = fight_model or load("fight", str(fight_path or model_path(f["model"], g.matchup, g.race.letter)))
             models["fight"] = getattr(fight, "path", "?")
         rule = lambda r: RULES[r](g, **f.get("rule_options", {}).get(r, {}))
         g.fight = FightLayer(g, fight, f["provider"], [rule(r) for r in f.get("before", [])],

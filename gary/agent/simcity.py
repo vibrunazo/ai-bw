@@ -95,7 +95,7 @@ class SimCity:
                     bx0, by0, bx1, by1 = fp.box_at_tile(unit_type, tx, ty)
                     if not line[max(0, by0 - y0):max(0, by1 - y0 + 1), max(0, bx0 - x0):max(0, bx1 - x0 + 1)].any():
                         continue
-                    if any(abs(tx - rx) < T.SIZE[rt][0] and abs(ty - ry) < T.SIZE[rt][1] for rt, rx, ry in g.reserved):
+                    if any(abs(tx - rx) < g.race.sizes[rt][0] and abs(ty - ry) < g.race.sizes[rt][1] for rt, rx, ry in g.reserved):
                         continue
                     if not g.executor.fits(unit_type, tx, ty, builder):
                         continue
@@ -112,7 +112,7 @@ class SimCity:
                         best = (score, (tx, ty))
         if best is None:
             return None
-        g.say(f"sim city: {T.NAMES.get(unit_type, unit_type)} in the wall"
+        g.say(f"sim city: {g.race.names.get(unit_type, unit_type)} in the wall"
               + (", closing it" if best[0][0] == 0 else ""))
         return best[1]
 
@@ -122,9 +122,9 @@ class SimCity:
         from gary.walls import frontier
         g = self.g
         mine = [u for u in obs["units"] if u["owner"] == g.slot]
-        key = frozenset((u["tag"], u["type"]) for u in mine if u["type"] in T.SIZE) | frozenset(g.reserved)
+        key = frozenset((u["tag"], u["type"]) for u in mine if u["type"] in g.race.sizes) | frozenset(g.reserved)
         if key != self._for:
-            bases = [(u["x"], u["y"]) for u in mine if u["type"] == T.CC]
+            bases = [(u["x"], u["y"]) for u in mine if u["type"] in g.race.town_halls]
             if g.natural is not None and not any(math.dist(b, g.natural.center) < 4 * 32 for b in bases):
                 bases.append(g.natural.center)                         # (where it will expand)
             self._for = key

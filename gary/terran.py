@@ -14,6 +14,7 @@ CC, COMSAT, NUKE_SILO, DEPOT, REFINERY, RAX, ACADEMY, FACTORY, STARPORT = 106, 1
 CONTROL_TOWER, SCIENCE_FACILITY, COVERT_OPS, PHYSICS_LAB, MACHINE_SHOP = 115, 116, 117, 118, 120
 EBAY, ARMORY, TURRET, BUNKER = 122, 123, 124, 125
 GEYSER = 188
+TOWN_HALLS = {CC}
 
 COST = {  # (minerals, gas)
     SCV: (50, 0), MARINE: (50, 0), FIREBAT: (50, 25), MEDIC: (50, 25), GHOST: (25, 75),
@@ -34,7 +35,6 @@ SIZE = {  # footprint in tiles
 ADDON_PARENT = {COMSAT: CC, NUKE_SILO: CC, MACHINE_SHOP: FACTORY, CONTROL_TOWER: STARPORT,
                 PHYSICS_LAB: SCIENCE_FACILITY, COVERT_OPS: SCIENCE_FACILITY}
 ADDON_OFFSET = (4, 1)        # an add-on's top-left tile, from its parent's top-left tile
-ORDER_PLACE_ADDON = 0x24
 
 # what must exist (completed) before something can be made
 REQUIRES = {
@@ -91,7 +91,4 @@ UPGRADE_NAMES = {0: "Infantry Armor", 7: "Infantry Weapons", 1: "Vehicle Plating
 
 SUPPLY = {SCV: 1, MARINE: 1, FIREBAT: 1, MEDIC: 1, GHOST: 1, VULTURE: 2, TANK: 2, GOLIATH: 2,
           WRAITH: 2, DROPSHIP: 2, VESSEL: 2, VALKYRIE: 3, BC: 6}
-
-# unit orders (the game's order ids) that tell what a unit is doing
-ORDER_RESEARCH, ORDER_UPGRADE, ORDER_BUILD_ADDON = 75, 76, 37
-GAS_ORDERS = {81, 82, 83, 84}             # moving to / waiting for / harvesting / returning gas
+SUPPLY_PROVIDED = {DEPOT: 8, CC: 10}

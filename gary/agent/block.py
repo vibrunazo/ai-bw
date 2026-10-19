@@ -190,7 +190,7 @@ class ChokeBlock:
             for u in army:
                 pool[u["type"]] = pool.get(u["type"], 0) + 1
             if c.workers and c.workers_from is not None:
-                pool[T.SCV] = c.workers
+                pool[g.race.worker] = c.workers
             seen = {"units": [u for u in obs["units"] if u["owner"] in (g.slot, 11)]}
             self.plan = block(g.hi.game, seen, c.outside, c.inside, pool, through=c.through, walker=c.walker) or \
                 {"units": [], "behind": c.inside, "ends": (c.inside, c.inside)}
@@ -202,7 +202,7 @@ class ChokeBlock:
         for i, (kind, x, y) in enumerate(spots):
             if i in taken:
                 continue
-            pool = [u for u in (army if kind != T.SCV else [by_tag[t] for t in self.workers]) if u["type"] == kind
+            pool = [u for u in (army if kind != g.race.worker else [by_tag[t] for t in self.workers]) if u["type"] == kind
                     and u["tag"] not in self.slot_of]
             if pool:
                 u = min(pool, key=lambda u: math.dist((u["x"], u["y"]), (x, y)))
@@ -247,9 +247,9 @@ class ChokeBlock:
         if busy:                              # its last order still being given: let it finish
             return False
         # 2. workers for the block's worker spots: any from the mineral line, to the block (one order)
-        need = sum(1 for kind, _, _ in spots if kind == T.SCV) - len(self.workers)
+        need = sum(1 for kind, _, _ in spots if kind == g.race.worker) - len(self.workers)
         if need > 0 and not coming and c.workers_from is not None:
-            free = sorted((u for u in mine if u["type"] == T.SCV and u["completed"] and u["tag"] != g.scout
+            free = sorted((u for u in mine if u["type"] == g.race.worker and u["completed"] and u["tag"] != g.scout
                            and u["tag"] not in g.pulled and u["tag"] not in self.workers
                            and u["tag"] not in g.block_units and u["order"] in HARVEST_ORDERS | {3}
                            and math.dist((u["x"], u["y"]), c.workers_from) < WORKERS_FROM),
@@ -320,14 +320,14 @@ def features(g, obs: dict, choke: Choke, width: float = 0.0) -> dict:
     at = [b for b in bunkers if dist(b, mid) < CLOSE]
     loaded = lambda bs: sum(len(g.loaded.get(b["tag"], ())) for b in bs)
     return {"minutes": obs["frame"] / 24 / 60,
-            "bases": sum(1 for u in mine if u["type"] == T.CC),
+            "bases": sum(1 for u in mine if u["type"] in g.race.town_halls),
             "enemy_near": sup([e for e in enemy if dist(e, mid) < NEAR]),
             "enemy_close": sup([e for e in enemy if dist(e, mid) < CLOSE]),
             "enemy_in": sup([e for e in enemy if dist(e, choke.inside) < d_mid - LOST]),
             "enemy_dist": min((dist(e, mid) for e in enemy), default=NEAR * 2) / 32,
             "own_army": sup([u for u in army if dist(u, choke.units_at) <= choke.units_reach]),
             "own_at_choke": sup([u for u in army if dist(u, mid) < CLOSE]),
-            "workers": sum(1 for u in mine if u["type"] == T.SCV),
+            "workers": sum(1 for u in mine if u["type"] == g.race.worker),
             "bunkers_at": len(at), "loaded_at": loaded(at),
             "bunkers_else": len(bunkers) - len(at), "loaded_else": loaded(bunkers) - loaded(at),
             "width": width / 32}

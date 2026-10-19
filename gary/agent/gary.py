@@ -16,6 +16,8 @@ from typing import Callable
 
 from gary.interface import HumanInterface, screen_of
 from gary.mapinfo import Base, MapInfo
+from gary.race import Race, matchup_of
+from gary.races import enemy_of
 
 LOC_MAIN, LOC_NATURAL = 2, 3          # F2, F3: saved screens
 IN_FLIGHT = 48                        # frames an order's money counts as spent before the game shows it
@@ -37,10 +39,16 @@ class Task:
 class Gary:
     """Built by gary.agent.manifests.build_gary; act() once per step, between hi.step() calls."""
 
-    def __init__(self, hi: HumanInterface, mapinfo: MapInfo | None, version: str, verbose: bool = True):
+    def __init__(self, hi: HumanInterface, mapinfo: MapInfo | None, version: str, verbose: bool = True,
+                 race: str = "T"):
         self.hi = hi
         self.map = mapinfo
         self.slot = hi.slot
+        # the race it plays (gary/race.py) and the matchup, from the game's players (none without an
+        # opponent: drills)
+        self.race = Race.of(race)
+        self.matchup = matchup_of(hi.game.observe()["players"], self.slot, race)   # (the lobby: public)
+        self.enemy = enemy_of(self.matchup, race) if self.matchup else None
         self.version = version
         self.verbose = verbose
         self.task: Task | None = None
@@ -99,7 +107,7 @@ class Gary:
         self.flip = (False, False)                       # mirror so the main is top-left (fight models)
         if mapinfo is not None:
             obs = hi.observe()
-            cc = next(u for u in obs["units"] if u["owner"] == self.slot and u["type"] == 106)
+            cc = next(u for u in obs["units"] if u["owner"] == self.slot and u["type"] in self.race.town_halls)
             self.main = mapinfo.base_near((cc["x"], cc["y"]))
             self.natural = mapinfo.natural_of(self.main)
             self.enemy_starts = mapinfo.enemy_starts(self.main) or mapinfo.starts
@@ -148,7 +156,7 @@ class Gary:
 
     def say(self, text: str) -> None:
         from gary.decision_log import LOG
-        LOG.note("T", self.hi.frame, text)                  # (the game's records, read with eval/why.py)
+        LOG.note(self.hi.side, self.hi.frame, text)                  # (the game's records, read with eval/why.py)
         if self.verbose:
             s = self.hi.frame // 24
             print(f"  {s // 60}:{s % 60:02d} Gary {text}", flush=True)
@@ -162,9 +170,9 @@ class Gary:
         """Minerals spoken for: buildings ordered but not started, the parked build, and units and
         research ordered in the last 2 s (the game takes them a moment later: two marines each
         checked against the same 472 minerals took a Command Center's 400 as its SCV arrived)."""
-        from gary.terran import COST
+        costs = self.race.costs
         self.in_flight = [(f, c) for f, c in self.in_flight if self.hi.frame - f < IN_FLIGHT]
-        return sum(COST[ut][0] for ut, *_ in self.reserved) + (COST[self.parked.unit_type][0] if self.parked else 0) \
+        return sum(costs[ut][0] for ut, *_ in self.reserved) + (costs[self.parked.unit_type][0] if self.parked else 0) \
             + sum(c for _, c in self.in_flight)
 
     def spend(self, minerals: int) -> None:

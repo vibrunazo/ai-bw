@@ -32,7 +32,7 @@ import torch.nn.functional as F
 
 from eval import scenarios as S
 from gary.agent.fight import DEST_NOISE
-from gary.agent.manifests import latest_fight_model
+from gary.agent.manifests import model_for
 from gary.policy.fight import ACTIONS, DEST_SCALE, FightModel, tensors
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -163,7 +163,7 @@ def main() -> None:
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    init = Path(args.init or latest_fight_model())
+    init = Path(args.init or model_for("fight", "TvZ", "T"))
     model = FightModel.load(init, device)
     ref = FightModel.load(init, device).net.eval()
     for p in ref.parameters():

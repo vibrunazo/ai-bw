@@ -104,7 +104,7 @@ class Answers:
         minerals) until every mineral line has its own (human game 2: the model's turrets went up in the
         main's back while the user's mutas killed SCVs in the natural's and main's mineral lines)."""
         if self.plan == "lurkers" and act == BUILD and uid == T.TURRET:
-            bases = sum(1 for u in mine if u["type"] == T.CC)
+            bases = sum(1 for u in mine if u["type"] in self.g.race.town_halls)
             return self.g.macro.count(mine, T.TURRET) < LURKER_TURRETS_PER_BASE * max(1, bases)
         if self.plan == "mutas" and self.mutas and act == BUILD and uid == T.TURRET and not self._answering                 and "near" not in (self.g.macro.goal or {}):        # (the answer's own goal, carried out)
             return not self._lines_short(mine)
@@ -116,7 +116,7 @@ class Answers:
         g = self.g
         enemy = getattr(g.army, "enemy_main", None) or (g.enemy_starts[0] if len(g.enemy_starts) == 1 else None)
         out = []
-        for cc in (u for u in mine if u["type"] == T.CC and u["completed"]):
+        for cc in (u for u in mine if u["type"] in g.race.town_halls and u["completed"]):
             base = g.map.base_near((cc["x"], cc["y"]))
             if not base.minerals or math.dist(base.center, (cc["x"], cc["y"])) > 6 * 32:
                 continue                         # (a CC away from a base: floating, or not settled)
@@ -142,7 +142,7 @@ class Answers:
             if not isinstance(plan, dict) or plan.get("kind") == "wait":
                 continue                     # (not possible, or not now: a research underway, a busy Factory)
             self.asked[(act, uid)] = f
-            name = (T.TECH_NAMES.get(uid) if act == RESEARCH else T.NAMES.get(uid)) or str(uid)
+            name = (g.race.tech_names.get(uid) if act == RESEARCH else g.race.names.get(uid)) or str(uid)
             return {"act": act, "id": uid, "p": 1.0, "since": f, "name": f"{name} (against {self.plan})"}
         if self.plan == "mutas" and self.mutas:
             return self.turret_goal(obs, mine, done, me)

@@ -27,6 +27,7 @@ def test_default_gary_macro_basics():
     except Exception as e:                      # no game data or env DLL here
         print(f"skip: {e}")
         return
+    from gary import orders as O
     from gary import terran as T
     said = []
     m.gary.say = said.append
@@ -36,7 +37,7 @@ def test_default_gary_macro_basics():
         if m.game.frame % 24 < 2:
             o = m.game.observe()
             gas_seen = max(gas_seen, sum(1 for u in o["units"] if u["owner"] == m.slot["T"] and u["type"] == T.SCV
-                                         and u["order"] in T.GAS_ORDERS))
+                                         and u["order"] in O.GAS_ORDERS))
     o = m.game.observe()
     mine = [u for u in o["units"] if u["owner"] == m.slot["T"]]
     count = lambda t: sum(1 for u in mine if u["type"] == t)

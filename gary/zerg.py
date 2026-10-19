@@ -45,6 +45,9 @@ UNIT_MORPH = {LURKER: HYDRALISK, GUARDIAN: MUTALISK, DEVOURER: MUTALISK}
 BUILDING_MORPH = {LAIR: HATCHERY, HIVE: LAIR, GREATER_SPIRE: SPIRE, SUNKEN: CREEP, SPORE: CREEP}
 DRONE_BUILDS = {HATCHERY, POOL, EXTRACTOR, DEN, SPIRE, QUEENS_NEST, EVO, ULTRA_CAVERN, DEFILER_MOUND,
                 CREEP, NYDUS}
+# unit -> what makes it: a town hall's larvae (any town hall's), or the unit it morphs from
+PRODUCER = {**{u: HATCHERY for u in FROM_LARVA}, **UNIT_MORPH}
+PRODUCTION = TOWN_HALLS                    # (every larva comes from one)
 
 # what must exist (completed) before something can be made; a Lair or Hive counts as a Hatchery,
 # a Hive as a Lair (HAS_TECH below), a Greater Spire as a Spire

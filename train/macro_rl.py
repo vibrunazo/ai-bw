@@ -168,8 +168,8 @@ def main() -> None:
     gains = np.array([r["branch"]["net"] - r["base"]["net"] for r in rows])
     print(f"{len(rows)} pairs: the other decision better {np.mean(gains > 0):.0%}, worse {np.mean(gains < 0):.0%}, "
           f"mean {gains.mean():+.0f}")
-    from gary.agent.manifests import model_path
-    train(rows, str(model_path("macro/latest")), run)
+    from gary.agent.manifests import model_for
+    train(rows, str(model_for("macro", "TvZ", "T")), run)
 
 
 if __name__ == "__main__":
