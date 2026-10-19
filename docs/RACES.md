@@ -99,7 +99,8 @@ turrets and bunkers), so a ZvZ game is the first thing that breaks it.
    Still open: Gary-Z reads the matchup from the launcher, not the lobby; the pro-history table
    and plans exist for ZvZ without build styles (no taxonomy yet); TvT Gary-T vs Gary-T has not
    been played (the manifests' TvZ default and roles' Zerg prey kinds will show there).
-2. **Modern replays** when the cwal.gg download lands: inventory, `run_batch.py --remastered`,
+2. **Modern replays** (the first pack landed 2026-10-18: docs/DATA_ERAS.md has the comparison and the
+   recipe) when more arrive: inventory, `run_batch.py --remastered`,
    datasets per matchup, then retrain `--era modern` against mixed and judge both on the league
    and on the humanlikeness gap measured against modern pros. The pro reference for economy and
    humanlikeness moves to the modern games.

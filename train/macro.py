@@ -151,7 +151,8 @@ def load_split(jobs: list, spec: FeatureSpec, workers: int) -> dict:
             parts[job[3]].append(res)
     out = {}
     for held, rs in parts.items():
-        out["test" if held else "train"] = tuple(np.concatenate([r[k] for r in rs]) for k in range(5))
+        if rs:                                      # (an evaluation may pass held-out jobs alone)
+            out["test" if held else "train"] = tuple(np.concatenate([r[k] for r in rs]) for k in range(5))
     return out
 
 
