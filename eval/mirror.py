@@ -5,7 +5,8 @@ train it with --matchup ZvZ --race Z). Both sides' POVs and the shared decision 
 next to the replay (eval/why.py reads them). Prints who is ahead every 30 s and the result.
 
 Usage:
-  python -m eval.mirror --map "D:/docs/StarCraft/Maps/(4)Fighting Spirit.scx" --seed 5001 --minutes 20
+  python -m eval.mirror --map tests/fixtures/replays/stardata_tvz_standard_ozp3w.rep --seed 5001 --minutes 20
+  python -m eval.mirror --map "<your StarCraft folder>/Maps/(4)Fighting Spirit.scx" --seed 5001
 """
 
 from __future__ import annotations
