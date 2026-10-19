@@ -602,8 +602,25 @@ plan and the full log).
   - building placement: buildings spread out, no packed depots: by late game no room to build or to move.
   Also: the start must focus the human's client before the countdown ends (auto_game.py --start
   --focus-after PID).
-- **Next:** worker management (idle SCVs, transfers, pulls); the attack's execution (regroup, retreat, call
-  off); production against turrets; then mutalisk vision, vessels, building placement, late game.
+- **Workers off their work (L9 against L6, 48 games, 2026-10-19).** A new humanlike feature,
+  `workers_off`: the share of workers neither mining, building nor repairing while no enemy fighter is
+  within 8 tiles (walking, standing, following or attacking all count; idle alone had read 9% and missed
+  most of it), and `workers_off_3`, the share of minutes with 3 or more such workers. Three causes, found
+  from the records and the replays:
+  - a mining task whose minerals were off screen right-clicked them on the minimap: a move, and the
+    workers stood idle by the field (41 of 188 mining tasks in human game 4); transfers did the same;
+  - a selection box that caught miners standing stacked at the field was refused and retried (39);
+  - a right-click on a field's middle hit an SCV standing there and became a follow order (a quarter of
+    the off time in a test game).
+  Now the camera goes to the base first and the field is right-clicked on its far side from the town hall
+  (gary/agent/executor.py `_mine_gather`, `field_click`), a box with miners in it is accepted, and a base
+  stays off-limits 60 s after zerg fighters were seen there (20 s let mutalisks that hid and came back
+  draw the main's workers under them). Against modern pros (their workers_off 7% at 8-10 minutes, 9% at
+  11-14, 14% at 15-20): Gary-T 18% / 23% / 30% before, 9% / 11% / 13% after; minutes with 3+ off at 8-10,
+  100% before, 60% after (pros 43%). Gary-T won 30 (21), lost none (2); gap score 0.27 (0.29).
+- **Next:** the one-Gary refactor (docs/REFACTOR.md); then the attack's execution (regroup, retreat, call
+  off); production against turrets; then mutalisk vision, vessels, building placement (a later phase in
+  docs/REFACTOR.md), late game.
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
 

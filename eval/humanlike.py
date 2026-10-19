@@ -56,6 +56,12 @@ PRO_MIN_S = 600
 MAPS = ("python", "fighting spirit", "heartbreak")
 MODERN_MAP_MIN = 20             # modern pros: a ladder map with at least this many TvZ games of the race
 IDLE = {2, 3}                   # Guard, PlayerGuard: standing
+# a worker at work: to, at, mining or returning minerals or gas (79-91), placing or constructing a building (30,
+# 31, 33), walking to repair or repairing (35, 34), a drone morphing into a building (25), stepping out of a stack at
+# the minerals (151, ResetHarvestCollision); any other order, walking, standing, following or attacking, is a worker
+# off its work. Counted only while safe (no enemy fighter within SAFE_PX): pulled against a raid is work
+WORKING = set(range(79, 92)) | {25, 30, 31, 33, 34, 35, 151}
+SAFE_PX = 8 * 32
 GAS = {81, 82, 83, 84}
 NEUTRAL = 11
 ALONE = 4 * 32
@@ -109,7 +115,7 @@ def _names(race: str) -> list[str]:
     r = RACES[race]
     kinds = sorted(set(r["fighters"].values()) | set(r["others"].values()))
     return (["minute", "workers", "halls", "supply_used", "supply_max", "blocked", "minerals", "gas",
-             "workers_idle", "workers_gas", "army_supply", "army_standing", "orders_per_fighter",
+             "workers_idle", "workers_gas", "workers_off", "workers_off_3", "army_supply", "army_standing", "orders_per_fighter",
              "army_home", "army_field", "army_enemy", "army_alone", "army_spread", "army_gone",
              "threatened", "threat_met", "response_s",
              "fighting", "hit_standing", "moving_between_shots", "harass_response_s", "harass_hp_lost",
@@ -180,6 +186,13 @@ def features(path: str, race: str, minutes: int = MINUTES, end: int | None = Non
             acc["gas"] += me["gas"]
             acc["workers_idle"] += sum(1 for u in workers if u["order"] in IDLE) / max(1, len(workers))
             acc["workers_gas"] += sum(1 for u in workers if u["order"] in GAS) / max(1, len(workers))
+            # workers off their work while nothing threatens them (the user, human game 4: "a few workers that
+            # should have been mining" half the time; idle alone missed the walking and the attacking)
+            danger = [(u["x"], u["y"]) for u in foes if u["type"] in FIGHTERS_ANY]
+            safe = [u for u in workers if not any(abs(u["x"] - x) < SAFE_PX and abs(u["y"] - y) < SAFE_PX for x, y in danger)]
+            off = sum(1 for u in safe if u["order"] not in WORKING)
+            acc["workers_off"] += off / max(1, len(workers))
+            acc["workers_off_3"] += off >= 3
             # the army
             now = {u["tag"]: R["supply"](u["type"]) for u in fight}
             acc["army_gone"] += sum(s for t, s in prev_fight.items() if t not in now)
@@ -401,7 +414,7 @@ def _spread(units: list[dict]) -> float:
 
 
 def _fresh() -> dict:
-    return {"n": 0, "fight_n": 0, "blocked": 0, "minerals": 0, "gas": 0, "workers_idle": 0, "workers_gas": 0,
+    return {"n": 0, "fight_n": 0, "blocked": 0, "minerals": 0, "gas": 0, "workers_idle": 0, "workers_gas": 0, "workers_off": 0, "workers_off_3": 0,
             "army_gone": 0, "army_standing": 0, "changes": 0, "fighter_samples": 0, "army_home": 0,
             "army_enemy": 0, "army_field": 0, "army_alone": 0, "army_spread": 0, "threatened": 0, "met": 0,
             "responses": [], "ticks": 0, "fight_ticks": 0, "hit": 0, "hit_standing": 0, "reloading": 0,
@@ -415,7 +428,8 @@ def _row(minute: int, acc: dict, me: dict, mine: list, workers: list, fight: lis
     row.update(minute=minute, workers=len(workers), halls=sum(1 for u in mine if u["type"] in R["halls"]),
                supply_used=me["supply_used"], supply_max=me["supply_max"], blocked=acc["blocked"] / n,
                minerals=acc["minerals"] / n, gas=acc["gas"] / n, workers_idle=acc["workers_idle"] / n,
-               workers_gas=acc["workers_gas"] / n, army_supply=sum(R["supply"](u["type"]) for u in fight),
+               workers_gas=acc["workers_gas"] / n, workers_off=acc["workers_off"] / n,
+               workers_off_3=acc["workers_off_3"] / n, army_supply=sum(R["supply"](u["type"]) for u in fight),
                army_gone=acc["army_gone"],
                army_standing=acc["army_standing"] / fn if fn else nan,
                orders_per_fighter=acc["changes"] / acc["fighter_samples"] * (1440 / SAMPLE) if acc["fighter_samples"] else nan,
@@ -553,7 +567,7 @@ def auc_by_minute(y, p, minute) -> dict[int, float]:
 
 
 BY_LABEL = ("army_home", "army_field", "army_enemy", "army_standing", "army_alone", "orders_per_fighter", "army_supply",
-            "workers")                       # (the features shown per label when several are compared)
+            "workers", "workers_off", "workers_off_3")  # (the features shown per label when several are compared)
 
 
 def main() -> None:

@@ -31,7 +31,9 @@ FIGHT_CALM = 10 * 24                          # home_scvs: pulled or attack-movi
 SATURATED, UNDER = 1.8, 1.0                   # balance: workers a mineral patch at a base that gives some away,
                                               # and at one that takes them
 TRANSFER_EVERY = 10 * 24                      # balance: bases' saturation looked at this often
-DANGER_FOR = 20 * 24                          # balance: a base with zerg fighters seen near this recently isn't sent to
+DANGER_FOR = 60 * 24                          # balance: a base with zerg fighters seen near this recently isn't sent to
+                                              # (20 s let mutalisks that hit, hid in the fog and came back draw the main's
+                                              # workers to the natural under them: human game 4)
 GATHERING = set(range(79, 92))                # orders: to, at, mining and returning minerals or gas
 ZERG_FIGHTERS = {37, 38, 39, 43, 103, 46, 47, 44, 45, 62}
 ATTACK_MOVE_ORDER, PATROL_ORDER = 14, 152
@@ -67,6 +69,15 @@ CREEP_BUILDINGS = {131, 132, 133, 143, 144, 146}   # Hatchery, Lair, Hive, Creep
 CREEP_RX, CREEP_RY = 320, 200         # creep spreads up to this far from one (pixels, an ellipse; OpenBW's
                                       # spread_creep), a tile every few seconds
 
+
+
+def field_click(obs: dict, field: tuple[int, int], hall: tuple[int, int]) -> tuple[int, int]:
+    """Where to right-click a mineral field to gather from it: its far side from the town hall, where no miner
+    stands (a click on its middle hit an SCV standing there and became a follow order: a quarter of the time
+    workers were off their work in a test game)."""
+    dx, dy = field[0] - hall[0], field[1] - hall[1]
+    d = math.hypot(dx, dy) or 1
+    return screen_of(obs, field[0] + dx / d * 12, field[1] + dy / d * 6) or screen_of(obs, *field)
 
 
 def _to_segment(p: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -359,8 +370,8 @@ class ScriptedExecutor:
         return True
 
     def _task_transfer(self, obs: dict, mine: list[dict], t: Task) -> None:
-        """A box around the chosen workers (at their mineral line), then a minimap right-click on the
-        other base's minerals."""
+        """A box around the chosen workers (at their mineral line), then the camera to the other base and a
+        right-click on one of its mineral fields: a gather order (a minimap right-click is a move)."""
         g, hi = self.g, self.g.hi
         tags = set(t.data["tags"])
         workers = [u for u in mine if u["tag"] in tags]
@@ -381,10 +392,21 @@ class ScriptedExecutor:
             t.stage = "send"
             return
         sel = [u for u in mine if u["tag"] in obs["selection"]]
-        if sel and all(u["type"] == SCV for u in sel) and len(sel) >= 2:
-            base = next(b for b in g.map.bases if b.center == tuple(t.data["to"]))
-            hi.minimap_right_click(*min(base.minerals, key=lambda m: math.dist(m, base.center)))
+        base = next(b for b in g.map.bases if b.center == tuple(t.data["to"]))
+        if t.stage == "gather":                       # (the camera at the base: its field, a gather order)
+            fields = [m for m in base.minerals if screen_of(obs, *m)]
+            if fields and sel:
+                hi.right_click(*field_click(obs, min(fields, key=lambda m: math.dist(m, base.center)), base.center))
+            elif sel:
+                hi.minimap_right_click(*min(base.minerals, key=lambda m: math.dist(m, base.center)))
             g.task = None
+            return
+        if sel and all(u["type"] == SCV for u in sel) and len(sel) >= 2:
+            # the camera to the other base, the field clicked next turn: a minimap right-click on its minerals
+            # was a move, and the workers stood idle there (human game 4: "SCVs mining fine on one base go stand
+            # idle in the main for no reason")
+            hi.camera_minimap(*base.center)
+            t.stage = "gather"
             return
         t.stage = "start"
         t.data["tries"] = t.data.get("tries", 0) + 1
@@ -415,9 +437,16 @@ class ScriptedExecutor:
             w = next(u for u in mine if u["tag"] == t.data["worker"])
             center = g.base(t.where).center
             walking = w["order"] == MOVE and math.dist((w.get("tx", 0), w.get("ty", 0)), center) < 6 * 32
-            if (math.dist((w["x"], w["y"]), center) > 6 * 32 and g.hi.frame - t.data["walking"] < TRAVEL_FOR
-                    and (walking or g.hi.frame - t.data["walking"] < 2 * 24)):
+            far = math.dist((w["x"], w["y"]), center) > 6 * 32
+            if far and g.hi.frame - t.data["walking"] < TRAVEL_FOR and (walking or g.hi.frame - t.data["walking"] < 2 * 24):
                 return False                                  # (stopped short: back to it now, to send it again)
+            if far and g.hi.frame - t.data["walking"] >= TRAVEL_FOR:
+                # not there after TRAVEL_FOR: the build fails and the macro layer decides again (the hands
+                # taken back for it waited 40 s more on an SCV pacing behind marines posted on the ramp,
+                # and the Refinery asked for meanwhile was given up twice)
+                g.parked = None
+                self.fail_build(t, "its SCV didn't get to the base")
+                return False
         else:
             budget = obs["me"]["minerals"] - sum(COST[ut] for ut, *_ in g.reserved)
             if budget < COST[t.unit_type] and g.hi.frame - t.data["walking"] < PARK_FOR:
@@ -879,6 +908,8 @@ class ScriptedExecutor:
         """Select idle workers (drag box around them, or a click) and right-click a mineral field."""
         g, hi = self.g, self.g.hi
         tags = set(t.data["tags"])
+        if t.stage == "gather":                           # (the camera moved to the base: the workers may be off
+            return self._mine_gather(obs, mine, t, tags)  # screen now, still selected)
         workers = [u for u in mine if u["tag"] in tags and screen_of(obs, u["x"], u["y"])]
         if not workers:
             g.task = None
@@ -899,8 +930,10 @@ class ScriptedExecutor:
             t.stage = "send"
             return
         # the box may have caught busy workers too (e.g. one walking off to build): never send
-        # those back to mining; select an idle one with a click instead
-        if not obs["selection"] or not set(obs["selection"]) <= tags:
+        # those back to mining; select an idle one with a click instead. Miners in it are fine: a gather
+        # order keeps them gathering (on the current ladder maps miners stand stacked, every box caught
+        # some, and 39 of 188 mining tasks in human game 4 ended without one order)
+        if not obs["selection"] or not self._mine_selection_ok(obs, mine, tags):
             if t.stage == "send":
                 t.stage = "click"
                 hi.click(*hi.aim(obs, workers[0]))
@@ -924,17 +957,44 @@ class ScriptedExecutor:
                 t.data["added"] = t.data.get("added", 0) + 1
                 hi.click(*hi.aim(obs, more[0]), shift=True)
                 return
-        # the closest mineral field to the Command Center of the nearest base Gary owns (a field
-        # at a base without a Command Center means a long walk with every load)
         w = workers[0]
+        t.data["base"] = self.mine_base(mine, (w["x"], w["y"]), obs).center
+        return self._mine_gather(obs, mine, t, tags)
+
+    def _mine_selection_ok(self, obs: dict, mine: list[dict], tags: set) -> bool:
+        """The selection is workers to send mining: SCVs, each one of the task's or one gathering already (none
+        walking to build, scouting, pulled or blocking)."""
+        g = self.g
+        by_tag = {u["tag"]: u for u in mine}
+        builders = {g.builder_of.get(r) for r in g.reserved} | ({g.parked.data.get("worker")} if g.parked else set())
+        busy = builders | {g.scout} | g.pulled | g.block_units
+        for tag in obs["selection"]:
+            u = by_tag.get(tag)
+            if u is None or u["type"] != SCV or tag in busy:
+                return False
+            if tag not in tags and u["order"] not in GATHERING:
+                return False
+        return True
+
+    def _mine_gather(self, obs: dict, mine: list[dict], t: Task, tags: set) -> None:
+        """The selected workers right-click a mineral field of the base chosen for them (the closest to its
+        Command Center: a field at a base without one means a long walk with every load). Its minerals off
+        screen: the camera goes there first, the selection kept, and the field is clicked next turn: a
+        minimap right-click on them was a move, and 41 of 188 mining tasks in human game 4 sent workers to
+        stand idle by the minerals."""
+        g, hi = self.g, self.g.hi
+        base = next((b for b in g.map.bases if b.center == tuple(t.data["base"])), None) or g.main
         bases = self.my_bases(mine) or [g.main]
-        base = self.mine_base(mine, (w["x"], w["y"]), obs)
         fields = [m for m in base.minerals if screen_of(obs, *m)] or \
                  [m for b in bases for m in b.minerals if screen_of(obs, *m)]
         if fields:
             m = min(fields, key=lambda m: math.dist(m, base.center))
-            hi.right_click(*screen_of(obs, *m))
-        elif g.home_scvs:                             # (away from the base: its minerals on the minimap)
+            hi.right_click(*field_click(obs, m, base.center))
+        elif t.stage != "gather":
+            hi.camera_minimap(*base.center)
+            t.stage = "gather"
+            return
+        elif g.home_scvs:                             # (the camera didn't get there: the minimap as before)
             hi.minimap_right_click(*min(base.minerals, key=lambda m: math.dist(m, base.center)))
         # whether or not it worked, don't fixate on these workers: look again in 20 s
         for tag in tags:
