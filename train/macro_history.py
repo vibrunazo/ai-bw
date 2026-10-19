@@ -62,7 +62,8 @@ def main() -> None:
     GameFilter.add_args(ap)
     args = ap.parse_args()
     keep = GameFilter.from_args(args)
-    spec = MacroModel.load(str(_newest("macro", args.matchup, args.race))).spec
+    from gary.policy.macro import macro_model_path, shared_macro
+    spec = MacroModel.load(str(macro_model_path(args.matchup, args.race))).spec      # (GARY_MACRO_SHARED: the shared model's)
     jobs = player_games(args.matchup, args.race, keep)
     print(f"{len(jobs)} player-games ({keep.describe()}); {len(spec.decisions)} decisions", flush=True)
     tables, styles = [], []
@@ -74,7 +75,7 @@ def main() -> None:
     tables, styles = np.stack(tables), np.array(styles)
     mean = np.nanmean(tables, axis=0).astype(np.float32)
     out = macro_dir()
-    tag = f"{args.matchup}_{args.race}"
+    tag = f"{args.matchup}_{args.race}" + ("_shared" if shared_macro() else "")
     np.save(out / f"history_mean_{tag}.npy", mean)
     print(f"wrote history_mean_{tag}.npy {mean.shape}; {mean[10].sum():.0f} decisions taken by 10:00 on average")
     if len(spec.styles):

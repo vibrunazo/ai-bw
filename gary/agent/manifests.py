@@ -331,7 +331,8 @@ def _newest(kind: str, matchup: str = "TvZ", race: str = "T") -> Path:
 
 
 def latest_macro_model() -> Path:
-    return _newest("macro")
+    from gary.policy.macro import macro_model_path
+    return macro_model_path("TvZ", "T")
 
 
 def latest_army_model() -> Path:

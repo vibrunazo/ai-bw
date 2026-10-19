@@ -83,7 +83,7 @@ class LearnedMacro:
         self.next_nat_bunker = 0
         self._nat_bunker_spot = None
         self.model = model
-        self.tracker = MacroTracker(model.spec, g.slot, style, getattr(g.map, "hash", None))
+        self.tracker = MacroTracker(model.spec, g.slot, style, getattr(g.map, "hash", None), getattr(g, "matchup", "TvZ"))
         self.goal: dict | None = None
         self.next_query = 0
         self.decisions: list[tuple[int, str, float]] = []   # (frame, decision, model probability)

@@ -20,6 +20,7 @@ encodes states the same way in training and in play.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -40,6 +41,7 @@ class FeatureSpec:
     styles: list[int] = field(default_factory=list)   # build-style clusters (unknown = extra slot)
     maps: list[str] = field(default_factory=list)     # map data hashes with their own slot (unknown = extra)
     year: bool = False                                # the game's year as an input
+    matchups: list[str] = field(default_factory=list)  # one model for the race's matchups: which one (one-hot)
 
     def __post_init__(self):
         self.decisions = [tuple(d) for d in self.decisions]
@@ -48,7 +50,8 @@ class FeatureSpec:
     @property
     def size(self) -> int:
         return (7 + 2 * len(self.own_types) + 2 * len(self.seen_types) + len(self.decisions)
-                + len(self.styles) + 1 + (len(self.maps) + 1 if self.maps else 0) + (1 if self.year else 0))
+                + len(self.styles) + 1 + (len(self.maps) + 1 if self.maps else 0) + (1 if self.year else 0)
+                + len(self.matchups))
 
     def decision_index(self, act: int, uid: int) -> int:
         return self._index.get((act, uid), self._index[OTHER])
@@ -62,7 +65,7 @@ class FeatureSpec:
 def encode(spec: FeatureSpec, frame: np.ndarray, eco: np.ndarray, units: np.ndarray,
            seen_now: np.ndarray, seen_max: np.ndarray, decided: np.ndarray,
            since_last_s: np.ndarray, style: int | None, map_hash: str | None = None,
-           year: float | np.ndarray | None = None) -> np.ndarray:
+           year: float | np.ndarray | None = None, matchup: str | None = None) -> np.ndarray:
     """Features for n moments of one player. Shapes: frame (n,), eco (n, 4) [minerals, gas,
     supply used x2, supply max x2], units (n, 228, 2), seen_now / seen_max (n, 228),
     decided (n, len(spec.decisions)) counts so far, since_last_s (n,)."""
@@ -88,6 +91,11 @@ def encode(spec: FeatureSpec, frame: np.ndarray, eco: np.ndarray, units: np.ndar
     if spec.year:
         parts.append(np.broadcast_to(np.asarray((PLAY_YEAR if year is None else year) - 2000.0, np.float32) / 30.0,
                                      (n,))[:, None])
+    if spec.matchups:
+        mu_onehot = np.zeros((n, len(spec.matchups)), dtype=np.float32)
+        if matchup in spec.matchups:
+            mu_onehot[:, spec.matchups.index(matchup)] = 1
+        parts.append(mu_onehot)
     x = np.concatenate([p.astype(np.float32) for p in parts], axis=1)
     assert x.shape[1] == spec.size, (x.shape, spec.size)
     return x
@@ -163,6 +171,28 @@ class MacroModel:
 
 
 
+REPO = Path(__file__).resolve().parents[2]
+
+
+def shared_macro() -> bool:
+    """GARY_MACRO_SHARED: play with the race's shared macro model (one for all its matchups, the matchup an
+    input: train/macro.py --matchup all; runs/macro_shared) and its history tables (..._shared)."""
+    return os.environ.get("GARY_MACRO_SHARED", "") not in ("", "0")
+
+
+def macro_model_path(matchup: str, race: str) -> Path:
+    """The macro model to play matchup as race: the race's shared model when shared_macro() and it covers the
+    matchup, else the matchup's own newest (runs/macro/<matchup>_<race>_*)."""
+    if shared_macro():
+        for p in sorted((REPO / "runs" / "macro_shared").glob(f"{race}_all_*/model.pt"), reverse=True):
+            if matchup in json.loads((p.parent / "report.json").read_text(encoding="utf-8")).get("matchups", []):
+                return p
+    found = sorted((REPO / "runs" / "macro").glob(f"{matchup}_{race}_*/model.pt"))
+    if not found:
+        raise FileNotFoundError(f"no {race} macro model for {matchup}: python -m train.macro --matchup {matchup} --race {race}")
+    return found[-1]
+
+
 def pro_history(race: str, style: int | None = None, matchup: str = "TvZ") -> np.ndarray | None:
     """The pros' mean decision counts per minute for a race in a matchup (data/interim/macro/v1/
     history_mean_<matchup>_<race>.npy, train/macro_history.py), or for one of its build styles (..._styles.npy, the race's mean where a style has too few
@@ -173,11 +203,12 @@ def pro_history(race: str, style: int | None = None, matchup: str = "TvZ") -> np
     try:
         from inventory import data_root
         root = data_root() / "interim" / "macro" / "v1"
-        if style is not None and (root / f"history_mean_{matchup}_{race}_styles.npy").exists():
-            t = np.load(root / f"history_mean_{matchup}_{race}_styles.npy")
+        tag = f"{matchup}_{race}" + ("_shared" if shared_macro() else "")   # (the model's decision index)
+        if style is not None and (root / f"history_mean_{tag}_styles.npy").exists():
+            t = np.load(root / f"history_mean_{tag}_styles.npy")
             if 0 <= style < len(t):
                 return t[style]
-        return np.load(root / f"history_mean_{matchup}_{race}.npy")
+        return np.load(root / f"history_mean_{tag}.npy")
     except Exception:
         return None
 
@@ -191,8 +222,9 @@ class MacroTracker:
     Enemy units count only while visible; the most of each type ever seen at once is kept, which
     is what the replay data's seen_max holds."""
 
-    def __init__(self, spec: FeatureSpec, slot: int, style: int | None = None, map_hash: str | None = None):
-        self.spec, self.slot, self.style, self.map_hash = spec, slot, style, map_hash
+    def __init__(self, spec: FeatureSpec, slot: int, style: int | None = None, map_hash: str | None = None,
+                 matchup: str | None = None):
+        self.spec, self.slot, self.style, self.map_hash, self.matchup = spec, slot, style, map_hash, matchup
         self.seen_max = np.zeros(228, dtype=np.float32)
         self.decided = np.zeros(len(spec.decisions), dtype=np.float32)
         self.last_decision_frame = 0
@@ -241,4 +273,4 @@ class MacroTracker:
             decided = w * pro + (1.0 - w) * self.decided
         return encode(self.spec, frame, eco, units, seen[None], self.seen_max[None], decided[None],
                       np.array([(obs["frame"] - self.last_decision_frame) / 24.0], dtype=np.float32), self.style,
-                      self.map_hash)
+                      self.map_hash, None, self.matchup)
