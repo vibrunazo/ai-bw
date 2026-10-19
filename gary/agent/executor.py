@@ -1,10 +1,12 @@
 """The macro executor (layer L2b, docs/CONTROL.md): how macro decisions get done with Gary's hands.
 
 Building placement, workers (mining, gas, building), hotkeys and rallies for production buildings,
-finishing buildings nobody builds, and selecting a building to train or research in. Scripted
-(provider `scripted/v1`, from Gary v0.1-v0.2). It works on what the decision layers ask for
-(build tasks, commands) and on chores it notices itself (idle workers, a refinery short of
-workers, a new building without a hotkey).
+and selecting a building to train or research in. Scripted (provider `scripted/v1`, from Gary
+v0.1-v0.2). It works on what the decision layers ask for (build tasks, commands) and on chores it
+notices itself (idle workers, a refinery short of workers, a new building without a hotkey).
+
+`Executor` here is the race-neutral part; a race plugs in its own over it (docs/REFACTOR.md):
+gary/agent/terran_executor.py, gary/agent/zerg_executor.py.
 """
 
 from __future__ import annotations
@@ -12,7 +14,6 @@ from __future__ import annotations
 import math
 
 from gary import orders as O
-from gary import terran as T
 from gary.agent.gary import LOC_NATURAL, Gary, Task
 from gary.decision_log import LOG
 from gary.interface import screen_of
@@ -85,11 +86,15 @@ def _to_segment(p: tuple[float, float], a: tuple[float, float], b: tuple[float, 
     t = max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / ((dx * dx + dy * dy) or 1)))
     return math.dist(p, (ax + t * dx, ay + t * dy))
 
-class ScriptedExecutor:
+class Executor:
+    """The race-neutral hands (docs/REFACTOR.md Phase 1): reservations, workers to mining and gas,
+    transfers, picking and selecting a worker, placement, hotkeys and rallies, commands to a building,
+    and a worker's build (walk, place). A race's executor adds what only it does: its task kinds
+    (`basic`), its placement rule (`site_ok`), its chores."""
+
     def __init__(self, g: Gary):
         self.g = g
         self.next_sweep = 0                           # next look for idle workers off screen
-        self.stalled_since: dict[int, int] = {}       # unfinished building -> since when nobody builds it
         self._terrain_cache = None                    # see terrain()
         self._ramp = None                             # rerally: (spot inside the main's ramp, its bottom), or False
         self.danger: dict[tuple, int] = {}            # balance: base center -> frame zerg fighters were last seen near it
@@ -97,12 +102,19 @@ class ScriptedExecutor:
         # the map's own creep (map knowledge, read now: at the start of a game, before any zerg's)
         creep = getattr(g.hi.game, "creep", None)
         self._map_creep = creep() if creep else None
-        for kind in ("build", "hotkey_building", "mine", "resume", "rerally", "transfer"):
+        self.basic = {"build": self._task_build, "hotkey_building": self._task_hotkey, "mine": self._task_mine,
+                      "rerally": self._task_rerally, "transfer": self._task_transfer}
+        for kind in self.basic:
             g.task_runners[kind] = self._run_basic
         g.task_runners["command"] = self._run_command
         g.task_runners["gas"] = self._run_command
 
     # --- chores, in the arbiter's order ------------------------------------------------------
+
+    def resume_construction(self, mine: list[dict]) -> bool:
+        """An unfinished building nobody builds gets a worker to finish it: a race whose buildings need
+        one (Terran). True if Gary acted."""
+        return False
 
     def release_reservations(self, mine: list[dict]) -> None:
         """A reserved spot is free again once its building exists, or after 40 s if it never
@@ -154,27 +166,6 @@ class ScriptedExecutor:
             g.reserved_at.pop(r, None)
             g.builder_of.pop(r, None)
         g.reserved = keep
-
-    def resume_construction(self, mine: list[dict]) -> bool:
-        """An unfinished building nobody builds (its SCV was killed or sent away) gets another SCV
-        to finish it, as players do. True if Gary acted."""
-        g = self.g
-        now = g.hi.frame
-        building = {u.get("order_target") for u in mine if u["type"] == g.race.worker}
-        stalled = None
-        for b in mine:
-            if not (106 <= b["type"] <= 175) or b["completed"] or b["type"] in T.ADDON_PARENT or b["tag"] in building:
-                self.stalled_since.pop(b["tag"], None)
-                continue
-            since = self.stalled_since.setdefault(b["tag"], now)
-            if stalled is None and now - since >= RESUME_AFTER:
-                stalled = b
-        if stalled is None:
-            return False
-        self.stalled_since[stalled["tag"]] = now + RESUME_RETRY - RESUME_AFTER
-        g.task = Task("resume", stalled["type"], data={"tag": stalled["tag"], "x": stalled["x"], "y": stalled["y"]},
-                      started=now)
-        return True
 
     def _idle(self, u: dict, mine: list[dict]) -> bool:
         """A worker the mining routine should send back: standing idle, or (home_scvs, an option) away
@@ -582,9 +573,9 @@ class ScriptedExecutor:
         map's terrain is map knowledge, so Gary checks it too (where the env can tell it)."""
         if not self.g.hi.game.can_place(self.g.slot, unit_type, tx, ty, builder):
             return False
-        # (these two whether the terrain is known or not: live, without it, they were skipped, and
+        # (the race's rule whether the terrain is known or not: live, without it, it was skipped, and
         # turrets stood where both Command Centers' Comsats go: no scan against lurkers, human game 2)
-        if self.on_addon_spot(unit_type, tx, ty) or self.creep_coming(unit_type, tx, ty):
+        if not self.site_ok(unit_type, tx, ty):
             return False
         terrain = self.terrain()
         if terrain is None:
@@ -592,17 +583,9 @@ class ScriptedExecutor:
         w, h = self.g.race.sizes[unit_type]
         return bool(terrain[0][ty:ty + h, tx:tx + w].all())
 
-    def on_addon_spot(self, unit_type: int, tx: int, ty: int) -> bool:
-        """The building would stand where one of Gary's buildings' add-on goes (a Comsat Station by
-        the natural's Command Center was asked for every second for minutes: its bunker stood there)."""
-        g = self.g
-        w, h = g.race.sizes[unit_type]
-        parents = set(T.ADDON_PARENT.values())
-        spots = [((u["x"] - g.race.sizes[u["type"]][0] * 16) // 32, (u["y"] - g.race.sizes[u["type"]][1] * 16) // 32)
-                 for u in g.hi.observe()["units"] if u["owner"] == g.slot and u["type"] in parents]
-        spots += [(rx, ry) for rt, rx, ry in g.reserved if rt in parents]
-        ox, oy = T.ADDON_OFFSET
-        return any(tx < px + ox + 2 and px + ox < tx + w and ty < py + oy + 2 and py + oy < ty + h for px, py in spots)
+    def site_ok(self, unit_type: int, tx: int, ty: int) -> bool:
+        """This race's placement rule beyond the game's check: no creep under it, now or soon."""
+        return not self.creep_coming(unit_type, tx, ty)
 
     def creep_coming(self, unit_type: int, tx: int, ty: int) -> bool:
         """Creep under the building, now or soon: the game accepts a build on fogged creep it hasn't
@@ -652,8 +635,7 @@ class ScriptedExecutor:
                 return self.fail_build(t, "stuck for 40 s")
             g.task = None
             return
-        {"build": self._task_build, "hotkey_building": self._task_hotkey, "mine": self._task_mine,
-         "resume": self._task_resume, "rerally": self._task_rerally, "transfer": self._task_transfer}[t.kind](obs, mine, t)
+        self.basic[t.kind](obs, mine, t)
 
     def _run_command(self, obs: dict, mine: list[dict], t: Task) -> None:
         if self.g.hi.frame - t.started > COMMAND_TIMEOUT:
@@ -999,34 +981,6 @@ class ScriptedExecutor:
             g.ignore_idle_until[tag] = hi.frame + 24 * 20
         g.task = None
 
-    def _task_resume(self, obs: dict, mine: list[dict], t: Task) -> None:
-        """Camera on the building, select the nearest free SCV, right-click the building."""
-        g, hi, d = self.g, self.g.hi, t.data
-        b = next((u for u in mine if u["tag"] == d["tag"]), None)
-        if b is None or b["completed"] or hi.frame - t.started > 24 * 8:
-            g.task = None
-            return
-        if t.stage == "start":
-            if not screen_of(obs, b["x"], b["y"]):
-                hi.camera_minimap(b["x"], b["y"])
-                return
-            scvs = [u for u in mine if u["type"] == g.race.worker and u["completed"] and u["tag"] not in g.pulled | g.block_units
-                    and u["order"] not in BUSY_ORDERS and screen_of(obs, u["x"], u["y"])]
-            if not scvs:
-                g.task = None
-                return
-            s = min(scvs, key=lambda u: math.dist((u["x"], u["y"]), (b["x"], b["y"])))
-            x, y = screen_of(obs, s["x"], s["y"])
-            hi.box(max(0, x - 4), max(0, y - 4), x + 4, y + 4)
-            d["scv"] = s["tag"]
-            t.stage = "order"
-            return
-        p = screen_of(obs, b["x"], b["y"])
-        if d.get("scv") in obs["selection"] and p:
-            hi.right_click(*p)
-            g.say(f"sends an SCV to finish the {g.race.names.get(b['type'], 'building')}")
-        g.task = None
-
     def select(self, obs: dict, b: dict) -> bool:
         """Get this building selected (hotkey, or look at it and click). True once it is."""
         g, hi = self.g, self.g.hi
@@ -1076,14 +1030,13 @@ class ScriptedExecutor:
         elif act == UPGRADE:
             if hi.upgrade(uid).accepted:
                 g.upgraded[uid] += 1
-        elif act == BUILD:                      # an add-on, next to the selected building
-            tx, ty = (b["x"] - 64) // 32 + T.ADDON_OFFSET[0], (b["y"] - 48) // 32 + T.ADDON_OFFSET[1]
-            p = screen_of(obs, tx * 32 + 16, ty * 32 + 16)
-            if not p:
-                hi.camera_minimap(b["x"], b["y"])
-                return
-            hi.build(uid, *p, order=O.ORDER_PLACE_ADDON)
+        elif act == BUILD and not self.command_build(obs, b, uid):
+            return
         g.task = None
+
+    def command_build(self, obs: dict, b: dict, uid: int) -> bool:
+        """A building built by a selected building (a race's add-on): False to come back next turn."""
+        raise NotImplementedError(f"{self.g.race.letter}: no building builds {uid}")
 
     def _task_gas(self, obs: dict, mine: list[dict], t: Task) -> None:
         """Send workers to a finished refinery, a few at a time, until three are on it."""

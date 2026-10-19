@@ -16,7 +16,7 @@ from pathlib import Path
 
 from gary.agent.army import LearnedArmy, WaveArmy
 from gary.agent.arbiter import DrillArbiter, FixedPriority
-from gary.agent.executor import ScriptedExecutor
+from gary.agent.terran_executor import TerranExecutor
 from gary.agent.fight import RULES, FightLayer, PullRule
 from gary.agent.gary import Gary
 from gary.agent.macro import LearnedMacro, LingFloodDefense, OneBaseDefense
@@ -731,7 +731,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     g.motor = DirectMotor(g)
     g.leases.enforced = m.get("leases") == "enforced"
     if m["macro"] is not None or m["army"] is not None:
-        g.executor = ScriptedExecutor(g)
+        g.executor = {"T": TerranExecutor}[g.race.letter](g)
         g.rally_plan = m.get("rally")
         g.home_scvs = m.get("home_scvs", False)
         g.builder_back = m.get("builder_back", False)
