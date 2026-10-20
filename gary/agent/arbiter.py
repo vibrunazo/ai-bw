@@ -50,12 +50,19 @@ WAIT_MIN = 24                        # waits shorter than a second aren't traced
 
 
 BUILD_WAITS = {"wait_arrival", "place"}   # v2: build stages a fight may interrupt (and resume)
+STREAK = 3                                 # option rotate: actions in a row one side keeps the turn (Gary-Z's)
 
 
 class FixedPriority:
-    def __init__(self, g: Gary, suspend_builds: bool = False):
+    def __init__(self, g: Gary, suspend_builds: bool = False, rotate: bool = False):
         self.g = g
         self.suspend_builds = suspend_builds
+        # option rotate (Gary-Z's sides): the army, the macro and the chores take the turn in rotation, whoever acted
+        # keeping it STREAK actions at most; the fixed order (chores, army, macro) gave the army of the one Gary
+        # playing Zerg a fraction of Gary-Z's turns: its join rule fired 35 times to 110 at 5-9 min, and the
+        # Terran's first push, which Gary-Z's gathered army beat, went through (round G5, the parity diff)
+        self.rotate = rotate
+        self.side, self.streak = "army", 0
         self.sightings = Sightings.for_gary(g)   # what Gary saw and lost between decisions: the game's records
         self.suspended = None            # v2: a build a fight turn put aside, to go on after
         self.interrupted = None          # the task the last fight turn dropped
@@ -131,6 +138,8 @@ class FixedPriority:
             LOG.owner[g.hi.side] = getattr(g.task, "by", "?")
             g.run_task(obs, mine)
             return None
+        if self.rotate:
+            return self._rotated(obs, mine, done, me)
         for who, chore in (("executor:resume", lambda: ex.resume_construction(mine)),
                            ("executor:mine", lambda: ex.idle_mining(obs, done)),
                            ("executor:sweep", lambda: ex.idle_sweep(obs, done)),
@@ -147,6 +156,42 @@ class FixedPriority:
         LOG.owner[g.hi.side] = "macro"
         g.macro.step(obs, mine, done, me)
         return "macro"
+
+    def _chores(self, obs: dict, mine: list[dict], done: list[dict]) -> str | None:
+        g, ex = self.g, self.g.executor
+        for who, chore in (("executor:resume", lambda: ex.resume_construction(mine)),
+                           ("executor:mine", lambda: ex.idle_mining(obs, done)),
+                           ("executor:sweep", lambda: ex.idle_sweep(obs, done)),
+                           ("executor:hotkey", lambda: ex.hotkey_new_buildings(done)),
+                           ("executor:rerally", lambda: ex.rerally(obs, mine, done)),
+                           ("executor:transfer", lambda: ex.transfer(obs, mine)),
+                           ("executor:gas", lambda: ex.refill_gas(obs, done))):
+            LOG.owner[g.hi.side] = who
+            if chore():
+                return who
+        return None
+
+    def _rotated(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> str | None:
+        """The sides in rotation from the one whose turn it is; one with nothing to do hands over at once."""
+        g, hi = self.g, self.g.hi
+
+        def macro():
+            LOG.owner[g.hi.side] = "macro"
+            g.macro.step(obs, mine, done, me)
+            return "macro" if (g.task is not None or hi.pending) else None
+        sides = {"army": lambda: self._army(obs, mine, done), "macro": macro,
+                 "chores": lambda: self._chores(obs, mine, done)}
+        order = ["army", "macro", "chores"]
+        k = order.index(self.side)
+        for name in order[k:] + order[:k]:
+            who = sides[name]()
+            if who:
+                self.streak = self.streak + 1 if name == self.side else 1
+                self.side = name
+                if self.streak >= STREAK:
+                    self.side, self.streak = order[(order.index(name) + 1) % len(order)], 0
+                return who
+        return None
 
     def _interruptible(self, task) -> bool:
         return task is None or task.kind in INTERRUPTIBLE or \

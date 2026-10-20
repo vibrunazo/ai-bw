@@ -318,7 +318,7 @@ MANIFESTS: dict[str, dict] = {
     # macro options (the dice; one-offs and hatcheries by summed odds; a decision parked for its money while
     # the larvae go on; the model's tempo; no tech path under 10%; an overlord ahead; the pros' history; a rolled
     # style). Its army and fights from Gary-Z (Phase 2)
-    "gz1": {"version": "gz0.1", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True,
+    "gz1": {"version": "gz0.1", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True, "rotate": True,
             "macro": {**_LEARNED, "builds": ["alarm"], "decoder": "dice", "odds_mass": 1.0, "hatch_mass": 0.5, "park": True, "pace": True,
                       "tech_min_p": 0.10, "wait_min_p": 0.05, "supply_ahead": True, "rax_by": 165 * 24, "history": "pro", "style": "roll"},
             # the army: clusters with commitments, drawn (Gary-Z's GARY_Z_COMMIT=latest), its ground army (the flyers
@@ -867,6 +867,6 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     if m["arbiter"] == "drill/v1":
         g.arbiter = DrillArbiter(g, seed, interruptions)
     else:
-        g.arbiter = FixedPriority(g, suspend_builds=m["arbiter"] == "fixed_priority/v2")
+        g.arbiter = FixedPriority(g, suspend_builds=m["arbiter"] == "fixed_priority/v2", rotate=m.get("rotate", False))
         g.announce = announcement(g.version, style, models)
     return g

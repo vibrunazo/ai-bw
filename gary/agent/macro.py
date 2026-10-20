@@ -225,7 +225,10 @@ class LearnedMacro:
         first = FIRST_PRODUCER.get(g.race.letter)
         rax = sum(1 for u in mine if u["type"] == first) + sum(1 for r, *_ in g.reserved if r == first) + g.building(first) \
             if self.rax_by is not None and first is not None else 1
-        if not rax and hi.frame >= self.rax_by and (self.goal is None or self.goal["id"] != first):
+        if not rax and hi.frame >= self.rax_by and (self.goal is None or self.goal["id"] != first) \
+                and (g.race.letter == "T" or self.plan(BUILD, first, obs, mine, done, me) not in (None, WAIT)):
+            # (and one can be built now: a Zerg with its Pool killed and no drone free set the goal and dropped it
+            # 459 times in 15 s, its macro held: round G5)
             fname = describe(g.race, BUILD, first)
             self.goal = {"act": BUILD, "id": first, "p": 1.0, "since": hi.frame, "name": fname}
             g.say(f"next: {fname} (none by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d})")

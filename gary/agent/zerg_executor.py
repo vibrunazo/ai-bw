@@ -283,10 +283,13 @@ class ZergExecutor(Executor):
                 for u in sel:
                     self.used_larva[u["tag"]] = hi.frame
                 self.morphs.append((hi.frame, uid, self._frames_to_make(uid)))
+            else:
+                self._undecided(t)
             g.task = None
             return
         if not fresh:
             LOG.order(g.hi.side, hi.frame, g.race.names.get(uid, str(uid)), "dropped", "no larva free", by="executor")
+            self._undecided(t)
             g.task = None
             return
         on = [lv for lv in fresh if screen_of(obs, lv["x"], lv["y"])]
@@ -301,6 +304,7 @@ class ZergExecutor(Executor):
         if t.data["boxes"] > LARVA_BOXES:
             LOG.order(g.hi.side, hi.frame, g.race.names.get(uid, str(uid)), "dropped",
                       f"{LARVA_BOXES} boxes on a larva took something else too", by="executor")
+            self._undecided(t)
             g.task = None
             return
         others = [u for u in mine if u["type"] != Z.LARVA or u["tag"] in self.used_larva]
@@ -320,6 +324,7 @@ class ZergExecutor(Executor):
         if not units:
             LOG.order(g.hi.side, hi.frame, g.race.names.get(d["id"], str(d["id"])), "dropped",
                       f"no {g.race.names.get(d['of'], d['of'])} free to morph", by="executor")
+            self._undecided(t)
             g.task = None
             return
         if not self._select_one(obs, mine, units):
@@ -328,6 +333,7 @@ class ZergExecutor(Executor):
         if not ok:
             LOG.order(g.hi.side, hi.frame, g.race.names.get(d["id"], str(d["id"])), "dropped", "the morph wasn't taken",
                       by="executor")
+            self._undecided(t)
         if ok:
             # (a building morphing still shows as what it was: a colony becoming a sunken was ordered again and
             # again; its morph counts as in production until done)
@@ -335,6 +341,13 @@ class ZergExecutor(Executor):
             for tag in obs["selection"]:
                 self.morphing[tag] = hi.frame + self._frames_to_make(d["id"])
         g.task = None
+
+    def _undecided(self, t: Task) -> None:
+        """The decision this task carried didn't happen: out of the model's "decisions so far" (noted when the task
+        started; Gary-Z noted a decision once carried out, and the one Gary's history counted the larvae's that
+        let go: more mutalisks and fewer zerglings than Gary-Z decided at 5-9 min, the parity diff)."""
+        if self.g.macro is not None and "act" in t.data:
+            self.g.macro.tracker.unnote_decision(t.data["act"], t.data["id"])
 
     def _select_one(self, obs: dict, mine: list[dict], units: list[dict]) -> bool:
         """One of these selected (the camera on it, then a click): one with nothing of Gary's on top of it,
