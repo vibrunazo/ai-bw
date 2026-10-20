@@ -94,6 +94,7 @@ def _to_segment(p: tuple[float, float], a: tuple[float, float], b: tuple[float, 
 
 class Executor:
     build_order = C.ORDER_PLACE_BUILDING          # the order a worker places a building with
+    builder_retries = 0                           # a build whose worker is lost (died, pulled): another this often
     box_extras: frozenset = frozenset()           # units a box around workers may take that a mining order leaves be
     box_orders: frozenset = frozenset()           # ...and orders of other free workers in it, sent mining with them
     army_select = "box"                           # how the motor selects an army's units: drag boxes, or "portrait"
@@ -434,7 +435,9 @@ class Executor:
             return False
         if not any(u["tag"] == t.data["worker"] for u in mine):
             g.parked = None
-            self.fail_build(t, "its SCV is gone")
+            if self.lost_builder(t, "its worker is gone"):
+                g.task = t
+                return True
             return False
         if t.data.get("resume") == "wait_arrival":           # walking to another base: until it's there
             w = next(u for u in mine if u["tag"] == t.data["worker"])
@@ -779,6 +782,27 @@ class Executor:
             return
         self.commands[t.kind](obs, mine, t)
 
+    def lost_builder(self, t: Task, why: str) -> bool:
+        """The build's worker is lost: another one (builder_retries times; True: the task starts over with it,
+        as the task on the hands), else the build fails."""
+        g = self.g
+        if t.data.get("lost", 0) >= self.builder_retries:
+            if why == "its worker is gone":
+                why = "its SCV is gone"              # (the records' words, as before)
+            elif why == "its worker was pulled or is gone":
+                why = "its SCV was pulled or is gone"
+            self.fail_build(t, why)
+            return False
+        t.data["lost"] = t.data.get("lost", 0) + 1
+        for k in ("worker", "walking", "resume", "looked", "clicked", "money_wait", "unhooked", "reselects", "again_tries",
+                  "resent", "resent_at"):
+            t.data.pop(k, None)
+        t.stage, t.started = "start", g.hi.frame
+        g.task = t
+        LOG.order(g.hi.side, g.hi.frame, g.race.names.get(t.unit_type, str(t.unit_type)), "retried",
+                  f"{why}: another ({t.data['lost']} of {self.builder_retries})", by="executor")
+        return True
+
     def fail_build(self, t: Task, why: str = "") -> None:
         """A building Gary decided on couldn't be placed: the macro layer hears of it (and why: the game's
         records, gary/decision_log.py)."""
@@ -863,7 +887,7 @@ class Executor:
         if t.stage == "reselect":                    # a fight put the build aside: the same worker again
             w = next((u for u in mine if u["tag"] == t.data["worker"]), None)
             if not w or w["tag"] in g.pulled | g.block_units:
-                self.fail_build(t, "its SCV was pulled or is gone")
+                self.lost_builder(t, "its worker was pulled or is gone")
                 return
             if obs["selection"] == [w["tag"]]:
                 t.stage = t.data.pop("resume")
@@ -909,7 +933,7 @@ class Executor:
         if t.stage == "wait_arrival":
             w = next((u for u in mine if u["tag"] == t.data["worker"]), None)
             if not w:
-                self.fail_build(t, "its SCV is gone")
+                self.lost_builder(t, "its worker is gone")
                 return
             center = g.base(t.where).center
             if math.dist((w["x"], w["y"]), center) > 6 * 32:

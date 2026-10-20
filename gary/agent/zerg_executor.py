@@ -56,6 +56,9 @@ class ZergExecutor(Executor):
     box_extras = frozenset({Z.LARVA, Z.OVERLORD})
     box_orders = frozenset({2, 3, 6, 41})         # Guard, PlayerGuard, Move, ZergBirth
     army_select = "portrait"
+    # (an expansion's drone killed on its way failed the build, and the macro decided it again only at its 1-5%
+    # odds: gz1 held 3 bases from 12:00 with 700-860 minerals banked, round G4; Gary-Z's jobs sent another drone)
+    builder_retries = 3
     in_flight = 24                                # frames a morph's money counts as spent before the game shows it
                                                   # (Gary-Z's: a larva's is taken at once; 2 s held a drone's 50 idle)
 
