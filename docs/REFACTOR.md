@@ -6,7 +6,7 @@ a race is a plug and everything above the plug is shared. Gary-Z's separate stac
 compatibility layers, no forwarding scripts: each step replaces what it supersedes.
 
 Read first: RACES.md (the audit this plan executes), CONTROL.md (the layers as providers and the
-manifest contract), ARCHITECTURE.md §6.4-6.7, HANDOFF.md (state of the data and models). The other
+manifest contract), ARCHITECTURE.md §6.4-6.7, DATA_ERAS.md (the data and models). The other
 session is giving the macro model a matchup input (gary/policy/macro.py `FeatureSpec.matchups`,
 landed 2026-10-19 as the shared per-race macro models, runs/macro_shared/<race>_all_*, chosen by
 `gary.policy.macro.macro_model_path(matchup, race)` and on by default): that is the model side of
@@ -218,7 +218,7 @@ wins) and its gap score; a ZvZ mirror round plays to the end as the first mirror
   back empty but for zerg_replayed if kept.
 - Docs: RACES.md step 3 done, the Zerg player paragraph rewritten; PROGRESS.md components table
   ("Matchups and races" row, "Macro executor" row); CONTROL.md "Where today's code goes";
-  HANDOFF.md.
+  the handoff notes (since folded into AGENTS.md and TODO.md).
 
 **Done 2026-10-20.** eval/match.py is the one launcher (two manifests, races from them, both sides'
 screens, traces and records, paired fight episodes): Gary-T against gz1 through it plays byte for byte the

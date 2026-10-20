@@ -5,6 +5,21 @@ held up, in the order to do it. Pick these up once the early-switch work (`train
 is done and its runs have finished; none of them should run while it does (shared code, shared
 CPU). Delete this file once each item is done or moved to an issue.
 
+## Open threads (from the 2026-10-19 handoff)
+
+- **More modern replays.** The curve flattens around 3,000 clean games per matchup: about 4,500 raw replays
+  per matchup at today's yield, four to five times the first pack (data/raw/cwal/2026-10); PvT and TvT yield
+  least. cwal.gg has no API and its robots.txt disallows crawling: packs are downloaded by hand. Confirmed
+  ladder bots are in ingest/inventory.py KNOWN_BOT_NAMES (the APM rule caught 226 of their 258 games alone).
+  The remaining 4% of desyncs (Attitude SE, Colorless Fate, TvT, PvT) are an SC:R-vs-1.16 unit-movement
+  difference, traced with GARY_TRACE_UNIT / GARY_TRACE_ORDER (docs/DATA_ERAS.md); Aiolos fails with
+  "unsupported map version 64".
+- **TvT Gary-T.** TvT plays (tests/test_matchups.py) on the TvZ-trained parts its `vs` section leaves on;
+  it needs TvT models for macro, army, fight, belief, plan, engage and commit (hours of training: ask first).
+- **Protoss** (docs/RACES.md step 4, docs/REFACTOR.md Phase 4): the executor and PvT/PvZ/PvP models.
+- **Human game 4's list** (docs/PROGRESS.md): attacks (measured, partly done), SCV pulls and the early
+  zerglings, single-unit micro, turrets, vision, the late game, building placement.
+
 ## Direction (2026-10-15)
 
 A second outside review (2026-10-15, after v0.25) of the docs, the last 40 commits and the latest runs.
