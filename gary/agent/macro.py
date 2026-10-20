@@ -146,11 +146,12 @@ class LearnedMacro:
                 return
             if self.goal is None:
                 self.goal = build.next_goal(obs, mine, done, me)
-                if self.goal is None:
+                if self.goal is None and not getattr(build, "falls_through", False):
                     return
-                g.say(f"next: {self.goal['name']} ({build.label})")
-                LOG.decision(g.hi.side, "macro", g.hi.frame, self.goal["name"], inputs=self._seen(obs, mine, me),
-                             by=f"posture's build: {build.label}")
+                if self.goal is not None:           # (else the learned macro goes on, under the posture's filters)
+                    g.say(f"next: {self.goal['name']} ({build.label})")
+                    LOG.decision(g.hi.side, "macro", g.hi.frame, self.goal["name"], inputs=self._seen(obs, mine, me),
+                                 by=f"posture's build: {build.label}")
         if self.natural_bunker and self._natural_bunker(mine, me):
             return
         if self.answers is not None:
@@ -340,6 +341,10 @@ class LearnedMacro:
             for k in order:
                 if probs[0, k] < floor:
                     break
+                floor_one_off = getattr(g.posture, "one_off_min_p", None)
+                if floor_one_off is not None and self._one_off(*self.model.spec.decisions[k]) and probs[0, k] < floor_one_off:
+                    over.append([name(k), f"rule: the posture: a one-off under {floor_one_off:.0%}"])
+                    continue
                 if self.tech_min_p is not None and self.model.spec.decisions[k][0] == BUILD \
                         and self.model.spec.decisions[k][1] in TECH_PATH.get(g.race.letter, ()) and probs[0, k] < self.tech_min_p:
                     over.append([name(k), f"rule: a tech path under {self.tech_min_p:.0%}"])
@@ -577,6 +582,8 @@ class LearnedMacro:
         have = {u["type"] for u in done}
         if not g.race.meets(have, uid):
             return self._no("what it needs isn't there")
+        if getattr(posture, "no_workers", False) and uid == g.race.worker:
+            return self._no("the posture: no workers now")
         if self.failed_until.get((act, uid), 0) > g.hi.frame:
             return self._no("it just failed")      # (e.g. no room): not again right away
         # (a larva's unit and a morph too: without, gz1 made drones past the pros' cap at 1:00, and its

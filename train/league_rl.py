@@ -3,7 +3,7 @@ layer logged (gary/decision_log.py: its inputs, the decision drawn, its log-prob
 what followed, then one policy-gradient update of that layer with a KL leash to the model it started
 from (the imitation model: ARCHITECTURE's lambda_KL, as AlphaStar).
 
-  roles_z   Gary-Z's fight roles (gary/bots/zerg_roles.py). A snapshot's outcome: the fight's net
+  roles_z   Gary-Z's fight roles (gary/agent/zerg_roles.py). A snapshot's outcome: the fight's net
             value over the next WINDOW (the enemy's units within FIGHT of the fight's middle lost, less
             its own; minerals + gas), the fight episode the role decisions were made in
   army_z    Gary-Z's army layer (gary_z.py _army_goal), and army_t the Terran's (gary/agent/army.py with
@@ -131,7 +131,7 @@ def load_round(rnd: str, layer: str, workers: int):
 
 
 def update_roles(data, adv, args, device):
-    from gary.bots.zerg_roles import latest_zerg_model
+    from gary.agent.zerg_roles import latest_zerg_model
     from gary.policy.roles import RoleModel, tensors
     start = latest_zerg_model()
     model = RoleModel.load(start, device)

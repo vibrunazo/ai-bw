@@ -110,8 +110,21 @@ class LearnedArmy:
     def __init__(self, g: Gary, model: ArmyModel, pull=None, hunt: bool = False, scan: bool = False, belief=None,
                  belief_total: bool = False, watch: bool = False, home_guard: bool = False, belief_hold: bool = True,
                  hunt_belief: bool = False, hold_moves: bool = True, hold_margin: float | None = None,
-                 draw: bool = False, engage=None, commit: bool = False, commit_act: float | None = None):
+                 draw: bool = False, engage=None, commit: bool = False, commit_act: float | None = None,
+                 scout: bool = True, types=None, rules=()):
         self.g = g
+        # option rules (gary/agent/army_rules.py, from Gary-Z's army): posts and raid every turn, before the clusters;
+        # join, sweep and press at a cluster's turn, before the model
+        from gary.agent.army_rules import ClusterRules, EnemyMemory, Posts, Raid
+        self.memory = EnemyMemory(g) if rules else None
+        self.turn_rules = [{"posts": Posts, "raid": Raid}[r](g, self.memory) for r in rules if r in ("posts", "raid")]
+        self.cluster_rules = ClusterRules(g, self.memory, "join" in rules, "sweep" in rules, "press" in rules,
+                                          lambda x, y: self.tracker.cell(x, y), cell_dist) \
+            if any(r in rules for r in ("join", "sweep", "press")) else None
+        self.scout = scout          # option: a worker scouts the enemy's start (a Zerg's overlords do: its posture)
+        # option: the unit types its clusters take (default the race's army; Zerg: its ground army, the flyers
+        # and the lurkers having their own rules)
+        self.types = set(types) if types is not None else None
         # option: draw the destination and move/attack from the model's odds (the league's learner: RL
         # learns from drawn decisions and their probabilities, logged), instead of the likeliest cell
         # away when most of the odds lie away, said twice (Gary-Z's likeliest-cell army stood at home)
@@ -218,7 +231,12 @@ class LearnedArmy:
         hi = g.hi
         if self.pull is not None and self.pull.step(obs, mine):
             return "rule:pull"
-        if self._scouting(obs, mine):
+        if self.memory is not None:
+            self.memory.look(obs)
+        for rule in self.turn_rules:
+            if (who := rule.step(obs, mine, done)):
+                return who
+        if self.scout and self._scouting(obs, mine):
             return "scout"
         if self.watch and self.scout_done and self._watching(obs, mine):
             return "scout"
@@ -232,13 +250,15 @@ class LearnedArmy:
             if near_home(mine, enemy_fighters(obs, g.slot)):
                 self.next_ask = hi.frame + ASK_EVERY
                 return None
-        army = [u for u in done if u["type"] in g.army_types]
+        army = [u for u in done if u["type"] in (self.types if self.types is not None else g.army_types)]
         clusters = self._clusters(army)
         if not clusters:
             return None
         self.next_ask = hi.frame + (COMMIT_TICK if self.commit else ASK_EVERY) // len(clusters)   # one cluster a question
         group = clusters[self.ask_turn % len(clusters)]
         self.ask_turn += 1
+        if self.cluster_rules is not None and (who := self.cluster_rules.step(obs, mine, clusters, group)):
+            return who
         if self.commit:
             return self._committed(obs, mine, group)
         grid, glob = self.tracker.inputs(obs, group)
@@ -477,8 +497,9 @@ class LearnedArmy:
         why = explain_army(self.model, grid, glob, lambda w, kd: kd[:, k])
         item = dict(frame=hi.frame, grid=grid[0].astype(np.float16), glob=glob[0].astype(np.float16), choice=k,
                     logp=float(np.log(q[k] + 1e-9)))
-        (self.record.append(item) if self.record is not None else LOG.add("commit_t", **item))
-        rl = self._rl_row("commit_t")
+        layer = f"commit_{g.race.letter.lower()}"     # (commit_t, commit_z: the league's RL reads them by race)
+        (self.record.append(item) if self.record is not None else LOG.add(layer, **item))
+        rl = self._rl_row(layer)
         if k == 0:
             LOG.decision(g.hi.side, "commit", hi.frame, "keep", q[0], options, self._seen, by, then="its commitment stands",
                          rl=rl, why=why)

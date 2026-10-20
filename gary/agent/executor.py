@@ -96,6 +96,8 @@ class Executor:
     build_order = C.ORDER_PLACE_BUILDING          # the order a worker places a building with
     box_extras: frozenset = frozenset()           # units a box around workers may take that a mining order leaves be
     box_orders: frozenset = frozenset()           # ...and orders of other free workers in it, sent mining with them
+    army_select = "box"                           # how the motor selects an army's units: drag boxes, or "ctrl" (a
+                                                  # ctrl+click on each type: no drones or overlords along)
     """The race-neutral hands (docs/REFACTOR.md Phase 1): reservations, workers to mining and gas,
     transfers, picking and selecting a worker, placement, hotkeys and rallies, commands to a building,
     and a worker's build (walk, place). A race's executor adds what only it does: its task kinds

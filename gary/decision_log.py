@@ -3,7 +3,7 @@
 Arrays (GARY_DECISION_LOG names the .npz; off without it): the learned layers' decisions as RL trains
 on them, each decision's inputs, what was drawn and its log-probability, saved when the game's process
 ends. Layers, by side (both sides of a headless game share the process): "army_z" (gary/bots/gary_z.py:
-where a group goes, move or attack), "roles_z" (gary/bots/zerg_roles.py: each unit's role in a fight
+where a group goes, move or attack), "roles_z" (gary/agent/zerg_roles.py: each unit's role in a fight
 snapshot), "army_t" (gary/agent/army.py, with draw), "engage_t" (its engage option), "roles_t"
 (gary/agent/roles.py ahead/v1: its units' roles before contact). Stacked per layer: "<layer>/<field>".
 

@@ -588,7 +588,14 @@ class DirectMotor:
                 cx, cy = u["x"], u["y"]
             hi.camera_minimap(cx, cy)
             return
-        box_around(hi, [self.g.hi.aim(obs, u) for u in here], 10)
+        if g.executor.army_select == "ctrl":
+            # a ctrl+click on one of the commonest type left: every one of that type on the screen, none of the
+            # rest (a box at the meeting point took the drones and overlords along: Gary-Z's way)
+            from collections import Counter
+            kind = Counter(u["type"] for u in here).most_common(1)[0][0]
+            hi.ctrl_click(*hi.aim(obs, next(u for u in here if u["type"] == kind)))
+        else:
+            box_around(hi, [self.g.hi.aim(obs, u) for u in here], 10)
         d["boxes"] += 1
         t.stage = "selected"
 

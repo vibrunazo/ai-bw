@@ -40,7 +40,7 @@ MAPS = {m: REPO / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
 
 def play(job: tuple) -> dict:
     """One game in its own process (Gary-Z's decision log written as the process ends)."""
-    version, name, path, seed, minutes, out, pairs, incumbent, candidate, layer = job
+    version, name, path, seed, minutes, out, pairs, incumbent, candidate, layer, zerg = job
     folder = out / name
     folder.mkdir(parents=True, exist_ok=True)
     rep = folder / f"{version}_seed{seed}.rep"
@@ -56,7 +56,7 @@ def play(job: tuple) -> dict:
         env["GARY_PAIRS_LAYER"] = layer
         if other:
             env["GARY_PAIRS_CANDIDATE"] = str(other)
-    cmd = [sys.executable, "-m", "gary.bots.zerg_rush", "--vs", version, "--opponent", "garyz", "--map", str(path),
+    cmd = [sys.executable, "-m", "gary.bots.zerg_rush", "--vs", version, "--opponent", zerg, "--map", str(path),
            "--minutes", str(minutes), "--seed", str(seed), "--save", str(rep)]
     p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     log = p.stdout + p.stderr
@@ -130,6 +130,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--round", required=True, help="the round's name (its folder in runs/league)")
     ap.add_argument("--vs", default="v029", help="the Terran Gary")
+    ap.add_argument("--zerg", default="garyz", help="the Zerg: garyz (gary/bots/gary_z.py) or a Zerg manifest (gz1)")
     ap.add_argument("--seeds", type=int, default=8, help="seeds per map")
     ap.add_argument("--maps", default="fixtures", help="fixtures (the three 1.16 maps), ladder (every current ladder map "
                     "written by ingest/ladder_maps.py) or ladder names, comma-separated (e.g. KnockOut,Attitude SE)")
@@ -162,7 +163,7 @@ def main() -> None:
         for m, c in table["graded_by_map"].items():
             print(f"  {m}: {c}")
         return
-    jobs = [(args.vs, name, path, s, args.minutes, out, args.pairs, args.incumbent, args.candidate, args.layer)
+    jobs = [(args.vs, name, path, s, args.minutes, out, args.pairs, args.incumbent, args.candidate, args.layer, args.zerg)
             for name, path in maps.items() for s in range(args.first, args.first + args.seeds)]
     with ThreadPoolExecutor(args.parallel) as pool:
         games = list(monitor.track(pool.map(play, jobs), len(jobs), "games"))

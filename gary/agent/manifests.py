@@ -317,11 +317,15 @@ MANIFESTS: dict[str, dict] = {
     # the one Gary playing Zerg (docs/REFACTOR.md Phase 1): the shared agent with the Zerg executor and Gary-Z's
     # macro options (the dice; one-offs and hatcheries by summed odds; a decision parked for its money while
     # the larvae go on; the model's tempo; no tech path under 10%; an overlord ahead; the pros' history; a rolled
-    # style). Its army, posts and fights come from Gary-Z in Phase 2: none yet
-    "gz1": {"version": "gz0.1", "race": "Z", "posture": "normal", "leases": "enforced", "balance": True,
-            "macro": {**_LEARNED, "decoder": "dice", "odds_mass": 1.0, "hatch_mass": 0.5, "park": True, "pace": True,
+    # style). Its army and fights from Gary-Z (Phase 2)
+    "gz1": {"version": "gz0.1", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True,
+            "macro": {**_LEARNED, "builds": ["alarm"], "decoder": "dice", "odds_mass": 1.0, "hatch_mass": 0.5, "park": True, "pace": True,
                       "tech_min_p": 0.10, "wait_min_p": 0.05, "supply_ahead": True, "rax_by": None, "history": "pro", "style": "roll"},
-            "army": None, "fight": None, "arbiter": "fixed_priority/v1"},
+            # the army: clusters with commitments, drawn (Gary-Z's GARY_Z_COMMIT=latest), its ground army (the flyers
+            # and lurkers have their own rules); no worker scout (its overlords)
+            "army": {"provider": "learned", "model": "commit/latest", "commit": True, "draw": True, "scout": False,
+                     "types": [37, 38, 39, 45, 46], "rules": ["posts", "raid", "join", "sweep", "press"], "hunt": True},
+            "fight": {"provider": "zerg"}, "arbiter": "fixed_priority/v1"},
     # the fight layer alone, for micro drills (gary/drills.py)
     "drill": {"version": "drill", "posture": "normal", "macro": None, "army": None,
               "fight": {"provider": "command", "model": "fight_cmd/latest_memory", "workers": False},
@@ -773,7 +777,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if m.get("simcity"):
             from gary.agent.simcity import SimCity
             g.simcity = SimCity(g, m.get("simcity_door", 32))
-    g.posture = {"normal": NormalPosture, "early_pool/v1": EarlyPoolPosture,
+    from gary.agent.zerg_posture import AlarmDefense, ZergPosture
+    g.posture = {"normal": NormalPosture, "zerg": ZergPosture, "early_pool/v1": EarlyPoolPosture,
                  "early_pool/v2": EarlyPoolPostureV2, "early_pool/v3": EarlyPoolPostureV3,
                  "early_pool/v4": EarlyPoolPostureV4, "early_pool/v5": EarlyPoolPostureV5,
                  "early_pool/v6": EarlyPoolPostureV6,
@@ -784,7 +789,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         path = model_path(m["macro"]["model"], g.matchup, g.race.letter)
         macro = load("macro", str(path))
         models["macro"] = getattr(macro, "path", "?")
-        builds = {k: c(g) for k, c in (("one_base_defense", OneBaseDefense), ("ling_flood_defense", LingFloodDefense))
+        builds = {k: c(g) for k, c in (("one_base_defense", OneBaseDefense), ("ling_flood_defense", LingFloodDefense),
+                                        ("alarm", AlarmDefense))
                   if k in m["macro"].get("builds", [])}
         if style is None and m["macro"].get("selector") and mapinfo is not None:
             # the strategy selector (gary/agent/selector.py): the build style for this map, from games counted
@@ -833,9 +839,15 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                  belief_hold=bool(m["army"].get("belief")), hunt_belief=m["army"].get("hunt_belief", False),
                                  hold_moves=m["army"].get("hold_moves", True), hold_margin=m["army"].get("hold_margin"),
                                  draw=m["army"].get("draw", False), engage=_engage_model(g, m),
-                                 commit=m["army"].get("commit", False), commit_act=m["army"].get("commit_act"))
+                                 commit=m["army"].get("commit", False), commit_act=m["army"].get("commit_act"),
+                                 scout=m["army"].get("scout", True), types=m["army"].get("types"),
+                                 rules=m["army"].get("rules", ()))
             g.army.commit_floor = m["army"].get("commit_floor")
-    if m["fight"] is not None:
+    if m["fight"] is not None and m["fight"]["provider"] == "zerg":
+        from gary.agent.zerg_fight import ZergFight
+        g.fight = ZergFight(g, m["fight"].get("roles", True), m["fight"].get("lurkers", True), seed)
+        models["fight"] = g.fight.model_path or "none"
+    elif m["fight"] is not None:
         f = m["fight"]
         if f["provider"] == "roles" and f.get("model") is None:
             fight = None

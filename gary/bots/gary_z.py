@@ -256,9 +256,9 @@ class GaryZ(ZergV3):
         self._post_points = None
         self.next_query = 0
         self.rng = random.Random(seed * 7919 + 1)          # the dice (deterministic per seed)
-        # its fights: the Zerg role model (gary/bots/zerg_roles.py: the pros' Zerg units before contact and
+        # its fights: the Zerg role model (gary/agent/zerg_roles.py: the pros' Zerg units before contact and
         # in it), in place of v3's scripted micro; none trained yet, v3's
-        from gary.bots.zerg_roles import ZergRoles, latest_zerg_model
+        from gary.agent.zerg_roles import ZergRoles, latest_zerg_model
         roles = latest_zerg_model()
         self.fight_roles = ZergRoles(self, roles) if roles is not None else None
         self.used_larva: dict[int, int] = {}                # larva tag -> frame it was morphed

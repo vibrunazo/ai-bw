@@ -55,12 +55,14 @@ class ZergExecutor(Executor):
     # A shift-click to take the overlord out of the selection doesn't, here: 330 s)
     box_extras = frozenset({Z.LARVA, Z.OVERLORD})
     box_orders = frozenset({2, 3, 6, 41})         # Guard, PlayerGuard, Move, ZergBirth
+    army_select = "ctrl"
     in_flight = 24                                # frames a morph's money counts as spent before the game shows it
                                                   # (Gary-Z's: a larva's is taken at once; 2 s held a drone's 50 idle)
 
     def __init__(self, g: Gary):
         super().__init__(g)
         self.used_larva: dict[int, int] = {}             # larva tag -> frame it was morphed
+        self.morphing: dict[int, int] = {}               # unit or building ordered to morph -> frame it's done
         self.morphs: list[tuple[int, int, int]] = []     # (frame, unit type, frames to make): eggs hide what they'll be
         self.build_frames: dict[int, int] = {}
         self.select_misses = 0
@@ -292,7 +294,9 @@ class ZergExecutor(Executor):
         """One unit or building of the kind selected, then its morph."""
         g, hi, d = self.g, self.g.hi, t.data
         building = d["act"] == BMORPH
-        units = [u for u in mine if u["type"] == d["of"] and u["completed"]
+        f = hi.frame
+        self.morphing = {t: until for t, until in self.morphing.items() if until > f}
+        units = [u for u in mine if u["type"] == d["of"] and u["completed"] and u["tag"] not in self.morphing
                  and (not building or (u.get("queue", 0) == 0 and u["order"] not in (O.ORDER_RESEARCH, O.ORDER_UPGRADE)))]
         if not units:
             LOG.order(g.hi.side, hi.frame, g.race.names.get(d["id"], str(d["id"])), "dropped",
@@ -305,8 +309,12 @@ class ZergExecutor(Executor):
         if not ok:
             LOG.order(g.hi.side, hi.frame, g.race.names.get(d["id"], str(d["id"])), "dropped", "the morph wasn't taken",
                       by="executor")
-        if ok and not building:
+        if ok:
+            # (a building morphing still shows as what it was: a colony becoming a sunken was ordered again and
+            # again; its morph counts as in production until done)
             self.morphs.append((hi.frame, d["id"], self._frames_to_make(d["id"])))
+            for tag in obs["selection"]:
+                self.morphing[tag] = hi.frame + self._frames_to_make(d["id"])
         g.task = None
 
     def _select_one(self, obs: dict, mine: list[dict], units: list[dict]) -> bool:

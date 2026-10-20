@@ -238,11 +238,15 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
         elif opponent == "garyz":
             from gary.bots.gary_z import GaryZ
             zerg = GaryZ(his["Z"], mapinfo, seed or 0)
+        elif opponent not in ("dummy",):           # the one Gary playing Zerg, from its manifest (docs/REFACTOR.md)
+            from gary.agent.manifests import build_gary
+            zerg = build_gary(his["Z"], mapinfo, opponent, seed=seed or 0)
         else:
             zerg = ZergRush(his["Z"], mapinfo)
         # the dummy knows where Gary is (no scouting): its waves go straight to Gary's main
-        zerg.attack_after = int(attack_after_s * 24)
-        zerg.target = next((u["x"], u["y"]) for u in obs["units"] if u["type"] == C.COMMAND_CENTER)
+        if not hasattr(zerg, "race"):                # (the bots of gary/bots; the one Gary scouts for itself)
+            zerg.attack_after = int(attack_after_s * 24)
+            zerg.target = next((u["x"], u["y"]) for u in obs["units"] if u["type"] == C.COMMAND_CENTER)
         end = int(minutes * 60 * 24)
         result = "time"
         from eval.pairs import Brancher                    # (paired fight episodes, when GARY_PAIRS is set)
@@ -278,7 +282,7 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
                 eco["built"] = built.look(o["units"])
                 bank = next(p for p in o["players"] if p["slot"] == slot_of["T"])
                 print(f"{t // 60}:{t % 60:02d}  buildings T {alive['T']} Z {alive['Z']}  "
-                      f"army T {army['T']} Z {army['Z']}  waves sent {zerg.waves}  "
+                      f"army T {army['T']} Z {army['Z']}  waves sent {getattr(zerg, 'waves', '-')}  "
                       f"economy SCVs {eco['scvs']} CCs {eco['ccs']} army supply {eco['army']:g} built {eco['built']:g} "
                       f"bank {bank['minerals']}/{bank['gas']}", flush=True)
                 if not alive["T"] or not alive["Z"]:
@@ -293,6 +297,8 @@ def play_match(map_path: str, minutes: float, seed: int | None, save: str, make_
             his["Z"].save_pov(pov[:-len(".pov.jsonl")] + ".zpov.jsonl")
         if hasattr(gary, "save_trace") and pov.endswith(".pov.jsonl"):
             gary.save_trace(pov[:-len(".pov.jsonl")] + ".trace.jsonl")
+        if hasattr(zerg, "save_trace") and pov.endswith(".pov.jsonl"):
+            zerg.save_trace(pov[:-len(".pov.jsonl")] + ".ztrace.jsonl")
         if pov.endswith(".pov.jsonl"):                # (every layer's decisions and orders: eval/why.py reads them)
             LOG.save_records(pov[:-len(".pov.jsonl")] + ".records.jsonl")
         print(f"{result}; saved {save} and {pov}")
@@ -307,8 +313,8 @@ def main() -> None:
     ap.add_argument("--save", default="gary_vs_rush.rep")
     ap.add_argument("--attack-after", type=float, default=0, help="no attack before this many seconds")
     ap.add_argument("--style", type=int, help="build style (taxonomy cluster) to steer Gary's macro toward")
-    ap.add_argument("--opponent", default="dummy", choices=["dummy", "v1", "v1a", "v1d", "v2", "v3", "garyz", "replayed"],
-                    help="the Zerg: this dummy, or gary/bots/zerg_v1.py (gathers, judges, surrounds, retreats)")
+    ap.add_argument("--opponent", default="dummy",
+                    help="the Zerg: this dummy, v1 v1a v1d v2 v3 garyz replayed (gary/bots), or a Zerg manifest (gz1)")
     args = ap.parse_args()
     from gary.agent.manifests import build_gary
     make = lambda hi, m: build_gary(hi, m, args.vs, args.style, seed=args.seed)
