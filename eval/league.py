@@ -97,6 +97,15 @@ def gaps(rows: dict[str, list[dict]], race: str, workers: int, era: str = "old")
     return gap_score(Xg, Xp)
 
 
+def save_rows(out: Path, rows_t: dict, rows_z: dict) -> None:
+    """Both sides' per-minute feature rows, kept beside round.json (rows.json.gz, by replay path relative to the round):
+    eval/gap_windows.py reads them instead of re-simulating the replays."""
+    import gzip
+    rel = lambda p: str(Path(p).resolve().relative_to(out.resolve())).replace("\\", "/")
+    with gzip.open(out / "rows.json.gz", "wt", encoding="utf-8") as f:
+        json.dump({"T": {rel(p): r for p, r in rows_t.items()}, "Z": {rel(p): r for p, r in rows_z.items()}}, f)
+
+
 AHEAD = 1.4          # a game at time: the side whose supply used (workers and army) in the last minute is this many
                      # times the other's is ahead; else even
 
@@ -173,6 +182,7 @@ def main() -> None:
         monitor.tally("results", g["result"])
     done = [g["replay"] for g in games if g["result"] != "error"]
     rows_t, rows_z = side_rows(done, "T", args.parallel), side_rows(done, "Z", args.parallel)
+    save_rows(out, rows_t, rows_z)
     grade(games, rows_t, rows_z)
     table = {"round": args.round, "terran": args.vs, "minutes": args.minutes, "games": games,
              "results": dict(Counter(g["result"] for g in games)),

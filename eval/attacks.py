@@ -9,7 +9,8 @@ middle at the start):
 
   share     of the Terran's fighter supply on the map, the most within THERE of the point over its first
             ARRIVE_S: the army that went (pros gather it first)
-  late      fighters arriving within THERE after ARRIVE_S, per fighter there by then: the trickle
+  late      fighters arriving within THERE after ARRIVE_S, per fighter there by then: the trickle; and of those,
+            the share made after the attack began (production walking to it) rather than stragglers
   medics    medics per marine within THERE at the share's moment, over the same ratio across its army
             (1: they came along; under 1: left behind)
   sunkens   sunken colonies within NEAR of the point at the start: attacked into static defense
@@ -82,6 +83,7 @@ def attacks(path: str) -> list[dict] | None:
     cur = None
     last_near = last_big = -10 ** 9           # (any fighter near a Zerg building; ATTACK_N or more)
     prev: dict[int, dict] = {}
+    born: dict[int, int] = {}                 # each Terran fighter's first frame seen
     end = MINUTES * 60 * 24
     while g.frame < end:
         try:
@@ -97,6 +99,8 @@ def attacks(path: str) -> list[dict] | None:
         f = o["frame"]
         units = {u["tag"]: u for u in o["units"]}
         mine = [u for u in o["units"] if u["owner"] == ts and u["type"] in FIGHTERS and u["completed"]]
+        for u in mine:
+            born.setdefault(u["tag"], f)
         zb = [(u["x"], u["y"]) for u in o["units"] if u["owner"] == zs and _is_zbuilding(u["type"])]
         near = [u for u in mine if zb and min(math.dist((u["x"], u["y"]), b) for b in zb) < NEAR]
         if near:
@@ -104,7 +108,7 @@ def attacks(path: str) -> list[dict] | None:
                 px = sum(u["x"] for u in near) / len(near)
                 py = sum(u["y"] for u in near) / len(near)
                 cur = {"start": f, "at": (px, py), "share": 0.0, "medics": None, "there": set(), "late": 0,
-                       "sunkens": sum(1 for u in o["units"] if u["owner"] == zs and u["type"] == Z.SUNKEN
+                       "late_new": 0, "sunkens": sum(1 for u in o["units"] if u["owner"] == zs and u["type"] == Z.SUNKEN
                                       and math.dist((u["x"], u["y"]), (px, py)) < NEAR),
                        "lost": 0.0, "killed": 0.0, "lost_mid": None, "killed_mid": None}
             last_near = f
@@ -126,7 +130,9 @@ def attacks(path: str) -> list[dict] | None:
                     cur["medics"] = (d_here / m_here) / (d_all / m_all) if m_here and m_all and d_all else None
                 cur["there"] |= {u["tag"] for u in here}
             else:
-                cur["late"] += sum(1 for u in here if u["tag"] not in cur["there"])
+                fresh = [u for u in here if u["tag"] not in cur["there"]]
+                cur["late"] += len(fresh)
+                cur["late_new"] += sum(1 for u in fresh if born.get(u["tag"], 0) > cur["start"])
                 cur["there"] |= {u["tag"] for u in here}
             for t, u in prev.items():                     # (deaths since the last look, near the point)
                 if t in units or math.dist((u["x"], u["y"]), at) >= THERE:
@@ -143,6 +149,7 @@ def attacks(path: str) -> list[dict] | None:
                 lm = cur["lost"] if cur["lost_mid"] is None else cur["lost_mid"]
                 km = cur["killed"] if cur["killed_mid"] is None else cur["killed_mid"]
                 out.append({"minute": cur["start"] / 1440, "share": cur["share"], "late": cur["late"] / n0,
+                            "late_n": cur["late"], "late_new": cur["late_new"],
                             "medics": cur["medics"], "sunkens": cur["sunkens"], "lost": cur["lost"],
                             "killed": cur["killed"], "losing": lm > km, "stayed": still})
                 cur = None
@@ -159,7 +166,8 @@ def summary(name: str, games: list[list[dict]]) -> None:
     mean = lambda v: round(sum(v) / len(v), 2) if v else None
     print(f"{name}: {len(games)} games, {len(rows)} attacks ({len(rows) / len(games):.1f} a game)")
     print(f"  share of the army there (median) {med([a['share'] for a in rows])}; late arrivals per one there "
-          f"{mean([a['late'] for a in rows])}")
+          f"{mean([a['late'] for a in rows])}, of them made after the attack began "
+          f"{sum(a['late_new'] for a in rows) / max(1, sum(a['late_n'] for a in rows)):.0%}")
     print(f"  medics along (1 = as in its army) {med([a['medics'] for a in rows if a['medics'] is not None])}; "
           f"into sunkens {mean([a['sunkens'] > 0 for a in rows])} of attacks")
     print(f"  lost / killed supply a game {mean([a['lost'] for a in rows]) * len(rows) / len(games):.1f} / "
@@ -170,7 +178,7 @@ def summary(name: str, games: list[list[dict]]) -> None:
           f"{mean([a['stayed'] for a in losing])}")
     by = {}
     for a in rows:
-        by.setdefault(min(int(a["minute"] // 4) * 4, 16), []).append(a)
+        by.setdefault(min(int(a["minute"] // 4) * 4, 28), []).append(a)
     print("  by minute:", {f"{k}-{k + 4}": (len(v), med([a['share'] for a in v])) for k, v in sorted(by.items())})
 
 

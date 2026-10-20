@@ -587,8 +587,7 @@ OPTIONS = {
     "split": lambda m: m["army"].update(hunt_split=True),
     "static": lambda m: m["army"].update(static_odds=1.5),
     # the fight roles model trained on whole games to 30 minutes, old and modern (ingest/response_dataset.py --era
-    # both; until 2026-10-20 the first 20 minutes on the three 1.16 maps): either race's. In gz1; not for gt1 (round
-    # R30T against B30: won 33 (34), the Zerg ahead at 30:00 in 6 (2), its gap at 21-30 minutes 0.45 (0.39))
+    # both; until 2026-10-20 the first 20 minutes on the three 1.16 maps): either race's. In gz1 and gt1
     "roles30": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_30min.npz"),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
@@ -783,9 +782,12 @@ def manifest_of(name: str | dict) -> dict:
 # (army.py) also when 4x ahead of the enemy fighters seen in the last minute, searching unseen bases with squads
 # (round Jhs against G13: won 24 (21), lost 2 (3)); engages only where the group outweighs the static defense
 # (round Jstatic against Jhs: the same 24 won, led at 20:00 15 (12), supply killed / lost 78.8 / 44.8 a game to
-# 71.9 / 52.6). Changes are judged as options against it, and an adopted one goes in here
-MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords+hunt4+split+static"),
-                    "version": "gt0.3"}
+# 71.9 / 52.6); the fight roles from whole games to 30 minutes, old and modern (96 paired games against gt0.3,
+# rounds B30 + B30b against R30T + R30Tb: won 54 (57), lost 9 (7), the gap per 5-minute window within noise in
+# every window; adopted as the model that has seen late-game and modern fights). Changes are judged as options
+# against it, and an adopted one goes in here
+MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords+hunt4+split+static+roles30"),
+                    "version": "gt0.4"}
 
 
 def _against(m: dict, vs: dict) -> dict:

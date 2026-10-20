@@ -689,7 +689,15 @@ plan and the full log).
   --move`); a manifest picks its model by its data (`roles_data`, option `roles30` for either race). Against
   B30 (48 games, 30 minutes): gz1 with it, the Zerg won or led at 30:00 in 9 (6) and its gap at 21-30 minutes
   0.40 (0.46): in gz1. gt1 with it won 33 (34), the Zerg led at 30:00 in 6 (2), Gary-T's gap at 21-30 minutes
-  0.45 (0.39): not adopted (next: which half, the late minutes or the modern games, hurt the Terran's).
+  0.45 (0.39) from one round with no spread: open, not rejected. The new model imitates the pros better offline
+  (0.754 to 0.728) and the old one never saw a fight past 20 minutes or a modern map; Gary-T's fight options
+  were tuned around the old one. Next: 96 paired games with the gap per 5-minute window and its spread
+  (eval/gap_windows.py); if the late gap holds, re-tune the fight options to the new model, then the data
+  ablation (old maps to 30 minutes against modern only). Done: over 96 paired games (B30 + B30b against R30T + R30Tb) the
+  Terran's gap is within noise in every window (20-25 minutes -0.001, 25-30 +0.014, 90% intervals across
+  zero); won 54 (57), lost 9 (7). In gt1 (gt0.4); R30T + R30Tb are its 96-game baseline. Also measured: two
+  thirds of Gary-T's late arrivals at its attacks were units that existed when the attack began (other clusters,
+  stragglers), a third new production (the pros' 37%): the trickle is the army not gathering first.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the

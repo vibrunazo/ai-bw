@@ -9,8 +9,10 @@ How to work in this repository, for coding agents and people alike. The design i
 - `gary/`: the agent (`gary/agent`: arbiter, executor and its race plugs, macro, army, fight, rules), the
   race data (`gary/terran.py`, `zerg.py`, `protoss.py`, `race.py`), the learned models (`gary/policy`), the
   interface (human-like hands) and the game environment.
-- `eval/`: the launcher (`match.py`), league rounds (`league.py`), measures against the pros (`humanlike.py`,
-  `attacks.py`), the records' queries (`why.py`), the run monitor (`monitor.py`, `priority.py`).
+- `eval/`: the launcher (`match.py`), league rounds (`league.py`, which keeps each round's feature rows), measures
+  against the pros (`humanlike.py`, `attacks.py`), two versions compared game against game per time window with a
+  bootstrap spread (`gap_windows.py`), the records' queries (`why.py`), the run monitor (`monitor.py`,
+  `priority.py`).
 - `train/`, `ingest/`, `resim/`: models, datasets from replays, the replay re-simulator.
 - `adapters/scr_bridge`: playing StarCraft: Remastered. `tests/`: smoke, parity, matchups, game data.
 - `docs/`: ARCHITECTURE (design), CONTROL (layers and manifests), RACES (the per-race audit), REFACTOR (one
@@ -23,7 +25,8 @@ How to work in this repository, for coding agents and people alike. The design i
   (`--vs`, default gt1) against Zerg (`--zerg`, default gz1); `gary/play.py --live` plays a human.
 - A change is an option on them (`gt1+<option>`), judged in paired 48-game rounds on the ladder maps
   (`--maps ladder --seeds 6 --first 4004`, 30 minutes) and the gap score to modern pros; 24 games are too
-  noisy for close calls. An adopted option is folded into the manifest with a version bump, so the name
+  noisy for close calls, and a single round's gap score needs its spread (`eval/gap_windows.py`, 96 paired games
+  for a close call). An adopted option is folded into the manifest with a version bump, so the name
   never grows into a chain of options.
 - Gary loads the newest `runs/<kind>/<matchup>_<race>_*` model; experiments go to `--out` so they stay out of
   that glob.

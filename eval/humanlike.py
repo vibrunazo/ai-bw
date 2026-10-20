@@ -524,12 +524,12 @@ def pro_rows(race: str, games: int, workers: int, era: str = "old") -> dict[str,
     return {p: have[p] for p in chosen if have.get(p)}
 
 
-def gap_score(Xs, Xp, cap: float = 5.0) -> list:
-    """Per minute range (BUCKETS, then all minutes): (the mean standardized gap, the share of features
+def gap_score(Xs, Xp, cap: float = 5.0, buckets=BUCKETS) -> list:
+    """Per minute range (buckets, BUCKETS by default, then all minutes): (the mean standardized gap, the share of features
     with Gary's median inside the pros' interquartile range), or None where there are too few rows.
     A feature's spread: the pros' interquartile range, else their standard deviation, else 1."""
     out = []
-    for a, b in list(BUCKETS) + [(0, 99)]:
+    for a, b in list(buckets) + [(0, 99)]:
         g = Xs[(Xs[:, 0] >= a) & (Xs[:, 0] <= b)]
         q = Xp[(Xp[:, 0] >= a) & (Xp[:, 0] <= b)]
         if len(g) < 5 or len(q) < 20:
