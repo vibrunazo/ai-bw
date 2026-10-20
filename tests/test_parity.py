@@ -24,7 +24,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 FIXTURE = REPO / "tests" / "fixtures" / "parity.json"
 
-TERRAN = "v029+commit+draw+floor+mass+nonatbunker+depots"   # the defaults of 2026-10-19 (docs/REFACTOR.md)
+TERRAN = "gt1"                                     # the Terran default (gary/agent/manifests.py)
 # (map, seed, side A, side B): TvZ on three maps, and a mirror of each race that plays (docs/REFACTOR.md
 # "Tests across matchups")
 GAMES = [("KnockOut 1.4", 4004, "T", "Z"), ("Fighting Spirit 1.4", 4005, "T", "Z"), ("Odyssey-RE 2.0", 4006, "T", "Z"),

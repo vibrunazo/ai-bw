@@ -759,6 +759,12 @@ def manifest_of(name: str | dict) -> dict:
     return m
 
 
+# the one Gary playing Terran (2026-10-20): v0.29 with the options adopted round by round since (commit, draw,
+# floor, mass, nonatbunker, depots: docs/PROGRESS.md L5-L6; lords: round G13), folded into one name. Changes are
+# judged as options against it, and an adopted one goes in here
+MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords"), "version": "gt0.1"}
+
+
 def _against(m: dict, vs: dict) -> dict:
     """A manifest with its overrides for the enemy's race (its "vs" section): a layer's dict merged key by key, the
     rest replaced."""

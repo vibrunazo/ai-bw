@@ -8,7 +8,7 @@ Every 30 s a line with both sides' buildings, army and economy; at the end the r
 eval/pairs.py) as before.
 
 Usage:
-  python -m eval.match --a v029+commit+draw+floor+mass+nonatbunker+depots --b gz1 --map <map> --seed 4004 --minutes 20
+  python -m eval.match --a gt1 --b gz1 --map <map> --seed 4004 --minutes 20
   python -m eval.match --a gz1 --b gz1 --map <map> --seed 6001 --minutes 20 --save runs/mirror/m.rep
 """
 

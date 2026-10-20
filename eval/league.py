@@ -130,7 +130,7 @@ def ladder_maps(names: list[str] | None = None) -> dict[str, Path]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--round", required=True, help="the round's name (its folder in runs/league)")
-    ap.add_argument("--vs", default="v029", help="the Terran Gary")
+    ap.add_argument("--vs", default="gt1", help="the Terran Gary")
     ap.add_argument("--zerg", default="gz1", help="the Zerg Gary's manifest")
     ap.add_argument("--seeds", type=int, default=8, help="seeds per map")
     ap.add_argument("--maps", default="fixtures", help="fixtures (the three 1.16 maps), ladder (every current ladder map "

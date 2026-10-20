@@ -6,8 +6,8 @@ committed and pushed; nothing runs in the background.
 ## State
 
 - **Gary is every race, every matchup** (ARCHITECTURE.md §1). One Gary (gary/agent) since the refactor
-  (docs/REFACTOR.md, 2026-10-20): a race is a data module plus an executor plug; Terran (manifest
-  v029+commit+draw+floor+mass+nonatbunker+depots) and Zerg (gz1) play TvZ and mirrors; Gary-Z's old
+  (docs/REFACTOR.md, 2026-10-20): a race is a data module plus an executor plug; Terran (manifest gt1)
+  and Zerg (gz1) play TvZ and mirrors; Gary-Z's old
   stack is deleted. docs/RACES.md is the audit; TvT plays on the same code with its models where they
   exist, Protoss has its data module only (Phase 4).
 - **Data.** StarData and TL packs (1.16 era) plus the first modern pack, data/raw/cwal/2026-10:
@@ -27,7 +27,8 @@ committed and pushed; nothing runs in the background.
 - **Models.** TvZ macro, army, commit, fight, belief, plan, engage, roles for Terran (runs/*/TvZ_T_*),
   TvZ and ZvZ macro and army for Zerg, a Zerg value model. The era experiments are in
   runs/era_experiments (not the newest models; Gary loads runs/<kind>/<matchup>_<race>_* newest).
-- **Play versions.** Terran: v029+commit+draw+floor+mass+nonatbunker+depots; Zerg: gz1. Every game
+- **Play versions.** Terran: gt1 (v0.29 with its adopted options folded in, gary/agent/manifests.py); Zerg:
+  gz1. A change is judged as an option on them (gt1+<option>) and an adopted one goes into the manifest. Every game
   runs through eval/match.py (--a, --b: two manifests); eval/league.py plays Terran against gz1;
   gary/play.py --live plays the local player's race.
 

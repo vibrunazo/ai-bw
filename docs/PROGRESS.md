@@ -60,7 +60,7 @@ game, for reasons in its army and economy rather than its micro.
 | POV viewer | Watch any game from Gary's screen (`viewer/`) | Cursor, clicks, every action in words; Remastered replays; videos | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | — |
 | Trace | Gary's decisions and reasons, recorded (§6.5) | Decision log with model probabilities and fight estimates; POV action log; the learned layers' decisions per league game (`gary/decision_log.py`: inputs, the drawn decision, its log-probability) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
 | Evaluation | Matches against opponents, many seeds, a scoreboard (§9) | `eval/vs_rush.py`: several seeds against scripted Zergs, pro Zergs' armies spawned on their timings (not for economic or humanlikeness judgments: its replays don't re-simulate), or Gary-Z; `eval/scenarios.py`: 239 pro home defenses, several draws of Gary's hands; `eval/humanlike.py`: the humanlikeness classifier and the pro-distance table, either side; `eval/league.py`: Gary-T against Gary-Z; `eval/zerg_losses.py`, `eval/army_effect.py` | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ○ | ○ | — |
-| Matchups and races | Gary plays every race and matchup by design (ARCHITECTURE.md §1); TvZ was the first | One Gary for every race (refactor, 2026-10-20: race object, executor plug, shared providers, one launcher eval/match.py; Gary-Z's stack deleted): Terran (v029+...) and Zerg (gz1) in TvZ, ZvZ mirrors; TvT plays on the same code with its models where they exist; Protoss data module only (executor: Phase 4); the audit: docs/RACES.md | T (+Z) | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T |
+| Matchups and races | Gary plays every race and matchup by design (ARCHITECTURE.md §1); TvZ was the first | One Gary for every race (refactor, 2026-10-20: race object, executor plug, shared providers, one launcher eval/match.py; Gary-Z's stack deleted): Terran (gt1) and Zerg (gz1) in TvZ, ZvZ mirrors; TvT plays on the same code with its models where they exist; Protoss data module only (executor: Phase 4); the audit: docs/RACES.md | T (+Z) | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T | T |
 
 ## Versions
 
@@ -659,6 +659,11 @@ plan and the full log).
   Natural creep colonies (the user's suggestion after human game 4, option `colonies`) were mixed in G8:
   an option. Both races' workers double up on a field 3-4 times as often as pros', but a chore spreading
   them gained nothing per worker-minute (dropped).
+- **One name for the Terran (2026-10-20): gt1.** The play version had grown to
+  v029+commit+draw+floor+mass+nonatbunker+depots, each change an option appended once it won, while the league's
+  default opponent was still the bare v029 (none of them). gt1 is that string plus lords, folded into one manifest
+  (gary/agent/manifests.py), the default of gary/play.py, eval/league.py and the tests; changes are judged as
+  gt1+<option> and an adopted one goes into it.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the
@@ -686,8 +691,8 @@ plan and the full log).
      one a few times, then wander off); a Terran hunts them early with one or two marines, a supply block for
      the Zerg (the user, after human game 4). Done as option `lords` (army_rules.py LordHunt, 2026-10-20): the
      two nearest free marines hunt an overlord with nothing guarding it; overlords killed by 8:00 8 -> 21 in 16
-     games with no more marines lost, and in 48 games against gz1 Gary-T won 21 (19), lost 3 (5). Not yet in
-     the human-play default;
+     games with no more marines lost, and in 48 games against gz1 Gary-T won 21 (19), lost 3 (5). In the default,
+     gt1 since (below);
   7. building placement (packed depots, room to build and move; a later phase in docs/REFACTOR.md).
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments

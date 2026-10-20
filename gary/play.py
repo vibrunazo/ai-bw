@@ -21,7 +21,7 @@ from gary.mapinfo import MapInfo
 CC, SCV, MARINE, RAX, DEPOT = C.COMMAND_CENTER, C.SCV, C.MARINE, C.BARRACKS, C.SUPPLY_DEPOT
 
 
-DEFAULTS = {"T": "v029+commit+draw+floor+mass+nonatbunker+depots", "Z": "gz1"}   # the Gary each race plays
+DEFAULTS = {"T": "gt1", "Z": "gz1"}   # the Gary each race plays
 HALLS = {C.COMMAND_CENTER: "T", C.HATCHERY: "Z", C.NEXUS: "P"}
 
 

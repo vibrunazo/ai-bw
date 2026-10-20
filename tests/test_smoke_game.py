@@ -23,7 +23,7 @@ def test_default_gary_macro_basics():
     try:
         from eval.match import Match
         with contextlib.redirect_stdout(io.StringIO()):
-            m = Match(1, "v029", REPO / "tests" / "fixtures" / "replays" / "stardata_tvz_standard_ozp3w.rep")
+            m = Match(1, "gt1", REPO / "tests" / "fixtures" / "replays" / "stardata_tvz_standard_ozp3w.rep")
     except Exception as e:                      # no game data or env DLL here
         print(f"skip: {e}")
         return

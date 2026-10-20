@@ -21,7 +21,7 @@ sys.path.insert(0, str(REPO))
 MAP = "KnockOut 1.4"
 SEED = 7001
 MINUTES = 3
-TERRAN = "v029+commit+draw+floor+mass+nonatbunker+depots"
+TERRAN = "gt1"
 ZERG = "gz1"
 # matchup -> (side A's manifest, side B's), or the reason it isn't played
 MATCHUPS = {"TvZ": (TERRAN, ZERG), "ZvZ": (ZERG, ZERG), "TvT": (TERRAN, TERRAN),
