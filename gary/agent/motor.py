@@ -563,9 +563,10 @@ class DirectMotor:
                 # on the portrait of the commonest of them keeps that type only (the player's way)
                 from collections import Counter
                 kinds = Counter(u["type"] for u in mine if u["tag"] in set(sel))
-                hi.ctrl_click_portrait(kinds.most_common(1)[0][0])
-                d["narrowed"] = True
-                return
+                if kinds:                     # (none: the order's selected units died this frame, round G12)
+                    hi.ctrl_click_portrait(kinds.most_common(1)[0][0])
+                    d["narrowed"] = True
+                    return
             d["narrowed"] = False
             if sel:
                 if d["attack"]:
