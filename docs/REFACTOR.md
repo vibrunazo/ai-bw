@@ -220,6 +220,17 @@ wins) and its gap score; a ZvZ mirror round plays to the end as the first mirror
   ("Matchups and races" row, "Macro executor" row); CONTROL.md "Where today's code goes";
   HANDOFF.md.
 
+**Done 2026-10-20.** eval/match.py is the one launcher (two manifests, races from them, both sides'
+screens, traces and records, paired fight episodes): Gary-T against gz1 through it plays byte for byte the
+games the old launcher played. eval/league.py, the tests and the tools that step a game (`Match`:
+army_orders, block_branch, value_branches, losses, train/plan, value, early_switch, macro_rl) use it; their
+opponent pools are gz1. gary/play.py plays the local player's race (`--terran`, `--zerg`). Deleted:
+gary/bots (zerg_rush, zerg_v1-v3, gary_z, zerg_replayed, hello; zerg_roles moved to gary/agent),
+eval/mirror.py, vs_rush.py, walls_bench.py, block_drill.py, lurker_games.py, army_effect.py,
+garyz_accept.py, zerg_opening.py (each built on the scripted Zergs; in git). `git grep gary.bots` is
+empty. tests/test_parity.py now plays Gary-T against gz1 (hashes recorded again: the Zerg changed);
+the smoke games play gz1. A Gary's hands are its manifest's (`hands`, pro by default).
+
 ## Phase 4: Protoss (after, separately planned)
 
 `gary/protoss.py` with the same names, `ProtossExecutor` (probes place and leave, pylon power as

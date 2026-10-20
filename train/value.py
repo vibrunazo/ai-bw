@@ -50,7 +50,7 @@ GARY_EVERY_S = 5
 REFRESH = 50                                   # batches between refreshes of the bootstrapped head's targets
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
         for m in ("python_gg13676", "standard_ozp3w", "heartbreak_9rg84")}
-OPPONENTS = ("dummy", "v2", "replayed")
+OPPONENTS = ("gz1",)                   # (the Zerg Gary; the scripted Zergs were deleted in docs/REFACTOR.md Phase 3)
 STYLES = (None, 1, 2, 3, 4)
 VERSIONS = ("v019", "v019+sample_t05")         # by seed: even, odd
 MINUTES = 12
@@ -137,10 +137,10 @@ def gary_game(args: tuple) -> dict:
     """Gary's view every GARY_EVERY_S seconds of one game, the score's events, and the result."""
     opponent, mp, seed, version, style = args
     from eval.block_branch import Watch, _step
-    from eval.walls_bench import Match
+    from eval.match import Match
     from gary.policy.value import ValueView
     with contextlib.redirect_stdout(io.StringIO()):
-        m = Match(seed, 0, version, MAPS[mp], opponent, style=style)
+        m = Match(seed, version, MAPS[mp], opponent, style=style)
     w = Watch(m)
     w.look()
     view = ValueView(m.gary, _belief_model())

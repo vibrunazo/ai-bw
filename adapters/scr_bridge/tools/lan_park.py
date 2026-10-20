@@ -25,7 +25,7 @@ create the game); the guest is lan-join's prefix with the account Down and minus
 create; the game appears in the guest's games list — join it. Gary plays the HOST client (the
 one with the bridge), so its lobby row must be Terran. Once the match runs:
 
-    python -m gary.bots.terran_v01 --live
+    python -m gary.play --live
 """
 from __future__ import annotations
 
@@ -244,7 +244,7 @@ Finish by hand:
   1. host window:  pick map + game type in the dialog, Ok to create the game
   2. guest window: the game shows up in the list — join it, pick your race
   3. host lobby:   set Gary's row race to Terran (the bot is Terran-only)
-  4. host starts the game; once the match runs:  python -m gary.bots.terran_v01 --live""")
+  4. host starts the game; once the match runs:  python -m gary.play --live""")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 """The Zerg executor (docs/REFACTOR.md Phase 1): Zerg hands over the race-neutral Executor, from
-Gary-Z's (gary/bots/gary_z.py, zerg_v3.py).
+Gary-Z's (its gary_z.py and zerg_v3.py, in git before the refactor's Phase 3).
 
   produce   a larva's unit: a tiny box on a fresh larva (one just morphed still shows as a larva a
             moment: not again), then its key; zergling and scourge orders make two

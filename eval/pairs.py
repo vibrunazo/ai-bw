@@ -1,7 +1,7 @@
 """Paired fight episodes in league games (docs/SELF_PLAY.md "The loop": fight episodes paired on the same
 positions, with Gary-Z the reacting side): the one RL target of the first league nights.
 
-In a league game (gary/bots/zerg_rush.py play_match, GARY_PAIRS set), when Gary-Z's fighters see enemy
+In a league game (eval/match.py, GARY_PAIRS set), when Gary-Z's fighters see enemy
 fighters near them (no more often than EVERY), the game is saved and two arms are played from that
 moment for WINDOW, both bots live (each arm a deep copy of both bots; the models and the game shared,
 the game restored before each arm): in each arm Gary-Z's fight roles draw their own decisions. Then the
@@ -41,7 +41,7 @@ ARMY_WINDOW = 90 * 24           # army mode (GARY_PAIRS_LAYER=army_t): an arm pl
 ARMY_EVERY = 60 * 24            # ...at most this often...
 ARMY_FROM = 5 * 60 * 24         # ...from then on...
 ARMY_MIN_X2 = 32                # ...with the Terran's army this big (16 supply): its decision moves the game
-                                # three times as much as the chaos over 90 s (eval/army_effect.py)
+                                # three times as much as the chaos over 90 s (eval/army_effect.py, in git before the refactor's Phase 3)
 
 
 def _value(t: int) -> float:
@@ -87,6 +87,17 @@ def fight_outcome(a: dict, b: dict, slot: int) -> tuple[float, dict] | None:
                     "field": field, "units": len(ours)}
 
 
+def _net(a: dict, b: dict, zslot: int) -> float:
+    """The army value the Zerg's enemy lost less what it lost between two snapshots (tag -> (owner, type)), per 100."""
+    lost = lambda own: sum(_value(v[1]) for tag, v in a.items() if (v[0] == zslot) == own and tag not in b)
+    return (lost(False) - lost(True)) / 100.0
+
+
+def _roles(zerg):
+    """The Zerg Gary's fight roles (gary/agent/zerg_fight.py ZergFight.roles), or None."""
+    return getattr(getattr(zerg, "fight", None), "roles", None)
+
+
 class Brancher:
     """Paired episodes in one league game (GARY_PAIRS: the file they go to, .npz, written at the end)."""
 
@@ -118,7 +129,7 @@ class Brancher:
             return
         self.next = f + CHECK
         zerg = objs["zerg"]
-        if getattr(zerg, "fight_roles", None) is None:
+        if _roles(zerg) is None:
             return
         o = game.observe()
         z = self.slot_z
@@ -142,7 +153,7 @@ class Brancher:
             self.candidate = RoleModel.load(self.candidate_path)
         ab = self.candidate is not None and self.kind_turn % 2 == 0
         self.kind_turn += 1
-        self.incumbent_roles = zerg.fight_roles.model
+        self.incumbent_roles = _roles(zerg).model
         dice = [self.rng.random() for _ in range(2)]
         if ab:
             dice = [dice[0], dice[0]]                         # (the same dice: the models differ)
@@ -150,7 +161,7 @@ class Brancher:
         for arm in range(2):
             game.restore()
             c = _copy(objs)
-            roles = c["zerg"].fight_roles
+            roles = _roles(c["zerg"])
             if ab and arm == 1:
                 roles.model = self.candidate
             roles.rng = random.Random(dice[arm])
@@ -168,7 +179,7 @@ class Brancher:
         if self.kind_turn % CHECK_EVERY == 1:               # (arm 0 again: the same end, or the branches lie)
             game.restore()
             c = _copy(objs)
-            c["zerg"].fight_roles.rng = random.Random(dice[0])
+            _roles(c["zerg"]).rng = random.Random(dice[0])
             _play(game, c, WINDOW)
             if snap(game.observe()) == end0:
                 self.checks_ok += 1
@@ -239,7 +250,6 @@ class Brancher:
             recs = _play(game, c, ARMY_WINDOW)
             end = snap(game.observe())
             end0 = end if arm == 0 else end0
-            from eval.army_effect import _net
             arms.append({"reward": -_net(start, end, self.slot_z), "away": 0.0, "moved": 0.0, "field": False,
                          "units": len(mine),
                          "model": str(getattr(layer.engage if self.layer == "engage_t" else layer.model, "path", "?")),

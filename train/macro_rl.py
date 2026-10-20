@@ -36,7 +36,7 @@ from eval import monitor, priority
 from eval.block_branch import MAPS, Watch, _match, _step
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OPPONENTS = ("dummy", "v2", "replayed")
+OPPONENTS = ("gz1",)                   # (the Zerg Gary; the scripted Zergs were deleted in docs/REFACTOR.md Phase 3)
 VERSION = "v018"
 FROM, UNTIL = 2 * 60 * 24, 9 * 60 * 24
 HORIZON = 180 * 24

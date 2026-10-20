@@ -161,6 +161,12 @@ Options try one change on top of a manifest without a manifest of its own: `v010
 | The `if` order in `act()`, `macro_turn`, `INTERRUPTIBLE` | L6 `fixed_priority/v1` |
 | `HumanInterface` | L7, unchanged |
 
+Since the one-Gary refactor (docs/REFACTOR.md, 2026-10-20) a race plugs in at L2b (gary/agent/executor.py's
+`Executor`, with terran_executor.py and zerg_executor.py), and the Zerg's providers are posture `zerg`
+(zerg_posture.py), the army options of army_rules.py (posts, raid, join, sweep, press) and fight `zerg`
+(zerg_fight.py); the arbiter's `rotate` option takes the turns as Gary-Z did. Every game runs through
+eval/match.py.
+
 ## Plan
 
 Each step keeps Gary playable, and each step that only moves code must not change behavior: the

@@ -21,15 +21,19 @@ from gary.mapinfo import MapInfo
 CC, SCV, MARINE, RAX, DEPOT = C.COMMAND_CENTER, C.SCV, C.MARINE, C.BARRACKS, C.SUPPLY_DEPOT
 
 
-def terran_slot(game) -> int:
-    """The slot that owns a Command Center: Gary plays Terran. (Slot order is the engine's, not
-    the order of the races list, so bind by what's actually on the map.)"""
+DEFAULTS = {"T": "v029+commit+draw+floor+mass+nonatbunker+depots", "Z": "gz1"}   # the Gary each race plays
+HALLS = {C.COMMAND_CENTER: "T", C.HATCHERY: "Z", C.NEXUS: "P"}
+
+
+def slot_of(game, race: str) -> int:
+    """The slot whose start town hall is this race's. (Slot order is the engine's, not the order of the races
+    list, so bind by what's actually on the map.)"""
     obs = game.observe()
     slots = {p["slot"] for p in obs["players"]}
     for u in obs["units"]:
-        if u["type"] == CC and u["owner"] in slots:
+        if HALLS.get(u["type"]) == race and u["owner"] in slots:
             return u["owner"]
-    raise SystemExit("no Terran (Command Center) player in this game")
+    raise SystemExit(f"no {race} player in this game")
 
 
 def report(hi: HumanInterface, game) -> None:
@@ -44,13 +48,14 @@ def report(hi: HumanInterface, game) -> None:
 
 def play(map_path: str, minutes: float, seed: int | None, save: str, make_bot, name: str,
          command_delay: int = LIVE_COMMAND_DELAY) -> None:
-    """Play against an idle Zerg on a headless OpenBW game (gary/env.py). command_delay: frames
-    from sending a command to it running, as in a networked game. make_bot(hi, mapinfo) builds Gary."""
-    with Game.new(map_path, ["T", "Z"], [name, "Idle (Z)"], seed=seed, command_delay=command_delay) as game:
+    """Play against an idle opponent on a headless OpenBW game (gary/env.py). command_delay: frames
+    from sending a command to it running, as in a networked game. make_bot(hi, mapinfo, race) builds Gary."""
+    race = make_bot.race
+    with Game.new(map_path, [race, "Z" if race != "Z" else "T"], [name, "Idle"], seed=seed, command_delay=command_delay) as game:
         mapinfo = MapInfo.from_game(game)
-        hi = HumanInterface(game, terran_slot(game), PROFILES["pro"], seed=1)
-        hi.side = "T"
-        gary = make_bot(hi, mapinfo)
+        hi = HumanInterface(game, slot_of(game, race), PROFILES["pro"], seed=1)
+        hi.side = race
+        gary = make_bot(hi, mapinfo, race)
         end = int(minutes * 60 * 24)
         while hi.frame < end:
             gary.act()
@@ -69,8 +74,8 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
               snapshots: str | None = None) -> None:
     """Play in a live StarCraft: Remastered client through the bridge (adapters/scr_bridge).
 
-    Gary plays the client's local player (the bridge only accepts that slot), so it must be
-    Terran. act() latency is calibrated from the adapter's reported latency_frames so the
+    Gary plays the client's local player (the bridge only accepts that slot), as its race's Gary
+    (Protoss: none yet, waited out). act() latency is calibrated from the adapter's reported latency_frames so the
     human interface lands actions when they really take effect. The client writes its own
     replay on match end. snapshots: a file for what the bridge showed Gary each second.
     """
@@ -92,23 +97,24 @@ def play_live(pipe: str, minutes: float, profile: str, pov: str | None, make_bot
                 obs = game.observe()
                 mains = [u["type"] for u in obs["units"] if u["owner"] == slot
                          and u["type"] in (CC, C.NEXUS, C.HATCHERY)]
-                if CC in mains:
+                race = HALLS.get(mains[0]) if mains else None
+                if race in make_bot.races:
                     break
                 if mains:
-                    state = "Protoss" if mains[0] == C.NEXUS else "Zerg"
+                    state = "Protoss"
             if state != said:
                 said = state
-                print("waiting for a live game where the local player is Terran (start one)..." if state == "menus" else
-                      f"the match running has the local player as {state}: Gary plays Terran; waiting for the next match",
+                print("waiting for a live game (start one)..." if state == "menus" else
+                      f"the match running has the local player as {state}: no Gary plays it yet; waiting for the next match",
                       flush=True)
             time.sleep(0.25)
         st = game.status()
         mapinfo = MapInfo.from_game(game)
         hi = HumanInterface(game, slot, PROFILES[profile], seed=1)
-        hi.side = "T"
+        hi.side = race
         print(f"playing slot {slot} | act() latency calibrated to {hi.act_latency_frames} frames "
               f"(adapter reported latency_frames={st.get('latency_frames')})", flush=True)
-        gary = make_bot(hi, mapinfo)
+        gary = make_bot(hi, mapinfo, race)
         end = hi.frame + int(minutes * 60 * 24)
         minute = hi.frame // 1440
         snaps = open(snapshots, "w", encoding="utf-8") if snapshots else None
@@ -152,7 +158,9 @@ def _save_live(hi: HumanInterface, gary, pov: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--gary", default="v027", type=manifest_name, help="which Gary (a manifest, options with +: v010+post)")
+    ap.add_argument("--terran", default=DEFAULTS["T"], type=manifest_name, help="the Gary that plays Terran (a manifest)")
+    ap.add_argument("--zerg", default=DEFAULTS["Z"], type=manifest_name, help="the Gary that plays Zerg (a manifest)")
+    ap.add_argument("--race", default="T", choices=["T", "Z"], help="headless: the race Gary plays")
     ap.add_argument("--map", help="a .scm/.scx map (or a pre-1.18 replay) for headless play")
     ap.add_argument("--minutes", type=float, default=12)
     ap.add_argument("--seed", type=int)
@@ -168,17 +176,19 @@ def main() -> None:
     ap.add_argument("--pov", help="where to save the point-of-view log (live)")
     ap.add_argument("--snapshots", help="live: save what the bridge showed Gary each second (for tools/parity.py)")
     args = ap.parse_args()
-    make = lambda hi, mapinfo: build_gary(hi, mapinfo, args.gary, args.style, verbose=not args.quiet,
-                                          fight_path=args.fight_model)
-    version = manifest_of(args.gary)["version"]
+    manifests = {"T": args.terran, "Z": args.zerg}
+
+    def make(hi, mapinfo, race):
+        return build_gary(hi, mapinfo, manifests[race], args.style, verbose=not args.quiet, fight_path=args.fight_model)
+    make.races, make.race = set(manifests), args.race
     if args.live:
-        play_live(args.pipe, args.minutes, args.profile, args.pov or f"gary_{args.gary}_live.pov.jsonl", make,
-                  args.snapshots)
+        play_live(args.pipe, args.minutes, args.profile, args.pov or "gary_live.pov.jsonl", make, args.snapshots)
     else:
         if not args.map:
             ap.error("--map is required unless --live")
-        play(args.map, args.minutes, args.seed, args.save or f"gary_{args.gary}.rep", make, f"Gary {version} (T)",
-             command_delay=args.command_delay)
+        version = manifest_of(manifests[args.race])["version"]
+        play(args.map, args.minutes, args.seed, args.save or f"gary_{manifests[args.race]}.rep", make,
+             f"Gary {version} ({args.race})", command_delay=args.command_delay)
 
 
 if __name__ == "__main__":

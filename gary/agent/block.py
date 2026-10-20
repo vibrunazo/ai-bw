@@ -26,7 +26,7 @@ right-click each unit a little into the wall or past the last one placed, so the
 against it (spam the click while a group compresses), then hold position; closed() checks the
 result as now. It doesn't depend on click accuracy, and a group can be pressed in at once rather
 than placed one by one (the natural's 6-10 unit blocks were too slow: closed 42% in the drill).
-Measure with eval/block_drill.py (--chokes ramp natural).
+Measured with eval/block_drill.py (--chokes ramp natural; in git before the refactor's Phase 3).
 """
 
 from __future__ import annotations

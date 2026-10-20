@@ -2,7 +2,7 @@
 keep the CPU they need and the games take what's left (child processes, the games themselves,
 inherit the priority).
 
-    python -m eval.vs_rush ... --priority normal      # full priority (nothing else running)
+    python -m eval.league ... --priority normal       # full priority (nothing else running)
 """
 
 from __future__ import annotations

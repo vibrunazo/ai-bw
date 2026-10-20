@@ -241,7 +241,7 @@ def main() -> None:
     ap.add_argument("--pairs", action="store_true", help="the game's paired branches, listed")
     ap.add_argument("--pair", type=int, help="one paired branch's arms, side by side")
     ap.add_argument("--side", choices=["T", "Z", "P"])
-    ap.add_argument("--slot", type=int, help="one player's records in a mirror (eval/mirror.py tags them by slot)")
+    ap.add_argument("--slot", type=int, help="one player's records in a mirror (eval/match.py tags them by slot)")
     ap.add_argument("--layer", action="append", help="only these layers' decisions (macro, army, engage, roles, "
                                                      "posture, gas) or records (seen, belief, death); repeatable")
     ap.add_argument("--orders", choices=["fates", "all", "none"], default="fates")

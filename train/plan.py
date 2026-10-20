@@ -28,18 +28,18 @@ from gary.policy.plan import MODES, PlanModel
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
         for m in ("python_gg13676", "standard_ozp3w", "heartbreak_9rg84")}
-OPPONENTS = ("dummy", "v2", "replayed")
+OPPONENTS = ("gz1",)                   # (the Zerg Gary; the scripted Zergs were deleted in docs/REFACTOR.md Phase 3)
 VERSION = "v018+watch+flood"
 MINUTES = 10
 
 
 def collect(args: tuple) -> dict:
     """One game with the rules deciding: the policy's input every second (its last part: the rules' mode)."""
-    from eval.walls_bench import Match
+    from eval.match import Match
     from gary.agent.posture import LearnedPosture
     opponent, mp, seed = args
     with contextlib.redirect_stdout(io.StringIO()):
-        m = Match(seed, 0, VERSION, MAPS[mp], opponent)
+        m = Match(seed, VERSION, MAPS[mp], opponent)
     rec: list = []
     m.gary.posture = LearnedPosture(m.gary, record=rec)
     end = MINUTES * 60 * 24

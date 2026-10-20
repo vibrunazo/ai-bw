@@ -133,7 +133,7 @@ def gary_end(path: str) -> int | None:
         return None
     text = log.read_text(encoding="utf-8", errors="replace")
     if "Zerg replays " in text:
-        # the replayed-pro fixture (gary/bots/zerg_replayed.py) creates its units in the engine, no
+        # the replayed-pro fixture (the replayed-pro Zerg, deleted in the refactor's Phase 3) creates its units in the engine, no
         # commands: its replays re-simulate with an idle Zerg (3 drones and no army at 8:00), so the
         # game can't be measured from them
         raise ValueError(f"{path}: the replayed-pro fixture's games don't re-simulate")

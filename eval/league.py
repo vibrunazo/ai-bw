@@ -1,18 +1,19 @@
-"""The league (docs/SELF_PLAY.md, "The loop"): Gary-T against Gary-Z in parallel headless games, each
-game's outcome, both sides' humanlikeness and the learned layers' decisions kept for the RL that
-trains on them.
+"""The league (docs/SELF_PLAY.md, "The loop"): a Terran Gary against a Zerg Gary (gz1 by default) in parallel
+headless games (eval/match.py), each game's outcome, both sides' humanlikeness and the learned layers'
+decisions kept for the RL that trains on them.
 
-A round: the Terran version against Gary-Z on the three pool maps, seeds from --first. Per game, in
-runs/league/<round>/<map>/: the replay, Gary's log, and Gary-Z's decision log (gary/bots/
-decision_log.py: both sides' learned layers' drawn decisions, each with inputs and log-probability). Then the round's table, round.json:
+A round: the Terran version against the Zerg on the maps, seeds from --first. Per game, in
+runs/league/<round>/<map>/: the replay, the game's log, both sides' screens, traces and records, and the
+learned layers' drawn decisions (gary/decision_log.py: each with inputs and log-probability). Then the
+round's table, round.json:
 
   results      Gary-T won / lost / undecided, by map
   gap          each side's gap score against the pros (eval/humanlike.py: mean standardized gap per
                minute range; 0 is the pros), the anchor the league isn't trained on
   decisions    how many each learned layer logged (what RL has to learn from)
 
-The fight episodes train the fight roles (zerg_roles.py); the army layer (gary_z.py _army_goal)
-learns from whole games and segments, through the outcomes logged here.
+The fight episodes train the Zerg's fight roles (gary/agent/zerg_roles.py); the army layers learn from
+whole games and segments, through the outcomes logged here.
 
     python -m eval.league --round r1 --seeds 8 --minutes 20
 """
@@ -39,13 +40,13 @@ MAPS = {m: REPO / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
 
 
 def play(job: tuple) -> dict:
-    """One game in its own process (Gary-Z's decision log written as the process ends)."""
+    """One game in its own process (the learned layers' decision log written as the process ends)."""
     version, name, path, seed, minutes, out, pairs, incumbent, candidate, layer, zerg = job
     folder = out / name
     folder.mkdir(parents=True, exist_ok=True)
     rep = folder / f"{version}_seed{seed}.rep"
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "GARY_DECISION_LOG": str(rep.with_suffix(".decisions.npz"))}
-    # Gary-Z's fight roles: the incumbent, or on odd seeds the candidate (its own games: the gap score
+    # the Zerg's fight roles: the incumbent, or on odd seeds the candidate (its own games: the gap score
     # judges it too); paired episodes against the other one
     main, other = (candidate, incumbent) if candidate and seed % 2 else (incumbent, candidate)
     if main:
@@ -56,15 +57,15 @@ def play(job: tuple) -> dict:
         env["GARY_PAIRS_LAYER"] = layer
         if other:
             env["GARY_PAIRS_CANDIDATE"] = str(other)
-    cmd = [sys.executable, "-m", "gary.bots.zerg_rush", "--vs", version, "--opponent", zerg, "--map", str(path),
+    cmd = [sys.executable, "-m", "eval.match", "--a", version, "--b", zerg, "--map", str(path),
            "--minutes", str(minutes), "--seed", str(seed), "--save", str(rep)]
     p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     log = p.stdout + p.stderr
     rep.with_suffix(".log").write_text(log, encoding="utf-8")
     result = "error"
     for line in reversed(log.splitlines()):
-        if line.startswith(("Gary won", "Gary lost", "time")):
-            result = line.split(";")[0].replace("Gary ", "")
+        if line.startswith(("A won", "B won", "time")):
+            result = {"A won": "won", "B won": "lost"}.get(line.split(";")[0], "time")
             break
     return {"map": name, "seed": seed, "result": result, "replay": str(rep), "zroles": str(main) if main else None}
 
@@ -130,7 +131,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--round", required=True, help="the round's name (its folder in runs/league)")
     ap.add_argument("--vs", default="v029", help="the Terran Gary")
-    ap.add_argument("--zerg", default="garyz", help="the Zerg: garyz (gary/bots/gary_z.py) or a Zerg manifest (gz1)")
+    ap.add_argument("--zerg", default="gz1", help="the Zerg Gary's manifest")
     ap.add_argument("--seeds", type=int, default=8, help="seeds per map")
     ap.add_argument("--maps", default="fixtures", help="fixtures (the three 1.16 maps), ladder (every current ladder map "
                     "written by ingest/ladder_maps.py) or ladder names, comma-separated (e.g. KnockOut,Attitude SE)")
@@ -138,10 +139,10 @@ def main() -> None:
     ap.add_argument("--minutes", type=float, default=20)
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--pairs", action="store_true", help="paired fight episodes in every game (eval/pairs.py)")
-    ap.add_argument("--incumbent", help="Gary-Z's fight-role model (default: its newest)")
+    ap.add_argument("--incumbent", help="the Zerg's fight-role model (default: its newest)")
     ap.add_argument("--candidate", help="a candidate model of the layer: odd seeds play it, pairs A/B it")
     ap.add_argument("--layer", default="roles_z", choices=("roles_z", "army_t", "engage_t", "commit_t"),
-                    help="what the pairs and the candidate are: Gary-Z's fight roles or Gary-T's army layer")
+                    help="what the pairs and the candidate are: the Zerg's fight roles or the Terran's army layer")
     priority.add_argument(ap)
     ap.add_argument("--regrade", action="store_true", help="an existing round: grade its games at time by who is ahead (no games played)")
     args = ap.parse_args()

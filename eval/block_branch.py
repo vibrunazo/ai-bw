@@ -27,7 +27,7 @@ from eval import monitor, priority
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
         for m in ("python_gg13676", "standard_ozp3w", "heartbreak_9rg84")}
-OPPONENTS = ("dummy", "v2", "replayed")
+OPPONENTS = ("gz1",)                   # (the Zerg Gary; the scripted Zergs were deleted in docs/REFACTOR.md Phase 3)
 VERSION = "v018+block"
 MINUTES = 10
 DECISION_EVERY = 10 * 24
@@ -45,9 +45,9 @@ def out_path() -> Path:
 
 
 def _match(opponent: str, mp: str, seed: int, version: str = VERSION):
-    from eval.walls_bench import Match
+    from eval.match import Match
     with contextlib.redirect_stdout(io.StringIO()):
-        return Match(seed, 0, version, MAPS[mp], opponent)
+        return Match(seed, version, MAPS[mp], opponent)
 
 
 class Watch:

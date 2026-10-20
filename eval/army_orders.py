@@ -30,17 +30,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 VERSION = "v025"
 WINDOW = 45 * 24
 NEAR = 10 * 32                   # a zerg unit dying this close to the group's units: the group's doing
-MINUTES = {"v3": 25}
+MINUTES: dict[str, int] = {}          # per opponent (default 12)
 ARMY = {0, 1, 2, 3, 5, 30, 32, 34, 8, 11, 12, 58}
 ZERG_ARMY = {37, 38, 39, 43, 44, 45, 46, 47, 62, 103}
 
 
 def play(job: tuple) -> dict:
     opponent, mp, seed = job
-    from eval.walls_bench import Match
+    from eval.match import Match
     from gary.policy.army import supply_x2
     with contextlib.redirect_stdout(io.StringIO()):
-        m = Match(seed, 0, VERSION, MAPS[mp], opponent)
+        m = Match(seed, VERSION, MAPS[mp], opponent)
     where, _ = places(m)
     g = m.gary
     orders, open_ = [], []

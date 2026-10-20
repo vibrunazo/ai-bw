@@ -216,7 +216,7 @@ any resolution; they are real-input clicks and move the mouse):
    `[4]Fighting_Spirit_1.3`).
 3. `--seq tvz`: the local player Terran, slots 3 and 4 Closed, the computer Zerg. Check the
    screenshot it saves (`build/auto_game/after_tvz.png`).
-4. Start Gary first: `python -m gary.play --gary v025 --live --pov runs/live/NAME.pov.jsonl`. It
+4. Start Gary first: `python -m gary.play --live --pov runs/live/NAME.pov.jsonl` (it plays the local player's race: `--terran` / `--zerg` name the manifests). It
    waits for a match where the local player is Terran and starts on frame 0.
 5. `--target ok` starts the match.
 6. To end a match early: `--seq end` (Menu → End Mission → Quit Mission, twice). The client

@@ -68,10 +68,10 @@ def places(m) -> tuple:
 
 def play(args: tuple) -> dict:
     opponent, mp, seed, result_before = args
-    from eval.walls_bench import Match
+    from eval.match import Match
     from gary.policy.army import supply_x2
     with contextlib.redirect_stdout(io.StringIO()):
-        m = Match(seed, 0, VERSION, MAPS[mp], opponent)
+        m = Match(seed, VERSION, MAPS[mp], opponent)
     try:
         where, start = places(m)
     except Exception as e:                       # (no analysis for this map)

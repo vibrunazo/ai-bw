@@ -90,15 +90,16 @@ terran_executor.py and zerg_executor.py, and the macro's decision loop is shared
 its options. The manifest gz1 plays Zerg on the shared agent (its army and fights come from Gary-Z in
 Phase 2); eval/mirror.py --sides gz1 garyz plays it against Gary-Z.
 
-## The Zerg player (gary/bots)
+## The Zerg player (gary/agent, manifest gz1)
 
-Gary playing Zerg is a separate stack: `zerg_rush.py` (319 lines) → `zerg_v2.py` (393) →
-`zerg_v3.py` (823) → `gary_z.py` (1,623), plus `zerg_roles.py` (282). It shares the models
-(`gary/policy`), the decision records and Sightings with the Terran agent, and reimplements the
-rest: jobs instead of the executor, its own rallies and posts instead of posture, its own cluster
-army, raid, sweep, press and alarm instead of the army and roles providers. Seven places assume
-the enemy is Terran (the alarm's "away from their CCs", the press's building ranks, the sweep's
-turrets and bunkers), so a ZvZ game is the first thing that breaks it.
+Since the refactor (docs/REFACTOR.md, 2026-10-20) Gary plays Zerg on the shared agent: the Zerg
+executor (gary/agent/zerg_executor.py: larva morphs, unit and building morphs, drone builds through the
+shared build task, overlords ahead, the gas float, hatchery rallies), the alarm as a posture
+(zerg_posture.py), posts, raid, join, sweep and press as army options (army_rules.py), the role model's
+fights and the lurkers as a fight provider (zerg_fight.py, zerg_roles.py), Gary-Z's turns as the
+arbiter's rotate option. Gary-Z's separate stack (gary/bots: zerg_rush, v1-v3, gary_z, 3,400 lines) is
+deleted, its league record matched first (round G6 against L9). The enemy is read by race
+(gary/races.py, `g.enemy`), so ZvZ and ZvT play on the same code.
 
 ## Order of work
 
@@ -117,7 +118,7 @@ turrets and bunkers), so a ZvZ game is the first thing that breaks it.
    datasets per matchup, then retrain `--era modern` against mixed and judge both on the league
    and on the humanlikeness gap measured against modern pros. The pro reference for economy and
    humanlikeness moves to the modern games.
-3. **One Gary.** The Zerg stack moves onto the agent's arbiter: jobs become the Zerg executor
+3. **One Gary.** Done on 2026-10-20 (docs/REFACTOR.md Phases 0-3). The Zerg stack moves onto the agent's arbiter: jobs become the Zerg executor
    (larva morphs, drone builds, creep); rallies and posts become posture; raid, sweep, press and
    alarm become army and roles providers that any race can use. A race is then a data module
    (`terran.py`, `zerg.py`, `protoss.py` with the same names) plus an executor and a macro

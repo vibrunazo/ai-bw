@@ -1,4 +1,4 @@
-"""One game of the default Gary against the rush dummy (held to 7:00) to 6:00: the basics of its
+"""One game of a default Gary-T against the Zerg Gary (gz1) to 6:00: the basics of its
 macro still work. A broken chore can ruin every game quietly (a guard in the gas chore once sent no
 SCV to gas: Stim Packs never came, and only a 192-game benchmark showed it); this takes a minute.
 Needs the game data (skips without it).
@@ -21,9 +21,9 @@ FAILURES = ("didn't start", "order was lost", "couldn't build", "gives up")
 
 def test_default_gary_macro_basics():
     try:
-        from eval.walls_bench import Match
+        from eval.match import Match
         with contextlib.redirect_stdout(io.StringIO()):
-            m = Match(1, 420, "v025")
+            m = Match(1, "v029", REPO / "tests" / "fixtures" / "replays" / "stardata_tvz_standard_ozp3w.rep")
     except Exception as e:                      # no game data or env DLL here
         print(f"skip: {e}")
         return

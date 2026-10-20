@@ -1,5 +1,5 @@
 """The refactor's gate (docs/REFACTOR.md): fixed games with the day's default manifests play byte-identically
-before and after. Each game's logs (both sides' screens, Gary-T's trace and every layer's records) are hashed,
+before and after. Each game's logs (both sides' screens and traces, and every layer's records) are hashed,
 the git hash in Gary's greeting masked, and compared with the hashes recorded in tests/fixtures/parity.json.
 A change of behavior on purpose records them again (--record), in its own commit, with the reason.
 
@@ -27,7 +27,8 @@ FIXTURE = REPO / "tests" / "fixtures" / "parity.json"
 TERRAN = "v029+commit+draw+floor+mass+nonatbunker+depots"   # the defaults of 2026-10-19 (docs/REFACTOR.md)
 GAMES = [("KnockOut 1.4", 4004), ("Fighting Spirit 1.4", 4005), ("Odyssey-RE 2.0", 4006)]
 MINUTES = 8
-LOGS = (".pov.jsonl", ".zpov.jsonl", ".trace.jsonl", ".records.jsonl")
+LOGS = (".pov.jsonl", ".bpov.jsonl", ".trace.jsonl", ".btrace.jsonl", ".records.jsonl")
+ZERG = "gz1"
 GIT = re.compile(r"git [0-9a-f]{7,40}\+?")
 
 
@@ -45,9 +46,9 @@ def play(map_name: str, seed: int, out: Path) -> dict[str, str]:
     sys.path.insert(0, str(REPO / "ingest"))
     from inventory import data_root
     rep = out / f"{re.sub(r'[^A-Za-z0-9]', '', map_name)}_{seed}.rep"
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "GARY_Z_COMMIT": "latest"}
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     env.pop("GARY_RUN_NOTE", None)
-    cmd = [sys.executable, "-m", "gary.bots.zerg_rush", "--vs", TERRAN, "--opponent", "garyz", "--seed", str(seed),
+    cmd = [sys.executable, "-m", "eval.match", "--a", TERRAN, "--b", ZERG, "--seed", str(seed),
            "--minutes", str(MINUTES), "--map", str(data_root() / "maps" / "ladder" / f"{map_name}.rep"),
            "--save", str(rep)]
     p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)

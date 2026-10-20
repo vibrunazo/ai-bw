@@ -38,7 +38,7 @@ from eval import monitor, priority
 from eval.block_branch import MAPS, Watch, _match, _step
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OPPONENTS = ("dummy", "v2", "replayed")
+OPPONENTS = ("gz1",)                   # (the Zerg Gary; the scripted Zergs were deleted in docs/REFACTOR.md Phase 3)
 VERSION = "v019"
 LOOKS = (30, 60, 180)                  # seconds after the moment: Gary's view recorded
 HORIZON = 180 * 24

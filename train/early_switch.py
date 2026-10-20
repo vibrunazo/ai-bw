@@ -40,15 +40,13 @@ from eval import monitor, priority
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
         for m in ("python_gg13676", "standard_ozp3w", "heartbreak_9rg84")}
-SETS = [("dummy", "standard_ozp3w"), ("v2", "standard_ozp3w"), ("v2", "python_gg13676"),
-        ("replayed", "standard_ozp3w"), ("replayed", "python_gg13676"), ("replayed", "heartbreak_9rg84"),
-        ("v3", "standard_ozp3w"), ("v3", "python_gg13676")]   # (v3: the greedy Zerg, punishing over-defense)
+SETS = [("gz1", "standard_ozp3w"), ("gz1", "python_gg13676"), ("gz1", "heartbreak_9rg84")]   # (the Zerg Gary; the
+                                             # scripted Zergs were deleted in docs/REFACTOR.md Phase 3)
 VERSION = "v019"                              # (--version: the Gary that plays them)
 FORCE_S = (120, 150, 180, 210, 240)          # forced switch moments (seconds)
 FACTS_EVERY = 10 * 24                        # the facts recorded this often, FACTS_FROM to FACTS_UNTIL
 FACTS_FROM, FACTS_UNTIL = 100 * 24, 260 * 24
 MINUTES = 12
-MINUTES_V3 = 20                               # (the greedy Zerg's games are decided later: 20 minutes)
 EARLY_UNTIL = 300 * 24                        # zerglings at Gary's bases by 5:00: an early attack (not a false alarm)
 HOME_PX = 20 * 32                             # ...this close to one of its Command Centers
 EARLY_LINGS = 4
@@ -81,14 +79,14 @@ def play(args: tuple) -> dict:
     opponent, mp, seed, force, switch, *rest = args
     version = rest[0] if rest else VERSION
     import torch
-    from eval.walls_bench import Match
+    from eval.match import Match
     from gary.policy.army import supply_x2
     from gary.policy.switch import facts
     from gary.policy.value import ValueView
     torch.set_num_threads(1)
     with contextlib.redirect_stdout(io.StringIO()):
-        m = Match(seed, 0, version, MAPS[mp], opponent)
-    minutes = MINUTES_V3 if opponent == "v3" else MINUTES
+        m = Match(seed, version, MAPS[mp], opponent)
+    minutes = MINUTES
     g = m.gary
     p = g.posture
     if force is not None:
