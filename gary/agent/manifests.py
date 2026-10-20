@@ -324,10 +324,12 @@ MANIFESTS: dict[str, dict] = {
     # the one Gary playing Zerg (docs/REFACTOR.md Phase 1): the shared agent with the Zerg executor and Gary-Z's
     # macro options (the dice; one-offs and hatcheries by summed odds; a decision parked for its money while
     # the larvae go on; the model's tempo; no tech path under 10%; an overlord ahead; the pros' history; a rolled
-    # style). Its army and fights from Gary-Z (Phase 2)
+    # style; a roll waiting for supply or money held, 2026-10-20: LearnedMacro.hold, round G11 against G9). Its army
+    # and fights from Gary-Z (Phase 2)
     "gz1": {"version": "gz0.1", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True, "rotate": True,
             "macro": {**_LEARNED, "builds": ["alarm"], "decoder": "dice", "odds_mass": 1.0, "hatch_mass": 0.5, "park": True, "pace": True,
-                      "tech_min_p": 0.10, "wait_min_p": 0.05, "supply_ahead": True, "rax_by": 165 * 24, "history": "pro", "style": "roll"},
+                      "tech_min_p": 0.10, "wait_min_p": 0.05, "supply_ahead": True, "rax_by": 165 * 24, "history": "pro", "style": "roll",
+                      "hold": True},
             # the army: clusters with commitments, drawn (Gary-Z's GARY_Z_COMMIT=latest), its ground army (the flyers
             # and lurkers have their own rules); no worker scout (its overlords)
             "army": {"provider": "learned", "model": "commit/latest", "commit": True, "draw": True, "scout": False,
@@ -835,6 +837,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro.expand_mass = m["macro"].get("expand_mass")
         g.macro.odds_mass = m["macro"].get("odds_mass")
         g.macro.supply_ahead = m["macro"].get("supply_ahead", False)
+        g.macro.hold = m["macro"].get("hold", False)
         if m["macro"].get("history") == "pro":
             # (Gary-Z's: the pros' decision history in the model's inputs, fading to its own over HISTORY_FADE
             # minutes, so its own drone-heavy past doesn't feed back on itself)

@@ -37,6 +37,7 @@ WALK_AHEAD = 6                  # seconds: a building's worker sets out this muc
 MINING = 1.0                    # minerals a second an SCV mines (about)
 GOAL_TIMEOUT = 24 * 30          # a decision Gary can't afford or do within 30 s is dropped
 DICE_FLOOR = 0.01               # decoder "dice": decisions less likely than this are never rolled
+HOLD_FOR = 30 * 24              # option hold: a roll waited for this long at most
 MIN_P = 0.05                    # never take a decision the model gives less than this: unlikely
                                 # choices lead into states pros rarely reach, where it knows less
 WAIT = {"kind": "wait"}         # plan(): possible, but not right now
@@ -99,6 +100,14 @@ class LearnedMacro:
         self.tech_min_p = tech_min_p                        # option: a tech path opened only on odds of this or more
         self.hatch_mass = hatch_mass                        # option: a town hall's odds summed to this (else odds_mass)
         self.wait_min_p = wait_min_p                        # option: while a decision waits, others at these odds
+        # option hold (decoder dice): a roll that waits for supply or for its money (a larva's) stays the roll at the
+        # next looks, and nothing else is taken meanwhile: the model's odds are of the pros' next decision, and rolling
+        # again at every look (or taking the next doable one at 5%, wait_min_p) took a 7% Spawning Pool at 1:27 while
+        # the drone waited for the overlord, nearly every game; the pros' natural at 1:38, gz1's at 2:06, and 13
+        # drones at 4:00 to their 16 (round O6). A roll waiting for a larva still lets others by (wait_min_p): held
+        # there too, the tech came late (a Lair by 7:00 in half the games, the pros' all; round G10)
+        self.hold = False
+        self.held: tuple[int, int] | None = None            # (the decision rolled and waited for, since)
         self.queued: dict[tuple[int, int], int] = {}        # units decided whose producer is busy -> since
         self.keep_busy = keep_busy
         self.decoder = decoder                              # "favorite" (the most likely), "dice" or "sample"
@@ -307,6 +316,11 @@ class LearnedMacro:
                 order = [k for _, k in sorted(((self.rng.random() ** (1 / p), k) for k, p in enumerate(probs[0])
                                                if p >= DICE_FLOOR), reverse=True)]
                 floor = DICE_FLOOR
+                if self.hold and self.held is not None:
+                    if hi.frame - self.held[1] < HOLD_FOR and probs[0, self.held[0]] >= DICE_FLOOR:
+                        order = [self.held[0]] + [k for k in order if k != self.held[0]]
+                    else:
+                        self.held = None
             else:
                 order, floor = np.argsort(-probs[0]), MIN_P
             k_exp = self.model.spec.decisions.index(next(d for d in self.model.spec.decisions if d[0] == EXPAND))
@@ -365,6 +379,8 @@ class LearnedMacro:
                         # (a larva's the money doesn't cover yet: no goal, the dice again at the next look, as
                         # Gary-Z's; held as the goal until the money came, nothing else was rolled meanwhile: 32
                         # decisions a game in the first 4 minutes to Gary-Z's 83, the Extractor at 3:05 to 1:22)
+                        if self.hold and self.held is None:
+                            self.held = (k, hi.frame)
                         record(None, "dice" if self.decoder == "dice" else "favorite", f"waits: {name(k)} needs money")
                         return
                     if not g.executor.burst(act, uid) and not affordable:
@@ -381,6 +397,10 @@ class LearnedMacro:
                                  else f"also waits: {self.why_not or 'its building is busy'}"])
                     if waiting is None:
                         waiting, waiting_why = k, self.why_not or "its building is busy"
+                        if self.hold and waiting_why.startswith("supply"):
+                            if self.held is None:
+                                self.held = (k, hi.frame)
+                            break
                 elif plan is not None:
                     # something doable now, unless the likelier decision is worth waiting for
                     # (a pro saves for the expansion rather than spend on whatever is possible)
@@ -405,6 +425,8 @@ class LearnedMacro:
                 record(None, "dice" if self.decoder == "dice" else "favorite", f"waits: {waiting_why} for {name(waiting)}")
                 return
             k = pick if pick is not None else waiting
+            if k is not None:
+                self.held = None                                # (taken: the next roll is a new one)
             if self.log:
                 logged["k"] = None if k is None else int(k)
             record(k, "dice" if self.decoder == "dice" else "favorite",
