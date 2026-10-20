@@ -675,6 +675,13 @@ plan and the full log).
   building known squads of 8+ search the unseen bases at once: Gary-T won 24 (21), lost 2 (3) of 48. Not
   adopted: Gary-Z's join (won 20, the Zerg ahead at 20:00 in 8 to 2), press (won 22, the Zerg ahead in 7),
   press at 4x (22 won, 19 led: even), the hunt at 4x alone (23 won, 13 led).
+- **Rounds to 30 minutes (2026-10-20).** Half of every 48-game round had ended at the 20:00 limit, graded by
+  who was ahead, and nothing after 20:00 was measured. The league, match, humanlike and attack measures run
+  30 minutes now (the gap score with a 21-30 bucket; 20% of modern TvZ pro games pass 20 minutes, 2% pass
+  30). The new baseline, gt1 (gt0.3) against gz1, round B30: Gary-T won 34, the Zerg 4, 10 at the limit
+  (Gary-T ahead 5, the Zerg 2, even 3); the same seeds at 20 minutes: 24, 2 and 22. Gap at 21-30 minutes:
+  Gary-T 0.39, the Zerg 0.46 (its worst bucket). Still at 10-12 minutes: the fight, plan and value models'
+  training data (to rebuild on whole games).
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the
