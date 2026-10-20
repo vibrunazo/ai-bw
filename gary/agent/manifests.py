@@ -577,7 +577,7 @@ OPTIONS = {
     # that end the game. Not adopted for gt1 (48 games against G13: +join won 20 (21), the Zerg ahead at 20:00 in 8
     # (2); +press won 22 but the Zerg ahead in 7; +join+press won 18)
     **{r: (lambda r: lambda m: m["army"].update(rules=[*m["army"].get("rules", ()), r]))(r) for r in ("join", "sweep", "press")},
-    # army.py (STOP-GAP, docs/STOPGAPS.md; in gt1, shared by every race's learned army): hunt_ahead, the hunt also at 4x
+    # army.py (STOP-GAP, AGENTS.md; in gt1, shared by every race's learned army): hunt_ahead, the hunt also at 4x
     # the enemy fighters seen in the last minute; hunt_split, unseen bases searched by squads; static_odds, an engage
     # only where the group outweighs the ground static defense there (6 supply each) and the enemy fighters seen
     # near it 1.5 times

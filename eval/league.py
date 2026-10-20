@@ -15,7 +15,7 @@ round's table, round.json:
 The fight episodes train the Zerg's fight roles (gary/agent/zerg_roles.py); the army layers learn from
 whole games and segments, through the outcomes logged here.
 
-    python -m eval.league --round r1 --seeds 8 --minutes 20
+    python -m eval.league --round r1 --seeds 8 --minutes 30
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ def main() -> None:
     ap.add_argument("--maps", default="fixtures", help="fixtures (the three 1.16 maps), ladder (every current ladder map "
                     "written by ingest/ladder_maps.py) or ladder names, comma-separated (e.g. KnockOut,Attitude SE)")
     ap.add_argument("--first", type=int, default=101)
-    ap.add_argument("--minutes", type=float, default=20)
+    ap.add_argument("--minutes", type=float, default=30)
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--pairs", action="store_true", help="paired fight episodes in every game (eval/pairs.py)")
     ap.add_argument("--incumbent", help="the Zerg's fight-role model (default: its newest)")
@@ -195,9 +195,10 @@ def main() -> None:
     print(f"round {args.round}: {len(games)} games, Gary-T {table['results']}; by map {table['by_map']}")
     print(f"graded (games at time by who is ahead at the end, supply used {AHEAD:g}x): {table['graded']}")
     print(f"decisions logged: {table['decisions']}")
+    from eval.humanlike import BUCKETS
     for side, gap in table["gap"].items():
         if gap:
-            print(f"gap score {side} (2-4/5-7/8-10/11-14/15-20 min, all): "
+            print(f"gap score {side} ({'/'.join(f'{a}-{b}' for a, b in BUCKETS)} min, all): "
                   + " ".join("-" if v is None else f"{v[0]:.2f}" for v in gap))
     if "pairs" in table:
         print(f"pairs: {json.dumps(table['pairs'])}")

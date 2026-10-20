@@ -8,8 +8,8 @@ Every 30 s a line with both sides' buildings, army and economy; at the end the r
 eval/pairs.py) as before.
 
 Usage:
-  python -m eval.match --a gt1 --b gz1 --map <map> --seed 4004 --minutes 20
-  python -m eval.match --a gz1 --b gz1 --map <map> --seed 6001 --minutes 20 --save runs/mirror/m.rep
+  python -m eval.match --a gt1 --b gz1 --map <map> --seed 4004 --minutes 30
+  python -m eval.match --a gz1 --b gz1 --map <map> --seed 6001 --minutes 30 --save runs/mirror/m.rep
 """
 
 from __future__ import annotations
@@ -170,7 +170,7 @@ def main() -> None:
     ap.add_argument("--b", required=True, type=manifest_name, help="side B's manifest")
     ap.add_argument("--map", required=True)
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument("--minutes", type=float, default=20)
+    ap.add_argument("--minutes", type=float, default=30)
     ap.add_argument("--style", type=int, help="A's build style (taxonomy cluster) to steer its macro toward")
     ap.add_argument("--save", default="match.rep")
     args = ap.parse_args()

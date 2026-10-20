@@ -420,7 +420,7 @@ class Raid:
 
 
 class LordHunt:
-    """One or two shooters on an exposed overlord (see the module's docstring). STOP-GAP (docs/STOPGAPS.md): until the
+    """One or two shooters on an exposed overlord (see the module's docstring). STOP-GAP (AGENTS.md): until the
     fight or army layer decides small detachments itself."""
 
     def __init__(self, g: Gary, memory: EnemyMemory):

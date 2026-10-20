@@ -22,7 +22,7 @@ How to work in this repository, for coding agents and people alike. The design i
   runs through `python -m eval.match --a <manifest> --b <manifest>`; `python -m eval.league` plays Terran
   (`--vs`, default gt1) against Zerg (`--zerg`, default gz1); `gary/play.py --live` plays a human.
 - A change is an option on them (`gt1+<option>`), judged in paired 48-game rounds on the ladder maps
-  (`--maps ladder --seeds 6 --first 4004 --minutes 20`) and the gap score to modern pros; 24 games are too
+  (`--maps ladder --seeds 6 --first 4004`, 30 minutes) and the gap score to modern pros; 24 games are too
   noisy for close calls. An adopted option is folded into the manifest with a version bump, so the name
   never grows into a chain of options.
 - Gary loads the newest `runs/<kind>/<matchup>_<race>_*` model; experiments go to `--out` so they stay out of
@@ -67,7 +67,8 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   known, squads of 8+ search the unseen bases at once. Scripted because the commit model's engages scatter
   when the enemy is nearly dead, and it has no notion of finishing or searching. Replace with the commit or
   army model trained with a reward for ending games (self-play) and searching as a learned scouting skill.
-  Measure: games won against gz1 in 48 (24 with it, 21 without) and leads unfinished at 20:00.
+  Measure: games won against gz1 in 48 (24 with it, 21 without) and leads unfinished at 20:00. Tried on gz1 with the
+  static guard (48 games against gt1): the Zerg won 1 (2), so off for Zerg.
 - **Static-defense guard on engages** (option `static`, in gt1; `army.py` static_odds). An engage only goes
   where the group outweighs 1.5 times the ground static defense there (6 supply each) and the enemy
   fighters seen near it. Scripted because the commit model doesn't weigh static defense (human game 4's

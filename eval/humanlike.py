@@ -50,7 +50,8 @@ from gary import terran as T
 from gary import zerg as Z
 
 SAMPLE = 48                     # frames between samples (2 s)
-MINUTES = 20                    # the first this many minutes of a game
+MINUTES = 30                    # the first this many minutes of a game (20 until 2026-10-20: the late game was never
+                                # measured; 20% of modern TvZ pro games go past 20 minutes, 2% past 30)
 PRO_GAMES = 300                 # pro games, a third per map
 PRO_MIN_S = 600
 MAPS = ("python", "fighting spirit", "heartbreak")
@@ -70,7 +71,7 @@ THREAT = 12 * 32
 MET = 8 * 32
 QUIET = 5                       # samples (10 s) with no threat before a new attack starts
 SIEGED = 30                     # Siege Tank in siege mode
-BUCKETS = ((2, 4), (5, 7), (8, 10), (11, 14), (15, 20))
+BUCKETS = ((2, 4), (5, 7), (8, 10), (11, 14), (15, 20), (21, 30))
 TICK = 8                        # frames between in-fight looks (a marine reloads in 15)
 ENGAGE = 7 * 32                 # an enemy fighter this near: in a fight
 MOVE = 6
@@ -482,7 +483,7 @@ def pro_rows(race: str, games: int, workers: int, era: str = "old") -> dict[str,
     rounds on the ladder maps are judged against: the 2026 meta, not the 2010s')."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
     from inventory import data_root
-    cache = data_root() / "interim" / "humanlike" / f"pro_{race}{'_modern' if era == 'modern' else ''}.jsonl"
+    cache = data_root() / "interim" / "humanlike" / f"pro_{race}{'_modern' if era == 'modern' else ''}_{MINUTES}min.jsonl"
     cache.parent.mkdir(parents=True, exist_ok=True)
     have = {}
     if cache.exists():

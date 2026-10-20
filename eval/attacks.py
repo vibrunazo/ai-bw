@@ -42,7 +42,7 @@ from gary import terran as T  # noqa: E402
 from gary import zerg as Z  # noqa: E402
 
 STEP = 12                         # frames between looks (half a second)
-MINUTES = 20
+MINUTES = 30
 NEAR = 10 * 32
 THERE = 14 * 32
 ATTACK_N = 3

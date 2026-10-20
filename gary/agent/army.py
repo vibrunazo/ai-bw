@@ -551,7 +551,7 @@ class LearnedArmy:
         """static_odds: the cells an engage may go to, those whose ground static defense (each STATIC_SUPPLY) and the
         enemy fighters seen near them in the last minute the group outweighs static_odds times (human game 4's three
         attacks all went into 2-4 sunkens and lost 24 supply for 1.5; against gz1, 38% of its attacks went into
-        sunkens to the pros' 28%: eval/attacks.py). STOP-GAP (docs/STOPGAPS.md): until the commit model weighs static
+        sunkens to the pros' 28%: eval/attacks.py). STOP-GAP (AGENTS.md): until the commit model weighs static
         defense itself."""
         ours = sum(supply_x2(u["type"]) for u in group)
         seen = {u["tag"] for u in obs["units"]}
@@ -633,7 +633,7 @@ class LearnedArmy:
                 self.visited[i] = f
                 self.hunted.pop(b.center, None)
         army = [u for u in done if u["type"] in g.army_types]
-        # (option hunt_ahead, STOP-GAP (docs/STOPGAPS.md): also far ahead of the enemy fighters seen in the last minute, as a few new zerglings
+        # (option hunt_ahead, STOP-GAP (AGENTS.md): also far ahead of the enemy fighters seen in the last minute, as a few new zerglings
         # kept "no enemy army seen" from ever holding: Gary-T led 18 of 48 games at 20:00 with 60-67 army to the
         # Zerg's 0-2 and its last 4 buildings standing, its clusters' engages drawn all over the map; round G13)
         ahead = self.hunt_ahead is not None and self.memory is not None and             sum(supply_x2(u["type"]) for u in army) >= max(HUNT_AHEAD_MIN, self.hunt_ahead * max(8, sum(v[1] for v in self.memory.fighters.values())))
@@ -696,7 +696,7 @@ class LearnedArmy:
         """hunt_split: no enemy building known, the bases not seen lately searched at once by squads (pros split up
         to find the last buildings; the whole army walking to one base at a time saw 6 in 4 minutes, and the Zerg's
         last hatchery outlived 4 minutes of hunting at 66-0 army: round Jhunt4). Each squad keeps its base until it
-        has been seen; one squad ordered a turn. STOP-GAP (docs/STOPGAPS.md): until searching is a learned skill."""
+        has been seen; one squad ordered a turn. STOP-GAP (AGENTS.md): until searching is a learned skill."""
         from gary.decision_log import LOG
         g, f = self.g, self.g.hi.frame
         alive = {u["tag"] for u in army}
