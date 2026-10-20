@@ -635,6 +635,12 @@ OPTIONS = {
     # macro.py: a depot ahead of production (each producer under 2 supply left), as the scripted builds: the model
     # leaves Gary-T supply-blocked (42 of 48 games at 4-8 minutes, L5b; pros almost never are)
     "depots": lambda m: m["macro"].update(supply_ahead=True),
+    # zerg_posture.py: no alarm (the normal posture, no alarm build): while on, the alarm forbade drones, 46% of 5-12
+    # minutes in round G6, and gz1 ended there with 22 drones to the pros' 27-33
+    "noalarm": lambda m: (m.update(posture="normal"), m["macro"].update(builds=[])),
+    # zerg_posture.py NaturalColonies: the pros' natural colonies (a sunken from 3:45, a spare colony from 5:00 morphed
+    # when a push is seen), the alarm's drones not forbidden
+    "colonies": lambda m: (m.update(colonies=True, alarm_drones=False), m["macro"].update(builds=["alarm", "colonies"])),
     # answers.py: the zerg's plan read from what Gary saw (a tech scan of its main at 6:30 if nothing is
     # known), and the pros' answer to it as macro goals (against lurkers: Siege Mode, tanks, vessels,
     # Irradiate, turrets one a base; against mutalisks nothing: the model's own turrets do). On v0.23 (432
@@ -795,8 +801,9 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if m.get("simcity"):
             from gary.agent.simcity import SimCity
             g.simcity = SimCity(g, m.get("simcity_door", 32))
-    from gary.agent.zerg_posture import AlarmDefense, ZergPosture
-    g.posture = {"normal": NormalPosture, "zerg": ZergPosture, "early_pool/v1": EarlyPoolPosture,
+    from gary.agent.zerg_posture import AlarmDefense, NaturalColonies, ZergPosture
+    g.posture = {"normal": NormalPosture, "zerg": lambda g: ZergPosture(g, m.get("colonies", False), m.get("alarm_drones", True)),
+                 "early_pool/v1": EarlyPoolPosture,
                  "early_pool/v2": EarlyPoolPostureV2, "early_pool/v3": EarlyPoolPostureV3,
                  "early_pool/v4": EarlyPoolPostureV4, "early_pool/v5": EarlyPoolPostureV5,
                  "early_pool/v6": EarlyPoolPostureV6,
@@ -808,7 +815,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         macro = load("macro", str(path))
         models["macro"] = getattr(macro, "path", "?")
         builds = {k: c(g) for k, c in (("one_base_defense", OneBaseDefense), ("ling_flood_defense", LingFloodDefense),
-                                        ("alarm", AlarmDefense))
+                                        ("alarm", AlarmDefense), ("colonies", NaturalColonies))
                   if k in m["macro"].get("builds", [])}
         if style is None and m["macro"].get("selector") and mapinfo is not None:
             # the strategy selector (gary/agent/selector.py): the build style for this map, from games counted

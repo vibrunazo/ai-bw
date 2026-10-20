@@ -26,7 +26,7 @@ from collections import Counter
 from gary import commands as C
 from gary import orders as O
 from gary import zerg as Z
-from gary.agent.executor import PATH_CLEAR, Executor, _to_segment
+from gary.agent.executor import PATH_CLEAR, Executor, _to_segment, field_click
 from gary.agent.gary import Gary, Task
 from gary.agent.macro import BMORPH, BUILD, EXPAND, MORPH, RESEARCH, UPGRADE, WAIT
 from gary.decision_log import LOG
@@ -38,11 +38,16 @@ CLEAR_PX = 16                    # a unit with another of Gary's this close may 
 OVERLORD_FOR = 25 * 24           # an overlord ordered counts as coming this long (its morph takes 25 s)
 GAS_FLOAT, GAS_LOW = 400, 300    # gas above this (and above the minerals): its drones mine minerals; below this, gas
 MUTA_FLOCK_SAVE = 6              # no floating while a Spire stands and fewer mutalisks than this
-RALLY_IN_LINE = 0.6              # the rally beside the minerals: this far from the hatchery toward their middle
 RALLY_FRONT_AT = 5 * 60 * 24     # hatcheries rally to the army's meeting point from then on
 RALLY_SIEGE = 14 * 32            # enemy fighters this near the meeting point: the hatcheries rally to the main...
 RALLY_SIEGE_FOR = 20 * 24        # ...and keep to it this long after the last was seen there
 CREEP_FRONT = 0.6                # a creep colony this far from the natural toward the meeting point
+EGG_SLACK = 3 * 24               # an overlord's supply counted coming this long past its make time (the egg hatches
+                                 # after it: a second overlord at 1:27 as the first hatched, 100 minerals of drones)
+LORDS_EVERY = 3 * 24             # overlords over a mineral line looked for this often...
+LORD_OVER = 2 * 32               # ...this near a field...
+LORD_BEHIND = 4 * 32             # ...and sent this far behind their hatchery
+LORD_CLEAR = 48                  # a rally's click on a field at least this far (pixels) from every overlord of Gary's
 SPOT_RINGS = (4, 14)             # a building's spot: the first that fits in rings this far around the hatchery (tiles)
 
 
@@ -74,6 +79,9 @@ class ZergExecutor(Executor):
         self.gas_floating = False
         self.basic["hatch_rally"] = self._task_hatch_rally
         g.task_runners["hatch_rally"] = self._run_basic
+        self.basic["lords_off"] = self._task_lords_off
+        g.task_runners["lords_off"] = self._run_basic
+        self.next_lords = 0
         self.commands["produce"] = self._task_produce
         self.commands["morph"] = self._task_morph
         for kind in ("produce", "morph"):
@@ -90,7 +98,7 @@ class ZergExecutor(Executor):
         if act == MORPH and uid in Z.FROM_LARVA:
             if uid != Z.OVERLORD and me["supply_used"] + Z.SUPPLY.get(uid, 1) > me["supply_max"]:
                 # supply blocked: wait if an overlord is on its way, else let one come next
-                return self.wait("supply: an overlord is coming") if self.in_production(mine)[Z.OVERLORD] else self.no("supply")
+                return self.wait("supply: an overlord is coming") if self.in_production(mine, EGG_SLACK)[Z.OVERLORD] else self.no("supply")
             if not self._fresh_larvae(mine):
                 return self.wait("no larva") if any(u["type"] in Z.TOWN_HALLS for u in mine) else self.no("no hatchery")
             return {"kind": "produce", "act": act, "id": uid, "cost": cost}
@@ -203,7 +211,7 @@ class ZergExecutor(Executor):
         """An overlord before a supply block (Gary-Z's): supply left at most 2 per hatchery, one coming at a
         time per finished hatchery."""
         halls = [u for u in mine if u["type"] in Z.TOWN_HALLS]
-        coming = self.in_production(mine)[Z.OVERLORD]
+        coming = self.in_production(mine, EGG_SLACK)[Z.OVERLORD]
         left = me["supply_max"] - me["supply_used"]
         # (a larva awaited counts: the overlord takes the next one, else the drones took every larva and Gary
         # sat supply-blocked from 1:05 to 2:00 in the first mirror. With 100 minerals there, as Gary-Z's: without, the
@@ -216,14 +224,15 @@ class ZergExecutor(Executor):
 
     # --- what Zerg has ----------------------------------------------------------------------------
 
-    def in_production(self, mine: list[dict]) -> Counter:
+    def in_production(self, mine: list[dict], slack: int = 0) -> Counter:
         """Units ordered and not out yet (eggs and cocoons hide what they'll be): from Gary's own orders,
-        each for as long as it takes to make; a zergling or scourge order makes two."""
+        each for as long as it takes to make (and slack frames more); a zergling or scourge order makes two."""
         f = self.g.hi.frame
-        self.morphs = [m for m in self.morphs if f - m[0] < m[2]]
+        self.morphs = [m for m in self.morphs if f - m[0] < m[2] + EGG_SLACK]
         out: Counter = Counter()
-        for _, t, _ in self.morphs:
-            out[t] += 2 if t in Z.PAIRS else 1
+        for at, t, frames in self.morphs:
+            if f - at < frames + slack:
+                out[t] += 2 if t in Z.PAIRS else 1
         return out
 
     def count(self, mine: list[dict], unit_type: int) -> int:
@@ -248,7 +257,12 @@ class ZergExecutor(Executor):
         return [u for u in mine if u["type"] == Z.LARVA and u["tag"] not in self.used_larva]
 
     def _idle(self, u: dict, mine: list[dict]) -> bool:
-        """Also a gas drone while the gas floats: to minerals."""
+        """Also a gas drone while the gas floats: to minerals; and a drone following an overlord of Gary's (a rally
+        or mining click that hit one: on Odyssey every new drone followed the first overlord, 1,000-1,600
+        drone-seconds of a game's first 5 minutes, round O3)."""
+        if u["type"] == Z.DRONE and u["order"] == O.ORDER_FOLLOW and any(
+                o["tag"] == u.get("order_target") and o["type"] == Z.OVERLORD for o in mine):
+            return True
         return super()._idle(u, mine) or (self.gas_floating and u["type"] == Z.DRONE and u["order"] in (81, 82, 84))
 
     def trim_selection(self, obs: dict, mine: list[dict]) -> bool:
@@ -416,12 +430,66 @@ class ZergExecutor(Executor):
             elif mode == "front":
                 spot = g.rally
             else:
-                mx = sum(x for x, _ in base.minerals) / len(base.minerals)
-                my = sum(y for _, y in base.minerals) / len(base.minerals)
-                spot = (int(h["x"] + (mx - h["x"]) * RALLY_IN_LINE), int(h["y"] + (my - h["y"]) * RALLY_IN_LINE))
+                # on a mineral field of its base, as pros rally while droning: a drone rallied onto minerals mines by
+                # itself (a ground spot beside them, Gary-Z's, left each new drone standing for the mining chore: 50
+                # minerals a drone-minute to the pros' 56 by 5:00, round O1)
+                spot = min(base.minerals, key=lambda m: math.dist(m, (h["x"], h["y"])))
             g.task = Task("hatch_rally", h["type"], data={"tag": h["tag"], "spot": spot, "mode": mode}, started=hi.frame)
             return True
+        return self._lords_off_minerals(obs, mine, done)
+
+    def _lords_off_minerals(self, obs: dict, mine: list[dict], done: list[dict]) -> bool:
+        """An overlord parked over a mineral line of Gary's (the minerals rally brings each new one onto its field)
+        is sent behind its hatchery, one at a time: the clicks on that field hit the overlord, and the drones
+        followed it (on Odyssey, every new drone: 1,000-1,600 drone-seconds of a game's first 5 minutes, round O3)."""
+        g, hi = self.g, self.g.hi
+        if hi.frame < self.next_lords:
+            return False
+        self.next_lords = hi.frame + LORDS_EVERY
+        lords = [u for u in done if u["type"] == Z.OVERLORD and u["order"] != O.ORDER_MOVE]
+        for h in done:
+            if h["type"] not in Z.TOWN_HALLS:
+                continue
+            base = g.map.base_near((h["x"], h["y"]))
+            over = [u for u in lords if base.minerals and min(math.dist((u["x"], u["y"]), m) for m in base.minerals) < LORD_OVER]
+            if over:
+                mx = sum(x for x, _ in base.minerals) / len(base.minerals)
+                my = sum(y for _, y in base.minerals) / len(base.minerals)
+                d = math.dist((mx, my), (h["x"], h["y"])) or 1
+                spot = (int(h["x"] + (h["x"] - mx) / d * LORD_BEHIND), int(h["y"] + (h["y"] - my) / d * LORD_BEHIND))
+                w, ht = g.map.size
+                spot = (min(max(spot[0], 16), w - 16), min(max(spot[1], 16), ht - 16))
+                g.task = Task("lords_off", Z.OVERLORD, data={"tag": over[0]["tag"], "spot": spot}, started=hi.frame)
+                return True
         return False
+
+    def _task_lords_off(self, obs: dict, mine: list[dict], t: Task) -> None:
+        """A click on the overlord, then a minimap move behind the hatchery."""
+        g, hi, d = self.g, self.g.hi, t.data
+        u = next((u for u in mine if u["tag"] == d["tag"]), None)
+        if u is not None and obs["selection"] == [u["tag"]]:
+            hi.minimap_right_click(*d["spot"])
+            LOG.decision(hi.side, "executor", hi.frame, "overlord off the minerals", inputs={"at": d["spot"]},
+                         by="rule: an overlord over a mineral line of Gary's")
+            g.task = None
+            return
+        if u is None or t.data.get("clicks", 0) >= 2:
+            g.task = None
+            return
+        t.data["clicks"] = t.data.get("clicks", 0) + 1
+        p = screen_of(obs, u["x"], u["y"])
+        if p is None:
+            hi.camera_minimap(u["x"], u["y"])
+            return
+        hi.click(*p)
+
+    def _clear_field(self, mine: list[dict], spot: tuple[int, int], h: dict) -> tuple[int, int]:
+        """The field of the rally's base nearest the hatchery with no overlord of Gary's over it (a right-click on
+        one under an overlord rallies onto the overlord: every new drone follows it), else spot."""
+        lords = [(u["x"], u["y"]) for u in mine if u["type"] == Z.OVERLORD]
+        base = self.g.map.base_near(spot)
+        clear = [m for m in base.minerals if all(math.dist(m, o) >= LORD_CLEAR for o in lords)]
+        return min(clear, key=lambda m: math.dist(m, (h["x"], h["y"]))) if clear else spot
 
     def _task_hatch_rally(self, obs: dict, mine: list[dict], t: Task) -> None:
         g, hi, d = self.g, self.g.hi, t.data
@@ -430,7 +498,14 @@ class ZergExecutor(Executor):
             g.task = None
             return
         if obs["selection"] == [h["tag"]]:
-            hi.minimap_right_click(*d["spot"])
+            if d["mode"] == "minerals":
+                p = screen_of(obs, *d["spot"])
+                if p is None:
+                    hi.camera_minimap(*d["spot"])
+                    return
+                hi.right_click(*field_click(obs, self._clear_field(mine, d["spot"], h), (h["x"], h["y"])))
+            else:
+                hi.minimap_right_click(*d["spot"])
             self.rally_of[h["tag"]] = d["mode"]
             g.task = None
             return

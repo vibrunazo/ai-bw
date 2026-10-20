@@ -270,7 +270,13 @@ class MacroTracker:
         frame = np.array([obs["frame"]], dtype=np.float32)
         decided = self.decided
         if self.history is not None:
-            pro = self.history[min(obs["frame"] // 1440, len(self.history) - 1)]
+            # the pros' counts at this moment: between the minute marks the table holds (decisions taken before each),
+            # not the last mark's (all of minute 0 told the model nothing had been decided while it had 5 drones, and
+            # it asked for a Spawning Pool at 97% from 0:20; the pros' cap refused it to 1:00: 42 s without a drone)
+            t = obs["frame"] / 1440
+            m, top = min(int(t), len(self.history) - 1), len(self.history) - 1
+            a = t - int(t) if m < top else 0.0
+            pro = (1.0 - a) * self.history[m] + a * self.history[min(m + 1, top)]
             w = self.history_weight * (max(0.0, 1.0 - obs["frame"] / (self.history_until * 1440)) if self.history_until else 1.0)
             decided = w * pro + (1.0 - w) * self.decided
         return encode(self.spec, frame, eco, units, seen[None], self.seen_max[None], decided[None],
