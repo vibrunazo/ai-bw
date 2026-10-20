@@ -65,6 +65,9 @@ HOME_PX = 12 * 32                   # belief: destinations this close to a Comma
 SCAN_ENERGY = 50                    # hunt with scans: a Comsat Station with this much energy scans a base first
 NOT_ARMY = {35, 36, 41, 42, 7, 64}  # larva, egg, drone, overlord, SCV, probe: not an enemy army
 SCAN_STUCK = 20 * 24                # hunt: a remembered building's spot not settled after this: scanned
+HUNT_SQUAD = 8                      # option hunt_split: bases unseen searched by squads of this many units at least...
+HUNT_SQUADS = 4                     # ...at most this many at once
+HUNT_AHEAD_MIN = 80                 # option hunt_ahead: at least this much army (supply x2) to hunt while enemy fighters are seen
 HUNT_BOXES = 8                      # hunt: drag boxes for the whole army (4 left 29 of 77 units standing)
 RESCAN_SPOT = 60 * 24               # hunt: a remembered building's spot scanned again after this at most
 GONE_PX = 7 * 32                    # an enemy building is gone when Gary's units are this close and don't see it
@@ -122,6 +125,7 @@ class LearnedArmy:
         self.cluster_rules = ClusterRules(g, self.memory, "join" in rules, "sweep" in rules, "press" in rules,
                                           lambda x, y: self.tracker.cell(x, y), cell_dist) \
             if any(r in rules for r in ("join", "sweep", "press")) else None
+        self.hunt_ahead: float | None = None   # option: the hunt also this many times the enemy fighters seen (a manifest's)
         self.scout = scout          # option: a worker scouts the enemy's start (a Zerg's overlords do: its posture)
         # option: the unit types its clusters take (default the race's army; Zerg: its ground army, the flyers
         # and the lurkers having their own rules)
@@ -185,6 +189,8 @@ class LearnedArmy:
         self.hunted: dict[tuple[int, int], int] = {}             # hunt target -> frame first sent there
         self.visited: dict[int, int] = {}                       # base index -> frame Gary's units were there
         self.next_hunt = 0
+        self.hunt_split = False                 # option: unseen bases searched by squads at once (a manifest's)
+        self.search: dict[tuple, list[int]] = {}   # hunt_split: base center -> its squad's tags
         self.scanned: dict[tuple[int, int], int] = {}            # hunt: a remembered building's spot -> frame scanned
         self.model = model
         self.tracker = ArmyTracker(model.spec, g.slot, g.map.size, g.main.center)
@@ -597,7 +603,11 @@ class LearnedArmy:
                 self.visited[i] = f
                 self.hunted.pop(b.center, None)
         army = [u for u in done if u["type"] in g.army_types]
-        if f < HUNT_AFTER or f - self.enemy_army_seen < QUIET or len(army) < HUNT_ARMY:
+        # (option hunt_ahead: also far ahead of the enemy fighters seen in the last minute, as a few new zerglings
+        # kept "no enemy army seen" from ever holding: Gary-T led 18 of 48 games at 20:00 with 60-67 army to the
+        # Zerg's 0-2 and its last 4 buildings standing, its clusters' engages drawn all over the map; round G13)
+        ahead = self.hunt_ahead is not None and self.memory is not None and             sum(supply_x2(u["type"]) for u in army) >= max(HUNT_AHEAD_MIN, self.hunt_ahead * max(8, sum(v[1] for v in self.memory.fighters.values())))
+        if f < HUNT_AFTER or (f - self.enemy_army_seen < QUIET and not ahead) or len(army) < HUNT_ARMY:
             return None
         if self.hunt_belief and self.belief is not None:
             # not seeing their army isn't their having none: the hunt only with an army at least what the
@@ -616,6 +626,9 @@ class LearnedArmy:
                  if f - self.visited.get(i, -VISITED_FOR) >= VISITED_FOR and b.center not in given_up]
         if not todo:
             return None
+        if self.hunt_split and not self.enemy_buildings and len(army) >= 2 * HUNT_SQUAD:
+            return self._search(army, todo, (cx, cy))
+        self.search.clear()
         if f < self.next_hunt:
             return False
         x, y = min(todo, key=lambda p: math.dist(p, (cx, cy)))
@@ -641,13 +654,42 @@ class LearnedArmy:
             return True
         self.hunted.setdefault((x, y), f)
         what = "where an enemy building was" if self.enemy_buildings else "to a base not seen lately"
-        g.say(f"army ({len(army)} units) hunts, no enemy army seen for {(f - self.enemy_army_seen) // 24} s: "
-              f"{what}, ({x}, {y})")
+        why = f"no enemy army seen for {(f - self.enemy_army_seen) // 24} s" if f - self.enemy_army_seen >= QUIET else             f"{self.hunt_ahead:g}x the enemy fighters seen"
+        g.say(f"army ({len(army)} units) hunts, {why}: {what}, ({x}, {y})")
         tags = [u["tag"] for u in army]
         g.motor.start(Intent("ARMY_ATTACK", tags, (x, y), {"tags": tags, "x": x, "y": y, "attack": True, "p": 1.0,
                                                           "fight": 0.0, "done": [], "boxes": 0,
                                                           "max_boxes": HUNT_BOXES, "hunt": True}, "army"))
         return True
+
+    def _search(self, army: list[dict], todo: list[tuple], at: tuple) -> bool:
+        """hunt_split: no enemy building known, the bases not seen lately searched at once by squads (pros split up
+        to find the last buildings; the whole army walking to one base at a time saw 6 in 4 minutes, and the Zerg's
+        last hatchery outlived 4 minutes of hunting at 66-0 army: round Jhunt4). Each squad keeps its base until it
+        has been seen; one squad ordered a turn."""
+        from gary.decision_log import LOG
+        g, f = self.g, self.g.hi.frame
+        alive = {u["tag"] for u in army}
+        todo_set = set(map(tuple, todo))
+        self.search = {b: [t for t in tags if t in alive] for b, tags in self.search.items() if b in todo_set}
+        self.search = {b: tags for b, tags in self.search.items() if tags}
+        n = min(HUNT_SQUADS, len(army) // HUNT_SQUAD, len(todo))
+        free = [u for u in army if not any(u["tag"] in tags for tags in self.search.values())]
+        if len(self.search) < n and len(free) >= HUNT_SQUAD:
+            base = min((b for b in map(tuple, todo) if b not in self.search), key=lambda b: math.dist(b, at))
+            size = len(free) if len(self.search) == n - 1 else max(HUNT_SQUAD, len(army) // n)
+            squad = sorted(free, key=lambda u: math.dist((u["x"], u["y"]), base))[:size]
+            self.search[base] = [u["tag"] for u in squad]
+            x, y = int(base[0]), int(base[1])
+            self.hunted.setdefault((x, y), f)
+            g.say(f"army: a squad of {len(squad)} searches the base at ({x}, {y}) ({len(self.search)} of {n} squads)")
+            LOG.decision(g.hi.side, "army", f, f"search ({x // 32},{y // 32})", inputs={"squad": len(squad), "squads": n},
+                         by="rule: no enemy building known, the bases not seen lately searched by squads", then="sent")
+            tags = self.search[base]
+            g.motor.start(Intent("ARMY_ATTACK", tags, (x, y), {"tags": tags, "x": x, "y": y, "attack": True, "p": 1.0,
+                                                              "fight": 0.0, "done": [], "boxes": 0, "hunt": True}, "army"))
+            return True
+        return False
 
     # --- scouting (scripted for now) -----------------------------------------------------------
 

@@ -571,6 +571,12 @@ OPTIONS = {
     "floor": lambda m: m["army"].update(commit_floor=0.15),
     # army_rules.py LordHunt: one or two marines hunt an exposed overlord (the user, after human game 4)
     "lords": lambda m: m["army"].update(rules=[*m["army"].get("rules", ()), "lords"]),
+    # army_rules.py ClusterRules (Gary-Z's, shared): join, a cluster under the main one's size walks to it rather than
+    # deciding alone (Gary-T's attacks: 0.26 late arrivals per fighter there, the pros' 0.06, eval/attacks.py); sweep,
+    # the main body attacks a packet it outweighs; press, far ahead and nothing at home, it attacks the buildings
+    # that end the game. Not adopted for gt1 (48 games against G13: +join won 20 (21), the Zerg ahead at 20:00 in 8
+    # (2); +press won 22 but the Zerg ahead in 7; +join+press won 18)
+    **{r: (lambda r: lambda m: m["army"].update(rules=[*m["army"].get("rules", ()), r]))(r) for r in ("join", "sweep", "press")},
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
@@ -760,9 +766,12 @@ def manifest_of(name: str | dict) -> dict:
 
 
 # the one Gary playing Terran (2026-10-20): v0.29 with the options adopted round by round since (commit, draw,
-# floor, mass, nonatbunker, depots: docs/PROGRESS.md L5-L6; lords: round G13), folded into one name. Changes are
-# judged as options against it, and an adopted one goes in here
-MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords"), "version": "gt0.1"}
+# floor, mass, nonatbunker, depots: docs/PROGRESS.md L5-L6; lords: round G13), folded into one name; and the hunt
+# (army.py) also when 4x ahead of the enemy fighters seen in the last minute, searching unseen bases with squads
+# (round Jhs against G13: won 24 (21), lost 2 (3)). Changes are judged as options against it, and an adopted one
+# goes in here
+MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords"), "version": "gt0.2"}
+MANIFESTS["gt1"]["army"].update(hunt_ahead=4.0, hunt_split=True)
 
 
 def _against(m: dict, vs: dict) -> dict:
@@ -879,6 +888,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                  scout=m["army"].get("scout", True), types=m["army"].get("types"),
                                  rules=m["army"].get("rules", ()))
             g.army.commit_floor = m["army"].get("commit_floor")
+            g.army.hunt_ahead = m["army"].get("hunt_ahead")
+            g.army.hunt_split = m["army"].get("hunt_split", False)
     if m["fight"] is not None and m["fight"]["provider"] == "zerg":
         from gary.agent.zerg_fight import ZergFight
         g.fight = ZergFight(g, m["fight"].get("roles", True), m["fight"].get("lurkers", True), seed)
