@@ -647,6 +647,21 @@ plan and the full log).
 - **Every matchup that can play is tested (2026-10-20).** tests/test_matchups.py: TvZ, ZvZ and TvT play, the
   Protoss ones skip (no executor yet); TvT played for the first time, the Terran manifest's TvZ-only parts
   (early-pool posture, Zerg answers, the TvZ role model) switched off against a non-Zerg by its `vs` section.
+- **Zerg's economy (2026-10-20).** By 5:00 gz1 had mined 2,492 minerals to modern pro Zergs' 3,232 (ZvT), with
+  13 drones at 4:00 to their 16; its sunkens stand at the natural (111 of 112). The causes, in order of size:
+  the macro took whatever was doable at 5% while the drone waited (a Spawning Pool during the 9/9 supply block,
+  the natural at 2:06 to the pros' 1:38), now held (LearnedMacro.hold: a roll waiting for supply or money stays
+  the roll); a second overlord ordered as the first hatched; the model's pro history read a minute late
+  (all of minute 0 as "nothing decided"); and on Odyssey every new drone followed an overlord parked on the
+  rally's mineral field (1,000-1,600 drone-seconds a game), now moved off. After: 2,752 mined, 14 drones at
+  4:00 (16 in the version that held larva waits too, but its tech came late). 48 games against the default
+  Gary-T (G11 against G9): Gary-T won 19 (24), the Zerg won 5 (0), the Zerg's gap to the pros 0.25 (0.28).
+  Natural creep colonies (the user's suggestion after human game 4, option `colonies`) were mixed in G8:
+  an option. Both races' workers double up on a field 3-4 times as often as pros', but a chore spreading
+  them gained nothing per worker-minute (dropped).
+- **Next for Zerg:** the remaining opening gap (natural at 1:53 to the pros' 1:38, the first gas late at
+  2:27 to their 2:00, zerglings 2.5x the pros' by 7:00 and mutalisks a third); finishing games it leads;
+  late-game spending.
 - **Next:** human game 4's list (above), starting with the attack's execution. After the refactor, human game 4's list
   (above), in this order; the workers' part is done (workers off their work, the main's miners drawn under
   mutalisks):
