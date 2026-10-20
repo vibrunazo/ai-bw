@@ -659,6 +659,14 @@ plan and the full log).
   Natural creep colonies (the user's suggestion after human game 4, option `colonies`) were mixed in G8:
   an option. Both races' workers double up on a field 3-4 times as often as pros', but a chore spreading
   them gained nothing per worker-minute (dropped).
+- **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
+  as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
+  the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the
+  same results, the bank at 20:00 1,797 to 2,713. Gary-T floats from 15:00 because its favorite, Marine, is
+  at the pros' cap for the minute and nothing else is over 5%; it leads 18-19 of 48 games at 20:00 without
+  finishing them: the army's decisions, not money (human game 4's item 1). gz1 loses its zerglings two at a
+  time to groups of seven (42 a game by 12:00, mostly at 9-11 minutes), with zergling speed at 3:48: a matter
+  for the fight and army layers.
 - **Next for Zerg:** the remaining opening gap (natural at 1:53 to the pros' 1:38, the first gas late at
   2:27 to their 2:00, zerglings 2.5x the pros' by 7:00 and mutalisks a third); finishing games it leads;
   late-game spending.
