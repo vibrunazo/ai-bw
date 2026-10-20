@@ -659,6 +659,9 @@ plan and the full log).
   5. vision: mutalisks hiding behind the natural's cliff (a scan or a floating building), Comsat energy
      kept for lurkers (the hold-position trick at 14:40), Science Vessels;
   6. the late game: expansions past the natural, hunting the Zerg's expansions, tech;
+  6b. overlords: Gary-T leaves out-of-position overlords alone even when they are free kills (its marines shoot
+     one a few times, then wander off); a Terran hunts them early with one or two marines, a supply block for
+     the Zerg (the user, after human game 4);
   7. building placement (packed depots, room to build and move; a later phase in docs/REFACTOR.md).
 
 ### Between v0.16 and v0.22 (2026-10-10 to 10-14): the belief model and other experiments
