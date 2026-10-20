@@ -268,6 +268,16 @@ base's way out stays open.
 
 ## Tests across matchups
 
+**Done 2026-10-20.** tests/test_matchups.py plays each matchup 3 minutes through eval/match.py and prints the
+table of what plays: TvZ, ZvZ and TvT ok, the Protoss matchups skipped ("no Protoss executor yet"); a Gary
+that can't be built for a matchup (a model kind missing) is a skip with that reason. tests/test_parity.py
+hashes a ZvZ and a TvT game besides the three TvZ ones. TvT was played for the first time: the default
+Terran manifest is TvZ's, so manifests got a `vs` section (overrides by the enemy's race, applied once the
+matchup is known from the lobby); against a Terran or a Protoss the default Gary-T plays the normal posture,
+no scripted rush builds, no answers to a Zerg's plan, no natural bunker, no TvZ selector table, and the fight
+layer's rules (the role model is TvZ's), with the TvT macro, army and commit models. In the first game both
+sides had seen an early pool and built ramp bunkers.
+
 tests/test_parity.py (Phase 0) and tests/test_smoke_game.py are parametrized over the matchups
 that can be played: the game's races from the manifests, the map one of the ladder maps
 (`eval/league.py ladder_maps`), a few minutes headless. In Phase 0 that is TvZ (Gary-T against

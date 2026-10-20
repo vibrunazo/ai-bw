@@ -644,6 +644,9 @@ plan and the full log).
   --zerg). gary/bots and the tools built on its scripted Zergs (vs_rush, walls_bench, block_drill,
   lurker_games, army_effect, garyz_accept, mirror, zerg_opening) are deleted; the tools that stepped
   games against them play gz1. The refactor is done: one Gary, a race a plug.
+- **Every matchup that can play is tested (2026-10-20).** tests/test_matchups.py: TvZ, ZvZ and TvT play, the
+  Protoss ones skip (no executor yet); TvT played for the first time, the Terran manifest's TvZ-only parts
+  (early-pool posture, Zerg answers, the TvZ role model) switched off against a non-Zerg by its `vs` section.
 - **Next:** human game 4's list (above), starting with the attack's execution. After the refactor, human game 4's list
   (above), in this order; the workers' part is done (workers off their work, the main's miners drawn under
   mutalisks):

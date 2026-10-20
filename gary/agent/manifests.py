@@ -35,6 +35,12 @@ _LEARNED = {"provider": "learned", "model": "macro/latest"}
 _ARMY = {"provider": "learned", "model": "army/latest"}
 _V09_FIGHT = {"provider": "command", "model": "fight_cmd_rl/v08", "before": ["repair", "pull", "load"],
               "in_fight": ["reinforce"], "workers": False}
+# what a Terran manifest built for TvZ plays against a non-Zerg (its "vs" section, by the enemy's race): the
+# early-pool posture, the scripted rush builds, the answers to the Zerg's plan, the natural bunker and the
+# strategy selector's TvZ table are the Zerg's; the role model is trained on TvZ only, so the fight layer's
+# rules play (the first TvT game, Gary-T against Gary-T: both sides saw an early pool and built ramp bunkers)
+_VS_NON_ZERG = {"posture": "normal", "macro": {"builds": [], "answers": False, "natural_bunker": False, "selector": None},
+                "fight": {"provider": "roles", "model": None, "roles": {"post": 3}}}
 
 MANIFESTS: dict[str, dict] = {
     # learned macro, army in waves of 16
@@ -275,6 +281,7 @@ MANIFESTS: dict[str, dict] = {
                        "before": _V09_FIGHT["before"] + ["detect", "stim"],
                        "rule_options": {"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8},
                                         "load": {"always": True}, "repair": {"turrets": 3}}},
+             "vs": {"T": _VS_NON_ZERG, "P": _VS_NON_ZERG},
              "arbiter": "fixed_priority/v1"},
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
@@ -742,6 +749,15 @@ def manifest_of(name: str | dict) -> dict:
     return m
 
 
+def _against(m: dict, vs: dict) -> dict:
+    """A manifest with its overrides for the enemy's race (its "vs" section): a layer's dict merged key by key, the
+    rest replaced."""
+    out = copy.deepcopy(m)
+    for k, v in vs.items():
+        out[k] = {**(out.get(k) or {}), **v} if isinstance(v, dict) and isinstance(out.get(k), dict) else copy.deepcopy(v)
+    return out
+
+
 def manifest_name(name: str) -> str:
     """For argparse (type=): a manifest name, with options, that exists."""
     base, *options = name.split("+")
@@ -761,6 +777,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     torch.set_num_threads(1)       # its models are small: games run side by side (14 at once: 2.7x faster)
     m = manifest_of(manifest)
     g = Gary(hi, mapinfo, m["version"], verbose, m.get("race", "T"))
+    if g.enemy is not None and g.enemy.race in m.get("vs", {}):
+        m = _against(m, m["vs"][g.enemy.race])
     g.army_types = set(g.race.army)
     g.production_types = g.race.production if mapinfo is not None else tuple(g.race.town_halls)
     if flip is not None:

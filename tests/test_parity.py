@@ -25,10 +25,14 @@ sys.path.insert(0, str(REPO))
 FIXTURE = REPO / "tests" / "fixtures" / "parity.json"
 
 TERRAN = "v029+commit+draw+floor+mass+nonatbunker+depots"   # the defaults of 2026-10-19 (docs/REFACTOR.md)
-GAMES = [("KnockOut 1.4", 4004), ("Fighting Spirit 1.4", 4005), ("Odyssey-RE 2.0", 4006)]
+# (map, seed, side A, side B): TvZ on three maps, and a mirror of each race that plays (docs/REFACTOR.md
+# "Tests across matchups")
+GAMES = [("KnockOut 1.4", 4004, "T", "Z"), ("Fighting Spirit 1.4", 4005, "T", "Z"), ("Odyssey-RE 2.0", 4006, "T", "Z"),
+         ("KnockOut 1.4", 6001, "Z", "Z"), ("Radeon 1.2", 7001, "T", "T")]
 MINUTES = 8
 LOGS = (".pov.jsonl", ".bpov.jsonl", ".trace.jsonl", ".btrace.jsonl", ".records.jsonl")
 ZERG = "gz1"
+BY_RACE = {"T": TERRAN, "Z": ZERG}
 GIT = re.compile(r"git [0-9a-f]{7,40}\+?")
 
 
@@ -41,14 +45,14 @@ def _digest(path: Path) -> str:
     return h.hexdigest()
 
 
-def play(map_name: str, seed: int, out: Path) -> dict[str, str]:
+def play(map_name: str, seed: int, a: str, b: str, out: Path) -> dict[str, str]:
     """One game's log hashes."""
     sys.path.insert(0, str(REPO / "ingest"))
     from inventory import data_root
-    rep = out / f"{re.sub(r'[^A-Za-z0-9]', '', map_name)}_{seed}.rep"
+    rep = out / f"{re.sub(r'[^A-Za-z0-9]', '', map_name)}_{seed}_{a}{b}.rep"
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     env.pop("GARY_RUN_NOTE", None)
-    cmd = [sys.executable, "-m", "eval.match", "--a", TERRAN, "--b", ZERG, "--seed", str(seed),
+    cmd = [sys.executable, "-m", "eval.match", "--a", BY_RACE[a], "--b", BY_RACE[b], "--seed", str(seed),
            "--minutes", str(MINUTES), "--map", str(data_root() / "maps" / "ladder" / f"{map_name}.rep"),
            "--save", str(rep)]
     p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
@@ -59,7 +63,8 @@ def play(map_name: str, seed: int, out: Path) -> dict[str, str]:
 
 def hashes() -> dict[str, dict[str, str]]:
     with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(len(GAMES)) as pool:
-        got = pool.map(lambda g: (f"{g[0]} {g[1]}", play(*g, Path(tmp))), GAMES)
+        got = pool.map(lambda g: (f"{g[0]} {g[1]}" + ("" if g[2:] == ("T", "Z") else f" {g[2]}v{g[3]}"), play(*g, Path(tmp))),
+                       GAMES)
         return dict(got)
 
 
@@ -67,7 +72,7 @@ def _available() -> str | None:
     try:
         sys.path.insert(0, str(REPO / "ingest"))
         from inventory import data_root
-        missing = [m for m, _ in GAMES if not (data_root() / "maps" / "ladder" / f"{m}.rep").exists()]
+        missing = [g[0] for g in GAMES if not (data_root() / "maps" / "ladder" / f"{g[0]}.rep").exists()]
         return f"no ladder map {missing[0]}" if missing else None
     except Exception as e:                              # no game data here
         return str(e)

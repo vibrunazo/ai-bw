@@ -37,6 +37,8 @@ class NormalPosture:
     build = None
     army_home = False
     preload_bunkers = False
+    rush = False                # (the rush defense and the hold are the early-pool postures': never here)
+    hold = False
 
     def __init__(self, g: Gary):
         self.g = g
