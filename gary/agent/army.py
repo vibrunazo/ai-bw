@@ -67,6 +67,9 @@ NOT_ARMY = {35, 36, 41, 42, 7, 64}  # larva, egg, drone, overlord, SCV, probe: n
 SCAN_STUCK = 20 * 24                # hunt: a remembered building's spot not settled after this: scanned
 HUNT_SQUAD = 8                      # option hunt_split: bases unseen searched by squads of this many units at least...
 HUNT_SQUADS = 4                     # ...at most this many at once
+STATIC_NEAR = 8 * 32                # option static_odds: ground static defense this near an engage's cell defends it...
+STATIC_SUPPLY = {146: 12, 162: 12, 125: 12}   # ...each worth this (supply x2): sunken, cannon, bunker
+DEFENDERS_NEAR = 12 * 32            # ...with the enemy fighters seen in the last minute this near
 HUNT_AHEAD_MIN = 80                 # option hunt_ahead: at least this much army (supply x2) to hunt while enemy fighters are seen
 HUNT_BOXES = 8                      # hunt: drag boxes for the whole army (4 left 29 of 77 units standing)
 RESCAN_SPOT = 60 * 24               # hunt: a remembered building's spot scanned again after this at most
@@ -126,6 +129,7 @@ class LearnedArmy:
                                           lambda x, y: self.tracker.cell(x, y), cell_dist) \
             if any(r in rules for r in ("join", "sweep", "press")) else None
         self.hunt_ahead: float | None = None   # option: the hunt also this many times the enemy fighters seen (a manifest's)
+        self.static_odds: float | None = None  # option: an engage only with this many times its spot's defense
         self.scout = scout          # option: a worker scouts the enemy's start (a Zerg's overlords do: its posture)
         # option: the unit types its clusters take (default the race's army; Zerg: its ground army, the flyers
         # and the lurkers having their own rules)
@@ -519,6 +523,8 @@ class LearnedArmy:
                 near |= np.roll(np.roll(enemy, dy, 0), dx, 1)
         far = np.array([cell_dist(c, here) >= MOVE_CELLS for c in range(GRID * GRID)])
         mask = far & (near.reshape(-1) if k == 1 else ~near.reshape(-1))
+        if k == 1 and self.static_odds is not None and self.memory is not None:
+            mask &= self._breakable(obs, mine, group)
         p = where[0] * mask
         if p.sum() <= 0:
             LOG.decision(g.hi.side, "commit", hi.frame, names[k], q[k], options, self._seen, by,
@@ -540,6 +546,30 @@ class LearnedArmy:
                              {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": float(q[k]),
                               "fight": 0.0, "done": [], "boxes": 0}, "army"))
         return "army"
+
+    def _breakable(self, obs: dict, mine: list[dict], group: list[dict]) -> np.ndarray:
+        """static_odds: the cells an engage may go to, those whose ground static defense (each STATIC_SUPPLY) and the
+        enemy fighters seen near them in the last minute the group outweighs static_odds times (human game 4's three
+        attacks all went into 2-4 sunkens and lost 24 supply for 1.5; against gz1, 38% of its attacks went into
+        sunkens to the pros' 28%: eval/attacks.py). STOP-GAP (docs/STOPGAPS.md): until the commit model weighs static
+        defense itself."""
+        ours = sum(supply_x2(u["type"]) for u in group)
+        seen = {u["tag"] for u in obs["units"]}
+        at = [(u["x"], u["y"]) for u in mine]
+        # (one remembered where Gary's units now stand and don't see it is gone: the memory keeps every building seen)
+        static = [(x, y, STATIC_SUPPLY[t]) for tag, (x, y, t) in self.memory.buildings.items() if t in STATIC_SUPPLY
+                  and (tag in seen or not any(math.dist((x, y), q) < GONE_PX for q in at))]
+        ok = np.ones(GRID * GRID, bool)
+        if not static:
+            return ok
+        fighters = list(self.memory.fighters.values())
+        for c in range(GRID * GRID):
+            cx, cy = self.tracker.center(c)
+            walls = sum(w for x, y, w in static if math.dist((x, y), (cx, cy)) < STATIC_NEAR)
+            if walls:
+                guard = walls + sum(v[1] for v in fighters if math.dist((v[2], v[3]), (cx, cy)) < DEFENDERS_NEAR)
+                ok[c] = ours >= self.static_odds * guard
+        return ok
 
     def _cell_name(self, cell: int) -> str:
         x, y = self.tracker.center(cell)
@@ -603,7 +633,7 @@ class LearnedArmy:
                 self.visited[i] = f
                 self.hunted.pop(b.center, None)
         army = [u for u in done if u["type"] in g.army_types]
-        # (option hunt_ahead: also far ahead of the enemy fighters seen in the last minute, as a few new zerglings
+        # (option hunt_ahead, STOP-GAP (docs/STOPGAPS.md): also far ahead of the enemy fighters seen in the last minute, as a few new zerglings
         # kept "no enemy army seen" from ever holding: Gary-T led 18 of 48 games at 20:00 with 60-67 army to the
         # Zerg's 0-2 and its last 4 buildings standing, its clusters' engages drawn all over the map; round G13)
         ahead = self.hunt_ahead is not None and self.memory is not None and             sum(supply_x2(u["type"]) for u in army) >= max(HUNT_AHEAD_MIN, self.hunt_ahead * max(8, sum(v[1] for v in self.memory.fighters.values())))
@@ -666,7 +696,7 @@ class LearnedArmy:
         """hunt_split: no enemy building known, the bases not seen lately searched at once by squads (pros split up
         to find the last buildings; the whole army walking to one base at a time saw 6 in 4 minutes, and the Zerg's
         last hatchery outlived 4 minutes of hunting at 66-0 army: round Jhunt4). Each squad keeps its base until it
-        has been seen; one squad ordered a turn."""
+        has been seen; one squad ordered a turn. STOP-GAP (docs/STOPGAPS.md): until searching is a learned skill."""
         from gary.decision_log import LOG
         g, f = self.g, self.g.hi.frame
         alive = {u["tag"] for u in army}

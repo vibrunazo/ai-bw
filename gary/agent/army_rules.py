@@ -77,7 +77,8 @@ PRESS_MIN = 40
 PRESS_MEMORY = 60 * 24
 PRESS_AGAIN = 20 * 24
 LORD_PREY = {"Z": {42}}                   # the enemy's flyers worth hunting alone, by its race: overlords
-LORD_HUNTER = {"T": {0}}                  # Gary's shooters that hunt them, by its race: marines
+LORD_HUNTER = {"T": {0}, "Z": {38}, "P": {66}}   # Gary's shooters that hunt them, by its race: marines, hydralisks,
+                                                 # dragoons (only Gary-T plays the rule yet)
 LORD_REACH = 12 * 32
 LORD_SAFE = 9 * 32                        # no enemy fighter, sunken or spore this near the overlord
 LORD_HUNTERS = 2
@@ -419,7 +420,8 @@ class Raid:
 
 
 class LordHunt:
-    """One or two shooters on an exposed overlord (see the module's docstring)."""
+    """One or two shooters on an exposed overlord (see the module's docstring). STOP-GAP (docs/STOPGAPS.md): until the
+    fight or army layer decides small detachments itself."""
 
     def __init__(self, g: Gary, memory: EnemyMemory):
         self.g, self.memory = g, memory
