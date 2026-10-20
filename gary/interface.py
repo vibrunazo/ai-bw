@@ -100,6 +100,10 @@ class _Pending:
     by: str = "?"             # who had the hands when it was given (decision_log.py LOG.owner)
 
 
+PANEL = (180, 418)        # the selection panel's first portrait (screen pixels: the console, below the 400-pixel view)
+PORTRAIT = (36, 32)       # a portrait's size: 6 a row, 2 rows
+
+
 class HumanInterface:
     def __init__(self, game: Game, slot: int, profile: Profile = PROFILES["pro"], seed: int = 0):
         self.game = game
@@ -424,6 +428,39 @@ class HumanInterface:
         with others, or where the env can't tell)."""
         return self._schedule_click(sx, sy, 16, "ctrl_click")
 
+    def ctrl_click_portrait(self, unit_type: int) -> ActionResult:
+        """Ctrl+click on a unit's portrait in the selection panel: the selection narrowed to the units of that
+        type in it (a box at the rally point, then the zerglings only: the drones and overlords there are left
+        out). The mouse travels to the panel, below the screen."""
+        kinds = [self.game.unit_type_of(t) for t in self.selection]
+        if unit_type not in kinds:
+            self._refused("portrait_ctrl", "no such unit selected")
+            return ActionResult(False, "not selected")
+        return self._schedule_panel(kinds.index(unit_type), "portrait_ctrl", unit_type=unit_type)
+
+    def shift_click_portrait(self, tag: int) -> ActionResult:
+        """Shift+click on a unit's portrait in the selection panel: that unit out of the selection (an
+        overlord a box took with the drones)."""
+        if tag not in self.selection:
+            self._refused("portrait_shift", "not selected")
+            return ActionResult(False, "not selected")
+        return self._schedule_panel(self.selection.index(tag), "portrait_shift", tag=tag)
+
+    def _schedule_panel(self, i: int, kind: str, **args) -> ActionResult:
+        """A click on the i-th portrait of the selection panel (6 a row, 2 rows), below the screen."""
+        if (r := self._spend(kind)):
+            return r
+        px, py = PANEL[0] + (i % 6) * PORTRAIT[0], PANEL[1] + (i // 6) * PORTRAIT[1]
+        dist = math.dist(self.cursor, (px, py))
+        travel_ms = self.p.fitts_a_ms + self.p.fitts_b_ms * math.log2(dist / PORTRAIT[1] + 1)
+        start = max(self.frame, self.hand_free_at)
+        land = start + max(1, round(travel_ms / FRAME_MS))
+        self.hand_free_at = land
+        self._mouse_moves.append((start, land, self.cursor, (px, py)))
+        self.cursor = (px, py)
+        self.pending.append(_Pending(land, kind, args, LOG.owner.get(self.side, "?")))
+        return self._game_result(land)
+
     def box(self, sx0: int, sy0: int, sx1: int, sy1: int) -> ActionResult:
         """Drag-select a screen rectangle."""
         if not (self._on_screen(sx0, sy0) and self._on_screen(sx1, sy1)):
@@ -606,7 +643,8 @@ class HumanInterface:
     def _land(self, a: _Pending) -> None:
         g = self.game
         click = {"click": "left", "ctrl_click": "left", "box": "left", "build": "left", "right_click": "right",
-                 "minimap_right_click": "right", "minimap_order": "left"}.get(a.kind)
+                 "minimap_right_click": "right", "minimap_order": "left", "portrait_ctrl": "left",
+                 "portrait_shift": "left"}.get(a.kind)
         act = None                       # what happened, in words, for the POV log
         cmd = None                       # a command to the selection: kind, map point, target (POV log)
         self._sent_ok = True
@@ -657,6 +695,15 @@ class HumanInterface:
                     self.selection = [tag]
             else:
                 act = "click: nothing there"
+        elif a.kind in ("portrait_ctrl", "portrait_shift"):
+            if a.kind == "portrait_ctrl":
+                keep = [t for t in self.selection if g.unit_type_of(t) == a.args["unit_type"]]
+                act = f"ctrl+click portrait: {len(keep)} {unit_name(a.args['unit_type'])}"
+            else:
+                keep = [t for t in self.selection if t != a.args["tag"]]
+                act = f"shift+click portrait: {unit_name(g.unit_type_of(a.args['tag']))} out"
+            if keep and keep != self.selection and self._send(C.select(keep)):
+                self.selection = keep
         elif a.kind == "box":
             x0, y0 = self._to_map(a.args["x0"], a.args["y0"])
             x1, y1 = self._to_map(a.args["sx"], a.args["sy"])

@@ -49,6 +49,7 @@ Z_ONE_OFF_BUILDINGS = {135, 141, 138, 136, 140, 139, 131}    # Den, Spire, Queen
                                                              # Evolution Chamber, Hatchery
 Z_ONE_OFF_MORPHS = {132, 133, 137}                           # Lair, Hive, Greater Spire
 TECH_PATH = {"Z": {135, 141, 138, 136, 140}}
+FIRST_PRODUCER = {"T": T.RAX, "Z": 142}  # the building that makes the army first: by rax_by (option), else one is built
 PACE_MAX = 10 * 24              # option pace: the longest wait for the next decision
 QUERY_EVERY = 12                # frames between the macro's looks at the model
 PARK_AHEAD = 100                # option park: a building's worker sets out this many minerals short of its cost
@@ -219,13 +220,17 @@ class LearnedMacro:
         # an early pool: the bunker needs it (4 of v0.11's 9 losses to a 9-pool)
         # (a second by 3:45, as the pros of the standard style have it at 3:31, lost 12 of 144 to the
         # replayed pros, 8 without)
-        rax = sum(1 for u in mine if u["type"] == T.RAX) + sum(1 for r, *_ in g.reserved if r == T.RAX) + g.building(T.RAX) \
-            if self.rax_by is not None else 1
-        if not rax and hi.frame >= self.rax_by and (self.goal is None or self.goal["id"] != T.RAX):
-            self.goal = {"act": BUILD, "id": T.RAX, "p": 1.0, "since": hi.frame, "name": "Barracks"}
-            g.say(f"next: Barracks (none by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d})")
-            LOG.decision(g.hi.side, "macro", hi.frame, "Barracks", inputs=self._seen(obs, mine, me),
-                         by=f"rule: a Barracks by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d}")
+        # (Zerg: a Spawning Pool by 2:45; one that didn't go up at 2:50 got the model's 1-4% odds after, and a
+        # Zerg without one sat on 2,000 minerals with no army to 8:25: round G1)
+        first = FIRST_PRODUCER.get(g.race.letter)
+        rax = sum(1 for u in mine if u["type"] == first) + sum(1 for r, *_ in g.reserved if r == first) + g.building(first) \
+            if self.rax_by is not None and first is not None else 1
+        if not rax and hi.frame >= self.rax_by and (self.goal is None or self.goal["id"] != first):
+            fname = describe(g.race, BUILD, first)
+            self.goal = {"act": BUILD, "id": first, "p": 1.0, "since": hi.frame, "name": fname}
+            g.say(f"next: {fname} (none by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d})")
+            LOG.decision(g.hi.side, "macro", hi.frame, fname, inputs=self._seen(obs, mine, me),
+                         by=f"rule: a {fname} by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d}")
         if self.supply_ahead and (self.goal is None or self.goal["id"] != g.race.supply_provider) and me["supply_max"] < 200 \
                 and (due := g.executor.supply_due(obs, mine, done, me)) is not None:
             act, by, uncapped = due

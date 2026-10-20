@@ -44,6 +44,8 @@ AIR_STATIC = {"T": {124, 125}, "Z": {144}, "P": {162}}
 POST_OUT = 10 * 32
 POST_AGAIN = 60 * 24
 RAID_KEY = 9
+RAID_MAX = 12                             # a flock is what a hotkey holds (more never matched the selection: the
+                                          # hotkey pressed 70 times in 4 minutes, round G2)
 RAID_FLOCK = 5
 RAID_REST = 20 * 24
 RAID_MEMORY = 90 * 24
@@ -235,7 +237,7 @@ class Raid:
             return None
         if self.state == "home":
             loose = [u for t, u in flyers.items() if t not in self.flock and any(math.dist((u["x"], u["y"]), h) < 16 * 32 for h in halls)]
-            if loose and (self.flock or len(loose) >= RAID_FLOCK):
+            if loose and len(self.flock) < RAID_MAX and (self.flock or len(loose) >= RAID_FLOCK):
                 return self._form(obs, flyers, loose)
             lines = self.memory.lines()
             if len(flock) >= RAID_FLOCK and hi.frame - self.since >= RAID_REST and lines:
@@ -293,7 +295,7 @@ class Raid:
                 workers = [u for u in enemy if u["type"] in WORKERS and math.dist((u["x"], u["y"]), self.line) < 10 * 32]
                 if workers:                                # (one worker at a time: a right-click on it)
                     w = min(workers, key=lambda u: ((u["hp"] or 0), math.dist((u["x"], u["y"]), mid)))
-                    if set(obs["selection"]) != self.flock:
+                    if not self._selected(obs):
                         hi.hotkey_recall(RAID_KEY)
                         return "army:raid"
                     p = screen_of(obs, w["x"], w["y"])
@@ -316,7 +318,7 @@ class Raid:
         sel = set(obs["selection"])
         if sel and sel <= set(flyers) and sel & {u["tag"] for u in loose}:
             (hi.hotkey_add if self.flock else hi.hotkey_set)(RAID_KEY)
-            self.flock |= sel
+            self.flock |= set(list(sel)[:RAID_MAX - len(self.flock)])
             self.size = len(self.flock)
             g.say(f"raid: a flock of {len(self.flock)}")
             return "army:raid"
@@ -332,7 +334,7 @@ class Raid:
         """The flock selected (its hotkey), then a minimap order."""
         g, hi = self.g, self.g.hi
         obs = hi.observe()
-        if set(obs["selection"]) != self.flock or not obs["selection"]:
+        if not self._selected(obs):
             hi.hotkey_recall(RAID_KEY)
             return "army:raid"
         x, y = int(point[0]), int(point[1])
@@ -350,7 +352,7 @@ class Raid:
         post, queued (straight from home, the flight crossed the enemy's base and its anti-air)."""
         g, hi = self.g, self.g.hi
         obs = hi.observe()
-        if set(obs["selection"]) != self.flock or not obs["selection"]:
+        if not self._selected(obs):
             hi.hotkey_recall(RAID_KEY)
             return "army:raid"
         post = self._post(line)
@@ -370,6 +372,11 @@ class Raid:
                          inputs={"flyers": len(self.flock)}, by="rule: the line with the least anti-air seen")
         self.state, self.since = "out", hi.frame
         return "army:raid"
+
+    def _selected(self, obs: dict) -> bool:
+        """The flock (or what of it its hotkey brings up) is the selection."""
+        sel = set(obs["selection"])
+        return bool(sel) and sel <= self.flock
 
     def _pick_line(self, lines: list, but=None):
         """No static anti-air seen by it first, then the least anti-air near it, then the one raided longest ago."""

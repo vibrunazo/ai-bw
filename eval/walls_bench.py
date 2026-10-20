@@ -47,7 +47,7 @@ class Match:
                  opponent: str = "dummy", style: int | None = None):
         from gary import commands as C
         from gary.agent.manifests import build_gary
-        from gary.bots.zerg_rush import HATCH, LIVE_COMMAND_DELAY, PRO_HANDS, ZergRush
+        from gary.bots.zerg_rush import B_RANK_HANDS, HATCH, LIVE_COMMAND_DELAY, ZergRush
         from gary.env import Game
         from gary.interface import PROFILES, HumanInterface
         from gary.mapinfo import MapInfo
@@ -57,7 +57,7 @@ class Match:
         obs = self.game.observe()
         self.slot = {("T" if u["type"] == C.COMMAND_CENTER else "Z"): u["owner"] for u in obs["units"]
                      if u["type"] in (C.COMMAND_CENTER, HATCH)}
-        self.his = {r: HumanInterface(self.game, s, PROFILES["pro" if r == "T" or opponent in PRO_HANDS else "b_rank"], seed=s)
+        self.his = {r: HumanInterface(self.game, s, PROFILES["pro" if r == "T" or opponent not in B_RANK_HANDS else "b_rank"], seed=s)
                     for r, s in self.slot.items()}
         self.gary = build_gary(self.his["T"], self.map, version, style, verbose=False, seed=seed)
         if opponent == "replayed":

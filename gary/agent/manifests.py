@@ -320,7 +320,7 @@ MANIFESTS: dict[str, dict] = {
     # style). Its army and fights from Gary-Z (Phase 2)
     "gz1": {"version": "gz0.1", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True,
             "macro": {**_LEARNED, "builds": ["alarm"], "decoder": "dice", "odds_mass": 1.0, "hatch_mass": 0.5, "park": True, "pace": True,
-                      "tech_min_p": 0.10, "wait_min_p": 0.05, "supply_ahead": True, "rax_by": None, "history": "pro", "style": "roll"},
+                      "tech_min_p": 0.10, "wait_min_p": 0.05, "supply_ahead": True, "rax_by": 165 * 24, "history": "pro", "style": "roll"},
             # the army: clusters with commitments, drawn (Gary-Z's GARY_Z_COMMIT=latest), its ground army (the flyers
             # and lurkers have their own rules); no worker scout (its overlords)
             "army": {"provider": "learned", "model": "commit/latest", "commit": True, "draw": True, "scout": False,

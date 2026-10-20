@@ -55,7 +55,7 @@ class ZergExecutor(Executor):
     # A shift-click to take the overlord out of the selection doesn't, here: 330 s)
     box_extras = frozenset({Z.LARVA, Z.OVERLORD})
     box_orders = frozenset({2, 3, 6, 41})         # Guard, PlayerGuard, Move, ZergBirth
-    army_select = "ctrl"
+    army_select = "portrait"
     in_flight = 24                                # frames a morph's money counts as spent before the game shows it
                                                   # (Gary-Z's: a larva's is taken at once; 2 s held a drone's 50 idle)
 
@@ -248,6 +248,15 @@ class ZergExecutor(Executor):
         """Also a gas drone while the gas floats: to minerals."""
         return super()._idle(u, mine) or (self.gas_floating and u["type"] == Z.DRONE and u["order"] in (81, 82, 84))
 
+    def trim_selection(self, obs: dict, mine: list[dict]) -> bool:
+        """An overlord the box took with the drones: shift+click on its portrait (sent along, it flew to the field
+        and the next clicks there hit it: 35 drone-seconds a game following one)."""
+        sel = set(obs["selection"])
+        lord = next((u for u in mine if u["tag"] in sel and u["type"] == Z.OVERLORD), None)
+        if lord is None or len(sel) == 1:
+            return False
+        return bool(self.g.hi.shift_click_portrait(lord["tag"]).accepted)
+
     def click_blockers(self, mine: list[dict]) -> list[tuple[int, int]]:
         """Overlords: a right-click on a mineral field under one hits the overlord, and the drones follow it."""
         return [(u["x"], u["y"]) for u in mine if u["type"] == Z.OVERLORD]
@@ -259,6 +268,13 @@ class ZergExecutor(Executor):
         g, hi, uid = self.g, self.g.hi, t.data["id"]
         fresh = self._fresh_larvae(mine)
         sel = [u for u in mine if u["tag"] in obs["selection"]]
+        fresh_sel = [u for u in sel if u["type"] == Z.LARVA and u["tag"] not in self.used_larva]
+        if fresh_sel and len(fresh_sel) < len(sel) and not t.data.get("narrowed"):
+            # the box took a drone or a zergling beside the larva too: a ctrl+click on the larva's portrait keeps
+            # the larvae (boxed again, 13 tasks a game gave up after 3 boxes: round G1)
+            t.data["narrowed"] = True
+            if hi.ctrl_click_portrait(Z.LARVA).accepted:
+                return
         if sel and all(u["type"] == Z.LARVA and u["tag"] not in self.used_larva for u in sel):
             if hi.morph(uid).accepted:
                 for u in sel:

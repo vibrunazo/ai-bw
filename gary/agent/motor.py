@@ -558,6 +558,15 @@ class DirectMotor:
             return
         if t.stage == "selected":
             sel = [s for s in obs["selection"] if s in set(d["tags"])]
+            if g.executor.army_select == "portrait" and sel and len(sel) < len(obs["selection"]) and not d.get("narrowed"):
+                # the box took more than the order's units (drones and overlords at the rally point): a ctrl+click
+                # on the portrait of the commonest of them keeps that type only (the player's way)
+                from collections import Counter
+                kinds = Counter(u["type"] for u in mine if u["tag"] in set(sel))
+                hi.ctrl_click_portrait(kinds.most_common(1)[0][0])
+                d["narrowed"] = True
+                return
+            d["narrowed"] = False
             if sel:
                 if d["attack"]:
                     hi.minimap_command(C.ORDER_ATTACK_MOVE, d["x"], d["y"])
@@ -588,14 +597,7 @@ class DirectMotor:
                 cx, cy = u["x"], u["y"]
             hi.camera_minimap(cx, cy)
             return
-        if g.executor.army_select == "ctrl":
-            # a ctrl+click on one of the commonest type left: every one of that type on the screen, none of the
-            # rest (a box at the meeting point took the drones and overlords along: Gary-Z's way)
-            from collections import Counter
-            kind = Counter(u["type"] for u in here).most_common(1)[0][0]
-            hi.ctrl_click(*hi.aim(obs, next(u for u in here if u["type"] == kind)))
-        else:
-            box_around(hi, [self.g.hi.aim(obs, u) for u in here], 10)
+        box_around(hi, [self.g.hi.aim(obs, u) for u in here], 10)
         d["boxes"] += 1
         t.stage = "selected"
 

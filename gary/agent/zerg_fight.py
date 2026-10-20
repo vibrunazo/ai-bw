@@ -52,7 +52,6 @@ class _Host:
 
 
 class ZergFight:
-    next_fight = 10 ** 9            # (no fight turns that put a task aside: block() is never asked)
     center = None                   # (the army layer isn't kept off any units)
     ctrl_click = False
     rl_log = None
@@ -69,7 +68,22 @@ class ZergFight:
         self.lurk_since = self.lurk_calm = 0
         self.lurk_streak, self.lurk_backoff = 0, 0
 
+    @property
+    def next_fight(self) -> int:
+        """When the roles want a fight turn (one that may put a chore aside): now while an order is under way,
+        else at their next ask. Without these turns the roles acted only when nothing else had the hands: a
+        fifth of Gary-Z's fight decisions in round G1."""
+        if self.roles is None:
+            return 10 ** 9
+        if self.roles.pending is not None or self.roles.queue:
+            return 0
+        return self.roles.next_ask
+
     def block(self, obs: dict, mine: list[dict]) -> str | None:
+        """The fight turn: the roles; after one, the macro's turn (production isn't starved by fights)."""
+        if self.roles is not None and self.roles.step(obs, mine):
+            self.g.macro_turn = True
+            return "fight:roles"
         return None
 
     def decide(self, obs: dict, mine: list[dict]) -> str | None:

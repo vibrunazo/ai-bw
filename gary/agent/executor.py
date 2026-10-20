@@ -96,8 +96,8 @@ class Executor:
     build_order = C.ORDER_PLACE_BUILDING          # the order a worker places a building with
     box_extras: frozenset = frozenset()           # units a box around workers may take that a mining order leaves be
     box_orders: frozenset = frozenset()           # ...and orders of other free workers in it, sent mining with them
-    army_select = "box"                           # how the motor selects an army's units: drag boxes, or "ctrl" (a
-                                                  # ctrl+click on each type: no drones or overlords along)
+    army_select = "box"                           # how the motor selects an army's units: drag boxes, or "portrait"
+                                                  # (a box, then a ctrl+click on a portrait: no drones or overlords along)
     """The race-neutral hands (docs/REFACTOR.md Phase 1): reservations, workers to mining and gas,
     transfers, picking and selecting a worker, placement, hotkeys and rallies, commands to a building,
     and a worker's build (walk, place). A race's executor adds what only it does: its task kinds
@@ -845,6 +845,14 @@ class Executor:
                 # natural (13 Barracks in a row failed for it in one game)
                 t.data["from"] = "natural"
                 return
+            others = [b for b in self.my_bases(mine) if b is not g.main and b is not g.natural
+                      and b.center not in t.data.get("looked_at", [])]
+            if not w and t.data.get("from", "main") != "main" and others:
+                # nor there: the next base of Gary's with a town hall (gz1's drones mined at its third: 9 builds a
+                # game dropped "no free SCV", round G1)
+                t.data.setdefault("looked_at", []).append(others[0].center)
+                t.data["from"] = others[0]
+                return
             if not w:
                 self.fail_build(t, "no free SCV")
                 return
@@ -1093,6 +1101,11 @@ class Executor:
                 return False
         return True
 
+    def trim_selection(self, obs: dict, mine: list[dict]) -> bool:
+        """A unit the box took with the workers that a mining order would move (a race's flyers): out of the
+        selection by its portrait (True: that was this turn's action)."""
+        return False
+
     def click_blockers(self, mine: list[dict]) -> list[tuple[int, int]]:
         """Own units a right-click on a mineral field may hit instead (a race's flyers kept over its bases)."""
         return []
@@ -1109,6 +1122,8 @@ class Executor:
         minimap right-click on them was a move, and 41 of 188 mining tasks in human game 4 sent workers to
         stand idle by the minerals."""
         g, hi = self.g, self.g.hi
+        if self.trim_selection(obs, mine):
+            return
         base = next((b for b in g.map.bases if b.center == tuple(t.data["base"])), None) or g.main
         bases = self.my_bases(mine) or [g.main]
         fields = self._clear_fields(mine, [m for m in base.minerals if screen_of(obs, *m)] or
