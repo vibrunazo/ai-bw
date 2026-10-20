@@ -174,6 +174,36 @@ wins) and its gap score; a ZvZ mirror round plays to the end as the first mirror
   mirror are told apart by the slot the launcher sets (eval/mirror.py does this already). Nothing
   else to change.
 
+**Done 2026-10-20.** As built, against the list above:
+
+- Posture: `ZergPosture` (gary/agent/zerg_posture.py) carries the alarm; its effect is the build "alarm"
+  (`AlarmDefense`: sunkens at the natural, then army units by the model's odds) that hands back to the
+  learned macro when it has nothing to do (`falls_through`), under the posture's `no_workers` and
+  `one_off_min_p` filters. The overlord posts went to the army layer instead (option rule `posts`): they
+  are its scouting, and the one Gary has to find the enemy itself (Gary-Z was handed its start by the
+  launcher), before then an overlord to each start it may be at.
+- Army: `LearnedArmy` with commitments was Gary-Z's cluster army already; gary/agent/army_rules.py adds
+  the option rules `posts`, `raid` (the flyers' raid, per-race anti-air tables), `join`, `sweep`, `press`
+  over a shared `EnemyMemory`; options `scout` and `types`; the hunt (the Terran's) on for gz1, so a far
+  lead ends the game. The motor selects a Zerg army by a box and a ctrl+click on a portrait of the
+  selection panel (gary/interface.py, the user's way of splitting units at the rally point).
+- Roles: not a `RoleRules` subclass: the fight provider "zerg" (gary/agent/zerg_fight.py) hosts
+  `ZergRoles` (moved to gary/agent/zerg_roles.py) and the lurkers' burrow routine, with fight turns
+  that may put a chore aside, the macro's turn after each.
+- Gary-Z's turns: the arbiter option `rotate` (army, macro and the chores in rotation, 3 actions at most
+  each), found by the parity diff below.
+- Env options: gz1's are manifest options; gary_z.py's own stay until Phase 3 deletes it.
+- The gate: rounds G1-G6 (48 games each on the ladder maps against the default Gary-T, L9 the baseline).
+  G1-G3 played gz1 with b_rank hands (the launcher gave pro hands only to the Zergs it listed); with pro
+  hands G4 and G5 matched Gary-Z but for the lead at the limit (0 games to 5). A parity diff of the five
+  L9 games Gary-Z led at 20 minutes against gz1's on the same seeds (eval/why.py, 5-13 minutes) named the
+  rotation, the macro's history counting failed larva tasks, and a Pool rule firing when none could be
+  built; ported, G6: Gary-T won 25 (30), gz1 1 (0), Zerg ahead at the limit 7 (5), alive at 12 / 15
+  minutes 41 / 36 (42 / 25), gap score to modern pros 0.28 (0.33). A ZvZ round of gz1 against gz1 played
+  to kills at 8:30, 11:00 and 19:00 and to clear leads at 20 minutes.
+- Known differences: the commitment floor is off (as Gary-Z's default since L7); the flock's saving
+  (`GARY_Z_FLOCK_SAVE`, off in Gary-Z too) isn't ported.
+
 ## Phase 3: one launcher, delete the old stack (one day)
 
 - `eval/match.py`: a headless game between two manifests on a map: `--a v029 --b gz1 --map ...

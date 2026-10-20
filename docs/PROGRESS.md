@@ -630,7 +630,15 @@ plan and the full log).
   (eval/zerg_opening.py): drones 12 / 12, the Pool 1:35 / 1:54, the Extractor 1:17 / 1:24, larvae and
   mining alike; the second hatchery later (by 4:00 in 14 games / 21) and supply blocks a little longer
   (36 s / 26). Terran games still byte-identical (tests/test_parity.py).
-- **Next:** the one-Gary refactor's Phase 2 (docs/REFACTOR.md). After the refactor, human game 4's list
+- **The one-Gary refactor, Phase 2 (2026-10-20): Gary-Z's army, posture and fights as shared providers.**
+  The manifest gz1 is the shared agent playing Zerg in full: the alarm as a posture, Gary-Z's posts,
+  raid, join, sweep and press as army options, its fight roles and lurkers as a fight provider, its
+  turns as an arbiter option; portrait clicks in the selection panel (a box, then one type kept, or an
+  overlord taken out). Against the default Gary-T, 48 games on the ladder maps (L9, Gary-Z's, in
+  brackets): Gary-T won 25 (30), the Zerg ahead at the limit in 7 (5), alive at 15 minutes in 36 (25),
+  gap score to modern pros 0.28 (0.33). On the way: the launcher had given gz1 b_rank hands (three
+  rounds lost to it); a parity diff on the games Gary-Z led found what was missing.
+- **Next:** the one-Gary refactor's Phase 3 (docs/REFACTOR.md). After the refactor, human game 4's list
   (above), in this order; the workers' part is done (workers off their work, the main's miners drawn under
   mutalisks):
   1. the attack's execution: medics with the bio, no attack-move into sunkens, a regroup in front of the
