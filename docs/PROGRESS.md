@@ -664,6 +664,17 @@ plan and the full log).
   default opponent was still the bare v029 (none of them). gt1 is that string plus lords, folded into one manifest
   (gary/agent/manifests.py), the default of gary/play.py, eval/league.py and the tests; changes are judged as
   gt1+<option> and an adopted one goes into it.
+- **Attacks measured, and finishing games (gt1 = gt0.2, 2026-10-20).** eval/attacks.py: a Terran's attacks
+  from the replays (3+ fighters by a Zerg building after 20 s with none), Gary's against modern pros'. Against
+  gz1 (G13, 48 games; pros 48): army share there 0.50 (0.54), late arrivals per fighter there 0.26 (0.06),
+  medics along 1.09 (1.0), into sunkens 38% (28%), lost / killed supply per attack 6.0 / 11.0 (2.5 / 6.0),
+  still there at the end of a losing attack 0.12 (0.15). Its 18 unfinished leads: the Zerg down to a base or
+  two with no army, the clusters' engages drawn all over the map (overlords count as enemy presence), the hunt
+  held off by "no enemy army seen for a minute" while new zerglings appeared, then the whole army at one unseen
+  base at a time. Now the hunt also runs at 4x the enemy fighters seen in the last minute, and with no
+  building known squads of 8+ search the unseen bases at once: Gary-T won 24 (21), lost 2 (3) of 48. Not
+  adopted: Gary-Z's join (won 20, the Zerg ahead at 20:00 in 8 to 2), press (won 22, the Zerg ahead in 7),
+  press at 4x (22 won, 19 led: even), the hunt at 4x alone (23 won, 13 led).
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the
@@ -679,7 +690,10 @@ plan and the full log).
   (above), in this order; the workers' part is done (workers off their work, the main's miners drawn under
   mutalisks):
   1. the attack's execution: medics with the bio, no attack-move into sunkens, a regroup in front of the
-     natural, a retreat when hit, called off when outnumbered; plans that adapt to what is seen;
+     natural, a retreat when hit, called off when outnumbered; plans that adapt to what is seen. Measured
+     (eval/attacks.py, 2026-10-20): against gz1 the medics come along and losing attacks are called off as
+     the pros' are; the trickle (4x the pros') and attacks into sunkens (38% to 28%) remain. Finishing games:
+     the hunt in gt0.2 (below);
   2. SCVs pulled into fights (3 pulls at 7:47-7:53) and SCVs and marines that felt AFK against the early
      zerglings;
   3. micro of single units in a group, not only group orders;
