@@ -113,11 +113,12 @@ class LearnedArmy:
                  draw: bool = False, engage=None, commit: bool = False, commit_act: float | None = None,
                  scout: bool = True, types=None, rules=()):
         self.g = g
-        # option rules (gary/agent/army_rules.py, from Gary-Z's army): posts and raid every turn, before the clusters;
+        # option rules (gary/agent/army_rules.py, from Gary-Z's army): posts, raid and lords every turn, before the clusters;
         # join, sweep and press at a cluster's turn, before the model
-        from gary.agent.army_rules import ClusterRules, EnemyMemory, Posts, Raid
+        from gary.agent.army_rules import ClusterRules, EnemyMemory, LordHunt, Posts, Raid
         self.memory = EnemyMemory(g) if rules else None
-        self.turn_rules = [{"posts": Posts, "raid": Raid}[r](g, self.memory) for r in rules if r in ("posts", "raid")]
+        turn = {"posts": Posts, "raid": Raid, "lords": LordHunt}
+        self.turn_rules = [turn[r](g, self.memory) for r in rules if r in turn]
         self.cluster_rules = ClusterRules(g, self.memory, "join" in rules, "sweep" in rules, "press" in rules,
                                           lambda x, y: self.tracker.cell(x, y), cell_dist) \
             if any(r in rules for r in ("join", "sweep", "press")) else None

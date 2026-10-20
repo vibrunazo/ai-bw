@@ -569,6 +569,8 @@ OPTIONS = {
     # drawn under 15% (human game 3's 19 low draws were all under 14%), the destination among the 5 likeliest
     # cells. The deterministic decodes won fewer games against Gary-Z than drawing (6-7 of 24 against 13)
     "floor": lambda m: m["army"].update(commit_floor=0.15),
+    # army_rules.py LordHunt: one or two marines hunt an exposed overlord (the user, after human game 4)
+    "lords": lambda m: m["army"].update(rules=[*m["army"].get("rules", ()), "lords"]),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army

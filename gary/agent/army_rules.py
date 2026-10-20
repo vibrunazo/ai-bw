@@ -16,6 +16,12 @@ kind (a Terran could raid with wraiths, press with tanks, post a floating buildi
   press   far ahead (its army PRESS_RATIO times the enemy fighters seen in PRESS_MEMORY, PRESS_MIN at
           least) and nothing at home, the main body attacks the enemy building it knows of that ends a game
           first, the nearest within each rank; re-aimed every PRESS_AGAIN
+  lords   an enemy overlord in sight with no fighters or anti-air of the enemy near it, within LORD_REACH of
+          a free shooter of Gary's (Terran: a marine not in a fight or a bunker): the nearest LORD_HUNTERS
+          hunt it, held by the rule (the fight and the army leave them be), re-aimed every LORD_REAIM, until
+          it dies, gets away (LORD_LOST) or LORD_FOR is up. A pro Terran kills an exposed overlord with one or
+          two marines (a supply block for the Zerg); Gary-T's marines shot one a few times and wandered off
+          with their group (the user, after human game 4)
 
 Each records its decisions (gary/decision_log.py) and works with Gary's hands: posts and the raid by their
 own selections and minimap orders, the cluster rules by an army order to the motor.
@@ -27,7 +33,7 @@ import math
 
 from gary import commands as C
 from gary.agent.gary import Gary
-from gary.agent.intents import Intent
+from gary.agent.intents import Intent, priority
 from gary.decision_log import LOG
 from gary.interface import screen_of
 from gary.policy.army import is_building, is_worker, supply_x2
@@ -70,6 +76,16 @@ PRESS_RATIO = 2.0
 PRESS_MIN = 40
 PRESS_MEMORY = 60 * 24
 PRESS_AGAIN = 20 * 24
+LORD_PREY = {"Z": {42}}                   # the enemy's flyers worth hunting alone, by its race: overlords
+LORD_HUNTER = {"T": {0}}                  # Gary's shooters that hunt them, by its race: marines
+LORD_REACH = 12 * 32
+LORD_SAFE = 9 * 32                        # no enemy fighter, sunken or spore this near the overlord
+LORD_HUNTERS = 2
+LORD_REAIM = 3 * 24
+LORD_FOR = 25 * 24
+LORD_LOST = 16 * 32                       # the overlord this far from its hunters: let go
+LORD_AGAIN = 5 * 24                       # the next hunt after one ends
+LORD_BUNKER = 40                          # a marine this near a bunker is in it (or about to be)
 
 
 def mid_of(units: list[dict]) -> tuple[float, float]:
@@ -400,6 +416,88 @@ class Raid:
         dx, dy = line[0] - w / 2, line[1] - h / 2
         d = math.hypot(dx, dy) or 1.0
         return int(min(w - 64, max(64, line[0] + dx / d * RAID_POST))), int(min(h - 64, max(64, line[1] + dy / d * RAID_POST)))
+
+
+class LordHunt:
+    """One or two shooters on an exposed overlord (see the module's docstring)."""
+
+    def __init__(self, g: Gary, memory: EnemyMemory):
+        self.g, self.memory = g, memory
+        self.prey: int | None = None
+        self.hunters: list[int] = []
+        self.since = self.last_aim = 0
+        self.next_hunt = 0
+
+    def _end(self, why: str) -> None:
+        g = self.g
+        g.leases.release(self.hunters)
+        LOG.decision(g.hi.side, "army", g.hi.frame, "overlord hunt over", inputs={"hunters": len(self.hunters)}, by=why)
+        self.prey, self.hunters = None, []
+        self.next_hunt = g.hi.frame + LORD_AGAIN
+
+    def step(self, obs: dict, mine: list[dict], done: list[dict]) -> str | None:
+        g, hi = self.g, self.g.hi
+        if g.enemy is None:
+            return None
+        prey_types = LORD_PREY.get(g.enemy.race, set())
+        hunter_types = LORD_HUNTER.get(g.race.letter, set())
+        if not prey_types or not hunter_types:
+            return None
+        enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11)]
+        guards = [(u["x"], u["y"]) for u in enemy if u["type"] in (144, 146) or (
+            u["type"] not in prey_types and not is_building(u["type"]) and not is_worker(u["type"]) and supply_x2(u["type"]) > 0)]
+        if self.prey is not None:
+            prey = next((u for u in enemy if u["tag"] == self.prey), None)
+            hunters = [u for u in done if u["tag"] in set(self.hunters)]
+            if prey is None or not hunters:
+                self._end("rule: the overlord is gone (killed or out of sight)" if hunters else "rule: its hunters are gone")
+                return None
+            if hi.frame - self.since > LORD_FOR or min(math.dist((u["x"], u["y"]), (prey["x"], prey["y"])) for u in hunters) > LORD_LOST \
+                    or any(math.dist(q, (prey["x"], prey["y"])) < LORD_SAFE for q in guards):
+                self._end("rule: the hunt took too long, the overlord got away, or the enemy came")
+                return None
+            if hi.frame - self.last_aim < LORD_REAIM:
+                return None
+            return self._aim(obs, hunters, prey)
+        if hi.frame < self.next_hunt:
+            return None
+        bunkers = [(u["x"], u["y"]) for u in mine if u["type"] == 125]
+        free = [u for u in done if u["type"] in hunter_types and priority(g.leases.holder(u["tag"]) or "") < 2
+                and all(math.dist((u["x"], u["y"]), b) > LORD_BUNKER for b in bunkers)]
+        if not free:
+            return None
+        for prey in (u for u in enemy if u["type"] in prey_types):
+            at = (prey["x"], prey["y"])
+            if any(math.dist(q, at) < LORD_SAFE for q in guards):
+                continue
+            near = sorted(free, key=lambda u: math.dist((u["x"], u["y"]), at))[:LORD_HUNTERS]
+            if math.dist((near[0]["x"], near[0]["y"]), at) > LORD_REACH:
+                continue
+            self.prey, self.hunters, self.since, self.last_aim = prey["tag"], [u["tag"] for u in near], hi.frame, -10 ** 6
+            g.say(f"{len(near)} {'marine' if len(near) == 1 else 'marines'} hunt an overlord at {tuple(map(int, at))}")
+            LOG.decision(hi.side, "army", hi.frame, "hunt an overlord", inputs={"at": [int(at[0]), int(at[1])], "hunters": len(near)},
+                         by="rule: an overlord in sight with no fighters or anti-air near it")
+            return self._aim(obs, near, prey)
+        return None
+
+    def _aim(self, obs: dict, hunters: list[dict], prey: dict) -> str:
+        """The hunters selected (a click on the first, a shift+click on the other), then an attack-move on the
+        overlord's spot on the minimap; held by the rule till the next aim."""
+        g, hi = self.g, self.g.hi
+        tags = {u["tag"] for u in hunters}
+        sel = set(obs["selection"])
+        if sel != tags:
+            u = next((u for u in hunters if u["tag"] not in sel), hunters[0]) if sel and sel <= tags else hunters[0]
+            p = hi.aim(obs, u)
+            if p is None:
+                hi.camera_minimap(u["x"], u["y"])
+            else:
+                hi.click(*p, shift=bool(sel) and sel <= tags)
+            return "army:lords"
+        hi.minimap_command(C.ORDER_ATTACK_MOVE, int(prey["x"]), int(prey["y"]))
+        g.leases.take(list(tags), Intent("HUNT", list(tags), prey["tag"], source="rule:lords", ttl=LORD_REAIM + 24))
+        self.last_aim = hi.frame
+        return "army:lords"
 
 
 class ClusterRules:
