@@ -334,7 +334,9 @@ MANIFESTS: dict[str, dict] = {
             # and lurkers have their own rules); no worker scout (its overlords)
             "army": {"provider": "learned", "model": "commit/latest", "commit": True, "draw": True, "scout": False,
                      "types": [37, 38, 39, 45, 46], "rules": ["posts", "raid", "join", "sweep", "press"], "hunt": True},
-            "fight": {"provider": "zerg"}, "arbiter": "fixed_priority/v1"},
+            # its fight roles from the pros' Zerg units in whole games to 30 minutes, old and modern (round R30Z against
+            # B30: the Zerg ahead or winning at 30:00 in 9 of 48 games to 6, its gap at 21-30 minutes 0.40 to 0.46)
+            "fight": {"provider": "zerg", "roles_data": "response_Z_30min.npz"}, "arbiter": "fixed_priority/v1"},
     # the fight layer alone, for micro drills (gary/drills.py)
     "drill": {"version": "drill", "posture": "normal", "macro": None, "army": None,
               "fight": {"provider": "command", "model": "fight_cmd/latest_memory", "workers": False},
@@ -584,6 +586,10 @@ OPTIONS = {
     "hunt4": lambda m: m["army"].update(hunt_ahead=4.0),
     "split": lambda m: m["army"].update(hunt_split=True),
     "static": lambda m: m["army"].update(static_odds=1.5),
+    # the fight roles model trained on whole games to 30 minutes, old and modern (ingest/response_dataset.py --era
+    # both; until 2026-10-20 the first 20 minutes on the three 1.16 maps): either race's. In gz1; not for gt1 (round
+    # R30T against B30: won 33 (34), the Zerg ahead at 30:00 in 6 (2), its gap at 21-30 minutes 0.45 (0.39))
+    "roles30": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_30min.npz"),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
@@ -901,7 +907,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.army.static_odds = m["army"].get("static_odds")
     if m["fight"] is not None and m["fight"]["provider"] == "zerg":
         from gary.agent.zerg_fight import ZergFight
-        g.fight = ZergFight(g, m["fight"].get("roles", True), m["fight"].get("lurkers", True), seed)
+        g.fight = ZergFight(g, m["fight"].get("roles", True), m["fight"].get("lurkers", True), seed,
+                            m["fight"].get("roles_data", "response_Z.npz"))
         models["fight"] = g.fight.model_path or "none"
     elif m["fight"] is not None:
         f = m["fight"]
@@ -910,6 +917,11 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             models["fight"] = "roles/rules_v1"   # (the chat says so: as many lines as with a model)
         elif f["provider"] in ("roles", "role_override", "role_ahead"):
             from gary.policy.roles import RoleModel
+            if f.get("roles_data") and fight_path is None and fight_model is None:
+                from gary.policy.roles import latest_trained_on
+                fight_path = latest_trained_on(f["roles_data"])
+                if fight_path is None:
+                    raise FileNotFoundError(f"no role model trained on {f['roles_data']}")
             fight = fight_model or RoleModel.load(fight_path or model_path(f["model"], g.matchup, g.race.letter))
             models["fight"] = fight.path
         else:

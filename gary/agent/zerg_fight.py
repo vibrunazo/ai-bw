@@ -56,11 +56,12 @@ class ZergFight:
     ctrl_click = False
     rl_log = None
 
-    def __init__(self, g: Gary, roles: bool = True, lurkers: bool = True, seed: int = 0):
+    def __init__(self, g: Gary, roles: bool = True, lurkers: bool = True, seed: int = 0,
+                 roles_data: str = "response_Z.npz"):
         self.g = g
         self.rng = random.Random(seed)
         self.host = _Host(g, seed)
-        model = latest_zerg_model() if roles else None
+        model = latest_zerg_model(roles_data) if roles else None
         self.roles = ZergRoles(self.host, model) if model is not None else None
         self.model_path = str(model) if model is not None else None
         self.lurkers = lurkers

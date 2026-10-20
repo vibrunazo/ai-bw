@@ -192,3 +192,17 @@ class RoleModel:
             return torch.softmax(self.net(*inputs)[0], -1).cpu().numpy(), None
         logits, move = self.net(*inputs, with_move=True)
         return torch.softmax(logits[0], -1).cpu().numpy(), move[0].cpu().numpy()
+
+
+def latest_trained_on(data_name: str) -> Path | None:
+    """The newest role model (runs/roles/*/model.pt) trained on a dataset file of this name (e.g. response_T.npz,
+    response_Z_30min.npz), or None."""
+    for p in sorted(Path("runs/roles").glob("*/model.pt"), reverse=True):
+        try:
+            ck = torch.load(p, map_location="cpu", weights_only=True)
+        except Exception:
+            continue
+        if str(ck.get("config", {}).get("data", "")).replace("\\", "/").endswith("/" + data_name) or                 str(ck.get("config", {}).get("data", "")) == data_name:
+            return p
+    return None
+

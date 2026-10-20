@@ -63,9 +63,12 @@ class _Run:
         self.save(force=True)
         files = sorted(FOLDER.glob("*.json"))
         for old in files[:-KEEP]:
-            old.unlink(missing_ok=True)
-            for kind in ("note", "success"):
-                note_path(int(old.stem.split("_")[1]), kind).unlink(missing_ok=True)
+            try:                                # (two runs starting together clean up the same files: Windows
+                old.unlink(missing_ok=True)     # refuses the second delete, which killed a dataset build)
+                for kind in ("note", "success"):
+                    note_path(int(old.stem.split("_")[1]), kind).unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def save(self, force: bool = False) -> None:
         now = time.time()

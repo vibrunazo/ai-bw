@@ -40,7 +40,7 @@ from ingest.role_dataset import HALLS, Probe
 SIGHT = 12 * 32                 # a seen enemy fighter this near: the unit is labeled
 ACTIVE = SIGHT + 4 * 32         # ...this near its fighters or buildings: the game steps finely
 QUIET = 48                      # frames with no moment before stepping coarsely again
-MAX_MIN = 20
+MAX_MIN = 30                    # (20 until 2026-10-20: the role models had never seen a late-game fight)
 MAPS = ("python", "fighting spirit", "heartbreak")
 
 
@@ -117,7 +117,9 @@ def _job(job: tuple) -> dict:
     return out
 
 
-def select(games: int, race: str = "T") -> list[tuple]:
+def select(games: int, race: str = "T", era: str = "both") -> list[tuple]:
+    """games of the race's side of TvZ, clean, 6+ minutes: era "old", the 1.16 games on MAPS; "modern", the
+    ladder games (data/raw/cwal) on any map; "both", half each."""
     from eval.humanlike import clean_replays
     from ingest.inventory import data_root
     clean = clean_replays()
@@ -126,24 +128,29 @@ def select(games: int, race: str = "T") -> list[tuple]:
         r = json.loads(line)
         sha[r["rel_path"]] = r["sha1"]
     recs = [r for r in map(json.loads, open(data_root() / "interim" / "build_orders.jsonl", encoding="utf-8"))
-            if r["matchup"] == "TvZ" and r["race"] == race and r["rel_path"] in clean and r.get("duration_s", 0) >= 360
-            and any(m in re.sub(r"[^a-z ]", "", r.get("map", "").lower()) for m in MAPS)]
-    random.Random(0).shuffle(recs)
+            if r["matchup"] == "TvZ" and r["race"] == race and r["rel_path"] in clean and r.get("duration_s", 0) >= 360]
+    old = [r for r in recs if any(m in re.sub(r"[^a-z ]", "", r.get("map", "").lower()) for m in MAPS)]
+    modern = [r for r in recs if r["rel_path"].startswith("cwal/")]
+    random.Random(0).shuffle(old)
+    random.Random(0).shuffle(modern)
+    chosen = old[:games] if era == "old" else modern[:games] if era == "modern" else         old[:games // 2] + modern[:games - games // 2]
     return [(str(data_root() / "raw" / r["rel_path"]), clean[r["rel_path"]] or None, sha[r["rel_path"]], race)
-            for r in recs[:games]]
+            for r in chosen]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--race", choices=("T", "Z"), default="T", help="whose side (TvZ games)")
     ap.add_argument("--games", type=int, default=600)
+    ap.add_argument("--era", choices=("old", "modern", "both"), default="both",
+                    help="old: the 1.16 games on the three fixture maps (all until 2026-10-20); modern: ladder games")
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--out", help="default: data/interim/roles/response_<race>.npz")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
     from ingest.inventory import data_root
-    jobs = select(args.games, args.race)
+    jobs = select(args.games, args.race, args.era)
     with ProcessPoolExecutor(args.parallel) as pool:
         results = list(monitor.track(pool.map(_job, jobs, chunksize=1), len(jobs), "games"))
     n = sum(len(r["rows"]) for r in results)

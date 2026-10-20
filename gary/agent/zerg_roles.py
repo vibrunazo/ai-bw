@@ -45,23 +45,17 @@ URGENT = ("RETREAT", "PULL_BACK", "REPOSITION", "FIRE", "CLOSE_IN")
 FIGHTERS = Z.ARMY - {Z.LURKER}  # (lurkers: v3's lurker routine burrows them)
 
 
-def latest_zerg_model() -> Path | None:
+def latest_zerg_model(data: str = "response_Z.npz") -> Path | None:
     """The newest Zerg role model: updated by the league's RL (runs/roles_rl/Z_*), else the newest
-    trained on the Zerg's response dataset (runs/roles/*/model.pt)."""
-    from gary.policy.roles import RoleModel
+    trained on the Zerg's response dataset of this name (runs/roles/*/model.pt)."""
+    from gary.policy.roles import latest_trained_on
     import os
     if os.environ.get("GARY_ZROLES_MODEL"):           # (the league loop's incumbent or candidate, pinned)
         return Path(os.environ["GARY_ZROLES_MODEL"])
     rl = sorted(Path("runs/roles_rl").glob("Z_*/model.pt"))
     if rl:
         return rl[-1]
-    for p in sorted(Path("runs/roles").glob("*/model.pt"), reverse=True):
-        try:
-            if str(RoleModel.load(p).config.get("data", "")).endswith("response_Z.npz"):
-                return p
-        except Exception:
-            continue
-    return None
+    return latest_trained_on(data)
 
 
 class ZergRoles:

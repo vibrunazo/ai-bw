@@ -682,6 +682,14 @@ plan and the full log).
   (Gary-T ahead 5, the Zerg 2, even 3); the same seeds at 20 minutes: 24, 2 and 22. Gap at 21-30 minutes:
   Gary-T 0.39, the Zerg 0.46 (its worst bucket). Still at 10-12 minutes: the fight, plan and value models'
   training data (to rebuild on whole games).
+- **Fight roles from whole games (2026-10-20).** The role models that steer each fighter (fire, close in, pull
+  back, retreat, reposition) were trained on the pros' units in the first 20 minutes of 600 games on the three
+  1.16 maps (ingest/response_dataset.py). Now 30 minutes, 800 games per race, half old and half modern ladder
+  games (`--era both`; Terran 3.5M labeled units, Zerg 2.8M), the same training (`train.roles --decisions
+  --move`); a manifest picks its model by its data (`roles_data`, option `roles30` for either race). Against
+  B30 (48 games, 30 minutes): gz1 with it, the Zerg won or led at 30:00 in 9 (6) and its gap at 21-30 minutes
+  0.40 (0.46): in gz1. gt1 with it won 33 (34), the Zerg led at 30:00 in 6 (2), Gary-T's gap at 21-30 minutes
+  0.45 (0.39): not adopted (next: which half, the late minutes or the modern games, hurt the Terran's).
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the
