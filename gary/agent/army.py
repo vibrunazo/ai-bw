@@ -557,7 +557,7 @@ class LearnedArmy:
             return "army"
         g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
                              {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": float(q[k]),
-                              "fight": 0.0, "done": [], "boxes": 0}, "army"))
+                              "fight": 0.0, "done": [], "boxes": 0, "origin": f"commit {names[k]}"}, "army"))
         return "army"
 
     def _army_units(self, mine: list[dict]) -> list[dict]:

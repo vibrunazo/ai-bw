@@ -575,6 +575,11 @@ class DirectMotor:
                     hi.minimap_right_click(d["x"], d["y"])
                 d["done"] += [s for s in sel if s not in d["done"]]   # a box also grabs units already ordered
                 g.leases.take(sel, t.intent)
+                # (which units each army order moved, and what ordered it: eval/attacks.py traces late arrivals by it)
+                from gary.decision_log import LOG
+                LOG.decision(hi.side, "motor", hi.frame, "army order", by=d.get("origin") or ("hunt" if d.get("hunt") else t.intent.source),
+                             inputs={"tags": [int(s) for s in sel], "to": [int(d["x"]) // 32, int(d["y"]) // 32],
+                                     "attack": bool(d["attack"])})
             t.stage = "start"
             return
         left = [u for u in mine if u["tag"] in set(d["tags"]) - set(d["done"])]
