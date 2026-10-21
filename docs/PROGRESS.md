@@ -758,7 +758,10 @@ plan and the full log).
      one order a fight turn left 34-41% of its per-unit moves undone. Letting a turn give more orders whenever the
      hands were free again (most urgent first, dropped at the next turn): 96 paired games, won 55 (57), lost 10
      (8), the gap unchanged, fight commands a minute 52.8 (57.7), 2,400-3,800 orders a round left at the turn's
-     end: the hands have no room in fights (camera, macro, the army layer share them). Deleted;
+     end: the hands have no room in fights (camera, macro, the army layer share them). Deleted. Where the room
+     goes: 1.54 selection actions per order in fights to the pros' 1.14 (first 10 minutes, 100 modern pro games
+     against 48 of gt1); the pros' selections are 71% control-group recalls, Gary-T's 62% drag boxes and 14% clicks,
+     19% recalls. Next for the hands: the army kept on control groups (the pros' habits, from their commands);
   4. turrets overbuilt (16) at the army's cost;
   5. vision: mutalisks hiding behind the natural's cliff (a scan or a floating building), Comsat energy
      kept for lurkers (the hold-position trick at 14:40), Science Vessels;
