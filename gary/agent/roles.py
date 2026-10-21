@@ -119,6 +119,12 @@ PULL_HP = 0.5
 PULL_TILES = 1.5
 RETREAT_MARGIN = 3 * 32
 REPEAT = 24                          # the same role isn't given to a unit again within a second (but pull back)
+# option refresh (the skills keep their orders current): a unit whose role stands has its order given again when the
+# role's target moved past REFRESH_PX since it was given, REFRESH_MIN after: the pros' fight commands are 49%
+# (Terran) and 72% (Zerg) the same order to the same units with the target moved, a median 1.2-1.3 tiles (quartiles
+# 0.5 / 1.2 / 3.3; first 10 minutes, 150 modern games), where "keep" gave Gary nothing to issue
+REFRESH_PX = 32
+REFRESH_MIN = 12
 SHELTER = 15 * 32                    # a bunker this close is where a retreat goes
 HOME = 14 * 32                       # a Command Center this close: the group is defending home
 BUNKER, MARINE = 125, 0
@@ -169,8 +175,11 @@ class RoleRules:
     def __init__(self, g, brace: bool = False, leash: bool = False, volley: bool = False, regroup: bool = False,
                  anchor: bool = False,
                  holds: bool = False, kite: bool = False, fire: str = "enemy", post: float | str | None = None,
-                 vultures: bool = False, gap_post: bool = False, pull_hp: float = PULL_HP, surround: int = 0):
+                 vultures: bool = False, gap_post: bool = False, pull_hp: float = PULL_HP, surround: int = 0,
+                 refresh: bool = False):
         self.g = g
+        self.refresh = refresh                       # option: orders kept current as their targets move
+        self.order_at: dict[int, tuple[int, int]] = {}   # unit -> the point of its last order (refresh)
         self.anchor = anchor                         # at home, units stay by the Command Centers and bunkers
         self.pull_hp = pull_hp                       # pull back: hurt below this share of max HP
         self.surround = surround                     # ...or this many melee zerg on it (0: off): to the pack
@@ -695,6 +704,7 @@ class RoleRules:
         now = self.g.hi.frame
         for u in group:
             self.told[u["tag"]] = (role, now)
+            self.order_at[u["tag"]] = (int(point[0]), int(point[1]))
         tags = [u["tag"] for u in group]
         key = (order, int(point[0]), int(point[1]))
         return Intent(role, tags, (key[1], key[2]), {"key": key, "tags": tags, "center": _mid(group)}, "roles")
@@ -737,6 +747,34 @@ class RoleRules:
             group = [u for u in group if post and math.dist((u["x"], u["y"]), post) > POST_SLACK][:MAX_GROUP]
             if group:
                 return self._intent("POST", group, (int(post[0]), int(post[1])), "attack_move")
+        return self._refreshed(roles, enemy) if self.refresh else None
+
+    def _stale(self, u: dict, role: str, point) -> bool:
+        """refresh: the unit's last order was this role's, REFRESH_MIN ago or more, to a point REFRESH_PX or more from
+        where the role's target is now."""
+        told = self.told.get(u["tag"])
+        at = self.order_at.get(u["tag"])
+        return bool(told and told[0] == role and at and self.g.hi.frame - told[1] >= REFRESH_MIN
+                    and math.dist(at, point) >= REFRESH_PX)
+
+    def _refreshed(self, roles: dict[str, list[dict]], enemy: list[dict]) -> Intent | None:
+        """refresh: the standing roles' orders given again where their targets moved: close in and fire toward the
+        enemy nearest the group now, pull back to a step away from the enemy near the group where it is now."""
+        for role, order in (("CLOSE_IN", "attack_move"), ("FIRE", "attack_move")):
+            group = roles.get(role, [])
+            if group:
+                target = min(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
+                point = (int(target["x"]), int(target["y"]))
+                stale = [u for u in group if self._stale(u, role, point)][:MAX_GROUP]
+                if stale:
+                    return self._intent(role, stale, point, order)
+        group = roles.get("PULL_BACK", [])
+        if group:
+            near = sorted(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))[:3]
+            point = self._step_away(_mid(group), _mid(near), PULL_TILES * 32)
+            stale = [u for u in group if point and self._stale(u, "PULL_BACK", point)][:MAX_GROUP]
+            if stale:
+                return self._intent("PULL_BACK", stale, point, "move")
         return None
 
     def _join_or_hold(self, roles: dict, mine: list[dict], by_tag: dict, fresh) -> Intent | None:
@@ -962,8 +1000,13 @@ class RoleAhead(RoleRules):
                 self.choice[u["tag"]] = k
                 role = names[k].upper()
                 dx, dy = moves[i] * 32
+                to = (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)
                 if role in ("RETREAT", "PULL_BACK", "REPOSITION") and math.hypot(dx, dy) >= WHERE_MIN and fresh(u, role):
-                    groups.setdefault(role, []).append((u, (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)))
+                    groups.setdefault(role, []).append((u, to))
+                elif self.refresh and role == "KEEP" and math.hypot(dx, dy) >= WHERE_MIN:
+                    told = self.told.get(u["tag"], ("", 0))[0]
+                    if told in ("RETREAT", "PULL_BACK", "REPOSITION") and self._stale(u, told, to):
+                        groups.setdefault(told, []).append((u, to))   # (its move kept current)
         from gary.decision_log import LOG, top
         from gary.policy.roles import MAX_UNITS
         if self.choice:                     # (the game's records: the roles chosen, the model's mean odds)

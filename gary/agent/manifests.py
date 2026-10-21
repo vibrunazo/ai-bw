@@ -594,6 +594,12 @@ OPTIONS = {
     "roles30": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_30min.npz"),
     # roles.py RoleAhead lone: a unit alone and outnumbered in contact decided by the roles model, not the hand rules
     "lone": lambda m: m["fight"].setdefault("roles", {}).update(lone=True),
+    # roles.py refresh: the skills keep their orders current (a standing role's order given again when its target moved
+    # a tile: half to three quarters of the pros' fight commands)
+    "refresh": lambda m: m["fight"].setdefault("roles", {}).update(refresh=True),
+    # gary/agent/grouping.py: the army on control groups by the scripted cluster grouping (the motor uses a key when an
+    # order's units are exactly its members; no pooling)
+    "grouping": lambda m: m.update(grouping="clusters"),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
@@ -833,6 +839,9 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.flip = flip
     models: dict[str, str] = {}
     g.motor = DirectMotor(g)
+    if m.get("grouping"):                     # (gary/agent/grouping.py: the control-group provider; none: no keys)
+        from gary.agent.grouping import PROVIDERS as GROUPINGS
+        g.motor.grouping = GROUPINGS[m["grouping"]](g)
     g.leases.enforced = m.get("leases") == "enforced"
     if m["macro"] is not None or m["army"] is not None:
         g.executor = {"T": TerranExecutor, "Z": ZergExecutor}[g.race.letter](g)
