@@ -706,6 +706,13 @@ plan and the full log).
   16 even at 30:00 (10); late arrivals at attacks 0.22 (0.26; pros 0.06), killed per attack 9.0 (7.5). Not
   adopted: the trickle mostly comes from attacks it doesn't cover (engages with under a quarter elsewhere, the
   hunt, launches on the timeout).
+- **What the commit model sees, and a shared draw (2026-10-20).** It already sees the rest of the army: grid channel 0
+  is the whole army's supply per cell, channel 8 the cluster asked, its supply and the army's in the global
+  inputs, the dilated convolutions reach the whole map; only the other clusters' commitments are missing. A
+  decoder giving every cluster the same random number per 5-second tick (each still drawn from its own odds),
+  so that like clusters engage together: 96 paired games against gt1, won 44 (54), lost 14 (9), the gap
+  unchanged in every window, late arrivals at attacks 0.25 (0.26). Deleted. Neither missing inputs nor
+  independent draws explain the trickle; next: which decision sends the late arrivals.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the
