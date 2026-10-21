@@ -751,7 +751,14 @@ plan and the full log).
      the hunt in gt0.2 (below);
   2. SCVs pulled into fights (3 pulls at 7:47-7:53) and SCVs and marines that felt AFK against the early
      zerglings;
-  3. micro of single units in a group, not only group orders;
+  3. micro of single units in a group, not only group orders. Measured 2026-10-21: in fights Gary-T gives single-unit
+     orders as often as pros (20-24 a fight-minute, pros 19.4; human game 4 too), orders per fighter per minute
+     match theirs in every window and its units don't stand under fire: the hands aren't the gap ("none per unit"
+     came from a whole-game APM breakdown). What is off is which unit does what, the roles model's (learned);
+     one order a fight turn left 34-41% of its per-unit moves undone. Letting a turn give more orders whenever the
+     hands were free again (most urgent first, dropped at the next turn): 96 paired games, won 55 (57), lost 10
+     (8), the gap unchanged, fight commands a minute 52.8 (57.7), 2,400-3,800 orders a round left at the turn's
+     end: the hands have no room in fights (camera, macro, the army layer share them). Deleted;
   4. turrets overbuilt (16) at the army's cost;
   5. vision: mutalisks hiding behind the natural's cliff (a scan or a floating building), Comsat energy
      kept for lurkers (the hold-position trick at 14:40), Science Vessels;
