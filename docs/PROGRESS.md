@@ -735,8 +735,10 @@ plan and the full log).
   nearest one's distance and whether it engages; gary/policy/army.py others_inputs). On the same 438,440 held-out
   pro ticks: the deployed model (10-17) order-vs-keep AUC 0.760, engage-vs-move 0.771, cell in the top 5 0.372;
   the same recipe retrained on today's data (16,496 player-games, both eras) 0.779 / 0.791 / 0.385; with the
-  other clusters' commitments 0.779 / 0.791 / 0.383: nothing gained, not played. The retrain itself is in test
-  (runs/commit_exp/T_A, pinned with GARY_TCOMMIT_MODEL).
+  other clusters' commitments 0.779 / 0.791 / 0.383: nothing gained, not played. The retrain itself (runs/commit_exp/
+  T_A, pinned with GARY_TCOMMIT_MODEL), 96 paired games against gt1: won 57 (57), lost 11 (8), the gap unchanged,
+  fewer attacks (4.8 a game, 5.8), late arrivals 0.27 (0.24): better imitation per cluster, no better play. Not
+  adopted: the army's coordination is past what per-cluster imitation teaches.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the

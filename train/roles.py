@@ -57,9 +57,11 @@ def decision_labels(d) -> np.ndarray:
     return out
 
 
-def load(path: Path, decisions: bool = False, move: bool = False):
+def load(path: Path, decisions: bool = False, move: bool = False, attended: bool = False, budget: bool = False):
     """Train and validation arrays, and the label names (a dataset can name its own: the hand rules'
-    decisions, ingest/role_distill.py)."""
+    decisions, ingest/role_distill.py). attended: only the labels of units the player's commands reached
+    (ingest/response_dataset.py attended; the rest -1); budget: the player's order rate a minute (/ 100) as one
+    more per-unit input."""
     d = np.load(path)
     val_game = np.array([int(s[:8], 16) % 10 == 1 for s in d["sha1"]])
     val = val_game[d["game"]]
@@ -69,7 +71,13 @@ def load(path: Path, decisions: bool = False, move: bool = False):
     else:
         names = DECISIONS if decisions else ROLES
         labels = decision_labels(d) if decisions else d["labels"]
-    arrays = {"rows": d["rows"], "extra": d["extra"], "labels": labels, "count": d["count"], "time": d["time"]}
+    if attended:
+        labels = np.where(d["attended"] == 1, labels, -1).astype(labels.dtype)
+    extra = d["extra"]
+    if budget:
+        b = np.nan_to_num(d["budget"], nan=float(np.nanmedian(d["budget"]))) / 100.0
+        extra = np.concatenate([extra, np.broadcast_to(b[:, None, None], extra.shape[:2] + (1,)).astype(extra.dtype)], -1)
+    arrays = {"rows": d["rows"], "extra": extra, "labels": labels, "count": d["count"], "time": d["time"]}
     keys = ("rows", "extra", "labels", "count", "time")
     if "move" in d and move:            # (ingest/response_dataset.py: each unit's move over the half second)
         arrays["move"] = d["move"].astype(np.float32)
@@ -147,6 +155,8 @@ def main() -> None:
     ap.add_argument("--no-weights", action="store_true", help="plain cross entropy (rare roles not weighted up)")
     ap.add_argument("--extra", type=int, help="read only the first this many per-unit extras (6: without the terrain)")
     ap.add_argument("--move", action="store_true", help="also learn where each unit moves (the data's move)")
+    ap.add_argument("--attended", action="store_true", help="learn only from units the player's commands reached")
+    ap.add_argument("--budget", action="store_true", help="the player's order rate as an input (the model's config says so)")
     ap.add_argument("--smooth", type=float, default=0.0,
                     help="label smoothing: every decision keeps some probability (room to explore for RL)")
     priority.add_argument(ap)
@@ -155,7 +165,7 @@ def main() -> None:
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(0)
-    train, val, names = load(Path(args.data), args.decisions, args.move)
+    train, val, names = load(Path(args.data), args.decisions, args.move, args.attended, args.budget)
     decisions = "keep" in names
     y = train[2][train[2] >= 0]
     share = np.bincount(y, minlength=len(names)) / len(y)
@@ -165,7 +175,7 @@ def main() -> None:
           + ", ".join(f"{r} {s:.1%}" for r, s in zip(names, share)), flush=True)
     config = {"net": {"d": args.d, "layers": args.layers, "heads": 4, "n_roles": len(names),
                       "n_extra": args.extra or int(train[1].shape[-1]), "move": bool(args.move)},
-              "data": args.data, "roles": names}
+              "data": args.data, "roles": names, "attended": bool(args.attended), "budget": bool(args.budget)}
     net = RoleNet(**config["net"]).to(device)
     opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=0.01)
     rng = np.random.default_rng(0)
