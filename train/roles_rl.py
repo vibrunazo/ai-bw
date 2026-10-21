@@ -1,21 +1,24 @@
 """Reinforcement learning for the role model (gary/policy/roles.py; docs/CONTROL.md step 5).
 
-Starts from a role model of decisions, by default the hand rules distilled into it
-(ingest/role_distill.py, train/roles.py --no-weights: as good as the rules in play), and improves
-it on real pro positions: the home defenses from training games (eval/scenarios.py --split train),
-Gary playing with learned roles (--manifest, default v019roleml; --seconds each, 120 by default:
-eval/episodes.py). Each round Gary plays a batch of them
+Starts from a role model of decisions (default: the one imitated from attended pro units, told the
+player's order rate, train/roles.py --attended --budget) and improves it on real pro positions: the
+state-selected scenarios from training games (eval/scenarios.py --suite kinds --split train: attacks,
+mixed fights, outnumbered units, harassment; --suite early: the home defenses), Gary playing with the
+model (--manifest, default gt1+att+refresh: the role model before contact, its moves kept current;
+told its own order rate from its hands, gary/policy/roles.py order_budget). Each round Gary plays a batch of them
 several times, drawing each unit's role from the model. Every turn is judged by what happened in
 the HORIZON_S seconds after it (eval/score.py's events: value killed and lost, damage...; each
 command Gary carried out costs a little), against the other plays of the same position over the
 same stretch (group-relative advantages). Each unit's role is an action of its own, sharing its
 turn's advantage; a PPO-style clipped update makes better ones likelier, and a KL penalty keeps
-the model near where it started. Every few rounds the model plays the validation home defenses (a
+the model near where it started. Every few rounds the model plays the validation scenarios (a
 tenth of the training games', never trained on) without drawing (its likeliest roles), which
-picks the best checkpoint; the real test is afterwards, on the held-out games' home defenses:
+picks the best checkpoint; the real test is afterwards, on the held-out games' scenarios:
 
     python -m train.roles_rl --rounds 60
-    python -m eval.scenarios --run 114 --version v09roleml --controllers gary --fight-model runs/roles_rl/<run>/model.pt
+    python -m eval.scenarios --suite kinds --run 79 --version gt1+att+refresh --controllers gary --draws 8         --fight-model runs/roles_rl/<run>/model.pt
+
+Its gates and stop rule, written before the first run: docs/PROGRESS.md, "The roles RL".
 """
 
 from __future__ import annotations
@@ -33,8 +36,7 @@ import torch
 import torch.nn.functional as F
 
 from eval import monitor, priority
-from gary.agent.manifests import model_for
-from gary.policy.roles import EXTRA, RoleModel, tensors
+from gary.policy.roles import RoleModel, tensors
 from train.fight_cmd_rl import decisions, real_splits
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -45,7 +47,7 @@ def play_real(args: tuple) -> dict:
     from eval import scenarios as S
     sc, path, draw, manifest, seconds = args
     r = S.run_one(sc, "gary", seconds, manifest, 1, fight_path=path, sample_seed=draw)
-    r["drill"] = "real_" + sc["sha1"][:12]
+    r["drill"] = f"real_{S.scenario_id(sc)}_{sc['frame']}"
     return r
 
 
@@ -59,13 +61,14 @@ def batch(decs: list, device: str):
     n = max(len(d["rows"]) for d, _ in decs)
     B = len(decs)
     rows = np.zeros((B, n, 11), np.int16)
-    extra = np.zeros((B, n, EXTRA), np.float32)
+    extra = np.zeros((B, n, max(d["extra"].shape[1] for d, _ in decs)), np.float32)   # (EXTRA, +1: a budget model's)
     pad = np.ones((B, n), bool)
     role = np.full((B, n), -1, np.int64)
     times, adv = np.zeros(B, np.float32), np.zeros(B, np.float32)
     for b, (d, a) in enumerate(decs):
         m = min(len(d["rows"]), n)
-        rows[b, :m], extra[b, :m], pad[b, :m] = d["rows"][:m], d["extra"][:m], False
+        rows[b, :m], pad[b, :m] = d["rows"][:m], False
+        extra[b, :m, :d["extra"].shape[1]] = d["extra"][:m]
         for j, y in zip(d["units"], d["roles"]):
             if j < m:
                 role[b, j] = y
@@ -118,34 +121,64 @@ def update(net, ref, opt, decs: list, args, device: str) -> dict:
 
 
 def validate(pool, val: list[dict], path: str, draws: int, manifest: str, seconds: float) -> float:
-    """The validation home defenses' mean net, each played draws times (Gary's hands seeded apart:
+    """The validation scenarios' mean net, each played draws times (Gary's hands seeded apart:
     one play of a fight is a coin flip)."""
     rows = [r for r in pool.map(play_greedy, [(sc, path, h, manifest, seconds) for sc in val for h in range(draws)],
                                 chunksize=draws) if "error" not in r]
     return float(np.mean([r["net"] for r in rows]))
 
 
+def moved(pool, new: str, args, device: str) -> None:
+    """The first gate (docs/PROGRESS.md, "The roles RL"): did the policy move off its start? The held-out suite
+    played once a scenario with the new model drawing; on the states it saw, the mean KL from the start's role
+    odds to the new model's per unit, and each decision's share under both."""
+    from eval import scenarios as S
+    test = [json.loads(line) for line in S.scenarios_path("test", args.suite).read_text(encoding="utf-8").splitlines()]
+    rows = list(pool.map(play_real, [(sc, new, 1, args.manifest, args.seconds) for sc in test]))
+    decs = [(d, 0.0) for r in rows if "error" not in r for d in r.get("log", []) if d.get("units")]
+    start = RoleModel.load(new, "cpu").config.get("rl", {}).get("init", args.init_path)   # (the run's own start)
+    a, b = RoleModel.load(new, device).net.eval(), RoleModel.load(start, device).net.eval()
+    kls, pa, pb = [], 0.0, 0.0
+    with torch.no_grad():
+        for i in range(0, len(decs), args.minibatch):
+            inputs, role, _ = batch(decs[i:i + args.minibatch], device)
+            la, lb = F.log_softmax(a(*inputs), -1), F.log_softmax(b(*inputs), -1)
+            mask = role >= 0
+            kls.append((la.exp() * (la - lb)).sum(-1)[mask].cpu())
+            pa = pa + la.exp()[mask].sum(0).cpu()
+            pb = pb + lb.exp()[mask].sum(0).cpu()
+    kl = torch.cat(kls)
+    names = RoleModel.load(new, "cpu").config["roles"]
+    print(f"{len(decs)} turns, {len(kl)} unit decisions on the held-out {args.suite} suite: KL(new || start) mean "
+          f"{kl.mean():.4f}, median {kl.median():.4f}, 90th pct {kl.quantile(0.9):.4f}")
+    pa, pb = pa / pa.sum(), pb / pb.sum()
+    print("decision shares, start -> new: " + ", ".join(f"{n} {y:.1%} -> {x:.1%}" for n, x, y in zip(names, pa, pb)
+                                                        if max(x, y) >= 0.005))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--init", help="role model of decisions to start from (default: the newest in runs/roles)")
     ap.add_argument("--rounds", type=int, default=60)
-    ap.add_argument("--manifest", default="v019roleml", help="the Gary that plays (its roles: the model trained)")
+    ap.add_argument("--manifest", default="gt1+att+refresh", help="the Gary that plays (its roles: the model trained)")
+    ap.add_argument("--suite", default="kinds", choices=["kinds", "early"], help="eval/scenarios.py's scenario suite")
     ap.add_argument("--override", action="store_true",
                     help="the model only overrides the rules (join, hold, else the rules): manifest v017override")
-    ap.add_argument("--seconds", type=float, default=120,
-                    help="how long each home defense plays (eval/episodes.py: long enough for new units to join)")
-    ap.add_argument("--real", type=int, default=32, help="training home defenses per round")
+    ap.add_argument("--seconds", type=float, default=45, help="how long each scenario plays (as eval/scenarios.py scores)")
+    ap.add_argument("--real", type=int, default=32, help="training scenarios per round")
     ap.add_argument("--draws", type=int, default=8, help="plays of each per round")
     ap.add_argument("--test-every", type=int, default=10)
-    ap.add_argument("--val-draws", type=int, default=4, help="plays of each validation home defense")
+    ap.add_argument("--val-draws", type=int, default=4, help="plays of each validation scenario")
     ap.add_argument("--horizon", type=float, default=HORIZON_S)
-    ap.add_argument("--command-cost", type=float, default=5.0)
+    ap.add_argument("--command-cost", type=float, default=0.0,
+                    help="value a carried-out turn costs (0: the model is told its order rate; the hands' limit is the cost)")
     ap.add_argument("--lr", type=float, default=3e-5)
     ap.add_argument("--kl", type=float, default=0.05, help="weight of the KL penalty to the starting model")
     ap.add_argument("--clip", type=float, default=0.2)
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--minibatch", type=int, default=256)
     ap.add_argument("--parallel", type=int, default=max(1, (os.cpu_count() or 6) * 2 // 3))
+    ap.add_argument("--moved", help="a trained model: the first gate only (moved off its start? see moved())")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
@@ -153,7 +186,13 @@ def main() -> None:
         args.manifest = "v017override"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    init = Path(args.init or model_for("roles", "TvZ", "T"))
+    from gary.policy.roles import latest_trained_on
+    init = Path(args.init or latest_trained_on("response_T_att.npz"))
+    args.init_path = str(init)
+    if args.moved:
+        with ProcessPoolExecutor(args.parallel) as pool:
+            moved(pool, args.moved, args, device)
+        return
     model = RoleModel.load(init, device)
     if "keep" not in model.config.get("roles", []):
         raise SystemExit(f"{init} isn't a model of decisions (no 'keep'): train one with --decisions or distill the rules")
@@ -167,8 +206,8 @@ def main() -> None:
     out = REPO_ROOT / "runs" / "roles_rl" / time.strftime("%Y%m%d_%H%M%S")
     out.mkdir(parents=True)
     model.config = {**model.config, "rl": {"init": str(init), **vars(args)}}
-    train_real, val_real = real_splits()
-    print(f"from {init}; {len(train_real)} home defenses to train on ({args.real} x {args.draws} plays per round), "
+    train_real, val_real = real_splits(args.suite)
+    print(f"from {init}; {len(train_real)} scenarios to train on ({args.real} x {args.draws} plays per round), "
           f"{len(val_real)} for validation", flush=True)
     history, best = [], None
     rng = random.Random(0)
@@ -178,7 +217,7 @@ def main() -> None:
             model.save(path)
             if rnd % args.test_every == 0 or rnd == args.rounds:
                 score = validate(pool, val_real, path, args.val_draws, args.manifest, args.seconds)
-                print(f"round {rnd}: validation home defenses net {score:.0f}", flush=True)
+                print(f"round {rnd}: validation net {score:.0f}", flush=True)
                 history.append({"round": rnd, "validation": round(score, 1)})
                 if best is None or score > best[0]:
                     best = (score, rnd)
@@ -200,7 +239,7 @@ def main() -> None:
                 if old.name != f"round{rnd}.pt":
                     old.unlink()
             (out / "history.json").write_text(json.dumps(history, indent=1), encoding="utf-8")
-    print(f"best validation home defenses net {best[0]:.0f} at round {best[1]} -> {out / 'model.pt'}")
+    print(f"best validation net {best[0]:.0f} at round {best[1]} -> {out / 'model.pt'}")
 
 
 if __name__ == "__main__":

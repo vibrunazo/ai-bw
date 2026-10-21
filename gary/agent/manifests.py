@@ -592,14 +592,17 @@ OPTIONS = {
     # the fight roles model trained on whole games to 30 minutes, old and modern (ingest/response_dataset.py --era
     # both; until 2026-10-20 the first 20 minutes on the three 1.16 maps): either race's. In gz1 and gt1
     "roles30": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_30min.npz"),
+    # the role model imitated from attended pro units only, told the player's order rate (train/roles.py --attended
+    # --budget): Gary's own budget from its hands (order_budget); the roles RL's start (docs/PROGRESS.md)
+    "att": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_att.npz"),
     # roles.py RoleAhead lone: a unit alone and outnumbered in contact decided by the roles model, not the hand rules
     "lone": lambda m: m["fight"].setdefault("roles", {}).update(lone=True),
     # roles.py refresh: the skills keep their orders current (a standing role's order given again when its target moved
     # a tile: half to three quarters of the pros' fight commands)
     "refresh": lambda m: m["fight"].setdefault("roles", {}).update(refresh=True),
-    # gary/agent/grouping.py: the army on control groups by the scripted cluster grouping (the motor uses a key when an
-    # order's units are exactly its members; no pooling)
-    "grouping": lambda m: m.update(grouping="clusters"),
+    # gary/agent/grouping.py: the army on control groups, a unit type of a cluster on a key, re-assigned (the pros'
+    # habit); the motor recalls a key when all its members get an order, key by key
+    "grouping": lambda m: m.update(grouping="types"),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army

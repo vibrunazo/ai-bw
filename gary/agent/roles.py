@@ -965,7 +965,8 @@ class RoleAhead(RoleRules):
         if not mine or not enemy:
             return None
         from gary.policy.roles import order_budget
-        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000, order_budget(g.hi))
+        budget = order_budget(g.hi)
+        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000, budget)
         names = self.model.config.get("roles")
         index = {t: i for i, t in enumerate(tags)}
         now = g.hi.frame
@@ -1000,6 +1001,11 @@ class RoleAhead(RoleRules):
                          top=top(lambda k: names[k], probs[[index[t] for t in self.choice]].mean(0)),
                          inputs={"units": len(self.choice), "enemy": len(enemy)}, by="draw" if self.draw else "favorite",
                          then="orders: " + (", ".join(f"{r.lower()} {len(v)}" for r, v in groups.items()) or "none"))
+        if g.fight.rl_log is not None and self.draw and self.choice:   # (train/roles_rl.py: the drawn decisions, their
+            ids = [index[t] for t in self.choice]                       # inputs as the model saw them, budget too)
+            self.g.fight.rl_log.append({"rows": np.asarray(rows), "extra": self.model._with_budget(extra, budget),
+                                        "time": obs["frame"] * 42 / 1000, "units": ids,
+                                        "roles": list(self.choice.values()), "executed": bool(groups)})
         if LOG.on and self.draw:            # (each before-contact unit's drawn decision and its log-probability)
             drawn = np.full(MAX_UNITS, -1, np.int8)
             logp = np.zeros(MAX_UNITS, np.float32)

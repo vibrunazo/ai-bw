@@ -766,6 +766,43 @@ plan and the full log).
   scenario): attack-moves re-aimed at the enemy nearest the group -67 (30 orders); along the role model's predicted
   move -66 (paired -12.9, 90% -22 to -3.6); moves only (retreat, pull back, reposition along the model's move) -55
   (paired -3.3, -7.5 to +0.7; 23 orders). Kept as the move-only option, the re-order mechanism for the roles RL.
+- **A suite that sees re-orders: scenarios by state (2026-10-21).** eval/scenario_kinds.py (eval/scenarios.py --suite
+  kinds): Terran fight snapshots from 4:00 of held-out modern TvZ games classified as mixed (a big fight, 2+ fighter
+  types each side), attack (nearer a Zerg town hall), outnumbered (theirs 1.6x ours or more) and harass (from 6:00,
+  Zerg fighters by the Terran's buildings, its army weaker there), screened as before (the pro's control worth 100+
+  over doing nothing), away from home kept: 79 scenarios from 36 games (22 mixed, 19 attacks, 20 outnumbered,
+  18 harassment; a median 9:07 in). 45 s each, 8 draws; net: pro +517, nothing -134, gt1 +105 (attacks +282,
+  outnumbered +163, mixed +59, harassment -91; 34 orders a scenario). Paired (90% bootstrap over scenarios):
+  gt1+refresh -5 (-27 to +16; mixed -45, -89 to -1): the move-only refresh doesn't help here either. The role
+  model imitated from attended pro units with the order-rate input, told Gary's own rate (option att): +35 (-5 to
+  +77); att+refresh against att -1 (-32 to +32). att+refresh (+141) is the RL's start: the re-order path is in
+  it, whether to use it is the policy's to learn.
+- **Control groups by type (2026-10-21).** Round GR40a (gt1+grouping against gz1+grouping, the clusters provider, 48
+  games against L40a): Gary-T won 5 and lost 11 (L40a: 34 and 0), the gap +0.107 further from the pros (+0.074 to
+  +0.143), 15-20 and 25-30 minutes most; both sides grouped, so which side it served is not known. Its keys, against
+  the pros' (ingest/hotkey_dataset.py): T 1 key, assigns 1.9 a minute, adds 3.8, recalls 0.1 (pros 4 keys, 6, 0,
+  62); Z 3 keys, recalls 6.8 (pros 41): an order's units were almost never exactly a key's. The default provider is
+  now "types" (a unit type of a cluster on a key, re-assigned, not added to; a box narrowed to the type by its
+  portrait) and the motor recalls a key whenever all its members get an order, key by key, the rest selected as
+  before. In a 14-minute smoke game: T assigns 8.7 a minute, adds 0, recalls 42. Gary-T keeps 3 army keys (4-9
+  are its buildings', 0 the scout's), the pros 4. To judge side by side, each side grouping alone. The hotkey
+  statistics stay their own report (ingest/hotkey_dataset.py --report --gary), not in the humanlike gap:
+  that measures decisions, and click habits would dominate it.
+- **The roles RL: what success is, written before it starts (2026-10-21).** Reinforcement learning of the roles model
+  (gt1's fight before contact) from the model that can re-order (option refresh), with Gary's own order budget from
+  the arbiter during the episode as its budget input (not the pros' rate) and a drift penalty to the imitation
+  policy, on the train split of the state-selected suite (eval/scenario_kinds.py: attacks, mixed fights,
+  outnumbered units, harassment, from whole modern games). Its gates, in order; a gate failed ends the run's
+  claim there:
+  1. the policy moved off its starting model (its decisions on the held-out suite differ, by KL and by role
+     shares);
+  2. the attention numbers moved toward the pros' without passing them: commands into the fight per
+     fight-minute (gt1 45, pros 160) and the share of units reached (33%, pros 60%);
+  3. net value on the held-out state-selected suite, paired against the starting model;
+  4. 96 paired games on the ladder maps (the gap per window with its spread), the macro side of the gap watched
+     (more hands in fights can starve production).
+  The stop rule: if it doesn't move off its start after the planned compute, the next step is a dedicated offset
+  head imitated from the pros' re-issues (where a re-issued order goes), imitation again, not more RL.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the

@@ -69,6 +69,9 @@ def _names(units: list[dict]) -> str:
     return "/".join(sorted(kinds))
 
 
+GROUP_RETRY = 3 * 24                     # a key Gary set out to put units on: not tried again this soon
+
+
 class DirectMotor:
     def __init__(self, g: Gary):
         self.g = g
@@ -78,6 +81,7 @@ class DirectMotor:
         self.grouping = None                     # the grouping provider (a manifest's "grouping"), or None: no keys
         self.groups: dict[int, set[int]] = {}    # key -> the units Gary put on it
         self.plan: dict[int, set[int]] = {}      # key -> the units the provider wants on it
+        self.tried: dict[int, int] = {}          # key -> when Gary last set out to put units on it
         for kind, run in (("fight_cmd", self._run_command), ("pull", self._run_pull), ("unpull", self._run_pull),
                           ("load", self._run_load), ("unload", self._run_unload), ("scan", self._run_scan), ("repair", self._run_repair), ("reinforce", self._run_reinforce),
                           ("army_order", self._run_army_order), ("scout", self._run_scout),
@@ -86,13 +90,11 @@ class DirectMotor:
 
     # --- control groups ---------------------------------------------------------------------------
 
-    def group_of(self, tags: set[int], alive: set[int]) -> int | None:
-        """The key whose living members are exactly these units (an order to all of them: one key, one click)."""
-        want = tags & alive
-        for key, members in self.groups.items():
-            if len(want) >= 2 and members & alive == want:
-                return key
-        return None
+    def key_within(self, tags: set[int], alive: set[int]) -> int | None:
+        """The biggest key whose living members (2 or more) all get this order: one key recalls them, as the pros
+        give an order to an army key by key (the rest selected as before)."""
+        keys = [(len(m & alive), k) for k, m in self.groups.items() if len(m & alive) >= 2 and m & alive <= tags]
+        return max(keys)[1] if keys else None
 
     def groups_chore(self, obs: dict, mine: list[dict], done: list[dict]) -> bool:
         """The grouping provider's plan carried out, one key at a time: a key whose units changed beyond arrivals is
@@ -106,12 +108,14 @@ class DirectMotor:
         if plan is not None:
             self.plan = plan
         alive = {u["tag"] for u in army}
+        adds = getattr(self.grouping, "adds", True)
         for key, want in self.plan.items():
             want = want & alive
             have = self.groups.get(key, set()) & alive
-            if not want or want == have:
+            if not want or want == have or (not adds and want <= have) or g.hi.frame - self.tried.get(key, -10 ** 9) < GROUP_RETRY:
                 continue
-            mode = "add" if have and have <= want else "assign"
+            self.tried[key] = g.hi.frame
+            mode = "add" if adds and have and have <= want else "assign"
             tags = want - have if mode == "add" else want
             g.task = Task("group", data={"key": key, "tags": sorted(tags), "want": sorted(want), "mode": mode},
                           started=g.hi.frame)
@@ -148,6 +152,11 @@ class DirectMotor:
             return
         sel = set(obs["selection"])
         army = {u["tag"] for u in mine if u["type"] in g.army_types}
+        kinds = {u["type"] for u in units}
+        if len(kinds) == 1 and not d.get("narrowed") and any(u["tag"] in sel and u["type"] not in kinds for u in mine):
+            d["narrowed"] = True                 # (a group of one type: the box narrowed to it by its portrait)
+            hi.ctrl_click_portrait(next(iter(kinds)))
+            return
         if not sel or not sel <= army or len(sel & set(d["want"])) < 0.8 * len(sel):
             g.task = None                        # (the box took workers or units of another group: not this time)
             return
@@ -226,9 +235,10 @@ class DirectMotor:
                 if not on_screen:
                     g.task = None
                     return
-                key = self.group_of(want, {u["tag"] for u in mine})
-                if key is not None:                      # (exactly a key's members got this intent: one key)
-                    hi.hotkey_recall(key)
+                key = self.key_within(want, {u["tag"] for u in mine})
+                if key is not None:                      # (a key whose members all got this intent: the key; the
+                    hi.hotkey_recall(key)                # rest after the order, key by key or selected)
+                    d["keyed"] = True
                     t.stage = "order"
                     return
                 if (g.fight.ctrl_click or d.get("ctrl_click")) and self._ctrl_click(obs, on_screen):
@@ -297,6 +307,11 @@ class DirectMotor:
             g.leases.take(want, t.intent)
             if "bunker" in d:                    # a retreat into a bunker: they're its marines now
                 g.loaded.setdefault(d["bunker"], set()).update(want)
+        rest = set(d["tags"]) - want
+        if ordered and d.pop("keyed", False) and rest & {u["tag"] for u in mine}:
+            d["tags"] = sorted(rest)             # (a key took some: the others get the order next)
+            t.stage = "start"
+            return
         g.task = None
 
     def _exact(self, obs: dict, units: list[dict], sel: set, want: set, t: Task) -> bool:
@@ -677,13 +692,11 @@ class DirectMotor:
                       f"to ({d['x']}, {d['y']}) ({d['p']:.0%} sure it should move; fight estimate {d['fight']:+.0%})")
             g.task = None
             return
-        if not d.get("recalled") and not d["done"]:
-            key = self.group_of({u["tag"] for u in left}, {u["tag"] for u in mine})
-            if key is not None:                  # (exactly a key's members: one key, then the order)
-                d["recalled"] = True
-                hi.hotkey_recall(key)
-                t.stage = "selected"
-                return
+        key = self.key_within({u["tag"] for u in left}, {u["tag"] for u in mine})
+        if key is not None:                      # (a key whose members all get the order: the key, then the order)
+            hi.hotkey_recall(key)
+            t.stage = "selected"
+            return
         cx = sorted(u["x"] for u in left)[len(left) // 2]
         cy = sorted(u["y"] for u in left)[len(left) // 2]
         here = [u for u in left if screen_of(obs, u["x"], u["y"])]

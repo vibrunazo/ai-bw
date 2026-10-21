@@ -62,10 +62,10 @@ def play_real(args: tuple) -> dict:
     return r
 
 
-def real_splits() -> tuple[list[dict], list[dict]]:
-    """The training games' home defenses: train, and a tenth (by game) for validation."""
+def real_splits(suite: str = "early") -> tuple[list[dict], list[dict]]:
+    """The training games' scenarios (eval/scenarios.py's suite): train, and a tenth (by game) for validation."""
     from eval import scenarios as S
-    scs = [json.loads(line) for line in S.scenarios_path("train").read_text(encoding="utf-8").splitlines()]
+    scs = [json.loads(line) for line in S.scenarios_path("train", suite).read_text(encoding="utf-8").splitlines()]
     val = [sc for sc in scs if int(sc["sha1"][:8], 16) % 10 == 1]
     return [sc for sc in scs if int(sc["sha1"][:8], 16) % 10 != 1], val
 

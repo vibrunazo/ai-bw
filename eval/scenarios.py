@@ -90,10 +90,18 @@ TRACK_EVERY = 12
 ATTACK_ORDERS = {10, 11, 12, 14}
 
 
-def scenarios_path(split: str = "test") -> Path:
+def scenario_id(sc: dict) -> str:
+    """A scenario's name in rows and replays: its game's sha1 prefix (and, suite kinds, the kind's initial: a game
+    gives one scenario per kind)."""
+    return sc["sha1"][:8] + (sc["kind"][0] if sc.get("kind") else "")
+
+
+def scenarios_path(split: str = "test", suite: str = "early") -> Path:
     """test: from games held out of training (for scoring); train: from training games (for
-    reinforcement learning, train/fight_rl.py)."""
-    return data_root() / "interim" / "scenarios" / ("tvz_early.jsonl" if split == "test" else "tvz_early_train.jsonl")
+    reinforcement learning, train/fight_rl.py). suite: "early" (home defenses before 6:00) or "kinds"
+    (eval/scenario_kinds.py: attacks, mixed fights, outnumbered units, harassment, from whole games)."""
+    name = "tvz_early" if suite == "early" else f"tvz_{suite}"
+    return data_root() / "interim" / "scenarios" / (f"{name}.jsonl" if split == "test" else f"{name}_train.jsonl")
 
 
 # --- picking -----------------------------------------------------------------------------------
@@ -297,7 +305,7 @@ def run_one(sc: dict, controller: str, seconds: float, version: str, style: int 
     latest trained); sample_seed seeds its sampled fight decisions and the row gets them
     ("log"). on_step(game, slot), if given, is called after every step (eval/micro_timing.py).
     hands_seed: Gary's hands (reaction delays, click spread). zerg_play: "reactive" (the Zerg reacts once the game diverges from the pro's) or "replay"."""
-    row = {"sha1": sc["sha1"][:8], "controller": controller}
+    row = {"sha1": scenario_id(sc), "controller": controller}
     try:
         track = pro_track(sc) if zerg_play == "reactive" and controller != "pro" else None
         game = scenario_game(sc)
@@ -398,6 +406,8 @@ def main() -> None:
     ap.add_argument("--screen", action="store_true", help="keep only the picked scenarios where control mattered")
     ap.add_argument("--min-gap", type=int, default=100, help="--screen: net value the pro gained over nothing")
     ap.add_argument("--run", type=int, help="score the first N saved scenarios")
+    ap.add_argument("--suite", default="early", choices=["early", "kinds"],
+                    help="early: home defenses before 6:00; kinds: by state from whole games (eval/scenario_kinds.py)")
     ap.add_argument("--controllers", nargs="+", default=CONTROLLERS, choices=CONTROLLERS)
     ap.add_argument("--seconds", type=float, default=45)
     ap.add_argument("--version", default="v04", type=manifest_name,
@@ -421,7 +431,11 @@ def main() -> None:
     args = ap.parse_args()
     priority.apply(args.priority)
     if args.pick:
-        found = pick(args.pick, args.split)
+        if args.suite == "kinds":
+            from eval.scenario_kinds import pick as pick_kinds
+            found = pick_kinds(args.pick, args.split, args.parallel)
+        else:
+            found = pick(args.pick, args.split)
         if args.screen:
             jobs = [(sc, c, args.seconds, args.version, args.style) for sc in found for c in ("pro", "nothing")]
             with ProcessPoolExecutor(args.parallel) as pool:
@@ -429,24 +443,25 @@ def main() -> None:
             net = lambda r: r["net"] if "error" not in r else None
             kept, games, away = [], set(), 0
             for sc, pro, nothing in zip(found, res[0::2], res[1::2]):
-                if net(pro) is None or net(nothing) is None or sc["sha1"] in games:
+                key = (sc["sha1"], sc.get("kind"))
+                if net(pro) is None or net(nothing) is None or key in games:
                     continue
-                if not pro["home"]:
+                if args.suite == "early" and not pro["home"]:
                     away += 1
                     continue
                 sc["gap"] = net(pro) - net(nothing)
                 if sc["gap"] >= args.min_gap:
                     kept.append(sc)
-                    games.add(sc["sha1"])
-            print(f"screened {len(found)} fights: {away} not at the Terran's home; kept {len(kept)} at home where "
-                  f"the pro's control was worth {args.min_gap}+ (one per game)")
+                    games.add(key)
+            print(f"screened {len(found)} fights: {away} not at the Terran's home; kept {len(kept)} where the pro's "
+                  f"control was worth {args.min_gap}+ (one per game" + (" and kind)" if args.suite == "kinds" else ")"))
             found = kept
-        path = scenarios_path(args.split)
+        path = scenarios_path(args.split, args.suite)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("".join(json.dumps(s, ensure_ascii=False) + "\n" for s in found), encoding="utf-8")
         print(f"{len(found)} scenarios -> {path}")
     if args.run:
-        scs = [json.loads(line) for line in scenarios_path(args.split).read_text(encoding="utf-8").splitlines()][:args.run]
+        scs = [json.loads(line) for line in scenarios_path(args.split, args.suite).read_text(encoding="utf-8").splitlines()][:args.run]
         if args.only:
             scs = [sc for sc in scs if sc["sha1"].startswith(args.only)]
             for c in args.controllers:
@@ -461,7 +476,7 @@ def main() -> None:
                 draws = args.samples if c == "gary" and args.samples else 0
                 for k in range(max(1, draws)):
                     for h in range(args.draws if c == "gary" else 1):
-                        name = f"{sc['sha1'][:8]}_{c}" + (f"_{k}" if k else "") + (f"_h{h}" if h else "")
+                        name = f"{scenario_id(sc)}_{c}" + (f"_{k}" if k else "") + (f"_h{h}" if h else "")
                         save = str(Path(args.save) / f"{name}.rep") if args.save else None
                         jobs.append((sc, c, args.seconds, args.version, args.style, save, False, args.fight_model,
                                      k if draws else None, None, args.zerg, 1 + h))
@@ -502,7 +517,7 @@ def report(scs: list[dict], rows: list[dict], args: argparse.Namespace) -> None:
     for sc in scs:
         cells = []
         for c in cs:
-            r = by[(sc["sha1"][:8], c)]
+            r = by[(scenario_id(sc), c)]
             if "error" in r:
                 cells.append(f"{'error':>18s}")
                 continue
@@ -511,10 +526,18 @@ def report(scs: list[dict], rows: list[dict], args: argparse.Namespace) -> None:
             nets[c].append(r["net"])
             cells.append(f"{r['T_lost']:>6d} /{r['Z_lost']:>5d} ({r['T_workers_lost']:>2d})")
         s = sc["frame"] * 42 // 1000
-        print(f"{sc['sha1'][:8]:9s} {s // 60:>2d}:{s % 60:02d} " + " ".join(cells))
+        print(f"{scenario_id(sc):9s} {s // 60:>2d}:{s % 60:02d} " + " ".join(cells))
     print(f"{'mean':15s} " + " ".join(
         f"{t[0] / max(1, t[3]):>6.0f} /{t[1] / max(1, t[3]):>5.0f} ({t[2] / max(1, t[3]):>4.1f})" for t in tot.values()))
     print(f"{'net (score)':15s} " + " ".join(f"{np.mean(v) if v else 0:>18.0f}" for v in nets.values()))
+    kinds = sorted({sc.get("kind") for sc in scs if sc.get("kind")})
+    for k in kinds:                         # (suite kinds: net and orders by kind)
+        for c in cs:
+            ks = [by[(scenario_id(sc), c)] for sc in scs if sc.get("kind") == k and "error" not in by[(scenario_id(sc), c)]]
+            if ks:
+                orders = [r["fight_orders"] for r in ks if "fight_orders" in r]
+                print(f"  {k:12s} {c}: {len(ks)} scenarios, net {np.mean([r['net'] for r in ks]):.0f}"
+                      + (f", orders a minute {np.mean(orders) * 60 / args.seconds:.0f}" if orders else ""))
     for c in cs:
         split = [r for r in rows if r["controller"] == c and "zerg_reacts" in r]
         if split:

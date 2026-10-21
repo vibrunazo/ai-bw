@@ -4,14 +4,18 @@ one key and one click, an order to others is selected unit by unit as before. As
 clusters merge or split for good, not every turn.
 
 Providers:
-  clusters  scripted (the default): the army's clusters (up to 3, LearnedArmy's clustering) on keys 1-3, a cluster
-            keeping the key holding most of its units; an arrival joins its cluster's key once it is there; a key is
-            re-formed when its cluster has been merged or split for FOR_GOOD
-  learned   (planned) imitated from the pros' own hotkey commands (eval/pro_groups.py: what they group, how often
-            they re-form and recall)
+  types     scripted (the default): the pros' habit, one unit type of one cluster on a key (keys 1-3),
+            the biggest such groups by supply; a key re-assigned (not added to) when its group grew or moved on
+  clusters  scripted: the army's clusters (up to 3, LearnedArmy's clustering) on keys 1-3, a cluster keeping the key
+            holding most of its units; an arrival added to its cluster's key once it is there; a key is re-formed
+            when its cluster has been merged or split for FOR_GOOD
+  learned   (planned) imitated from the pros' own hotkey commands (ingest/hotkey_dataset.py: what they group, how
+            often they re-form and recall)
 
-Pros (100 modern games a race, after 5:00): the army on keys 1-3 (Terran also 9, 0, 4), assigned 6-10 times a
-minute, recalled 41-71 times; 71% of their fight selections are recalls, Gary-T's 19%.
+Pros (ingest/hotkey_dataset.py --report, 200 modern TvZ games, after 5:00): army keys in use T 4, Z 3; assigns 6
+(T) and 9.6 (Z) a minute, adds none, recalls 62 and 41; a group 5 (T) and 9 (Z) units at its assign, mostly one
+type (Terran: marines 20%, vultures 15%, vessels 11%, medics 7%, tanks 6%, marines with medics 5%). Gary with
+clusters (round GR40a): T 1 key, assigns 1.9, adds 3.8, recalls 0.1 a minute; Z 3 keys, recalls 6.8.
 """
 from __future__ import annotations
 
@@ -34,6 +38,7 @@ class ClusterGrouping:
     """The scripted grouping: keys follow the army's clusters, stably (see the module's docstring)."""
 
     name = "clusters"
+    adds = True
 
     def __init__(self, g: Gary):
         self.g = g
@@ -89,4 +94,79 @@ class ClusterGrouping:
         return dict(self.plan) if changed else None
 
 
-PROVIDERS = {"clusters": ClusterGrouping}
+# the keys free of the other hotkeys (executor.py: Command Centers 4-5, production 6-9; motor.py: the scout 0;
+# army_rules.py: a raid 9; zerg_fight.py: lurkers 0). The pros' Terran keeps 4 army keys: a fourth needs the
+# building keys moved
+KEYS = {"T": [1, 2, 3], "Z": [1, 2, 3], "P": [1, 2, 3]}
+TYPE_MIN_SUPPLY = 8                   # (supply x2) a type's group in a cluster: 4 marines or zerglings x2, 2 tanks
+REFORM_AFTER = 10 * 24                # a key re-assigned at most this often
+GROWN = 2                             # re-assigned when this many of its type joined its cluster
+
+
+class TypeGrouping:
+    """The pros' habit: a unit type of a cluster on a key, re-assigned when its group changed (module docstring)."""
+
+    name = "types"
+    adds = False                                      # (the motor re-assigns a key instead of adding to it)
+
+    def __init__(self, g: Gary):
+        self.g = g
+        self.keys = KEYS.get(g.race.letter, ARMY_KEYS)
+        self.plan: dict[int, set[int]] = {}           # key -> the units that belong on it
+        self.kind: dict[int, int] = {}                # key -> its unit type
+        self.formed: dict[int, int] = {}              # key -> when its plan was last set
+        self.next_ask = 0
+
+    def step(self, clusters: list[list[dict]]) -> dict[int, set[int]] | None:
+        from gary.policy.army import supply_x2
+        f = self.g.hi.frame
+        if f < self.next_ask:
+            return None
+        self.next_ask = f + ASK_EVERY
+        groups = []                                   # (supply, type, tags): a type in a cluster, 12 at most
+        for c in clusters:
+            by: dict[int, list[dict]] = {}
+            for u in c:
+                by.setdefault(u["type"], []).append(u)
+            for t, us in by.items():
+                if sum(supply_x2(t) for _ in us) >= TYPE_MIN_SUPPLY:
+                    mx, my = _mid(us)
+                    us = sorted(us, key=lambda u: math.dist((u["x"], u["y"]), (mx, my)))[:12]
+                    groups.append((sum(supply_x2(t) for _ in us), t, {u["tag"] for u in us}))
+        groups.sort(key=lambda x: -x[0])
+        alive = {u["tag"] for c in clusters for u in c}
+        changed = False
+        for key in list(self.plan):
+            self.plan[key] &= alive
+            if not self.plan[key]:
+                del self.plan[key], self.kind[key]
+                changed = True
+        taken: set[int] = set()
+        left = []
+        for _, t, tags in groups[:len(self.keys)]:    # the biggest groups keep (or get) keys
+            key = max((k for k in self.plan if self.kind[k] == t and k not in taken),
+                      key=lambda k: len(self.plan[k] & tags), default=None)
+            if key is None or not self.plan[key] & tags:
+                left.append((t, tags))
+                continue
+            taken.add(key)
+            have = self.plan[key]
+            moved = len(have & tags) < 0.7 * len(have)
+            if (len(tags - have) >= GROWN or moved) and f - self.formed.get(key, -10 ** 9) >= REFORM_AFTER:
+                self.plan[key], self.formed[key] = tags, f
+                changed = True
+        for t, tags in left:                          # new groups: a free key, else the key of the smallest group
+            free = [k for k in self.keys if k not in self.plan]
+            if not free:
+                spare = [k for k in self.plan if k not in taken and f - self.formed.get(k, -10 ** 9) >= REFORM_AFTER]
+                if not spare:
+                    continue
+                free = [min(spare, key=lambda k: len(self.plan[k]))]
+            key = free[0]
+            self.plan[key], self.kind[key], self.formed[key] = tags, t, f
+            taken.add(key)
+            changed = True
+        return dict(self.plan) if changed else None
+
+
+PROVIDERS = {"types": TypeGrouping, "clusters": ClusterGrouping}
