@@ -38,6 +38,18 @@ from gary.interface import screen_of, unit_name
 BOX_MARGIN = 20                      # screen pixels around the group's units when drag-selecting
 SCOUT_KEY = 0
 HK_ARMY = [1, 2]
+# option groups (the hands, not a rule): the army on control groups as the pros keep it. After a box that took a
+# cluster's units, the selection is assigned to a key (Ctrl+key, at most once a key every ASSIGN_GAP: pros assign
+# their army groups 6-10 times a minute and almost never add to them); a later order to about the same units
+# recalls the key instead of boxing again. Gary-T's fight selections were 62% boxes and 19% recalls where the pros'
+# are 71% recalls, 1.54 selections an order to their 1.14 (eval: actions per order in fights, 2026-10-21)
+ARMY_KEYS = [1, 2, 3]                # the pros' army keys, both races
+GROUP_MIN = 4                        # a box of at least this many units is worth a key
+ASSIGN_GAP = 5 * 24
+GROUP_INSIDE, GROUP_COVER = 0.7, 0.5          # an army order recalls a key whose members are this much among its
+                                              # units and cover this much of them (the rest boxed as before)
+ROLE_INSIDE, ROLE_COVER = 0.7, 0.5            # a role's order: most of a key's members got that role: the group gets it
+                                              # (the pros' way: the group ordered, the exceptions after)
 COMMANDS = {"MOVE", "ATTACK_MOVE", "ATTACK_UNIT", "GATHER", "OWN_UNIT", "STOP", "HOLD", "STIM", "RETURN_CARGO"}
 ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT", "BRACE", "REGROUP", "POST", "SKIRMISH",
          "REPOSITION"}  # roles.py: carried out as commands
@@ -73,11 +85,44 @@ class DirectMotor:
     def __init__(self, g: Gary):
         self.g = g
         g.leases = Leases(g)
+        self.groups_on = False                  # option groups (a manifest's "groups")
+        self.groups: dict[int, set[int]] = {}   # army key -> the units Gary put on it
+        self.assigned_at: dict[int, int] = {}
         for kind, run in (("fight_cmd", self._run_command), ("pull", self._run_pull), ("unpull", self._run_pull),
                           ("load", self._run_load), ("unload", self._run_unload), ("scan", self._run_scan), ("repair", self._run_repair), ("reinforce", self._run_reinforce),
                           ("army_order", self._run_army_order), ("scout", self._run_scout),
                           ("attack", self._run_attack_wave)):
             g.task_runners[kind] = run
+
+    def _group_for(self, tags: set[int], alive: set[int], inside: float = GROUP_INSIDE,
+                   cover: float = GROUP_COVER) -> int | None:
+        """option groups: the key whose living members are mostly among these units (inside) and cover enough of
+        them (cover), the best such, or None."""
+        if not self.groups_on:
+            return None
+        best, score = None, 0.0
+        for key, members in self.groups.items():
+            members = members & alive
+            if len(members) < GROUP_MIN:
+                continue
+            both = len(members & tags)
+            if both < inside * len(members) or both < cover * len(tags):
+                continue
+            if both / max(len(tags), len(members)) > score:
+                best, score = key, both / max(len(tags), len(members))
+        return best
+
+    def _assign_key(self, sel: set[int]) -> int | None:
+        """option groups: the key to give this selection now (the one holding most of these units, else the least
+        recently given), or None if that key was given within ASSIGN_GAP."""
+        f = self.g.hi.frame
+        key = max(self.groups, key=lambda k: len(self.groups[k] & sel), default=None)
+        if key is None or not self.groups[key] & sel:
+            free = [k for k in ARMY_KEYS if k not in self.groups]
+            key = free[0] if free else min(ARMY_KEYS, key=lambda k: self.assigned_at.get(k, -10 ** 9))
+        if f - self.assigned_at.get(key, -10 ** 9) < ASSIGN_GAP:
+            return None
+        return key
 
     def start(self, intent: Intent) -> None:
         """Carry the intent out: its skill becomes the task on Gary's hands."""
@@ -143,6 +188,11 @@ class DirectMotor:
                 if not on_screen:
                     g.task = None
                     return
+                key = self._group_for(want, {u["tag"] for u in mine}, ROLE_INSIDE, ROLE_COVER)
+                if key is not None:                      # (option groups: a key holds exactly these units)
+                    hi.hotkey_recall(key)
+                    t.stage = "order"
+                    return
                 if (g.fight.ctrl_click or d.get("ctrl_click")) and self._ctrl_click(obs, on_screen):
                     t.stage = "order"
                     return
@@ -152,11 +202,20 @@ class DirectMotor:
                     g.task = None                        # (its order would call the load off)
                     return
                 box_around(hi, pts, BOX_MARGIN)
+                d["boxed"] = True
                 t.stage = "order"
                 return
         if not sel & want:
             g.task = None
             return
+        if self.groups_on and d.get("boxed") and not d.get("assigned") and len(sel & want) >= GROUP_MIN                 and sel <= {u["tag"] for u in mine if u["type"] in g.army_types}:
+            hk = self._assign_key(sel)           # (option groups: a box of army units in a fight gets a key too)
+            if hk is not None:
+                d["assigned"] = True
+                self.groups[hk] = set(sel)
+                self.assigned_at[hk] = g.hi.frame
+                hi.hotkey_set(hk)
+                return
         want = sel & want
         key = d["key"]
         a = key[0]
@@ -568,6 +627,15 @@ class DirectMotor:
                     d["narrowed"] = True
                     return
             d["narrowed"] = False
+            if sel and self.groups_on and not d.get("recalled") and not d.get("assigned") and len(sel) >= GROUP_MIN \
+                    and set(obs["selection"]) <= set(d["tags"]):
+                key = self._assign_key(set(sel))     # (option groups: a box of this cluster's units gets a key)
+                if key is not None:
+                    d["assigned"] = True
+                    self.groups[key] = set(sel)
+                    self.assigned_at[key] = hi.frame
+                    hi.hotkey_set(key)
+                    return
             if sel:
                 if d["attack"]:
                     hi.minimap_command(C.ORDER_ATTACK_MOVE, d["x"], d["y"])
@@ -589,6 +657,13 @@ class DirectMotor:
                       f"to ({d['x']}, {d['y']}) ({d['p']:.0%} sure it should move; fight estimate {d['fight']:+.0%})")
             g.task = None
             return
+        if not d.get("recalled") and not d["done"]:
+            key = self._group_for({u["tag"] for u in left}, {u["tag"] for u in mine})
+            if key is not None:                  # (option groups: the key holds about these units)
+                d["recalled"] = True
+                hi.hotkey_recall(key)
+                t.stage = "selected"
+                return
         cx = sorted(u["x"] for u in left)[len(left) // 2]
         cy = sorted(u["y"] for u in left)[len(left) // 2]
         here = [u for u in left if screen_of(obs, u["x"], u["y"])]
