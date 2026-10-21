@@ -124,7 +124,8 @@ class ZergRoles:
                                         [(u["x"], u["y"]) for u in mine if u["type"] == Z.SUNKEN and u["completed"]],
                                         self.flip)
         self.prev = positions
-        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000)
+        from gary.policy.roles import order_budget
+        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000, order_budget(self.bot.hi))
         by_tag = {u["tag"]: u for u in seen}
         enemy = [u for u in seen if u["owner"] not in (slot, 11) and supply_x2(u["type"]) > 0
                  and not is_worker(u["type"]) and not is_building(u["type"])]

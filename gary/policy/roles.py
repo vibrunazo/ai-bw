@@ -172,26 +172,48 @@ class RoleModel:
     def save(self, path: str | Path) -> None:
         torch.save({"state": self.net.state_dict(), "config": self.config}, path)
 
+    def _with_budget(self, extra: np.ndarray, budget: float | None) -> np.ndarray:
+        """A model trained with the player's order rate as an input (train/roles.py --budget) gets it as one more
+        column (/ 100); without a value, BUDGET_DEFAULT."""
+        if not self.config.get("budget"):
+            return extra
+        b = (budget if budget is not None else BUDGET_DEFAULT) / 100.0
+        return np.concatenate([extra, np.full(extra.shape[:-1] + (1,), b, extra.dtype)], -1)
+
     @torch.no_grad()
-    def predict(self, rows: np.ndarray, extra: np.ndarray, time_s: float) -> np.ndarray:
+    def predict(self, rows: np.ndarray, extra: np.ndarray, time_s: float, budget: float | None = None) -> np.ndarray:
         """One snapshot: rows (n, 11), extra (n, EXTRA). Role probabilities per unit (n, R)."""
         dev = next(self.net.parameters()).device
         n = min(len(rows), MAX_UNITS)
+        extra = self._with_budget(extra, budget)
         logits = self.net(*tensors(rows[None, :n], extra[None, :n], np.zeros((1, n), bool),
                                    np.array([time_s], np.float32), dev))
         return torch.softmax(logits[0], -1).cpu().numpy()
 
     @torch.no_grad()
-    def predict_move(self, rows: np.ndarray, extra: np.ndarray, time_s: float) -> tuple[np.ndarray, np.ndarray]:
+    def predict_move(self, rows: np.ndarray, extra: np.ndarray, time_s: float,
+                     budget: float | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Role probabilities (n, R) and moves (n, 2: tiles over the next half second, mirrored as the
         rows; unmirror with the snapshot's flip). A model without the where head: moves None."""
         dev = next(self.net.parameters()).device
         n = min(len(rows), MAX_UNITS)
+        extra = self._with_budget(extra, budget)
         inputs = tensors(rows[None, :n], extra[None, :n], np.zeros((1, n), bool), np.array([time_s], np.float32), dev)
         if self.net.move is None:
             return torch.softmax(self.net(*inputs)[0], -1).cpu().numpy(), None
         logits, move = self.net(*inputs, with_move=True)
         return torch.softmax(logits[0], -1).cpu().numpy(), move[0].cpu().numpy()
+
+
+BUDGET_DEFAULT = 100.0           # unit commands a minute: the pros' median (ingest/response_dataset.py budget)
+BUDGET_S = 30
+
+
+def order_budget(hi) -> float:
+    """The player's unit commands a minute over the last BUDGET_S (the interface's own record, hi.commands): what a
+    --budget role model is told it is spending."""
+    since = hi.frame - BUDGET_S * 24
+    return sum(1 for c in hi.commands if c[0] >= since) * 60.0 / BUDGET_S
 
 
 def latest_trained_on(data_name: str) -> Path | None:

@@ -858,7 +858,8 @@ class RoleLearned(RoleRules):
         if snap is None:
             return None
         rows, tags, center, by_tag = snap
-        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000)
+        from gary.policy.roles import order_budget
+        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000, order_budget(g.hi))
         mine, enemy = self._units(snap)
         if not mine or not enemy:
             return None
@@ -941,7 +942,8 @@ class RoleAhead(RoleRules):
         mine, enemy = self._units(snap)
         if not mine or not enemy:
             return None
-        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000)
+        from gary.policy.roles import order_budget
+        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000, order_budget(g.hi))
         names = self.model.config.get("roles")
         index = {t: i for i, t in enumerate(tags)}
         now = g.hi.frame
@@ -1025,7 +1027,8 @@ class RoleOverride(RoleRules):
         mine, enemy = self._units(snap)
         if not mine or not enemy:
             return None
-        probs = self.model.predict(rows, extra, obs["frame"] * 42 / 1000)
+        from gary.policy.roles import order_budget
+        probs = self.model.predict(rows, extra, obs["frame"] * 42 / 1000, order_budget(g.hi))
         index = {t: i for i, t in enumerate(tags)}
         decided, roles = {}, {}
         for u in mine:
