@@ -119,10 +119,13 @@ PULL_HP = 0.5
 PULL_TILES = 1.5
 RETREAT_MARGIN = 3 * 32
 REPEAT = 24                          # the same role isn't given to a unit again within a second (but pull back)
-# option refresh (the skills keep their orders current): a unit whose role stands has its order given again when the
-# role's target moved past REFRESH_PX since it was given, REFRESH_MIN after: the pros' fight commands are 49%
-# (Terran) and 72% (Zerg) the same order to the same units with the target moved, a median 1.2-1.3 tiles (quartiles
-# 0.5 / 1.2 / 3.3; first 10 minutes, 150 modern games), where "keep" gave Gary nothing to issue
+# option refresh (the skills keep their orders current): a unit whose move role stands (retreat, pull back,
+# reposition) has its move given again where the role model moves it now, when that moved past REFRESH_PX since it was
+# given, REFRESH_MIN after: the pros' fight commands are 49% (Terran) and 72% (Zerg) the same order to the same units
+# with the target moved, a median 1.2-1.3 tiles (quartiles 0.5 / 1.2 / 3.3; first 10 minutes, 150 modern games), and
+# 75-87% of them right-clicks on the ground, where "keep" gave Gary nothing to issue. Attack-moves of units fighting
+# are not given again: re-aimed at the enemy nearest the group, or along the model's move, both cost net value on the
+# 239 home defenses (-67 and -66, -52 without: re-acquiring targets mid-fight)
 REFRESH_PX = 32
 REFRESH_MIN = 12
 SHELTER = 15 * 32                    # a bunker this close is where a retreat goes
@@ -747,7 +750,7 @@ class RoleRules:
             group = [u for u in group if post and math.dist((u["x"], u["y"]), post) > POST_SLACK][:MAX_GROUP]
             if group:
                 return self._intent("POST", group, (int(post[0]), int(post[1])), "attack_move")
-        return self._refreshed(roles, enemy) if self.refresh else None
+        return None
 
     def _stale(self, u: dict, role: str, point) -> bool:
         """refresh: the unit's last order was this role's, REFRESH_MIN ago or more, to a point REFRESH_PX or more from
@@ -757,25 +760,6 @@ class RoleRules:
         return bool(told and told[0] == role and at and self.g.hi.frame - told[1] >= REFRESH_MIN
                     and math.dist(at, point) >= REFRESH_PX)
 
-    def _refreshed(self, roles: dict[str, list[dict]], enemy: list[dict]) -> Intent | None:
-        """refresh: the standing roles' orders given again where their targets moved: close in and fire toward the
-        enemy nearest the group now, pull back to a step away from the enemy near the group where it is now."""
-        for role, order in (("CLOSE_IN", "attack_move"), ("FIRE", "attack_move")):
-            group = roles.get(role, [])
-            if group:
-                target = min(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
-                point = (int(target["x"]), int(target["y"]))
-                stale = [u for u in group if self._stale(u, role, point)][:MAX_GROUP]
-                if stale:
-                    return self._intent(role, stale, point, order)
-        group = roles.get("PULL_BACK", [])
-        if group:
-            near = sorted(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))[:3]
-            point = self._step_away(_mid(group), _mid(near), PULL_TILES * 32)
-            stale = [u for u in group if point and self._stale(u, "PULL_BACK", point)][:MAX_GROUP]
-            if stale:
-                return self._intent("PULL_BACK", stale, point, "move")
-        return None
 
     def _join_or_hold(self, roles: dict, mine: list[dict], by_tag: dict, fresh) -> Intent | None:
         """join: to Gary's biggest bunch of fighters (attack-moving: shooting on the way), from farther

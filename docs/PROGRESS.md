@@ -753,6 +753,19 @@ plan and the full log).
   recalled, because three quarters of Gary-T's fight orders go to 1-4 units whose role just changed. Reverted. The
   gap is in how the roles layer orders (small groups, on role changes; pros re-order whole groups many times a
   minute): the learned layer's, for RL with the budget given.
+- **Control groups as a slot, the pros' hotkeys, and re-issued orders (2026-10-21).** gary/agent/grouping.py: grouping
+  is a provider slot (which units on which key, asked when units arrive or clusters merge or split for good); the
+  scripted default, "clusters", and the motor's mechanics (assign, add; an order to exactly a key's members is one
+  key and one click; no pooling), off by default. ingest/hotkey_dataset.py, 200 modern TvZ games a race, after 5:00:
+  pro Terrans use 4 army keys, assign 6.0 a minute, add 0, recall 62, group 5 units, mostly by type (marines 20%,
+  vultures 15%, vessels 11%, medics 7%, tanks 6%); pro Zergs 3 keys, assign 9.6, add 0, recall 41, group 9 units
+  (mutalisks with an overlord 21%, zerglings 8%, lurkers 7%); selections per order 1.65 and 1.32. Re-issues: of the
+  pros' attended fight commands (first 10 minutes, 150 games) 49% (Terran) and 72% (Zerg) re-issue the same order to
+  the same units with the target moved (a median 1.2-1.3 tiles), 75-87% of them right-clicks on the ground. A skill
+  keeping standing orders current (option refresh), on the 239 home defenses (8 draws; gt1 net -52, 22 orders a
+  scenario): attack-moves re-aimed at the enemy nearest the group -67 (30 orders); along the role model's predicted
+  move -66 (paired -12.9, 90% -22 to -3.6); moves only (retreat, pull back, reposition along the model's move) -55
+  (paired -3.3, -7.5 to +0.7; 23 orders). Kept as the move-only option, the re-order mechanism for the roles RL.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the
