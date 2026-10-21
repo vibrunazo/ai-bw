@@ -713,6 +713,14 @@ plan and the full log).
   so that like clusters engage together: 96 paired games against gt1, won 44 (54), lost 14 (9), the gap
   unchanged in every window, late arrivals at attacks 0.25 (0.26). Deleted. Neither missing inputs nor
   independent draws explain the trickle; next: which decision sends the late arrivals.
+- **What sends the late arrivals (2026-10-21).** The motor now records each army order's units and origin; an
+  instrumented replay of R40a (D40a, the same games) traced every late arrival at Gary-T's attacks to its last
+  army order: the hunt 38%, no army order in 2 minutes (fight-layer moves, the rally) 25%, an order elsewhere
+  19%, the commit model's engage there 16%. A hunt that orders the main body and sends the rest to it first:
+  96 paired games, won 46 (54), lost 10 (9), late arrivals 0.26 (0.26: the joiners still came late, now as
+  "hunt join" 16%). Deleted. Three fixes aimed at the trickle (gather, a shared draw, the hunt's body) left it
+  at 0.22-0.26 (pros 0.06) and none won more games: the trickle is how Gary-T's army spreads over the map
+  (production, the hunt, the fight layer), not one rule to correct.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the
