@@ -730,6 +730,13 @@ plan and the full log).
   units to the roles model: 96 paired games, won 57 (54), lost 8 (9), the gap within noise, its retreat orders
   doubled (401 to 184 in 48 games) but lone_away 0.02 (0.00): the model rarely chooses to back a unit off
   (retreat 0.4% of its decisions). In gt1 (gt0.5); the model's calibration is self-play's to fix.
+- **The commit model with the other clusters' commitments (2026-10-21).** train/commit.py --others: four inputs per
+  cluster sample, from the clusters sampled at the same tick (their supply committed to engage and to move, the
+  nearest one's distance and whether it engages; gary/policy/army.py others_inputs). On the same 438,440 held-out
+  pro ticks: the deployed model (10-17) order-vs-keep AUC 0.760, engage-vs-move 0.771, cell in the top 5 0.372;
+  the same recipe retrained on today's data (16,496 player-games, both eras) 0.779 / 0.791 / 0.385; with the
+  other clusters' commitments 0.779 / 0.791 / 0.383: nothing gained, not played. The retrain itself is in test
+  (runs/commit_exp/T_A, pinned with GARY_TCOMMIT_MODEL).
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the

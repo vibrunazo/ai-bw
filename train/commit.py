@@ -42,7 +42,7 @@ sys.path.insert(0, str(REPO / "ingest"))
 from inventory import data_root  # noqa: E402
 
 from eval import monitor, priority  # noqa: E402
-from gary.policy.army import (ARMY_SUPPLY, GRID, MEMORY_S, ArmyModel, ArmyNet, ArmySpec,  # noqa: E402
+from gary.policy.army import (ARMY_SUPPLY, GRID, MEMORY_S, OTHER_INPUTS, ArmyModel, ArmyNet, ArmySpec,  # noqa: E402
                               commit_inputs, encode_global)
 from train.macro import is_test  # noqa: E402
 from train.select import GameFilter  # noqa: E402
@@ -70,11 +70,31 @@ def jobs(matchup: str, race: str, version: str = "v3", keep=None) -> list[tuple]
     return out
 
 
+def _others(d, i: int) -> np.ndarray:
+    """others_inputs for every tick sample of player i: the clusters sampled at the same frame are the others."""
+    from gary.policy.army import others_inputs
+    frames, grid, commit = d[f"p{i}_tick_frame"], d[f"p{i}_tick_grid"], d[f"p{i}_tick_commit"]
+    out = np.zeros((len(frames), OTHER_INPUTS), np.float32)
+    start = 0
+    while start < len(frames):
+        end = start
+        while end < len(frames) and frames[end] == frames[start]:
+            end += 1
+        ks = list(range(start, end))
+        centers = [int(grid[k, 8].argmax()) for k in ks]
+        sups = [float(grid[k, 8].sum()) for k in ks]
+        army = float(grid[start, 0].sum())
+        out[start:end] = others_inputs(centers, sups, [int(commit[k]) for k in ks], army)
+        start = end
+    return out
+
+
 def load_player(args: tuple) -> tuple:
     (path, i, held, mpath, mi), spec_d = args
     spec = ArmySpec(**spec_d)
     d = np.load(path)
     n = len(d[f"p{i}_tick_label"])
+    others = _others(d, i) if spec.others else None       # (before sampling: a frame's clusters together)
     rng = np.random.default_rng(hash(path) % 2**32 + i)
     idx = np.sort(rng.choice(n, MAX_TICKS, replace=False)) if n > MAX_TICKS and not held else np.arange(n)
     frames = d[f"p{i}_tick_frame"][idx]
@@ -90,7 +110,7 @@ def load_player(args: tuple) -> tuple:
     glob = encode_global(spec, frames.astype(np.float32), d[f"p{i}_tick_eco"][idx].astype(np.float32),
                          grid[:, 8].sum(1).astype(np.float32), d[f"p{i}_tick_units"][idx].astype(np.float32),
                          d[f"p{i}_tick_seen"][idx].astype(np.float32), seen_mem, own_sup[t], seen_mem @ ARMY_SUPPLY,
-                         commit_inputs(commit, d[f"p{i}_tick_age"][idx]))
+                         commit_inputs(commit, d[f"p{i}_tick_age"][idx]), others[idx] if others is not None else None)
     return (grid, glob.astype(np.float16), d[f"p{i}_tick_label"][idx].astype(np.int64),
             d[f"p{i}_tick_target"][idx].astype(np.int64), commit.astype(np.int64), frames)
 
@@ -130,6 +150,9 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=1024)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--workers", type=int, default=3)
+    ap.add_argument("--others", action="store_true", help="the other clusters' commitments as inputs (ArmySpec.others)")
+    ap.add_argument("--eval", help="score this commit model on the held-out games and stop (no training)")
+    ap.add_argument("--out", help="the run folder (default runs/commit/<matchup>_<race>_<time>: what Gary loads as newest)")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
@@ -137,7 +160,10 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     start = sorted((REPO / "runs" / "army").glob(f"{args.matchup}_{args.race}_*/model.pt"))[-1]
     base = ArmyModel.load(start)
-    spec = ArmySpec(base.spec.race, base.spec.own_types, base.spec.seen_types, commit=True, losses=True)
+    spec = ArmySpec(base.spec.race, base.spec.own_types, base.spec.seen_types, commit=True, losses=True, others=args.others)
+    if args.eval:
+        evaluated = ArmyModel.load(args.eval)
+        spec = evaluated.spec
     t0 = time.time()
     keep = GameFilter.from_args(args)
     js = jobs(args.matchup, args.race, keep=keep)
@@ -147,7 +173,7 @@ def main() -> None:
     tg, tglob, tl, tt, tc, tf = data["test"]
     print(f"{len(js)} player-games; ticks train {len(label):,} (keep/engage/move {np.bincount(label, minlength=3)}), "
           f"test {len(tl):,} ({time.time() - t0:.0f} s)", flush=True)
-    net = widen(base, spec).to(device)
+    net = (evaluated.net if args.eval else widen(base, spec)).to(device)
     head = list(net.kind.parameters()) + list(net.glob.parameters())
     trunk = [p for n, p in net.named_parameters() if not n.startswith(("kind.", "glob."))]
     opt = torch.optim.AdamW([{"params": head, "lr": args.lr}, {"params": trunk, "lr": args.lr / 10}], weight_decay=1e-4)
@@ -181,6 +207,8 @@ def main() -> None:
         out["where_top5"] = round(float((w5[o] == tt[o, None]).any(1).mean()), 3) if o.any() else None
         return out
     print("before:", evaluate(), flush=True)
+    if args.eval:
+        return
     for epoch in monitor.track(range(args.epochs), args.epochs, "epochs"):
         perm = torch.randperm(len(Y))
         total = 0.0
@@ -198,7 +226,7 @@ def main() -> None:
             total += loss.item() * len(idx)
         print(f"epoch {epoch + 1}: loss {total / len(Y):.4f}  test {evaluate()}", flush=True)
     res = evaluate()
-    out = REPO / "runs" / "commit" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
+    out = Path(args.out) if args.out else REPO / "runs" / "commit" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
     out.mkdir(parents=True, exist_ok=True)
     model = ArmyModel(spec, net.cpu().eval(), {**base.config, "net": {**base.config["net"], "n_kind": 3,
                                                                         "channels": spec.channels},

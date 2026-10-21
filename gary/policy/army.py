@@ -39,6 +39,7 @@ class ArmySpec:
     seen_types: list[int]         # enemy unit types counted
     commit: bool = False          # the group's commitment in the numbers too (train/commit.py)
     losses: bool = False          # a 10th map channel: own losses in the last LOSS_S, where they died
+    others: bool = False          # the other clusters' commitments in the numbers (others_inputs)
 
     @property
     def channels(self) -> int:
@@ -46,7 +47,8 @@ class ArmySpec:
 
     @property
     def n_global(self) -> int:
-        return 8 + len(self.own_types) + 2 * len(self.seen_types) + (COMMIT_INPUTS if self.commit else 0)
+        return 8 + len(self.own_types) + 2 * len(self.seen_types) + (COMMIT_INPUTS if self.commit else 0) + \
+            (OTHER_INPUTS if self.others else 0)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -56,6 +58,8 @@ LOSS_S = 10                       # own losses counted this long (ingest/army_da
 GONE_AFTER = 48                   # an own unit out of sight this long is lost (an SCV in a refinery, a drone
                                   # in an extractor, comes back sooner; a loaded bunker's marines are skipped)
 COMMIT_INPUTS = 3                 # the group's commitment: engaging, moving (one-hot; none: both 0), its age
+OTHER_INPUTS = 4                  # the other clusters: supply shares committed to engage and to move, the nearest's
+                                  # distance and whether it engages (others_inputs)
 COMMIT_AGE_S = 120                # an order older than this is no commitment (ingest/army_dataset.py COMMIT_S)
 
 
@@ -83,9 +87,30 @@ def commit_inputs(commit: np.ndarray, age_s: np.ndarray) -> np.ndarray:
                      np.minimum(age_s, COMMIT_AGE_S).astype(np.float32) / 60.0], 1)
 
 
+def others_inputs(centers: list[int], sups: list[float], commits: list[int], army: float) -> np.ndarray:
+    """(n, OTHER_INPUTS) for n clusters seen at one moment (cells, supply x2, commitment 0 none / 1 engage / 2 move;
+    army: the whole army's supply x2), each from the others: their supply committed to engage and to move, as
+    shares of the army; the nearest one's distance (cells / GRID; 1 when there is none) and whether it engages.
+    What a cluster's own view lacked to wait for the rest of the army (docs/PROGRESS.md, 2026-10-21)."""
+    out = np.zeros((len(centers), OTHER_INPUTS), np.float32)
+    for i, c in enumerate(centers):
+        rest = [j for j in range(len(centers)) if j != i]
+        out[i, 0] = sum(sups[j] for j in rest if commits[j] == 1) / max(army, 1.0)
+        out[i, 1] = sum(sups[j] for j in rest if commits[j] == 2) / max(army, 1.0)
+        out[i, 2] = 1.0
+        if rest:
+            cy, cx = divmod(c, GRID)
+            dist = lambda j: max(abs(divmod(centers[j], GRID)[0] - cy), abs(divmod(centers[j], GRID)[1] - cx))
+            j = min(rest, key=dist)
+            out[i, 2] = dist(j) / GRID
+            out[i, 3] = float(commits[j] == 1)
+    return out
+
+
 def encode_global(spec: ArmySpec, frame: np.ndarray, eco: np.ndarray, group_sup: np.ndarray,
                   units: np.ndarray, seen: np.ndarray, seen_mem: np.ndarray, own_army: np.ndarray,
-                  enemy_army_mem: np.ndarray, commit: np.ndarray | None = None) -> np.ndarray:
+                  enemy_army_mem: np.ndarray, commit: np.ndarray | None = None,
+                  others: np.ndarray | None = None) -> np.ndarray:
     """(n, n_global) numbers. eco: minerals, gas, supply used x2, supply max x2; group_sup x2;
     units / seen / seen_mem: (n, 228) counts (seen_mem: the most seen at once in MEMORY_S);
     own_army, enemy_army_mem: army supply x2 (enemy: of seen_mem); commit: (n, COMMIT_INPUTS) when
@@ -98,6 +123,8 @@ def encode_global(spec: ArmySpec, frame: np.ndarray, eco: np.ndarray, group_sup:
              np.log1p(seen_mem[:, spec.seen_types])]
     if spec.commit:
         parts.append(commit if commit is not None else np.zeros((len(frame), COMMIT_INPUTS), np.float32))
+    if spec.others:
+        parts.append(others if others is not None else np.tile(np.array([[0, 0, 1, 0]], np.float32), (len(frame), 1)))
     return np.concatenate([p.astype(np.float32) for p in parts], axis=1)
 
 
