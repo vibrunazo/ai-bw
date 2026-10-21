@@ -586,6 +586,9 @@ OPTIONS = {
     "hunt4": lambda m: m["army"].update(hunt_ahead=4.0),
     "split": lambda m: m["army"].update(hunt_split=True),
     "static": lambda m: m["army"].update(static_odds=1.5),
+    # army.py gather (STOP-GAP, AGENTS.md): a commit engage with a quarter of the army elsewhere gathers it at a staging
+    # point short of the target first, then attacks with it (any race's learned army)
+    "gather": lambda m: m["army"].update(gather=True),
     # the fight roles model trained on whole games to 30 minutes, old and modern (ingest/response_dataset.py --era
     # both; until 2026-10-20 the first 20 minutes on the three 1.16 maps): either race's. In gz1 and gt1
     "roles30": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_30min.npz"),
@@ -907,6 +910,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.army.hunt_ahead = m["army"].get("hunt_ahead")
             g.army.hunt_split = m["army"].get("hunt_split", False)
             g.army.static_odds = m["army"].get("static_odds")
+            g.army.gather_on = m["army"].get("gather", False)
     if m["fight"] is not None and m["fight"]["provider"] == "zerg":
         from gary.agent.zerg_fight import ZergFight
         g.fight = ZergFight(g, m["fight"].get("roles", True), m["fight"].get("lurkers", True), seed,

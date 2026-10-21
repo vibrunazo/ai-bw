@@ -67,6 +67,11 @@ NOT_ARMY = {35, 36, 41, 42, 7, 64}  # larva, egg, drone, overlord, SCV, probe: n
 SCAN_STUCK = 20 * 24                # hunt: a remembered building's spot not settled after this: scanned
 HUNT_SQUAD = 8                      # option hunt_split: bases unseen searched by squads of this many units at least...
 HUNT_SQUADS = 4                     # ...at most this many at once
+GATHER_ELSEWHERE = 0.25            # option gather: an engage with this share of the army's supply elsewhere gathers first...
+GATHER_BACK = 12 * 32               # ...at the army's middle, at least this far from the target
+GATHER_NEAR = 6 * 32                # ...the army there once this near it...
+GATHER_READY = 0.75                 # ...with this share of its supply; or after GATHER_FOR
+GATHER_FOR = 20 * 24
 STATIC_NEAR = 8 * 32                # option static_odds: ground static defense this near an engage's cell defends it...
 STATIC_SUPPLY = {146: 12, 162: 12, 125: 12}   # ...each worth this (supply x2): sunken, cannon, bunker
 DEFENDERS_NEAR = 12 * 32            # ...with the enemy fighters seen in the last minute this near
@@ -130,6 +135,8 @@ class LearnedArmy:
             if any(r in rules for r in ("join", "sweep", "press")) else None
         self.hunt_ahead: float | None = None   # option: the hunt also this many times the enemy fighters seen (a manifest's)
         self.static_odds: float | None = None  # option: an engage only with this many times its spot's defense
+        self.gather_on = False                 # option: an engage gathers the army first (a manifest's)
+        self.gathering: dict | None = None     # gather: the target, the staging point, the army's tags, since
         self.scout = scout          # option: a worker scouts the enemy's start (a Zerg's overlords do: its posture)
         # option: the unit types its clusters take (default the race's army; Zerg: its ground army, the flyers
         # and the lurkers having their own rules)
@@ -251,6 +258,10 @@ class LearnedArmy:
             return "scout"
         if self.watch and self.scout_done and self._watching(obs, mine):
             return "scout"
+        if self.gathering is not None:          # (the model isn't asked while the army gathers for its engage)
+            who = self._gather_step(obs, mine, done)
+            if self.gathering is not None or who:
+                return who
         hunt = self._hunt(obs, mine, done) if self.hunt else None
         if hunt is not None:                    # (the model isn't asked while the army hunts)
             return "army" if hunt else None
@@ -542,10 +553,92 @@ class LearnedArmy:
         x, y = self.tracker.center(best)
         attack = k == 1
         self.ordered[here] = (best, attack, hi.frame)
+        if attack and self.gather_on and self._gather_start(mine, group, (x, y)):
+            return "army"
         g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", [u["tag"] for u in group], (x, y),
                              {"tags": [u["tag"] for u in group], "x": x, "y": y, "attack": attack, "p": float(q[k]),
                               "fight": 0.0, "done": [], "boxes": 0}, "army"))
         return "army"
+
+    def _army_units(self, mine: list[dict]) -> list[dict]:
+        types = self.types if self.types is not None else self.g.army_types
+        return [u for u in mine if u["type"] in types and u["completed"]]
+
+    def _gather_start(self, mine: list[dict], group: list[dict], target: tuple) -> bool:
+        """gather, STOP-GAP (AGENTS.md): an engage while GATHER_ELSEWHERE of the army is away from the engaging group
+        first brings the whole army to its own middle (at least GATHER_BACK from the target: a staging point toward
+        the target drew the units into fights one by one on their way, 23 of 29 lost), then attacks with it
+        (Gary-T's attacks had 4x the pros' late arrivals, two thirds of them units that already existed when the
+        attack began: the other clusters, each deciding alone; eval/attacks.py). Until the commit model learns to
+        gather before it engages. True if the army now gathers."""
+        from gary.decision_log import LOG
+        g, f = self.g, self.g.hi.frame
+        army = self._army_units(mine)
+        ours = {u["tag"] for u in group}
+        cx = sum(u["x"] for u in group) / len(group)
+        cy = sum(u["y"] for u in group) / len(group)
+        total = sum(supply_x2(u["type"]) for u in army) or 1
+        away = sum(supply_x2(u["type"]) for u in army
+                   if u["tag"] not in ours and math.dist((u["x"], u["y"]), (cx, cy)) > GATHER_NEAR)
+        if away < GATHER_ELSEWHERE * total:
+            return False
+        mx = sum(supply_x2(u["type"]) * u["x"] for u in army) / total
+        my = sum(supply_x2(u["type"]) * u["y"] for u in army) / total
+        d = math.dist((mx, my), target) or 1.0
+        if d >= GATHER_BACK:
+            stage = (int(mx), int(my))
+        else:
+            stage = (int(target[0] + (mx - target[0]) / d * GATHER_BACK), int(target[1] + (my - target[1]) / d * GATHER_BACK))
+        tags = [u["tag"] for u in army]
+        aim = (int(target[0]), int(target[1]))
+        self.gathering = {"target": aim, "stage": stage, "tags": tags, "since": f, "again": f}
+        g.say(f"army: gathers {len(army)} units at {stage} before engaging {aim} ({away / total:.0%} of it elsewhere)")
+        LOG.decision(g.hi.side, "army", f, f"gather at ({stage[0] // 32},{stage[1] // 32})",
+                     inputs={"units": len(army), "elsewhere": round(away / total, 2)},
+                     by="rule: an engage with a quarter of the army elsewhere gathers it first", then="sent")
+        self._send_all(tags, stage, True)
+        return True
+
+    def _gather_step(self, obs: dict, mine: list[dict], done: list[dict]) -> str | None:
+        """gather: the attack once GATHER_READY of the army is at the staging point, or GATHER_FOR is up; late ones
+        sent again. Enemy fighters at home don't call it off: whether the attack is still worth it is the commit
+        model's call, already made with them in sight (moving out is often what ends a mutalisk harass: the flock
+        goes home to defend; the user), and the units at home are the fight layer's."""
+        from gary.decision_log import LOG
+        g, f, gth = self.g, self.g.hi.frame, self.gathering
+        alive = {u["tag"]: u for u in self._army_units(mine)}
+        tags = [t for t in gth["tags"] if t in alive]
+        why = "the army gone" if not tags else "out of time" if f - gth["since"] > 2 * GATHER_FOR else None
+        if why:
+            LOG.decision(g.hi.side, "army", f, "gather called off", inputs={"units": len(tags)}, by=f"rule: {why}")
+            self.gathering = None
+            return None
+        total = sum(supply_x2(alive[t]["type"]) for t in tags) or 1
+        there = {t for t in tags if math.dist((alive[t]["x"], alive[t]["y"]), gth["stage"]) <= GATHER_NEAR}
+        share = sum(supply_x2(alive[t]["type"]) for t in there) / total
+        if share >= GATHER_READY or f - gth["since"] >= GATHER_FOR:
+            army = list(alive)                     # (with what came out meanwhile)
+            aim = gth["target"]
+            g.say(f"army: {share:.0%} gathered, {len(army)} units engage {aim}")
+            LOG.decision(g.hi.side, "army", f, f"engage ({aim[0] // 32},{aim[1] // 32})",
+                         inputs={"units": len(army), "gathered": round(share, 2), "waited_s": (f - gth["since"]) // 24},
+                         by="rule: the army gathered (or the wait is up): the engage goes", then="sent")
+            self.gathering = None
+            self._send_all(army, aim, True)
+            return "army"
+        if f - gth["again"] >= REORDER_AFTER:
+            late = [t for t in tags if t not in there]
+            if late:
+                gth["again"] = f
+                self._send_all(late, gth["stage"], True)
+                return "army"
+        return None
+
+    def _send_all(self, tags: list[int], point: tuple, attack: bool) -> None:
+        x, y = int(point[0]), int(point[1])
+        self.g.motor.start(Intent("ARMY_ATTACK" if attack else "ARMY_MOVE", list(tags), (x, y),
+                                  {"tags": list(tags), "x": x, "y": y, "attack": attack, "p": 1.0, "fight": 0.0,
+                                   "done": [], "boxes": 0, "max_boxes": HUNT_BOXES}, "army"))
 
     def _breakable(self, obs: dict, mine: list[dict], group: list[dict]) -> np.ndarray:
         """static_odds: the cells an engage may go to, those whose ground static defense (each STATIC_SUPPLY) and the

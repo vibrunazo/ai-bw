@@ -698,6 +698,14 @@ plan and the full log).
   zero); won 54 (57), lost 9 (7). In gt1 (gt0.4); R30T + R30Tb are its 96-game baseline. Also measured: two
   thirds of Gary-T's late arrivals at its attacks were units that existed when the attack began (other clusters,
   stragglers), a third new production (the pros' 37%): the trickle is the army not gathering first.
+- **Gather before engaging (option `gather`, 2026-10-20; a stop-gap, AGENTS.md).** A commit engage with a quarter of
+  the army elsewhere first brings the army to its own middle (12+ tiles from the target), then attacks at 75%
+  there or after 20 s; it never vetoes the engage (a first version called it off with enemies at home: the
+  user: moving out is often what ends a mutalisk harass). 96 paired games against gt1 (R40a + R30Tb against
+  G40a + G40b): the gap at 10-15 minutes 0.352 (0.398, the interval below zero), lost 6 (9), but won 47 (54) and
+  16 even at 30:00 (10); late arrivals at attacks 0.22 (0.26; pros 0.06), killed per attack 9.0 (7.5). Not
+  adopted: the trickle mostly comes from attacks it doesn't cover (engages with under a quarter elsewhere, the
+  hunt, launches on the timeout).
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the

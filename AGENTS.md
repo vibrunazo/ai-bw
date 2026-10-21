@@ -78,6 +78,16 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   three attacks all went into sunkens). Replace with static defense as a commit-model input and its outcomes
   in training. Measure: the attacks' trade (`eval/attacks.py`): supply killed / lost 78.8 / 44.8 a game with
   it, 71.9 / 52.6 without.
+- **Gather before engaging** (option `gather`, not adopted; `army.py` `_gather_start`, `_gather_step`). A commit
+  engage with a quarter of the army's supply elsewhere first brings the whole army to its own middle (at least
+  12 tiles from the target), then attacks once 75% of it is there or 20 s pass. It only delays the engage, never
+  vetoes it: enemies at home don't call it off (whether to attack anyway is the model's; moving out is often what
+  ends a mutalisk harass). Scripted because each cluster's commit decision is taken alone: two thirds of Gary-T's late
+  arrivals at its attacks were units that existed when the attack began. Replace with the commit model learning
+  to gather before it engages (the pros' "move" commitments include regrouping), then self-play. Measure: late
+  arrivals per fighter at attacks (`eval/attacks.py`: Gary-T 0.27, pros 0.06) and 96 paired games. Measured
+  2026-10-20 (96 paired games against gt1): the 10-15 minute gap nearer the pros (-0.045, interval below zero),
+  lost 6 (9), but won 47 (54), more games at 30:00; late arrivals 0.26 to 0.22 only.
 - **Older rules, to review** (scripted before 2026-10-20; each needs a full entry when next worked on): the
   early-pool posture and its builds (rush defense from scouting); Gary-Z's alarm and the natural colonies;
   the first producer by a time (`rax_by`); supply ahead of production and the pros' caps per minute; the
