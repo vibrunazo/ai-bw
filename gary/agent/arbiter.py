@@ -146,7 +146,7 @@ class FixedPriority:
                            ("executor:hotkey", lambda: ex.hotkey_new_buildings(done)),
                            ("executor:rerally", lambda: ex.rerally(obs, mine, done)),
                            ("executor:transfer", lambda: ex.transfer(obs, mine)),
-                           ("executor:gas", lambda: ex.refill_gas(obs, done))):
+                           ("executor:gas", lambda: ex.refill_gas(obs, done))) +                 (() if g.motor.grouping is None else (("motor:groups", lambda: g.motor.groups_chore(obs, mine, done)),)):
             LOG.owner[g.hi.side] = who
             if chore():
                 return who
@@ -165,7 +165,7 @@ class FixedPriority:
                            ("executor:hotkey", lambda: ex.hotkey_new_buildings(done)),
                            ("executor:rerally", lambda: ex.rerally(obs, mine, done)),
                            ("executor:transfer", lambda: ex.transfer(obs, mine)),
-                           ("executor:gas", lambda: ex.refill_gas(obs, done))):
+                           ("executor:gas", lambda: ex.refill_gas(obs, done))) +                 (() if g.motor.grouping is None else (("motor:groups", lambda: g.motor.groups_chore(obs, mine, done)),)):
             LOG.owner[g.hi.side] = who
             if chore():
                 return who
