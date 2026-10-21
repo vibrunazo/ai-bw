@@ -739,6 +739,20 @@ plan and the full log).
   T_A, pinned with GARY_TCOMMIT_MODEL), 96 paired games against gt1: won 57 (57), lost 11 (8), the gap unchanged,
   fewer attacks (4.8 a game, 5.8), late arrivals 0.27 (0.24): better imitation per cluster, no better play. Not
   adopted: the army's coordination is past what per-cluster imitation teaches.
+- **Attention in fights, and control groups (2026-10-21).** Where commands go during fights (first 10 minutes,
+  the same measure for both: replays re-simulated for fight moments and unit commands, cmdcache for production):
+  pro Terrans put 160 commands a fight-minute into the fight (67% of their commands then), Gary-T 45 (40%); pro
+  Zergs 238 (77%), Gary-Z 16 (26%); macro during fights is at the pros' rate. Fight moments a command reached
+  within 2 s: pros 71% / 67%, Gary-T 61%, Gary-Z 27%; army units reached: pros 60% / 58%, Gary-T 33%, Gary-Z 14%.
+  The arbiter isn't starving the fight: Gary-T's hands sat free 44% of its fight moments. Imitating only attended
+  pro units (ingest/response_dataset.py attended, train/roles.py --attended --budget) gave models no better on
+  attended validation labels: the labels were not the bottleneck. Pros' army control groups: keys 1-3, assigned
+  6-10 times a minute, almost never added to, recalled 41-71 a minute. Control groups in the motor (assign after a
+  box of a cluster, recall for the orders after, a role's order to a group most of which got it): 96 paired games,
+  won 47 (57), lost 14 (8), selections per order 1.56 (1.54), recalls 19% (19%): groups formed and seldom
+  recalled, because three quarters of Gary-T's fight orders go to 1-4 units whose role just changed. Reverted. The
+  gap is in how the roles layer orders (small groups, on role changes; pros re-order whole groups many times a
+  minute): the learned layer's, for RL with the budget given.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the
