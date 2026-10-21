@@ -592,6 +592,8 @@ OPTIONS = {
     # the fight roles model trained on whole games to 30 minutes, old and modern (ingest/response_dataset.py --era
     # both; until 2026-10-20 the first 20 minutes on the three 1.16 maps): either race's. In gz1 and gt1
     "roles30": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_30min.npz"),
+    # roles.py RoleAhead lone: a unit alone and outnumbered in contact decided by the roles model, not the hand rules
+    "lone": lambda m: m["fight"].setdefault("roles", {}).update(lone=True),
     # fight.py: enemy fighters within 12 tiles make a fight (the model's 8 by default; ablation of v0.29)
     "watch12": lambda m: m["fight"].update(watch_tiles=12),
     # army.py: groups going away from home hold when the belief model's likely unseen enemy army
@@ -787,10 +789,12 @@ def manifest_of(name: str | dict) -> dict:
 # (round Jstatic against Jhs: the same 24 won, led at 20:00 15 (12), supply killed / lost 78.8 / 44.8 a game to
 # 71.9 / 52.6); the fight roles from whole games to 30 minutes, old and modern (96 paired games against gt0.3,
 # rounds B30 + B30b against R30T + R30Tb: won 54 (57), lost 9 (7), the gap per 5-minute window within noise in
-# every window; adopted as the model that has seen late-game and modern fights). Changes are judged as options
-# against it, and an adopted one goes in here
-MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords+hunt4+split+static+roles30"),
-                    "version": "gt0.4"}
+# every window; adopted as the model that has seen late-game and modern fights); a unit alone and outnumbered in
+# contact decided by the roles model, not the hand rules (96 paired games against gt0.4: won 57 (54), lost 8 (9),
+# gap within noise; retreats doubled, though the model still rarely backs a lone unit off: its calibration is the
+# next step, self-play's). Changes are judged as options against it, and an adopted one goes in here
+MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords+hunt4+split+static+roles30+lone"),
+                    "version": "gt0.5"}
 
 
 def _against(m: dict, vs: dict) -> dict:

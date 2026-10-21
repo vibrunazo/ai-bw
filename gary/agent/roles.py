@@ -127,6 +127,8 @@ MAX_GROUP = 12
 WHERE_LEAD = 4                       # learned where: a destination this many of the pros' half-second moves ahead (2 s)
 WHERE_MIN = 0.25 * 32                # px per half second: a predicted move shorter than this is no move
 AHEAD_FROM = 7 * 32                  # ahead/v1: a unit with no seen enemy fighter this near is before contact
+LONE_FRIEND = 4 * 32                 # option lone: a unit with no own fighter this near...
+LONE_ENEMY = 6 * 32                  # ...and 2+ seen enemy fighters this near is alone and outnumbered
 SIDEWAYS_PX = 8                      # closer by less than this isn't coming
 LEASH = 5 * 32                       # leash: zerg this close to Gary's buildings may be closed in on
 ANCHOR_OUT = 10 * 32                 # anchor: a unit this far from every Command Center and bunker is out...
@@ -913,10 +915,21 @@ class RoleAhead(RoleRules):
     pull back or retreat go where it moves them; the rules decide for the rest. With draw (the league),
     each such unit's decision is drawn from the model's odds instead of the likeliest, and logged."""
 
-    def __init__(self, g, model, draw: bool = False, **options):
+    def __init__(self, g, model, draw: bool = False, lone: bool = False, **options):
         super().__init__(g, **options)
         self.model = model
         self.draw = draw
+        # option lone: a unit alone and outnumbered in contact is the model's too, not the rules' (theirs fight: such
+        # units attacked 75-78% of the time and backed away 0-2%, the pros' 42-44% and 13-19%; human game 4 and 96
+        # games against gz1, eval/humanlike.py lone_attack / lone_away)
+        self.lone = lone
+
+    @staticmethod
+    def _alone_outnumbered(u: dict, mine: list[dict], enemy: list[dict]) -> bool:
+        """No own fighter within LONE_FRIEND and 2+ seen enemy fighters within LONE_ENEMY (eval/humanlike.py's lone)."""
+        near = lambda others, px: sum(1 for v in others if v["tag"] != u["tag"]
+                                      and math.dist((u["x"], u["y"]), (v["x"], v["y"])) < px)
+        return near(mine, LONE_FRIEND) == 0 and near(enemy, LONE_ENEMY) >= 2
 
     def decide(self, obs: dict, snap) -> Intent | None:
         g = self.g
@@ -939,7 +952,8 @@ class RoleAhead(RoleRules):
         if moves is not None:
             fx, fy = (-1 if g.flip[0] else 1), (-1 if g.flip[1] else 1)
             for u in mine:
-                if min(math.dist((u["x"], u["y"]), (e["x"], e["y"])) for e in enemy) < AHEAD_FROM:
+                if min(math.dist((u["x"], u["y"]), (e["x"], e["y"])) for e in enemy) < AHEAD_FROM and not (
+                        self.lone and self._alone_outnumbered(u, mine, enemy)):
                     continue
                 i = index[u["tag"]]
                 k = int(g.fight.rng.choice(len(probs[i]), p=probs[i] / probs[i].sum())) if self.draw else int(probs[i].argmax())

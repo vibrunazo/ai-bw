@@ -721,6 +721,15 @@ plan and the full log).
   "hunt join" 16%). Deleted. Three fixes aimed at the trickle (gather, a shared draw, the hunt's body) left it
   at 0.22-0.26 (pros 0.06) and none won more games: the trickle is how Gary-T's army spreads over the map
   (production, the hunt, the fight layer), not one rule to correct.
+- **Human game 4's item 2 (2026-10-21): SCV pulls and the "AFK" early zerglings.** The pulls at 7:47-7:53 were the
+  pull rule answering 5-6 zerglings at the natural with 1-2 marines left (the army lost at 6:20 into sunkens): 7 SCVs
+  killed them all for 2. Against gz1 Gary-T answers harassment faster than pros (7 s, 11.7) and meets more of it;
+  what is off is the lone unit: alone and outnumbered, it attacks 75-78% of the time (pros 42-44%) and backs
+  away 0-2% (13-19%), in human game 4 and in 96 games against gz1 (eval/humanlike.py lone_attack / lone_away).
+  In contact the hand rules decide (RoleAhead: the roles model only before contact). Option lone gives such
+  units to the roles model: 96 paired games, won 57 (54), lost 8 (9), the gap within noise, its retreat orders
+  doubled (401 to 184 in 48 games) but lone_away 0.02 (0.00): the model rarely chooses to back a unit off
+  (retreat 0.4% of its decisions). In gt1 (gt0.5); the model's calibration is self-play's to fix.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the
