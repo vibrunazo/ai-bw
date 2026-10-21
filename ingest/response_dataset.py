@@ -17,7 +17,11 @@ a margin of its fighters or buildings) steps every 2 frames, as the role probe n
 
     python -m ingest.response_dataset --games 600
 Output: data/interim/roles/response_T.npz (the role dataset's arrays, plus near and move: each labeled
-unit's move over the half second, tiles, mirrored as the rows)
+unit's move over the half second, tiles, mirrored as the rows; attended: 1 if a unit command of the player
+included the unit in the ATTEND_BEFORE frames before the moment or the ATTEND_AFTER after it, 0 if not, -1 if the
+replay's commands couldn't be read (the re-simulator's unit commands): a third of the pros' fighting is
+unattended, units on auto-acquire or an old order, which teaches no decision; budget: the player's unit commands
+per minute over the BUDGET_S before the moment, the attention it was spending)
 """
 
 from __future__ import annotations
@@ -40,6 +44,8 @@ from ingest.role_dataset import HALLS, Probe
 SIGHT = 12 * 32                 # a seen enemy fighter this near: the unit is labeled
 ACTIVE = SIGHT + 4 * 32         # ...this near its fighters or buildings: the game steps finely
 QUIET = 48                      # frames with no moment before stepping coarsely again
+ATTEND_BEFORE, ATTEND_AFTER = 48, 12   # frames: a command this near the moment reached the unit
+BUDGET_S = 30
 MAX_MIN = 30                    # (20 until 2026-10-20: the role models had never seen a late-game fight)
 MAPS = ("python", "fighting spirit", "heartbreak")
 
@@ -70,10 +76,60 @@ def _moment(o: dict, slot: int) -> bool:
     return bool((np.sqrt(((a[:, None] - b[None]) ** 2).sum(-1)) < ACTIVE).any())
 
 
+def _commands(path: str) -> dict[int, list[tuple[int, list[int]]]] | None:
+    """{slot: [(frame, unit tags)]}: every unit command of each player, from the re-simulator (its --fights output;
+    tags are OpenBW's unit IDs, as the game's), or None if it couldn't run."""
+    import subprocess
+    import sys
+    from ingest.inventory import data_root
+    from ingest.macro_dataset import resim_exe
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "resim"))
+    import scr_format
+    data = Path(path).read_bytes()
+    args = [str(resim_exe()), "--data", str(data_root() / "gamedata" / "scr"), "--replay", "-", "--every", "0",
+            "--fights", str(MAX_MIN * 60)]
+    if scr_format.replay_format(data) != "legacy":
+        args += ["--flat", "--unit-limit", str(scr_format.unit_limit(data))]
+        data = scr_format.to_flat(data)
+    try:
+        proc = subprocess.run(args, input=data, capture_output=True, timeout=1800)
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    out: dict[int, list] = {}
+    for line in proc.stdout.decode("utf-8", "replace").splitlines():
+        if '"ucmd"' in line:
+            r = json.loads(line)
+            out.setdefault(r["slot"], []).append((r["frame"], r["units"]))
+    return out
+
+
+def _attention(cmds: list[tuple[int, list[int]]]):
+    """(attended(tag, frame) -> 1/0, budget(frame) -> commands a minute over BUDGET_S) for one player's commands."""
+    import bisect
+    by_tag: dict[int, list[int]] = {}
+    frames = [f for f, _ in cmds]
+    for f, tags in cmds:
+        for t in tags:
+            by_tag.setdefault(t, []).append(f)
+
+    def attended(tag: int, f: int) -> int:
+        fs = by_tag.get(tag)
+        if not fs:
+            return 0
+        k = bisect.bisect_left(fs, f - ATTEND_BEFORE)
+        return int(k < len(fs) and fs[k] <= f + ATTEND_AFTER)
+
+    def budget(f: int) -> float:
+        return (bisect.bisect_right(frames, f) - bisect.bisect_left(frames, f - BUDGET_S * 24)) * 60.0 / BUDGET_S
+    return attended, budget
+
+
 def _job(job: tuple) -> dict:
     path, end, sha1, race = job
     out = {"sha1": sha1, "error": None, "rows": [], "extra": [], "labels": [], "near": [], "move": [], "time": [],
-           "tags": []}
+           "tags": [], "attended": [], "budget": []}
     try:
         from gary.env import Game
         g = Game.scenario(path)
@@ -97,6 +153,8 @@ def _job(job: tuple) -> dict:
         finally:
             g.close()
         labels = probe.labels()
+        cmds = _commands(path)
+        attended, budget = _attention(cmds.get(slot, [])) if cmds is not None else (None, None)
         near_of = {}
         for tag, s in probe.samples.items():
             for f, *_rest in s:
@@ -112,6 +170,9 @@ def _job(job: tuple) -> dict:
                 out["move"].append(np.array([probe.moves.get((t, f), (np.nan, np.nan)) for t in tags], np.float32))
                 out["time"].append(f * 42 / 1000)
                 out["tags"].append(tags)
+                out["attended"].append(np.array([attended(t, f) if attended and y[i] >= 0 else -1
+                                                 for i, t in enumerate(tags)], np.int8))
+                out["budget"].append(budget(f) if budget else np.nan)
     except Exception as e:                         # (a replay that won't run: counted, skipped)
         out["error"] = f"{type(e).__name__}: {e}"
     return out
@@ -160,26 +221,36 @@ def main() -> None:
     near = np.full((n, MAX_UNITS), 1e4, np.float16)
     move = np.full((n, MAX_UNITS, 2), np.nan, np.float16)
     unit_tags = np.zeros((n, MAX_UNITS), np.int32)
+    att = np.full((n, MAX_UNITS), -1, np.int8)
+    bud = np.full(n, np.nan, np.float32)
     count = np.zeros(n, np.int16)
     time_s = np.zeros(n, np.float32)
     game = np.zeros(n, np.int32)
     i = 0
     for gi, r in enumerate(results):
-        for rr, e, y, nr, mv, t, tg in zip(r["rows"], r["extra"], r["labels"], r["near"], r["move"], r["time"], r["tags"]):
+        for rr, e, y, nr, mv, t, tg, a, b in zip(r["rows"], r["extra"], r["labels"], r["near"], r["move"], r["time"],
+                                                 r["tags"], r["attended"], r["budget"]):
             k = min(len(rr), MAX_UNITS)
             rows[i, :k], extra[i, :k], labels[i, :k], near[i, :k], move[i, :k] = rr[:k], e[:k], y[:k], nr[:k], mv[:k]
             count[i], time_s[i], game[i] = k, t, gi
             unit_tags[i, :k] = tg[:k]
+            att[i, :k], bud[i] = a[:k], b
             i += 1
     out = Path(args.out) if args.out else data_root() / "interim" / "roles" / f"response_{args.race}.npz"
     out.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out, rows=rows, extra=extra, labels=labels, near=near, move=move, count=count, time=time_s, game=game,
-                        tags=unit_tags, sha1=np.array([r["sha1"] for r in results]))
+                        tags=unit_tags, attended=att, budget=bud, sha1=np.array([r["sha1"] for r in results]))
     y = labels[labels >= 0]
     pre = labels[(labels >= 0) & (near >= NEAR)]
     print(f"{len(results)} games ({sum(1 for r in results if r['error'])} errors), {n} snapshots, {len(y)} labeled units "
           f"({len(pre)} before contact) -> {out}")
     print("  all:            " + ", ".join(f"{ROLES[k]} {np.mean(y == k):.1%}" for k in range(len(ROLES))))
+    known = att[labels >= 0]
+    if (known >= 0).any():
+        ya = labels[(labels >= 0) & (att == 1)]
+        print(f"  attended: {np.mean(known[known >= 0] == 1):.0%} of the labeled units whose commands were read "
+              f"({np.mean(known >= 0):.0%} read); budget median {np.nanmedian(bud):.0f} commands a minute")
+        print("  attended only:  " + ", ".join(f"{ROLES[k]} {np.mean(ya == k):.1%}" for k in range(len(ROLES))))
     print("  before contact: " + ", ".join(f"{ROLES[k]} {np.mean(pre == k):.1%}" for k in range(len(ROLES))))
 
 
