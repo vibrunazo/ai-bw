@@ -23,6 +23,11 @@ How to work in this repository, for coding agents and people alike. The design i
 - One Gary for every race: manifest `gt1` plays Terran, `gz1` Zerg (`gary/agent/manifests.py`). Every game
   runs through `python -m eval.match --a <manifest> --b <manifest>`; `python -m eval.league` plays Terran
   (`--vs`, default gt1) against Zerg (`--zerg`, default gz1); `gary/play.py --live` plays a human.
+- Two Terran manifests: `gt1` is what plays (the strongest measured: human games, the tests' parity, the league's
+  default) and `gt1dev` is what learning is trained and judged in: gt1 with the role model deciding in contact and
+  the army on control groups, the configuration expected to win later. A learned layer's work (data, training, the
+  pipe check, RL) is done and judged in gt1dev; gt1dev replaces gt1 when it beats it in 96 paired games, with a
+  version bump. The suite's numbers for both, and how far apart they are, are in docs/PROGRESS.md.
 - A change is an option on them (`gt1+<option>`), judged in paired 48-game rounds on the ladder maps
   (`--maps ladder --seeds 6 --first 4004`, 30 minutes) and the gap score to modern pros; 24 games are too
   noisy for close calls, and a single round's gap score needs its spread (`eval/gap_windows.py`, 96 paired games

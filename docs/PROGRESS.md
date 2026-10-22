@@ -841,6 +841,25 @@ plan and the full log).
   in fights (0.16-0.24 an order, the production keys mostly): Gary's orders go to role groups of single units,
   seldom a whole key; recalls would need decisions per key, a learned layer's. Pipe check with grouping, again
   pushed: commands a minute 82.6 -> 89.4, reach 70% -> 72%, net -72 -> +68.
+- **Grouping on 96 games again, with the cheaper keys (2026-10-22; rounds GT40c+d, GZ40c+d against L40a+b).**
+  Gary-T grouping: won 45 and lost 17 (57 and 8), its gap +0.015 (-0.013 to +0.042), 10-15 minutes further. Not the
+  key layout: on keys 1-3 with the buildings' keys as before (GT3a against L40a and GT40c, 48 games) it won 28 and
+  lost 6 (27 and 7 with four keys; 34 and 0 without). Its cost is 25 actions a minute (army recalls 7.3 against 1.5,
+  assigns 4.3) with macro decisions and production about the same; at 10:00 more workers (40 against 38) and less
+  army (24 against 26, the Zerg's 14 against 11): where it loses is the next question, the fights' and army orders'.
+  Gary-Z grouping: Gary-T won 48 and lost 13, Gary-Z's gap -0.046 (-0.082 to +0.028), 15-20 minutes nearer
+  (-0.073, -0.102 to -0.017): with the first 96 (49 and 10), into gz1 (gz0.2).
+- **Control groups in the role model (2026-10-22).** ingest/key_labels.py: 71% of the pros' labeled fighters are
+  on a key at the moment (800 games). eval/key_coherence.py, held-out pro fights: key-mates take the same decision
+  80.4% of the time (shuffled within the snapshot 68.2%), and a new decision is shared with a key-mate 73.0%
+  (58.9%). The model's decisions drawn unit by unit: 30% and 25%, the same with the key as an input (train/roles.py
+  --keys: no gain, shown or hidden). Drawn with one shared random number per key (option together): 77-78% and
+  75-76%, matching the pros' decisions as often (32%). Pipe check with grouping and together, again pushed:
+  commands a minute 76.5 -> 80.4, reach 67% -> 72% (with independent draws 70% -> 72%), recalls 0.24 a fight
+  order (0.16): role groups still split keys (a fire group leaves out key-mates already attacking). The suite:
+  the in-contact start with grouping +107, with together +110 (+32, -20 to +83, over +93), against RoleAhead's +141.
+- **gt1dev (2026-10-22):** gt1+att+refresh+incontact+batch+grouping+together, the configuration learning is trained
+  and judged in (AGENTS.md); gt1 stays what plays until gt1dev beats it in 96 paired games.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
