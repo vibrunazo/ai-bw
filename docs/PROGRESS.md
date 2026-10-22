@@ -795,6 +795,38 @@ plan and the full log).
   gt1; for gz1 a second round (GZ40b, seeds 4010-4015 against L40b) decides on 96 paired games; Gary-T's losses
   are read in the records first (recalls overriding the roles, or units pulled off posts and bunkers). The fourth
   army key goes with Terran grouping.
+- **What Gary-T's grouping losses were (2026-10-22, GT40a against L40a seed for seed):** the mechanics' cost, not the
+  by-type default. The Terran's actions 5:00-14:00 rose from 198 to 244 a minute: camera 56.5 -> 66.0, drag boxes
+  41.0 -> 51.8, portrait clicks 8.3 and assigns about 13 (each re-assign a task of its own: camera, box, portrait,
+  Ctrl+key), for army recalls 1.5 -> 5.7; production orders 13.9 -> 13.4 and production keys' recalls unchanged
+  (the keys' new layout wasn't it). The bank was higher from 6:00 (minerals 309 against 256; 1,525 against 1,154
+  at 14:00), the army smaller from 14:00; in the 8 losses behind by 10:00 (army 15 against 23, workers 30 against
+  38). A recall overriding the roles can't happen by construction (a key is recalled only when all its members get
+  the order). The pros' assign costs one key, their units already selected for an order: the fix is assigning
+  then, a dedicated selection only for a key long out of date.
+- **Zerg grouping on 96 games (GZ40a + GZ40b against L40a + L40b):** Gary-Z's gap -0.054 (-0.089 to +0.034), Gary-T
+  won 49 and lost 10 (57 and 8): not adopted; with cheaper assigns, both sides again.
+- **How long commitments stand (2026-10-22; army dataset v3, 1,500 modern TvZ player-games a race).** The pros'
+  reversal chance per 5 s tick falls with the commitment's age: Terran engages 10.5% at 0-5 s, 5.6% at 40-60 s
+  (a quarter reversed by 20 s, half by 55 s, three quarters by 115 s); Terran moves 16.3% to 4.9% (10, 35, 110 s);
+  Zerg engages 14.8% to 4.8% (15, 40, 120 s); Zerg moves 16.3% to 3.8% (10, 50, >120 s). Gary's own (L40a's
+  records, per commit decision; 11 a minute for Terran, 6 for Zerg): Terran engages 8.5% at 0-10 s to 0.4% past
+  60 s, moves 18.6% to 2.6%; Zerg engages 18.8% to 9.0%, moves 13.6% to 4.5%: the pros' falling shape, Gary-T
+  holding engages longer and Gary-Z reversing them more. So e1 and e2's fast reversals (85-94% of forced arms
+  undone within 14-34 s) were the arms being forced against the model, not the model's own hysteresis: the lock
+  belongs on the training arms (a forced choice reversed at the pros' hazard, not the model's), the deployed
+  policy needing little change.
+- **The again decision (2026-10-22).** ingest/reissue_labels.py: in the attended response data (779 of 800 games
+  read) 20.5% of labeled units get a command in the next half second; a keep with one is "again" (20.8% of the
+  attended labels; keep 45.8%), its target a median 7 tiles from the unit. train/roles.py --again (runs/roles/
+  20261022-021940): again recall 0.20 and precision 0.36, the offset head's error 4.9 tiles against 6.8 for the
+  unit's own spot. Pipe check (10 held-out scenarios x 4, refresh, model in contact, batch): commands a minute
+  79.6 at the start (63.7 without again), 86.0 with again pushed +2 (reach 71% -> 72%, net -122 -> -8), 76.0 with
+  the moves pushed (reach 73%); with grouping the same (78.8 -> 86.0, 71% -> 73%). Orders decided a turn 2.14
+  (pushed 2.65, 0.93 before again), but 113-132 queued orders dropped stale in 10 scenarios with the APM bucket
+  full: the hands' time per order (cursor, camera, boxes) is the cap now. On the full suite the again start nets
+  +63 (paired -38, -101 to +20, against the batch start without again; -85, -185 to +15, against RoleAhead's
+  +141): more orders, not yet better ones.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league

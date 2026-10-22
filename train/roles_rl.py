@@ -174,14 +174,15 @@ def pipe(pool, args, device: str) -> None:
     picked = [sc for group in zip(*by.values()) for sc in group][:args.pipe]
     model = RoleModel.load(args.init_path, device)
     names = model.config["roles"]
+    push = [r for r in args.push.split(",") if r in names]
     with torch.no_grad():
-        for r in MOVE_ROLES:
+        for r in push:
             model.net.role.bias[names.index(r)] += args.bias
-    pushed = REPO_ROOT / "runs" / "roles_rl" / f"pipe_bias{args.bias:g}.pt"
+    pushed = REPO_ROOT / "runs" / "roles_rl" / f"pipe_{'_'.join(push)}_{args.bias:g}.pt"
     pushed.parent.mkdir(parents=True, exist_ok=True)
     model.save(pushed)
-    moves = [names.index(r) for r in MOVE_ROLES]
-    for label, path in (("start", args.init_path), (f"moves +{args.bias:g}", str(pushed))):
+    moves = [names.index(r) for r in push]
+    for label, path in (("start", args.init_path), (f"pushed +{args.bias:g}", str(pushed))):
         rows = [r for r in pool.map(play_real, [(sc, path, k, args.manifest, args.seconds) for sc in picked
                                                 for k in range(args.val_draws)], chunksize=args.val_draws)
                 if "error" not in r]
@@ -189,7 +190,7 @@ def pipe(pool, args, device: str) -> None:
         turns = [d for r in rows for d in r.get("log", [])]
         mean = lambda key: float(np.mean([r[key] for r in rows if key in r]))
         print(f"{label:12s} {len(rows)} plays: commands a minute {mean('commands_min'):.1f}, units reached "
-              f"{mean('reached'):.0%}, fight orders {mean('fight_orders'):.1f}, move decisions "
+              f"{mean('reached'):.0%}, fight orders {mean('fight_orders'):.1f}, pushed decisions "
               f"{np.isin(drawn, moves).mean() if drawn else 0:.1%} of {len(drawn)}, net {mean('net'):.0f}; fight turns "
               f"a play {len(turns) / max(1, len(rows)):.0f} of {args.seconds * 2:.0f}, {np.mean([d['executed'] for d in turns]):.0%} "
               f"giving an order", flush=True)
@@ -220,7 +221,8 @@ def main() -> None:
     ap.add_argument("--moved", help="a trained model: the first gate only (moved off its start? see moved())")
     ap.add_argument("--pipe", type=int, help="before a run: this many held-out scenarios, the start model against it "
                                              "pushed toward move roles (see pipe())")
-    ap.add_argument("--bias", type=float, default=2.0, help="--pipe: added to the move roles' logits")
+    ap.add_argument("--bias", type=float, default=2.0, help="--pipe: added to the pushed decisions' logits")
+    ap.add_argument("--push", default=",".join(MOVE_ROLES), help="--pipe: the decisions pushed (default the move roles)")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)

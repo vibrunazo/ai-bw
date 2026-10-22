@@ -599,6 +599,8 @@ OPTIONS = {
     "incontact": lambda m: m["fight"].update(provider="roles"),
     # roles.py learned/v1 batch: up to 4 orders a fight turn, a group per role, given as the hands come free
     "batch": lambda m: m["fight"].setdefault("roles", {}).update(batch=4),
+    # the attended model with the again decision and its offset head (train/roles.py --again: the pros' re-issues)
+    "again": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_att_again.npz"),
     "att": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_att.npz"),
     # roles.py RoleAhead lone: a unit alone and outnumbered in contact decided by the roles model, not the hand rules
     "lone": lambda m: m["fight"].setdefault("roles", {}).update(lone=True),
