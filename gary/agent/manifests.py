@@ -826,11 +826,12 @@ def manifest_of(name: str | dict) -> dict:
 MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords+hunt4+split+static+roles30+lone"),
                     "version": "gt0.5"}
 # gt1dev: the Terran Gary that learning is trained and judged in (AGENTS.md): gt1 with the role model deciding in
-# contact as well (attended pro units, Gary's own order rate as input, its moves kept current, several orders a
-# turn) and the army on control groups by type, a key's units drawing their decisions together. Weaker than gt1 today
+# contact as well (attended pro units with their re-issues as a decision, again, Gary's own order rate as input, its
+# moves kept current, several orders a turn) and the army on control groups by type, a key's units drawing their
+# decisions together (again in it since its pipe check moves reach: 67% -> 72% pushed, without it none). Weaker than gt1 today
 # (the state-selected suite: +110 against +141; Terran grouping 45 won 17 lost against 57 and 8 in 96 games); it
 # becomes gt1 when it beats it in 96 paired games
-MANIFESTS["gt1dev"] = {**manifest_of("gt1+att+refresh+incontact+batch+grouping+together"), "version": "gt0.5dev"}
+MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together"), "version": "gt0.5dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
