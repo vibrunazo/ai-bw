@@ -788,6 +788,17 @@ plan and the full log).
   are its buildings', 0 the scout's), the pros 4. To judge side by side, each side grouping alone. The hotkey
   statistics stay their own report (ingest/hotkey_dataset.py --report --gary), not in the humanlike gap:
   that measures decisions, and click habits would dominate it.
+- **Grouping by type, each side alone (2026-10-22, 48 games each on L40a's seeds).** Gary-T grouping (GT40a,
+  4 army keys): Gary-T won 23 and lost 8 (L40a 34 and 0), the gap +0.007 (-0.030 to +0.045), 15-20 and 25-30
+  minutes further (+0.072, +0.059). Gary-Z grouping (GZ40a): Gary-T won 29 and lost 4, Gary-Z's gap -0.073, its
+  15-20 minutes nearer (-0.076, -0.126 to -0.013). GR40a's collapse (both grouping) was the two at once. Not in
+  gt1; for gz1 a second round (GZ40b, seeds 4010-4015 against L40b) decides on 96 paired games; Gary-T's losses
+  are read in the records first (recalls overriding the roles, or units pulled off posts and bunkers). The fourth
+  army key goes with Terran grouping.
+- **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
+  results above checked against this file: the pipe check, the model owning the decision, branches locked by the
+  pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
+  loop's PPO paused.
 - **The roles RL: what success is, written before it starts (2026-10-21).** Reinforcement learning of the roles model
   (gt1's fight before contact) from the model that can re-order (option refresh), with Gary's own order budget from
   the arbiter during the episode as its budget input (not the pros' rate) and a drift penalty to the imitation

@@ -28,6 +28,10 @@ How to work in this repository, for coding agents and people alike. The design i
   noisy for close calls, and a single round's gap score needs its spread (`eval/gap_windows.py`, 96 paired games
   for a close call). An adopted option is folded into the manifest with a version bump, so the name
   never grows into a chain of options.
+- Before any learning run beyond imitation, the rules in docs/SELF_PLAY.md ("Learning beyond imitation"): the
+  pipe check shows pushed logits move what Gary executes; the model owns the decision in play and in the judging
+  games; branched decisions are locked for the window (the pros' hold lengths); the minimum detectable effect
+  is written down before a gate; learning from counterfactuals is offline. No online PPO on small batches.
 - Gary loads the newest `runs/<kind>/<matchup>_<race>_*` model; experiments go to `--out` so they stay out of
   that glob.
 - Make fixes reusable: race-keyed tables and shared providers rather than race-specific code, so the other

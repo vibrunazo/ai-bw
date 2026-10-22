@@ -459,6 +459,52 @@ side; TvZ is only the first pair the league runs.
   ceiling three times. Its drill: 4 zerglings against 2 SCVs and a marine, SCV kills counted, the
   pros' replays as the yardstick.
 
+## Learning beyond imitation: the rules (2026-10-22)
+
+Every RL run so far ended at its starting model: fight roles five times (three Terran, two Zerg), the army
+layer's paired branches twice (e1, e2), the league loop's candidates nearly always rejected. Read together
+(an outside review of these results, checked against docs/PROGRESS.md), the causes are structural, and the
+learning that did work here (stim, commit, belief, value) had one shape: a large dataset, an offline objective,
+held-out validation, then games. The rules:
+
+1. **No learning run without three prerequisites.**
+   - The pipe check: shifted logits move what Gary executes and the outcome (train/roles_rl.py --pipe for the
+     fight roles; the same check for any layer). If a push of +2 on a head's logits doesn't move commands, reach
+     or net, the policy gradient through that head is zero and the run can only drift. Fight roles, 2026-10-21/22:
+     one order a half-second turn capped it; with several orders a turn the turn no longer does, and what caps
+     it is what the decisions mean (keep, or fire on a unit already attacking, give no order).
+   - The model owns the decision in play: in the episodes and in the judging games alike (RoleAhead's hand rules
+     in contact left the roles model out of most fight commands). That has a price to record: the model in
+     contact is 95 net below RoleAhead on the state-selected suite (+47 against +141; +93 with several orders
+     a turn), the starting deficit of the first fight-roles run.
+   - Branched decisions locked for the learning window. e1 and e2 forced attack or hold, then let the same
+     policy decide every 5 s: the forced choice was undone in 85-94% of pairs within 14-34 s (medians), both
+     arms relaxed to the same policy and the pairs measured hand noise (-0.33 +- 0.43, +0.01 +- 0.39); with the
+     whole army's choice held (eval/army_effect.py, since deleted) the decision's effect was three times the
+     chaos (sd 650 against 210). The lock comes from the pros, not a constant: their distribution of how long
+     an engage or a hold stands before it changes (the commitment data, ingest/army_dataset.py), the same lock
+     in the deployed policy and on the training arms, so play, training and the humanlike gap describe one
+     behaviour. Played without it, a model trained on locked arms is judged on a policy it doesn't play.
+2. **No online PPO on small batches; the minimum detectable effect before any gate.** A KL-leashed step
+   changes few decisions (total variation at most sqrt(KL / 2): about 7% at KL 0.01); a paired gate of two
+   standard errors on N pairs of outcome sd sigma detects 2 sigma / sqrt(N) at best (army branches: sigma about
+   500 value, 200 pairs, 70 value, all of it from the few decisions that differ). A small step can't pass it, a
+   big one overfits the batch and fails the humanlike gate. Write the MDE for N and sigma down before a gate
+   runs. Learning on counterfactuals is offline: the policy frozen, locked-arm branched moments with repeats
+   (eval/value_branches.py --repeats), offline validation that the model picks the winning arm on held-out
+   moments, then advantage-weighted regression (or filtered imitation) anchored to the imitation policy, 96
+   paired games last. The league loop's nightly PPO (eval/league_loop.py) is paused until these are in place.
+3. **The army decision is the next learning target by that recipe:** engage against hold, locked by the pros'
+   hold lengths, several repeats an arm, moments spread over states that look like the pros' games (else it
+   learns to win only what Gary-Z concedes). First the lock in the deployed commit model, judged alone; then a
+   power check on the branch data that exists sets how many moments and repeats; then the collection.
+4. **Where Gary's strength came from, and so where to invest:** better and more recent imitation data,
+   conditioned on era, map and matchup; the decoder's exposure-bias fixes (floor, mass, faded pro history,
+   holds); execution leaks found by the records (eval/why.py) and the humanlike table. Grouping is unproven:
+   by type it cost Gary-T games (round GT40a) and is pending 96 games for Gary-Z.
+5. **The pipe check and the pairs tool are standing diagnostics,** run before and after any change to a learned
+   layer, not one-off probes.
+
 ## The loop
 
 - **League:** Gary-T and Gary-Z in parallel headless games (low priority, nightly batches here;
