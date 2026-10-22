@@ -25,7 +25,7 @@ import torch
 import torch.nn.functional as F
 
 from eval import monitor, priority
-from gary.policy.roles import DECISIONS, ROLES, RoleModel, RoleNet, tensors
+from gary.policy.roles import AGAIN, DECISIONS, ROLES, RoleModel, RoleNet, tensors
 from eval.micro_roles import NEAR
 from ingest.inventory import data_root
 
@@ -57,11 +57,13 @@ def decision_labels(d) -> np.ndarray:
     return out
 
 
-def load(path: Path, decisions: bool = False, move: bool = False, attended: bool = False, budget: bool = False):
+def load(path: Path, decisions: bool = False, move: bool = False, attended: bool = False, budget: bool = False,
+         again: bool = False):
     """Train and validation arrays, and the label names (a dataset can name its own: the hand rules'
     decisions, ingest/role_distill.py). attended: only the labels of units the player's commands reached
     (ingest/response_dataset.py attended; the rest -1); budget: the player's order rate a minute (/ 100) as one
-    more per-unit input."""
+    more per-unit input. again (needs decisions, ingest/reissue_labels.py's data): a keep the player gave a command to
+    in the next half second becomes "again", and its command's target (cmd_to) the offset head's target."""
     d = np.load(path)
     val_game = np.array([int(s[:8], 16) % 10 == 1 for s in d["sha1"]])
     val = val_game[d["game"]]
@@ -71,6 +73,10 @@ def load(path: Path, decisions: bool = False, move: bool = False, attended: bool
     else:
         names = DECISIONS if decisions else ROLES
         labels = decision_labels(d) if decisions else d["labels"]
+        if again:
+            names = names + [AGAIN]
+            labels = np.where((labels == names.index("keep")) & (d["commanded"] == 1), names.index(AGAIN), labels)
+            labels = labels.astype(np.int8)
     if attended:
         labels = np.where(d["attended"] == 1, labels, -1).astype(labels.dtype)
     extra = d["extra"]
@@ -82,6 +88,10 @@ def load(path: Path, decisions: bool = False, move: bool = False, attended: bool
     if "move" in d and move:            # (ingest/response_dataset.py: each unit's move over the half second)
         arrays["move"] = d["move"].astype(np.float32)
         keys += ("move",)
+    if again:                           # (the again orders' targets; NaN elsewhere)
+        to = d["cmd_to"].astype(np.float32)
+        arrays["offset"] = np.where((labels == names.index(AGAIN))[..., None], to, np.nan).astype(np.float32)
+        keys += ("offset",)
     pick = lambda m: tuple(arrays[k][m] for k in keys)
     if "near" in d:                     # (ingest/response_dataset.py: labels before contact scored apart too)
         arrays["labels_pre"] = np.where(d["near"] >= NEAR, labels, -1).astype(labels.dtype)
@@ -89,25 +99,34 @@ def load(path: Path, decisions: bool = False, move: bool = False, attended: bool
     return pick(~val), pick(val), names
 
 
-def batch(data, idx, device, with_move: bool = False):
+def batch(data, idx, device, with_move: bool = False, with_offset: bool = False):
     rows, extra, labels, count, time_s = (a[idx] for a in data[:5])
     n = int(count.max())
     rows, extra, labels = rows[:, :n], extra[:, :n], labels[:, :n]
     pad = np.arange(n)[None, :] >= count[:, None]
     out = tensors(rows, extra, pad, time_s, device), torch.as_tensor(labels.astype(np.int64), device=device)
     if with_move:
-        return out + (torch.as_tensor(data[5][idx][:, :n], device=device),)
+        out = out + (torch.as_tensor(data[5][idx][:, :n], device=device),)
+    if with_offset:                     # (the last array)
+        out = out + (torch.as_tensor(data[-1][idx][:, :n], device=device),)
     return out
 
 
 def evaluate(net, data, device, names=ROLES) -> dict:
     net.eval()
     pred, true, err, still, moved_role = [], [], [], [], []
-    with_move = len(data) > 5 and net.move is not None
+    with_offset = getattr(net, "offset", None) is not None
+    with_move = len(data) > (6 if with_offset else 5) and net.move is not None
+    off_err, off_zero = [], []
     with torch.no_grad():
         for s in range(0, len(data[0]), 512):
-            got = batch(data, np.arange(s, min(s + 512, len(data[0]))), device, with_move)
+            got = batch(data, np.arange(s, min(s + 512, len(data[0]))), device, with_move, with_offset)
             inputs, labels = got[0], got[1]
+            if with_offset:
+                off, to = net(*inputs, with_offset=True)[-1], got[-1]
+                m = ~torch.isnan(to).any(-1)
+                off_err.append((off[m] - to[m]).norm(dim=-1).cpu().numpy())
+                off_zero.append(to[m].norm(dim=-1).cpu().numpy())
             if with_move:
                 logits, move = net(*inputs, with_move=True)
                 m = (labels >= 0) & ~torch.isnan(got[2]).any(-1)
@@ -135,6 +154,10 @@ def evaluate(net, data, device, names=ROLES) -> dict:
            "baseline_fire": round(float((true == 0).mean()), 3)}
     if move_report:
         out["move"] = move_report
+    if off_err and sum(len(e) for e in off_err):
+        e, z = np.concatenate(off_err), np.concatenate(off_zero)
+        out["offset"] = {"error_tiles": round(float(np.median(e)), 2), "no_offset_tiles": round(float(np.median(z)), 2),
+                         "units": int(len(e))}
     for k, r in enumerate(names):
         tp = int(((pred == k) & (true == k)).sum())
         out[r] = {"share": round(float((true == k).mean()), 3),
@@ -157,6 +180,9 @@ def main() -> None:
     ap.add_argument("--move", action="store_true", help="also learn where each unit moves (the data's move)")
     ap.add_argument("--attended", action="store_true", help="learn only from units the player's commands reached")
     ap.add_argument("--budget", action="store_true", help="the player's order rate as an input (the model's config says so)")
+    ap.add_argument("--again", action="store_true",
+                    help="with --decisions: the pros' re-issues as a decision of their own, and an offset head for where "
+                         "they point (ingest/reissue_labels.py's data)")
     ap.add_argument("--smooth", type=float, default=0.0,
                     help="label smoothing: every decision keeps some probability (room to explore for RL)")
     priority.add_argument(ap)
@@ -165,7 +191,7 @@ def main() -> None:
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(0)
-    train, val, names = load(Path(args.data), args.decisions, args.move, args.attended, args.budget)
+    train, val, names = load(Path(args.data), args.decisions, args.move, args.attended, args.budget, args.again)
     decisions = "keep" in names
     y = train[2][train[2] >= 0]
     share = np.bincount(y, minlength=len(names)) / len(y)
@@ -174,7 +200,8 @@ def main() -> None:
     print(f"train {len(train[0])} snapshots, {len(y)} units; validation {len(val[0])} snapshots; "
           + ", ".join(f"{r} {s:.1%}" for r, s in zip(names, share)), flush=True)
     config = {"net": {"d": args.d, "layers": args.layers, "heads": 4, "n_roles": len(names),
-                      "n_extra": args.extra or int(train[1].shape[-1]), "move": bool(args.move)},
+                      "n_extra": args.extra or int(train[1].shape[-1]), "move": bool(args.move),
+                      "offset": bool(args.again)},
               "data": args.data, "roles": names, "attended": bool(args.attended), "budget": bool(args.budget)}
     net = RoleNet(**config["net"]).to(device)
     opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=0.01)
@@ -184,14 +211,19 @@ def main() -> None:
         order = rng.permutation(len(train[0]))
         total = 0.0
         for s in range(0, len(order), args.batch):
-            got = batch(train, order[s:s + args.batch], device, args.move)
+            got = batch(train, order[s:s + args.batch], device, args.move, args.again)
             inputs, labels = got[0], got[1]
+            outs = net(*inputs, with_move=args.move, with_offset=args.again)
+            logits = outs[0] if isinstance(outs, tuple) else outs
+            move_loss = 0.0
             if args.move:
-                logits, move = net(*inputs, with_move=True)
+                move = outs[1]
                 m = (labels >= 0) & ~torch.isnan(got[2]).any(-1)
                 move_loss = F.smooth_l1_loss(move[m], got[2][m]) if m.any() else move.sum() * 0
-            else:
-                logits, move_loss = net(*inputs), 0.0
+            if args.again:                # (the offset head: the again orders' targets, tiles)
+                off, to = outs[-1], got[-1]
+                m = ~torch.isnan(to).any(-1)
+                move_loss = move_loss + (F.smooth_l1_loss(off[m], to[m]) if m.any() else off.sum() * 0)
             loss = F.cross_entropy(logits.reshape(-1, len(names)), labels.reshape(-1), weight=weights, ignore_index=-1,
                                    label_smoothing=args.smooth) + move_loss
             opt.zero_grad()
@@ -202,7 +234,8 @@ def main() -> None:
         # model choice: over the roles that drive commands (not just the majority), mean recall; for
         # decisions mean F1 (a decision named wrongly is a needless command)
         f1 = lambda r: 2 * res[r]["recall"] * res[r]["precision"] / max(1e-9, res[r]["recall"] + res[r]["precision"])
-        score = np.mean([f1(r) if decisions else res[r]["recall"] for r in ("fire", "close_in", "pull_back", "retreat")])
+        score = np.mean([f1(r) if decisions else res[r]["recall"]
+                         for r in ("fire", "close_in", "pull_back", "retreat") + ((AGAIN,) if args.again else ())])
         history.append({"epoch": epoch, "loss": round(total / len(order), 4), "val": res, "score": round(float(score), 3)})
         print(f"epoch {epoch:2d} loss {total / len(order):.3f} val acc {res['accuracy']:.3f} "
               + " ".join(f"{r} {res[r]['recall']:.2f}/{res[r]['precision']:.2f}" for r in ROLES[:4]), flush=True)
@@ -222,6 +255,8 @@ def main() -> None:
               + f"; accuracy {pre['accuracy']}" + (f"; moves {pre['move']}" if "move" in pre else ""))
     if "move" in final:
         print(f"moves (median error, tiles; and if it guessed no move): {final['move']}")
+    if "offset" in final:
+        print(f"again offsets (median error, tiles; and if it guessed the unit's own spot): {final['offset']}")
     (out / "report.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     print(f"saved {out / 'model.pt'}; validation (recall/precision): "
           + ", ".join(f"{r} {final[r]['recall']:.2f}/{final[r]['precision']:.2f}" for r in names)

@@ -24,6 +24,9 @@ ROLES = ["fire", "close_in", "pull_back", "retreat", "reposition", "stand", "oth
 # the pros' units have no label for: post (the hand rules' post by the Command Center), join (to
 # Gary's biggest bunch of fighters), hold (hold position)
 DECISIONS = ROLES + ["keep", "post", "join", "hold"]
+# again (train/roles.py --again): the unit's order given again, to where the offset head points (the pros' re-issues,
+# ingest/reissue_labels.py: a keep with a command of the player's in the next half second)
+AGAIN = "again"
 MAX_UNITS = 64
 TERRAIN = 8                          # the ground under each unit and the player's own bases (Ground)
 EXTRA = 6 + TERRAIN                  # motion x, y over the last half second (tiles), enemies targeting it;
@@ -123,7 +126,7 @@ def terrain_features(tags: list[int], positions: dict[int, tuple[float, float]],
 
 class RoleNet(nn.Module):
     def __init__(self, d: int = 128, layers: int = 3, heads: int = 4, n_roles: int = len(ROLES), n_extra: int = 3,
-                 move: bool = False):
+                 move: bool = False, offset: bool = False):
         super().__init__()
         self.n_extra = n_extra
         self.type_emb = nn.Embedding(N_TYPES, 48)
@@ -137,16 +140,18 @@ class RoleNet(nn.Module):
         # moved theirs (ingest/response_dataset.py): a role names what, this where (a reposition among
         # the mineral line's workers, a retreat toward the buildings)
         self.move = nn.Linear(d, 2) if move else None
+        # where an again order points (tiles from the unit, mirrored as the rows; the pros' commands' targets)
+        self.offset = nn.Linear(d, 2) if offset else None
 
-    def forward(self, kind, side, order, num, extra, pad, with_move: bool = False):
+    def forward(self, kind, side, order, num, extra, pad, with_move: bool = False, with_offset: bool = False):
         """kind, side, order (B, N) long; num (B, N, 9); extra (B, N, EXTRA); pad (B, N) True where
-        there is no unit. Returns role logits (B, N, R); with_move, also the moves (B, N, 2)."""
+        there is no unit. Returns role logits (B, N, R); with_move, also the moves (B, N, 2); with_offset, also
+        the again orders' offsets (B, N, 2), after the moves when both."""
         h = self.inp(torch.cat([self.type_emb(kind), self.side_emb(side), self.order_emb(order), num,
                                 extra[..., :self.n_extra]], -1))
         h = self.body(h, src_key_padding_mask=pad)
-        if with_move:
-            return self.role(h), self.move(h)
-        return self.role(h)
+        out = (self.role(h),) + ((self.move(h),) if with_move else ()) + ((self.offset(h),) if with_offset else ())
+        return out if len(out) > 1 else out[0]
 
 
 def tensors(units: np.ndarray, extra: np.ndarray, pad: np.ndarray, time_s: np.ndarray, device):
@@ -203,6 +208,17 @@ class RoleModel:
             return torch.softmax(self.net(*inputs)[0], -1).cpu().numpy(), None
         logits, move = self.net(*inputs, with_move=True)
         return torch.softmax(logits[0], -1).cpu().numpy(), move[0].cpu().numpy()
+
+    @torch.no_grad()
+    def predict_offset(self, rows: np.ndarray, extra: np.ndarray, time_s: float, budget: float | None = None):
+        """The offset head's again targets (n, 2: tiles from each unit, mirrored as the rows), or None without one."""
+        if getattr(self.net, "offset", None) is None:
+            return None
+        dev = next(self.net.parameters()).device
+        n = min(len(rows), MAX_UNITS)
+        extra = self._with_budget(extra, budget)
+        inputs = tensors(rows[None, :n], extra[None, :n], np.zeros((1, n), bool), np.array([time_s], np.float32), dev)
+        return self.net(*inputs, with_offset=True)[1][0].cpu().numpy()
 
 
 BUDGET_DEFAULT = 100.0           # unit commands a minute: the pros' median (ingest/response_dataset.py budget)

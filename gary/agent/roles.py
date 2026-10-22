@@ -119,6 +119,10 @@ PULL_HP = 0.5
 PULL_TILES = 1.5
 RETREAT_MARGIN = 3 * 32
 REPEAT = 24                          # the same role isn't given to a unit again within a second (but pull back)
+# the again decision (a model with an offset head, train/roles.py --again): the unit's order given again to where the
+# head points, not within AGAIN_GAP of its last order; units whose points are within AGAIN_NEAR share one order
+AGAIN_GAP = 12
+AGAIN_NEAR = 3 * 32
 # option refresh (the skills keep their orders current): a unit whose move role stands (retreat, pull back,
 # reposition) has its move given again where the role model moves it now, when that moved past REFRESH_PX since it was
 # given, REFRESH_MIN after: the pros' fight commands are 49% (Terran) and 72% (Zerg) the same order to the same units
@@ -921,6 +925,7 @@ class RoleLearned(RoleRules):
                    for u in by_tag.values())
         fresh = lambda u, role: not (self.told.get(u["tag"], ("", -10**9))[0] == role
                                      and now - self.told[u["tag"]][1] < REPEAT)
+        again = roles.pop("AGAIN", [])
         intent = self._act(roles, mine, enemy, by_tag, home, fresh)
         self.more = []
         left = roles
@@ -931,11 +936,50 @@ class RoleLearned(RoleRules):
             if nxt is None or not set(nxt.units) - used:
                 break
             self.more.append(nxt)
+        if again:
+            for it in self._again(obs, rows, extra, budget, index, again):
+                if intent is None:
+                    intent = it
+                elif len(self.more) + 1 < self.batch:
+                    self.more.append(it)
         if logging:                             # (train/roles_rl.py: the drawn decisions, inputs as the model saw them)
             g.fight.rl_log.append({"rows": np.asarray(rows), "extra": self.model._with_budget(extra, budget),
                                    "time": obs["frame"] * 42 / 1000, "units": [index[u["tag"]] for u in mine],
                                    "roles": [drawn[u["tag"]] for u in mine], "executed": intent is not None})
         return intent
+
+    def _again(self, obs: dict, rows, extra, budget, index: dict, units: list[dict]) -> list[Intent]:
+        """The again decision: each unit's order given again, an attack-move if it is fighting (attacking, or told to
+        fire or close in), else a move, to where the offset head points; units with nearby points share an order."""
+        from gary.policy.roles import MAX_UNITS
+        g, now = self.g, self.g.hi.frame
+        offsets = self.model.predict_offset(rows, extra, obs["frame"] * 42 / 1000, budget)
+        if offsets is None:
+            return []
+        fx, fy = (-1 if g.flip[0] else 1), (-1 if g.flip[1] else 1)
+        buckets: dict[tuple, list] = {}
+        for u in units:
+            told, at = self.told.get(u["tag"], ("", -10 ** 9))
+            i = index[u["tag"]]
+            if now - at < AGAIN_GAP or i >= MAX_UNITS:
+                continue
+            dx, dy = offsets[i] * 32
+            point = (max(0.0, u["x"] + fx * dx), max(0.0, u["y"] + fy * dy))
+            if u.get("order") in ATTACK or told in ("FIRE", "CLOSE_IN", "POST"):
+                key = (told if told in ("FIRE", "CLOSE_IN") else "FIRE", "attack_move")
+            else:
+                key = (told if told in ("RETREAT", "PULL_BACK", "REPOSITION") else "REPOSITION", "move")
+            buckets.setdefault(key, []).append((u, point))
+        out = []
+        for (role, order), items in buckets.items():
+            while items:
+                seed = items[0][1]
+                group = [x for x in items if math.dist(x[1], seed) < AGAIN_NEAR][:MAX_GROUP]
+                items = [x for x in items if x not in group]
+                pts = [q for _, q in group]
+                out.append(self._intent(role, [u for u, _ in group],
+                                        (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)), order))
+        return out
 
     def _act(self, roles, mine, enemy, by_tag, home: bool, fresh) -> Intent | None:
         """With a where head (ingest/response_dataset.py: the pros' units before contact as well as in
