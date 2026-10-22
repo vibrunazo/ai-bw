@@ -619,6 +619,8 @@ OPTIONS = {
     # gary/agent/grouping.py: the army on control groups, a unit type of a cluster on a key, re-assigned (the pros'
     # habit); the motor recalls a key when all its members get an order, key by key
     "grouping": lambda m: m.update(grouping="types"),
+    # the learned provider: the grouping model's groups (gary/policy/grouping_model.py, train/groups.py)
+    "grouplearned": lambda m: m.update(grouping="learned"),
     # the same on keys 1-3 with the buildings' keys left where they are (executor.py): is the Terran's cost the layout
     # (production on 3 keys instead of 4) or the grouping? (rounds GT40c/d against L40a/b)
     "grouping3": lambda m: m.update(grouping="types", grouping_layout=False),

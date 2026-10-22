@@ -20,6 +20,7 @@ clusters (round GR40a): T 1 key, assigns 1.9, adds 3.8, recalls 0.1 a minute; Z 
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 from gary.agent.gary import Gary
 
@@ -126,16 +127,7 @@ class TypeGrouping:
         if f < self.next_ask:
             return None
         self.next_ask = f + ASK_EVERY
-        groups = []                                   # (supply, type, tags): a type in a cluster, 12 at most
-        for c in clusters:
-            by: dict[int, list[dict]] = {}
-            for u in c:
-                by.setdefault(u["type"], []).append(u)
-            for t, us in by.items():
-                if sum(supply_x2(t) for _ in us) >= TYPE_MIN_SUPPLY:
-                    mx, my = _mid(us)
-                    us = sorted(us, key=lambda u: math.dist((u["x"], u["y"]), (mx, my)))[:12]
-                    groups.append((sum(supply_x2(t) for _ in us), t, {u["tag"] for u in us}))
+        groups = self._groups(clusters)
         groups.sort(key=lambda x: -x[0])
         alive = {u["tag"] for c in clusters for u in c}
         changed = False
@@ -171,5 +163,64 @@ class TypeGrouping:
             changed = True
         return dict(self.plan) if changed else None
 
+    def _groups(self, clusters: list[list[dict]]) -> list[tuple[int, int, set[int]]]:
+        """(supply, type, tags): a type in a cluster, 12 at most."""
+        from gary.policy.army import supply_x2
+        groups = []
+        for c in clusters:
+            by: dict[int, list[dict]] = {}
+            for u in c:
+                by.setdefault(u["type"], []).append(u)
+            for t, us in by.items():
+                if sum(supply_x2(t) for _ in us) >= TYPE_MIN_SUPPLY:
+                    mx, my = _mid(us)
+                    us = sorted(us, key=lambda u: math.dist((u["x"], u["y"]), (mx, my)))[:12]
+                    groups.append((sum(supply_x2(t) for _ in us), t, {u["tag"] for u in us}))
+        return groups
 
-PROVIDERS = {"types": TypeGrouping, "clusters": ClusterGrouping}
+
+LEARNED_JOIN = 0.4                    # the grouping model's partition: a unit joins a group at this mean chance
+# (held-out pro fights, up to 4 keys: precision 0.529, recall 0.779 against the type rule's 0.530 and 0.706)
+
+
+class LearnedGrouping(TypeGrouping):
+    """The grouping model's groups (gary/policy/grouping_model.py: which units the pros keep on one key, from their
+    keys in fights), on TypeGrouping's keys and stability; a group's kind (for keeping its key) is its commonest type."""
+
+    name = "learned"
+
+    def __init__(self, g: Gary):
+        super().__init__(g)
+        from gary.policy.grouping_model import GroupModel
+        path = max(Path("runs/groups").glob("*/model.pt"), key=lambda q: q.parent.name)
+        self.model = GroupModel.load(path)
+
+    def _groups(self, clusters: list[list[dict]]) -> list[tuple[int, int, set[int]]]:
+        import numpy as np
+        from collections import Counter
+        from gary.policy.army import supply_x2
+        from gary.policy.grouping_model import partition
+        g = self.g
+        fx, fy = g.flip
+        out = []
+        for c in clusters:
+            if len(c) < 2:
+                continue
+            c = c[:64]
+            cx, cy = _mid(c)
+            rows = np.zeros((len(c), 11), np.int16)
+            for i, u in enumerate(c):
+                rx, ry = u["x"] - cx, u["y"] - cy
+                rows[i] = (u["type"], 1, -rx if fx else rx, -ry if fy else ry, min(u.get("hp") or 0, 32767),
+                           u.get("shields") or 0, u.get("cooldown", 0), u.get("order", 0), -1, u.get("carrying", 0),
+                           u.get("completed", 1))
+            aff = self.model.affinity(rows, g.hi.frame * 42 / 1000)
+            for grp in partition(aff, len(self.keys), join=LEARNED_JOIN):
+                us = [c[i] for i in grp]
+                sup = sum(supply_x2(u["type"]) for u in us)
+                if sup >= TYPE_MIN_SUPPLY:
+                    out.append((sup, Counter(u["type"] for u in us).most_common(1)[0][0], {u["tag"] for u in us}))
+        return out
+
+
+PROVIDERS = {"types": TypeGrouping, "learned": LearnedGrouping, "clusters": ClusterGrouping}
