@@ -25,11 +25,12 @@ import torch
 import torch.nn.functional as F
 
 from eval import monitor, priority
-from gary.policy.roles import AGAIN, DECISIONS, ROLES, RoleModel, RoleNet, tensors
+from gary.policy.roles import AGAIN, DECISIONS, KEY_DIMS, ROLES, RoleModel, RoleNet, key_onehot, tensors
 from eval.micro_roles import NEAR
 from ingest.inventory import data_root
 
 PRE_VAL: list = []                      # the validation set's labels before contact only (if the data has them)
+COLS: list = []                         # the arrays' names, in the order load() returns them
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -58,7 +59,7 @@ def decision_labels(d) -> np.ndarray:
 
 
 def load(path: Path, decisions: bool = False, move: bool = False, attended: bool = False, budget: bool = False,
-         again: bool = False):
+         again: bool = False, use_keys: bool = False):
     """Train and validation arrays, and the label names (a dataset can name its own: the hand rules'
     decisions, ingest/role_distill.py). attended: only the labels of units the player's commands reached
     (ingest/response_dataset.py attended; the rest -1); budget: the player's order rate a minute (/ 100) as one
@@ -92,6 +93,10 @@ def load(path: Path, decisions: bool = False, move: bool = False, attended: bool
         to = d["cmd_to"].astype(np.float32)
         arrays["offset"] = np.where((labels == names.index(AGAIN))[..., None], to, np.nan).astype(np.float32)
         keys += ("offset",)
+    if use_keys:                        # (ingest/key_labels.py: each unit's control-group key; the one-hot in batch())
+        arrays["key"] = d["key"].astype(np.int8)
+        keys += ("key",)
+    COLS[:] = list(keys)
     pick = lambda m: tuple(arrays[k][m] for k in keys)
     if "near" in d:                     # (ingest/response_dataset.py: labels before contact scored apart too)
         arrays["labels_pre"] = np.where(d["near"] >= NEAR, labels, -1).astype(labels.dtype)
@@ -99,24 +104,32 @@ def load(path: Path, decisions: bool = False, move: bool = False, attended: bool
     return pick(~val), pick(val), names
 
 
-def batch(data, idx, device, with_move: bool = False, with_offset: bool = False):
+def batch(data, idx, device, with_move: bool = False, with_offset: bool = False, rng=None):
+    """Model inputs and targets for the snapshots idx. With keys in the data, each unit's key one-hot appended to its
+    extras, the key numbers shuffled per snapshot when rng is given (training)."""
     rows, extra, labels, count, time_s = (a[idx] for a in data[:5])
     n = int(count.max())
     rows, extra, labels = rows[:, :n], extra[:, :n], labels[:, :n]
+    if "key" in COLS:
+        k = data[COLS.index("key")][idx][:, :n].astype(int)
+        if rng is not None:
+            perm = np.argsort(rng.random((len(k), 10)), axis=1)      # (a permutation of 0-9 per snapshot)
+            k = np.where((k >= 0) & (k <= 9), np.take_along_axis(perm, np.clip(k, 0, 9), axis=1), k)
+        extra = np.concatenate([extra, key_onehot(k).astype(extra.dtype)], -1)
     pad = np.arange(n)[None, :] >= count[:, None]
     out = tensors(rows, extra, pad, time_s, device), torch.as_tensor(labels.astype(np.int64), device=device)
     if with_move:
-        out = out + (torch.as_tensor(data[5][idx][:, :n], device=device),)
-    if with_offset:                     # (the last array)
-        out = out + (torch.as_tensor(data[-1][idx][:, :n], device=device),)
+        out = out + (torch.as_tensor(data[COLS.index("move")][idx][:, :n], device=device),)
+    if with_offset:
+        out = out + (torch.as_tensor(data[COLS.index("offset")][idx][:, :n], device=device),)
     return out
 
 
 def evaluate(net, data, device, names=ROLES) -> dict:
     net.eval()
     pred, true, err, still, moved_role = [], [], [], [], []
-    with_offset = getattr(net, "offset", None) is not None
-    with_move = len(data) > (6 if with_offset else 5) and net.move is not None
+    with_offset = getattr(net, "offset", None) is not None and "offset" in COLS
+    with_move = "move" in COLS and net.move is not None
     off_err, off_zero = [], []
     with torch.no_grad():
         for s in range(0, len(data[0]), 512):
@@ -183,6 +196,8 @@ def main() -> None:
     ap.add_argument("--again", action="store_true",
                     help="with --decisions: the pros' re-issues as a decision of their own, and an offset head for where "
                          "they point (ingest/reissue_labels.py's data)")
+    ap.add_argument("--keys", action="store_true",
+                    help="each unit's control-group key as an input (ingest/key_labels.py's data)")
     ap.add_argument("--smooth", type=float, default=0.0,
                     help="label smoothing: every decision keeps some probability (room to explore for RL)")
     priority.add_argument(ap)
@@ -191,7 +206,8 @@ def main() -> None:
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(0)
-    train, val, names = load(Path(args.data), args.decisions, args.move, args.attended, args.budget, args.again)
+    train, val, names = load(Path(args.data), args.decisions, args.move, args.attended, args.budget, args.again,
+                             args.keys)
     decisions = "keep" in names
     y = train[2][train[2] >= 0]
     share = np.bincount(y, minlength=len(names)) / len(y)
@@ -200,8 +216,8 @@ def main() -> None:
     print(f"train {len(train[0])} snapshots, {len(y)} units; validation {len(val[0])} snapshots; "
           + ", ".join(f"{r} {s:.1%}" for r, s in zip(names, share)), flush=True)
     config = {"net": {"d": args.d, "layers": args.layers, "heads": 4, "n_roles": len(names),
-                      "n_extra": args.extra or int(train[1].shape[-1]), "move": bool(args.move),
-                      "offset": bool(args.again)},
+                      "n_extra": args.extra or int(train[1].shape[-1]) + (KEY_DIMS if args.keys else 0),
+                      "move": bool(args.move), "offset": bool(args.again)}, "keys": bool(args.keys),
               "data": args.data, "roles": names, "attended": bool(args.attended), "budget": bool(args.budget)}
     net = RoleNet(**config["net"]).to(device)
     opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=0.01)
@@ -211,7 +227,7 @@ def main() -> None:
         order = rng.permutation(len(train[0]))
         total = 0.0
         for s in range(0, len(order), args.batch):
-            got = batch(train, order[s:s + args.batch], device, args.move, args.again)
+            got = batch(train, order[s:s + args.batch], device, args.move, args.again, rng)
             inputs, labels = got[0], got[1]
             outs = net(*inputs, with_move=args.move, with_offset=args.again)
             logits = outs[0] if isinstance(outs, tuple) else outs

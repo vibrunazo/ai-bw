@@ -114,6 +114,16 @@ class DirectMotor:
             self.plan[key] = self.groups[key] = set(tags)
             g.hi.hotkeys[key] = sorted(tags)
 
+    def keys_of(self, tags: list[int]) -> list[int]:
+        """Each unit's control-group key (the one set last that holds it), -1 for none: the role model's key input."""
+        best: dict[int, tuple[int, int]] = {}
+        for key, members in self.groups.items():
+            at = self.set_at.get(key, 0)
+            for t in members:
+                if t not in best or at > best[t][0]:
+                    best[t] = (at, key)
+        return [best[t][1] if t in best else -1 for t in tags]
+
     def assign_if_fits(self, sel: set[int], alive: set[int]) -> None:
         """After an order: if what is selected fits a planned key that differs from its members, Ctrl+key (one
         keypress; the pros' way, their units already selected for an order)."""

@@ -872,8 +872,13 @@ class RoleLearned(RoleRules):
     nor "keep", for a model of decisions (train/roles.py --decisions)."""
 
     def __init__(self, g, model, where: bool = True, draw: bool = False, lone: bool = False, batch: int = 1,
-                 **options):
+                 together: bool = False, **options):
         super().__init__(g, **options)
+        # option together: the units on one control-group key draw their decisions with one shared random number, a
+        # group deciding as one, as a pro decides for a key (eval/key_coherence.py, held-out pro fights: key-mates
+        # take the same decision 80% of the time; drawn unit by unit the model's 30%, shared 77%, with no loss in
+        # matching the pros' decisions); the units on no key draw alone
+        self.together = together
         # option batch: up to this many orders a turn, a group per role by the same priority as the one order (the
         # rest given as the hands come free, fight.py's queue): one order a half-second turn, waiting on the hands,
         # capped fight commands whatever the model decided (train/roles_rl.py --pipe, docs/PROGRESS.md)
@@ -894,7 +899,9 @@ class RoleLearned(RoleRules):
         rows, tags, center, by_tag = snap
         from gary.policy.roles import order_budget
         budget = order_budget(g.hi)
-        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000, budget)
+        keys = np.array(g.motor.keys_of(list(tags))) if self.model.config.get("keys") or self.together else None
+        shared: dict[int, float] = {}                    # key -> its units' shared uniform (together)
+        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000, budget, keys)
         mine, enemy = self._units(snap)
         if not mine or not enemy:
             return None
@@ -912,7 +919,12 @@ class RoleLearned(RoleRules):
         roles: dict[str, list[dict]] = {}
         for u in mine:
             p = probs[index[u["tag"]]].astype(np.float64)
-            k = int(g.fight.rng.choice(len(p), p=p / p.sum())) if logging or self.draw else int(p.argmax())
+            if logging or self.draw:
+                key = int(keys[index[u["tag"]]]) if self.together and keys is not None else -1
+                r = shared.setdefault(key, g.fight.rng.random()) if key >= 0 else g.fight.rng.random()
+                k = min(int(np.searchsorted(np.cumsum(p / p.sum()), r, side="right")), len(p) - 1)
+            else:
+                k = int(p.argmax())
             decided[u["tag"]], drawn[u["tag"]] = names[k], k
             role = names[k].upper()
             if self.refresh and role == "KEEP" and u["tag"] in self.where:
@@ -937,23 +949,23 @@ class RoleLearned(RoleRules):
                 break
             self.more.append(nxt)
         if again:
-            for it in self._again(obs, rows, extra, budget, index, again):
+            for it in self._again(obs, rows, extra, budget, index, again, keys):
                 if intent is None:
                     intent = it
                 elif len(self.more) + 1 < self.batch:
                     self.more.append(it)
         if logging:                             # (train/roles_rl.py: the drawn decisions, inputs as the model saw them)
-            g.fight.rl_log.append({"rows": np.asarray(rows), "extra": self.model._with_budget(extra, budget),
+            g.fight.rl_log.append({"rows": np.asarray(rows), "extra": self.model.inputs(extra, budget, keys),
                                    "time": obs["frame"] * 42 / 1000, "units": [index[u["tag"]] for u in mine],
                                    "roles": [drawn[u["tag"]] for u in mine], "executed": intent is not None})
         return intent
 
-    def _again(self, obs: dict, rows, extra, budget, index: dict, units: list[dict]) -> list[Intent]:
+    def _again(self, obs: dict, rows, extra, budget, index: dict, units: list[dict], keys=None) -> list[Intent]:
         """The again decision: each unit's order given again, an attack-move if it is fighting (attacking, or told to
         fire or close in), else a move, to where the offset head points; units with nearby points share an order."""
         from gary.policy.roles import MAX_UNITS
         g, now = self.g, self.g.hi.frame
-        offsets = self.model.predict_offset(rows, extra, obs["frame"] * 42 / 1000, budget)
+        offsets = self.model.predict_offset(rows, extra, obs["frame"] * 42 / 1000, budget, keys)
         if offsets is None:
             return []
         fx, fy = (-1 if g.flip[0] else 1), (-1 if g.flip[1] else 1)

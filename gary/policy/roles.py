@@ -27,6 +27,20 @@ DECISIONS = ROLES + ["keep", "post", "join", "hold"]
 # again (train/roles.py --again): the unit's order given again, to where the offset head points (the pros' re-issues,
 # ingest/reissue_labels.py: a keep with a command of the player's in the next half second)
 AGAIN = "again"
+# the control-group key as an input (train/roles.py --keys): per unit a one-hot of its key (0-9) and a column for
+# none; the key numbers shuffled per snapshot in training, so the model reads "these units share a key", not what
+# a number means (ingest/key_labels.py: the pros' key-mates take the same decision 80% of the time, 72% shuffled)
+KEY_DIMS = 11
+
+
+def key_onehot(keys: np.ndarray) -> np.ndarray:
+    """(..., KEY_DIMS) from keys (...): 0-9 a key, anything else none."""
+    keys = np.asarray(keys)
+    out = np.zeros(keys.shape + (KEY_DIMS,), np.float32)
+    on = (keys >= 0) & (keys <= 9)
+    out[on, keys[on].astype(int)] = 1.0
+    out[~on, KEY_DIMS - 1] = 1.0
+    return out
 MAX_UNITS = 64
 TERRAIN = 8                          # the ground under each unit and the player's own bases (Ground)
 EXTRA = 6 + TERRAIN                  # motion x, y over the last half second (tiles), enemies targeting it;
@@ -177,6 +191,15 @@ class RoleModel:
     def save(self, path: str | Path) -> None:
         torch.save({"state": self.net.state_dict(), "config": self.config}, path)
 
+    def inputs(self, extra: np.ndarray, budget: float | None = None, keys: np.ndarray | None = None) -> np.ndarray:
+        """The per-unit extras as this model reads them: the budget column and the key one-hot when it was trained
+        with them (without keys given: none for every unit)."""
+        extra = self._with_budget(extra, budget)
+        if self.config.get("keys"):
+            k = np.full(extra.shape[:-1], -1) if keys is None else np.asarray(keys)[:extra.shape[0]]
+            extra = np.concatenate([extra, key_onehot(k).astype(extra.dtype)], -1)
+        return extra
+
     def _with_budget(self, extra: np.ndarray, budget: float | None) -> np.ndarray:
         """A model trained with the player's order rate as an input (train/roles.py --budget) gets it as one more
         column (/ 100); without a value, BUDGET_DEFAULT."""
@@ -186,23 +209,24 @@ class RoleModel:
         return np.concatenate([extra, np.full(extra.shape[:-1] + (1,), b, extra.dtype)], -1)
 
     @torch.no_grad()
-    def predict(self, rows: np.ndarray, extra: np.ndarray, time_s: float, budget: float | None = None) -> np.ndarray:
+    def predict(self, rows: np.ndarray, extra: np.ndarray, time_s: float, budget: float | None = None,
+                keys: np.ndarray | None = None) -> np.ndarray:
         """One snapshot: rows (n, 11), extra (n, EXTRA). Role probabilities per unit (n, R)."""
         dev = next(self.net.parameters()).device
         n = min(len(rows), MAX_UNITS)
-        extra = self._with_budget(extra, budget)
+        extra = self.inputs(extra, budget, keys)
         logits = self.net(*tensors(rows[None, :n], extra[None, :n], np.zeros((1, n), bool),
                                    np.array([time_s], np.float32), dev))
         return torch.softmax(logits[0], -1).cpu().numpy()
 
     @torch.no_grad()
     def predict_move(self, rows: np.ndarray, extra: np.ndarray, time_s: float,
-                     budget: float | None = None) -> tuple[np.ndarray, np.ndarray]:
+                     budget: float | None = None, keys: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Role probabilities (n, R) and moves (n, 2: tiles over the next half second, mirrored as the
         rows; unmirror with the snapshot's flip). A model without the where head: moves None."""
         dev = next(self.net.parameters()).device
         n = min(len(rows), MAX_UNITS)
-        extra = self._with_budget(extra, budget)
+        extra = self.inputs(extra, budget, keys)
         inputs = tensors(rows[None, :n], extra[None, :n], np.zeros((1, n), bool), np.array([time_s], np.float32), dev)
         if self.net.move is None:
             return torch.softmax(self.net(*inputs)[0], -1).cpu().numpy(), None
@@ -210,13 +234,14 @@ class RoleModel:
         return torch.softmax(logits[0], -1).cpu().numpy(), move[0].cpu().numpy()
 
     @torch.no_grad()
-    def predict_offset(self, rows: np.ndarray, extra: np.ndarray, time_s: float, budget: float | None = None):
+    def predict_offset(self, rows: np.ndarray, extra: np.ndarray, time_s: float, budget: float | None = None,
+                       keys: np.ndarray | None = None):
         """The offset head's again targets (n, 2: tiles from each unit, mirrored as the rows), or None without one."""
         if getattr(self.net, "offset", None) is None:
             return None
         dev = next(self.net.parameters()).device
         n = min(len(rows), MAX_UNITS)
-        extra = self._with_budget(extra, budget)
+        extra = self.inputs(extra, budget, keys)
         inputs = tensors(rows[None, :n], extra[None, :n], np.zeros((1, n), bool), np.array([time_s], np.float32), dev)
         return self.net(*inputs, with_offset=True)[1][0].cpu().numpy()
 
