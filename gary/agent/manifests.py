@@ -607,6 +607,8 @@ OPTIONS = {
     # roles.py learned/v1 together: a key's units draw their decisions with one shared random number (a group decides
     # as one, as the pros' keys do; with grouping)
     "together": lambda m: m["fight"].setdefault("roles", {}).update(together=True),
+    # roles.py learned/v1 by_key: a key whose units all drew one decision gets one order, the whole key
+    "bykey": lambda m: m["fight"].setdefault("roles", {}).update(by_key=True),
     "again": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_att_again.npz"),
     "att": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_att.npz"),
     # roles.py RoleAhead lone: a unit alone and outnumbered in contact decided by the roles model, not the hand rules

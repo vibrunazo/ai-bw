@@ -119,6 +119,7 @@ PULL_HP = 0.5
 PULL_TILES = 1.5
 RETREAT_MARGIN = 3 * 32
 REPEAT = 24                          # the same role isn't given to a unit again within a second (but pull back)
+KEY_IN_FIGHT = 0.75                  # by_key: a key this much in the fight is ordered whole
 # the again decision (a model with an offset head, train/roles.py --again): the unit's order given again to where the
 # head points, not within AGAIN_GAP of its last order; units whose points are within AGAIN_NEAR share one order
 AGAIN_GAP = 12
@@ -872,8 +873,14 @@ class RoleLearned(RoleRules):
     nor "keep", for a model of decisions (train/roles.py --decisions)."""
 
     def __init__(self, g, model, where: bool = True, draw: bool = False, lone: bool = False, batch: int = 1,
-                 together: bool = False, **options):
+                 together: bool = False, by_key: bool = False, **options):
         super().__init__(g, **options)
+        # option by_key: a control-group key whose units (all of them, all in this fight) drew one decision gets one
+        # order for the whole key, as a pro recalls a key and orders it (71% of the pros' fight selections are
+        # recalls); the per-unit filters (already attacking, ordered a moment ago) don't split it. With together,
+        # key-mates draw alike as often as the pros' (eval/key_coherence.py)
+        self.by_key = by_key
+        self.key_told: dict[int, tuple[str, int]] = {}    # key -> (the role it was last given, when)
         # option together: the units on one control-group key draw their decisions with one shared random number, a
         # group deciding as one, as a pro decides for a key (eval/key_coherence.py, held-out pro fights: key-mates
         # take the same decision 80% of the time; drawn unit by unit the model's 30%, shared 77%, with no loss in
@@ -899,7 +906,8 @@ class RoleLearned(RoleRules):
         rows, tags, center, by_tag = snap
         from gary.policy.roles import order_budget
         budget = order_budget(g.hi)
-        keys = np.array(g.motor.keys_of(list(tags))) if self.model.config.get("keys") or self.together else None
+        keys = np.array(g.motor.keys_of(list(tags))) if self.model.config.get("keys") or self.together or self.by_key \
+            else None
         shared: dict[int, float] = {}                    # key -> its units' shared uniform (together)
         probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000, budget, keys)
         mine, enemy = self._units(snap)
@@ -938,8 +946,16 @@ class RoleLearned(RoleRules):
         fresh = lambda u, role: not (self.told.get(u["tag"], ("", -10**9))[0] == role
                                      and now - self.told[u["tag"]][1] < REPEAT)
         again = roles.pop("AGAIN", [])
+        keyed = self._by_key(roles, mine, enemy, keys, index) if self.by_key and keys is not None else []
+        if keyed:
+            used = {t for it in keyed for t in it.units}
+            roles = {r: [u for u in us if u["tag"] not in used] for r, us in roles.items()}
         intent = self._act(roles, mine, enemy, by_tag, home, fresh)
         self.more = []
+        if keyed:                               # (the keys' orders first, then the rest by the same priority)
+            if intent is not None:
+                keyed.append(intent)
+            intent, self.more = keyed[0], keyed[1:self.batch]
         left = roles
         while intent is not None and len(self.more) + 1 < self.batch:
             used = {t for it in [intent] + self.more for t in it.units}
@@ -959,6 +975,50 @@ class RoleLearned(RoleRules):
                                    "time": obs["frame"] * 42 / 1000, "units": [index[u["tag"]] for u in mine],
                                    "roles": [drawn[u["tag"]] for u in mine], "executed": intent is not None})
         return intent
+
+    KEY_ROLES = ("RETREAT", "PULL_BACK", "FIRE", "CLOSE_IN", "REPOSITION")
+
+    def _by_key(self, roles: dict, mine: list[dict], enemy: list[dict], keys, index: dict) -> list[Intent]:
+        """by_key: the orders for whole keys (see __init__), most urgent role first."""
+        g, now = self.g, self.g.hi.frame
+        role_of = {u["tag"]: r for r, us in roles.items() for u in us}
+        here = {u["tag"]: u for u in mine}
+        units = {u["tag"]: u for u in g.hi.observe()["units"] if u["owner"] == g.slot}
+        out = []
+        for key in sorted({int(keys[index[t]]) for t in here if index[t] < len(keys)} - {-1}):
+            members = g.motor.members(key) & set(units)
+            in_fight = [here[t] for t in members if t in here]
+            if len(in_fight) < 2 or len(in_fight) < KEY_IN_FIGHT * len(members):
+                continue
+            # the members that decided something agree, the rest keep: the key's decision is theirs (a pro orders
+            # the key: its kept members get the order again, its stragglers come along)
+            decided = {role_of.get(u["tag"]) for u in in_fight} - {"KEEP", None}
+            if len(decided) != 1:
+                continue
+            role = decided.pop()
+            if role not in self.KEY_ROLES:
+                continue
+            group = [units[t] for t in g.leases.free(sorted(members), "roles")]
+            if len(group) < len(members):        # (a member another layer holds: not the whole key)
+                continue
+            last = self.key_told.get(key, ("", -10 ** 9))
+            if last[0] == role and now - last[1] < REPEAT:
+                continue
+            if role in ("FIRE", "CLOSE_IN"):
+                target = min(enemy, key=lambda e: math.dist((e["x"], e["y"]), _mid(group)))
+                point, order = (int(target["x"]), int(target["y"])), "attack_move"
+            elif role == "RETREAT":
+                point, order = self._retreat_point(group, enemy), "move"
+            else:
+                pts = [self.where[u["tag"]] for u in group if u["tag"] in self.where]
+                if not pts:
+                    continue
+                point, order = (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)), "move"
+            it = self._intent(role, group, point, order)
+            if it is not None:
+                self.key_told[key] = (role, now)
+                out.append(it)
+        return sorted(out, key=lambda it: self.KEY_ROLES.index(it.kind))
 
     def _again(self, obs: dict, rows, extra, budget, index: dict, units: list[dict], keys=None) -> list[Intent]:
         """The again decision: each unit's order given again, an attack-move if it is fighting (attacking, or told to
