@@ -85,7 +85,7 @@ class DirectMotor:
         # control groups (gary/agent/grouping.py: a provider decides which units belong on which key; the motor
         # puts them there and uses them: an order to exactly a key's members is one key and one click)
         self.grouping = None                     # the grouping provider (a manifest's "grouping"), or None: no keys
-        self.groups: dict[int, set[int]] = {}    # key -> the units Gary put on it
+        self.groups: dict[int, set[int]] = {}    # the keys Gary keeps its army on (their members: members())
         self.plan: dict[int, set[int]] = {}      # key -> the units the provider wants on it
         self.tried: dict[int, int] = {}          # key -> when Gary last set out to put units on it
         self.set_at: dict[int, int] = {}         # key -> when it was last assigned
@@ -97,10 +97,17 @@ class DirectMotor:
 
     # --- control groups ---------------------------------------------------------------------------
 
+    def members(self, key: int) -> set[int]:
+        """What is on one of the army's keys: the interface's own record, the selection when Ctrl+key landed (what
+        Gary saw selected before pressing it is a moment old: a recall then gave its order to units it wasn't meant
+        for, close-in deaths 15 a game against 9.9, rounds GT3a and GT40c against L40a)."""
+        return set(self.g.hi.hotkeys.get(key, [])) if key in self.groups else set()
+
     def key_within(self, tags: set[int], alive: set[int]) -> int | None:
         """The biggest key whose living members (2 or more) all get this order: one key recalls them, as the pros
         give an order to an army key by key (the rest selected as before)."""
-        keys = [(len(m & alive), k) for k, m in self.groups.items() if len(m & alive) >= 2 and m & alive <= tags]
+        keys = [(len(m & alive), k) for k, m in ((k, self.members(k)) for k in self.groups)
+                if len(m & alive) >= 2 and m & alive <= tags]
         return max(keys)[1] if keys else None
 
     def adopt_groups(self) -> None:
@@ -117,7 +124,8 @@ class DirectMotor:
     def keys_of(self, tags: list[int]) -> list[int]:
         """Each unit's control-group key (the one set last that holds it), -1 for none: the role model's key input."""
         best: dict[int, tuple[int, int]] = {}
-        for key, members in self.groups.items():
+        for key in self.groups:
+            members = self.members(key)
             at = self.set_at.get(key, 0)
             for t in members:
                 if t not in best or at > best[t][0]:
@@ -130,7 +138,7 @@ class DirectMotor:
         if self.grouping is None or getattr(self.grouping, "adds", True) or len(sel) < 2:
             return
         for key, want in self.plan.items():
-            want, have = want & alive, self.groups.get(key, set()) & alive
+            want, have = want & alive, self.members(key) & alive
             if want and want != have and len(sel & want) >= FITS * len(sel) and len(sel & want) >= FITS * len(want):
                 self.g.hi.hotkey_set(key)
                 self.groups[key] = set(sel)
@@ -155,11 +163,13 @@ class DirectMotor:
         adds = getattr(self.grouping, "adds", True)
         for key, want in self.plan.items():
             want = want & alive
-            have = self.groups.get(key, set()) & alive
+            have = self.members(key) & alive
             if not want or want == have or (not adds and want <= have) or g.hi.frame - self.tried.get(key, -10 ** 9) < GROUP_RETRY:
                 continue
             if not adds and have and g.hi.frame - self.set_at.get(key, -10 ** 9) < GROUP_STALE:
                 continue                         # (set when an order's selection fits it, meanwhile)
+            if g.fight is not None and g.fight.center is not None:
+                continue                         # (not during a fight: deaths with the hands on a key, 4-5 a game)
             self.tried[key] = g.hi.frame
             mode = "add" if adds and have and have <= want else "assign"
             tags = want - have if mode == "add" else want
@@ -213,7 +223,7 @@ class DirectMotor:
             self.set_at[key] = hi.frame
         else:
             hi.hotkey_add(key)
-            self.groups[key] = self.groups.get(key, set()) | sel
+            self.groups[key] = sel
         LOG.decision(hi.side, "motor", hi.frame, f"group {d['mode']} {key}", inputs={"units": len(sel)},
                      by=f"grouping: {getattr(self.grouping, 'name', '?')}")
         g.task = None
