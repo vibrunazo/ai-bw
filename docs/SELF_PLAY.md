@@ -473,18 +473,21 @@ held-out validation, then games. The rules:
      or net, the policy gradient through that head is zero and the run can only drift. Fight roles, 2026-10-21/22:
      one order a half-second turn capped it; with several orders a turn the turn no longer does, and what caps
      it is what the decisions mean (keep, or fire on a unit already attacking, give no order).
-   - The model owns the decision in play: in the episodes and in the judging games alike (RoleAhead's hand rules
-     in contact left the roles model out of most fight commands). That has a price to record: the model in
-     contact is 95 net below RoleAhead on the state-selected suite (+47 against +141; +93 with several orders
-     a turn), the starting deficit of the first fight-roles run.
+   - The model owns the decision in the episodes and in the judging of the run (RoleAhead's hand rules in contact
+     left the roles model out of most fight commands). In play it replaces the hand rules only once it beats them:
+     the model in contact scores +93 (several orders a turn) and +63 (with again) on the state-selected suite
+     against RoleAhead's +141, so RoleAhead stays in gt1 and the model in contact is the training configuration.
+     That gap is the learning target in plain numbers: a fight-roles run's gate 3 is beating +141, from whichever
+     in-contact start scores best on the suite.
    - Branched decisions locked for the learning window. e1 and e2 forced attack or hold, then let the same
      policy decide every 5 s: the forced choice was undone in 85-94% of pairs within 14-34 s (medians), both
      arms relaxed to the same policy and the pairs measured hand noise (-0.33 +- 0.43, +0.01 +- 0.39); with the
      whole army's choice held (eval/army_effect.py, since deleted) the decision's effect was three times the
-     chaos (sd 650 against 210). The lock comes from the pros, not a constant: their distribution of how long
-     an engage or a hold stands before it changes (the commitment data, ingest/army_dataset.py), the same lock
-     in the deployed policy and on the training arms, so play, training and the humanlike gap describe one
-     behaviour. Played without it, a model trained on locked arms is judged on a policy it doesn't play.
+     chaos (sd 650 against 210). The lock goes on the training arms only, a forced choice reversing at the pros'
+     hazard: their reversal chance falls with a commitment's age (10-16% per 5 s at first, 4-6% past 40 s; half
+     reversed by 35-55 s), and Gary's own commitments already have that shape (docs/PROGRESS.md, 2026-10-22), so
+     e1 and e2's arms were undone because they were forced against the model, not because the model has no
+     hysteresis. The deployed policy keeps its own.
 2. **No online PPO on small batches; the minimum detectable effect before any gate.** A KL-leashed step
    changes few decisions (total variation at most sqrt(KL / 2): about 7% at KL 0.01); a paired gate of two
    standard errors on N pairs of outcome sd sigma detects 2 sigma / sqrt(N) at best (army branches: sigma about
