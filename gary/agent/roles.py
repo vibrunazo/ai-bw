@@ -194,6 +194,7 @@ class RoleRules:
         self.brace, self.leash, self.volley, self.regroup, self.holds = brace, leash or post is not None, volley, regroup, holds
         self.closing: dict[int, frozenset] = {}      # volley: unit -> its closing group
         self.told: dict[int, tuple[str, int]] = {}   # unit -> (role, frame)
+        self.more: list[Intent] = []                 # this turn's further orders (option batch; fight.py's queue)
         self._walk = None
         self._ground = None                          # the role model's terrain (gary/policy/roles.py Ground)
         self._ramp = None                            # post="ramp": the spot inside the main's ramp, or False
@@ -866,8 +867,13 @@ class RoleLearned(RoleRules):
     the same skills as the hand rules carry the groups out. Reposition, stand and other: no command;
     nor "keep", for a model of decisions (train/roles.py --decisions)."""
 
-    def __init__(self, g, model, where: bool = True, draw: bool = False, lone: bool = False, **options):
+    def __init__(self, g, model, where: bool = True, draw: bool = False, lone: bool = False, batch: int = 1,
+                 **options):
         super().__init__(g, **options)
+        # option batch: up to this many orders a turn, a group per role by the same priority as the one order (the
+        # rest given as the hands come free, fight.py's queue): one order a half-second turn, waiting on the hands,
+        # capped fight commands whatever the model decided (train/roles_rl.py --pipe, docs/PROGRESS.md)
+        self.batch = batch
         self.model = model
         self.use_where = where                  # option: move units where the model's where head says
         self.where: dict[int, tuple[float, float]] = {}   # unit -> where the model moves it (with a where head)
@@ -916,6 +922,15 @@ class RoleLearned(RoleRules):
         fresh = lambda u, role: not (self.told.get(u["tag"], ("", -10**9))[0] == role
                                      and now - self.told[u["tag"]][1] < REPEAT)
         intent = self._act(roles, mine, enemy, by_tag, home, fresh)
+        self.more = []
+        left = roles
+        while intent is not None and len(self.more) + 1 < self.batch:
+            used = {t for it in [intent] + self.more for t in it.units}
+            left = {r: [u for u in us if u["tag"] not in used] for r, us in left.items()}
+            nxt = self._act(left, mine, enemy, by_tag, home, fresh)
+            if nxt is None or not set(nxt.units) - used:
+                break
+            self.more.append(nxt)
         if logging:                             # (train/roles_rl.py: the drawn decisions, inputs as the model saw them)
             g.fight.rl_log.append({"rows": np.asarray(rows), "extra": self.model._with_budget(extra, budget),
                                    "time": obs["frame"] * 42 / 1000, "units": [index[u["tag"]] for u in mine],

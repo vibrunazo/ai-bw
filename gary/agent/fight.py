@@ -46,6 +46,7 @@ from gary.policy.fight_cmd import MAX_UNITS as COMMAND_MAX, MOVES, OWN_RADIUS, P
 from gary.policy.fight_memory import history_inputs
 
 ASK_EVERY = 12                       # frames between fight decisions (half a second)
+QUEUE_FOR = 24                       # a turn's further orders are given within this many frames, or dropped
 LURKER = 103
 SIGHT = 7 * 32                      # detect: a spot Gary's units see (a marine's sight)
 DETECT_NEAR = 8 * 32                # detect: Gary's units this near a burrowed lurker: scan it
@@ -141,6 +142,9 @@ class FightLayer:
             cls = {"role_override": RoleOverride, "role_ahead": RoleAhead}.get(kind, RoleLearned)
             self.roles = cls(g, model, **(role_options or {})) if model is not None else RoleRules(g, **(role_options or {}))
         self.next_fight = 0
+        # a turn's further orders (a role provider's batch, roles.py): started one after another as the hands come
+        # free, before production's turn; the next fight turn replaces them
+        self.queue: list[tuple[int, Intent]] = []
         self.center: tuple[float, float] | None = None
         self.told: dict[int, tuple[tuple, int]] = {}    # unit tag -> (order key, frame given)
         # sample (the default): draw each command from the model's distributions; it plays better
@@ -167,10 +171,20 @@ class FightLayer:
         if self.kind in ("roles", "role_override", "role_ahead"):
             snap = self._snapshot(obs)
             intent = self.roles.decide(obs, snap)
+            if snap is not None:
+                self.queue = [(self.g.hi.frame, it) for it in getattr(self.roles, "more", [])]
             if intent is None:
                 return None
             self.g.motor.start(intent)
             return "roles"
+
+    def next_queued(self) -> "Intent | None":
+        """The turn's next order still to give (QUEUE_FOR at most after its turn), or None."""
+        while self.queue:
+            made, intent = self.queue.pop(0)
+            if self.g.hi.frame - made <= QUEUE_FOR:
+                return intent
+        return None
         acted = self._per_unit(obs, mine) if self.kind == "per_unit" else self._command(obs, mine)
         return "fight" if acted else None
 

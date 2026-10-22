@@ -814,6 +814,20 @@ plan and the full log).
   (which units move), not its volume: the fight layer takes a turn every 12 frames and gives one group order of
   one role a turn, and the next turn waits for the hands to carry it out; 42 of 90 possible turns in 45 s, 72%
   of them giving an order (pushed: 35 turns, 90%). The pipe is closed for commands and reach: the run waits.
+  Opening it (2026-10-22), in order. (1) Cheaper orders, control groups by type with recalls (grouping on, the
+  Terran's 4 army keys, keys adopted at the takeover): start 57.6 commands a minute, 66% reached, pushed 62.3 and
+  61%; a probe of the half-second slots (10 scenarios): a fight turn 42%, no fight 29%, actions pending 12%, a
+  build 8%, the last fight order still being given 5%. Recalls are rarer than first counted: 7.4 a minute in a
+  14-minute game (the earlier 42 counted key 4, then also the Command Center's); an order seldom covers a whole
+  key. (2) Several orders a turn (option batch: up to 4, a group per role by the same priority, given one after
+  another as the hands come free, production's turn after the batch): start 63.7 and 68%, pushed 74.1 and 67%
+  (with grouping; without it 65.2 / 70% and 74.0 / 67%): the push moves commands 16% (5% before), not reach.
+  The turn is no longer the cap: 0.93 orders decided a turn (pushed 1.21) with room for 4, the APM bucket full at
+  almost every order (none under one token), 14-20 queued orders dropped stale in 10 scenarios. What caps it now is
+  what the decisions mean: keep gives no order, fire or close in to a unit already attacking gives none, and a
+  re-issue (the pros' same order with the target moved, half their fight commands) exists only for moves, by
+  refresh. On the full suite (79, 8 draws): the model deciding in contact (incontact) +47 against RoleAhead's +141
+  (paired -95, -179 to -10); with batch +93 (+48 over incontact, +5 to +94). Reach didn't move: the run waits.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the

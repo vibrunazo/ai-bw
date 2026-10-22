@@ -216,7 +216,8 @@ class DirectMotor:
             g.task = None
         else:
             self._command(obs, mine, t)
-        g.macro_turn = g.task is None            # after each fight command, production gets a turn
+        # after each fight command, production gets a turn (after a turn's batch: its queue given first)
+        g.macro_turn = g.task is None and not (g.fight is not None and getattr(g.fight, "queue", None))
 
     def _command(self, obs: dict, mine: list[dict], t: Task) -> None:
         """Select the group (or keep the selection if it already is the group), with the camera on

@@ -597,6 +597,8 @@ OPTIONS = {
     # the role model decides in contact too (roles.py learned/v1, not RoleAhead's hand rules there), the same skills
     # carrying its groups out: what the roles RL trains reaches every fight command
     "incontact": lambda m: m["fight"].update(provider="roles"),
+    # roles.py learned/v1 batch: up to 4 orders a fight turn, a group per role, given as the hands come free
+    "batch": lambda m: m["fight"].setdefault("roles", {}).update(batch=4),
     "att": lambda m: m["fight"].update(roles_data=f"response_{m.get('race', 'T')}_att.npz"),
     # roles.py RoleAhead lone: a unit alone and outnumbered in contact decided by the roles model, not the hand rules
     "lone": lambda m: m["fight"].setdefault("roles", {}).update(lone=True),
