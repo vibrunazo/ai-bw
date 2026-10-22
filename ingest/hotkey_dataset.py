@@ -61,10 +61,60 @@ def _resim(path: Path) -> list[dict] | None:
             if '"event"' in l or '"ucmd"' in l or '"header"' in l]
 
 
+def key_events(cg: dict, player_id: int):
+    """One player's selections tracked through Select / Select Add / Select Remove / Hotkey (a key holds at most 12
+    units): yields (frame, kind, key, units on the key after it) for each Hotkey command (kind assign, add or
+    recall; units as the replay's tags), and (frame, None, None, None) for each other selection change, so a caller
+    can count selections."""
+    from cmdcache import F, G, H, P, T, TAGS
+    sel: list[int] = []
+    keys: dict[int, list[int]] = {}
+    for c in cg["cmds"]:
+        if c[P] != player_id:
+            continue
+        t = c[T]
+        if t == "Select":
+            sel = list(dict.fromkeys(c[TAGS] or []))[:12]
+        elif t == "Select Add":
+            sel = list(dict.fromkeys(sel + list(c[TAGS] or [])))[:12]
+        elif t == "Select Remove":
+            gone = set(c[TAGS] or [])
+            sel = [u for u in sel if u not in gone]
+        elif t == "Hotkey" and c[G] is not None:
+            kind = {"Assign": "assign", "Add": "add", "Select": "recall"}.get(c[H])
+            if kind == "assign":
+                keys[c[G]] = list(sel)
+            elif kind == "add":
+                keys[c[G]] = list(dict.fromkeys(keys.get(c[G], []) + sel))[:12]
+            elif kind == "recall":
+                sel = list(keys.get(c[G], []))
+            if kind:
+                yield c[F], kind, c[G], list(keys.get(c[G], []))
+            continue
+        else:
+            continue
+        yield c[F], None, None, None
+
+
+def index_mapper(raw: bytes):
+    """A replay command's unit tag -> OpenBW's table index (resim/scr_replay.h translate_unit_id): a 3400-slot table
+    has a 13-bit index, its top half shifted by the extra slots; the generation bits are left out."""
+    import scr_format
+    limit = scr_format.unit_limit(raw) if scr_format.replay_format(raw) != "legacy" else 1700
+    shift = limit - 1700
+
+    def index_of(tag: int) -> int:
+        if limit <= 1700:
+            return tag & 0x7FF
+        i = tag & 0x1FFF
+        return i if i <= shift else i - shift
+    return index_of
+
+
 def game(job: tuple) -> list[dict]:
     """The player-game lines for one replay."""
     path, matchup = job
-    from cmdcache import F, G, H, P, T, TAGS, load_game
+    from cmdcache import load_game
     from inventory import data_root, find_screp
     path = Path(path)
     lines = _resim(path)
@@ -75,17 +125,7 @@ def game(job: tuple) -> list[dict]:
         cg = load_game(find_screp(None), path, hashlib.sha1(raw).hexdigest(), data_root() / "interim" / "cmdcache" / "v1")
     except Exception:
         return []
-    import scr_format
-    limit = scr_format.unit_limit(raw) if scr_format.replay_format(raw) != "legacy" else 1700
-    shift = limit - 1700
-
-    def index_of(tag: int) -> int:
-        """A replay command's unit tag -> OpenBW's table index (resim/scr_replay.h translate_unit_id): a 3400-slot
-        table has a 13-bit index, its top half shifted by the extra slots; the generation bits are left out."""
-        if limit <= 1700:
-            return tag & 0x7FF
-        i = tag & 0x1FFF
-        return i if i <= shift else i - shift
+    index_of = index_mapper(raw)
     types: dict[int, list[tuple[int, int]]] = collections.defaultdict(list)    # OpenBW index -> [(frame, type)]
     race_of_slot = {}
     for r in lines:
@@ -109,35 +149,12 @@ def game(job: tuple) -> list[dict]:
     for p in cg["players"]:
         if p["observer"] or p["race"] not in ("T", "Z", "P"):
             continue
-        sel: list[int] = []
-        keys: dict[int, list[int]] = {}
         events, selections = [], 0
-        for c in cg["cmds"]:
-            if c[P] != p["id"]:
-                continue
-            t = c[T]
-            if t == "Select":
-                sel = list(dict.fromkeys(c[TAGS] or []))[:12]
-            elif t == "Select Add":
-                sel = list(dict.fromkeys(sel + list(c[TAGS] or [])))[:12]
-            elif t == "Select Remove":
-                gone = set(c[TAGS] or [])
-                sel = [u for u in sel if u not in gone]
-            elif t == "Hotkey" and c[G] is not None:
-                kind = {"Assign": "assign", "Add": "add", "Select": "recall"}.get(c[H])
-                if kind == "assign":
-                    keys[c[G]] = list(sel)
-                elif kind == "add":
-                    keys[c[G]] = list(dict.fromkeys(keys.get(c[G], []) + sel))[:12]
-                elif kind == "recall":
-                    sel = list(keys.get(c[G], []))
-                if kind:
-                    units = keys.get(c[G], [])
-                    events.append({"f": c[F], "kind": kind, "key": c[G], "units": units,
-                                   "types": [type_at(u, c[F]) for u in units]})
-            else:
-                continue
-            if c[F] >= LATE and (t in SELECTS or (t == "Hotkey" and c[H] == "Select")):
+        for f, kind, key, units in key_events(cg, p["id"]):
+            if kind is not None:
+                events.append({"f": f, "kind": kind, "key": key, "units": units,
+                               "types": [type_at(u, f) for u in units]})
+            if f >= LATE and kind in (None, "recall"):
                 selections += 1
         out.append({"rel": str(path), "matchup": matchup, "race": p["race"], "minutes": end / 1440,
                     "selections": selections, "orders": orders.get(p["race"], 0), "events": events})
