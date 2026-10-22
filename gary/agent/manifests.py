@@ -846,8 +846,11 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     models: dict[str, str] = {}
     g.motor = DirectMotor(g)
     if m.get("grouping"):                     # (gary/agent/grouping.py: the control-group provider; none: no keys)
-        from gary.agent.grouping import PROVIDERS as GROUPINGS
+        from gary.agent.grouping import LAYOUTS, PROVIDERS as GROUPINGS
         g.motor.grouping = GROUPINGS[m["grouping"]](g)
+        layout = LAYOUTS.get(g.race.letter, {})
+        if "hall" in layout:                  # (the buildings' keys moved for the army's)
+            g.key_pools = (layout["hall"], layout["production"])
     g.leases.enforced = m.get("leases") == "enforced"
     if m["macro"] is not None or m["army"] is not None:
         g.executor = {"T": TerranExecutor, "Z": ZergExecutor}[g.race.letter](g)

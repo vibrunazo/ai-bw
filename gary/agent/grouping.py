@@ -4,7 +4,7 @@ one key and one click, an order to others is selected unit by unit as before. As
 clusters merge or split for good, not every turn.
 
 Providers:
-  types     scripted (the default): the pros' habit, one unit type of one cluster on a key (keys 1-3),
+  types     scripted (the default): the pros' habit, one unit type of one cluster on a key (LAYOUTS: Terran 1-4, Zerg 1-3),
             the biggest such groups by supply; a key re-assigned (not added to) when its group grew or moved on
   clusters  scripted: the army's clusters (up to 3, LearnedArmy's clustering) on keys 1-3, a cluster keeping the key
             holding most of its units; an arrival added to its cluster's key once it is there; a key is re-formed
@@ -94,10 +94,13 @@ class ClusterGrouping:
         return dict(self.plan) if changed else None
 
 
-# the keys free of the other hotkeys (executor.py: Command Centers 4-5, production 6-9; motor.py: the scout 0;
-# army_rules.py: a raid 9; zerg_fight.py: lurkers 0). The pros' Terran keeps 4 army keys: a fourth needs the
-# building keys moved
-KEYS = {"T": [1, 2, 3], "Z": [1, 2, 3], "P": [1, 2, 3]}
+# the keys with control groups on, by race: the army's, and the buildings' where they move (executor.py's default:
+# town halls 4-5, production 6-9). The pros' (ingest/hotkey_dataset.py, assigns by what a key holds): Terran army on
+# 1-5 (1-4 mostly), production on 6-7, other buildings on 8, 9 and 0; Zerg army on 1-3, hatcheries on 4-5. Terran:
+# 4 army keys, its Command Centers on 5-6, production on 7-9 (one key fewer: a fourth building is clicked), the
+# scout on 0 (motor.py). Zerg: the hatcheries keep 4-5, a raid 9 and lurkers 0 (army_rules.py, zerg_fight.py)
+LAYOUTS = {"T": {"army": [1, 2, 3, 4], "hall": [5, 6], "production": [7, 8, 9]},
+           "Z": {"army": [1, 2, 3]}, "P": {"army": [1, 2, 3]}}
 TYPE_MIN_SUPPLY = 8                   # (supply x2) a type's group in a cluster: 4 marines or zerglings x2, 2 tanks
 REFORM_AFTER = 10 * 24                # a key re-assigned at most this often
 GROWN = 2                             # re-assigned when this many of its type joined its cluster
@@ -111,7 +114,7 @@ class TypeGrouping:
 
     def __init__(self, g: Gary):
         self.g = g
-        self.keys = KEYS.get(g.race.letter, ARMY_KEYS)
+        self.keys = LAYOUTS.get(g.race.letter, {}).get("army", ARMY_KEYS)
         self.plan: dict[int, set[int]] = {}           # key -> the units that belong on it
         self.kind: dict[int, int] = {}                # key -> its unit type
         self.formed: dict[int, int] = {}              # key -> when its plan was last set

@@ -25,7 +25,13 @@ from gary.mapinfo import Base
 SELECT_TRIES = 6                      # clicks on a building that select nothing before it's left alone...
 UNSELECTABLE_FOR = 60 * 24            # ...for this long (live, one took 1,335 clicks and froze production)
 HK_CC = [4, 5]                        # one hotkey per Command Center (buildings can't share one)
-HK_RAX = [6, 7, 8, 9]
+HK_RAX = [6, 7, 8, 9]                 # (another layout with control groups: gary/agent/grouping.py LAYOUTS)
+
+
+def key_pool(g, hall: bool) -> list[int]:
+    """The keys a new town hall (hall) or production building can take."""
+    halls, production = g.key_pools or (HK_CC, HK_RAX)
+    return halls if hall else production
 STRAY = 12 * 32                              # home_scvs: a worker this far from every Command Center is astray
 MINE_CLICKS = 4                               # home_scvs: clicks to get an idle worker alone (a box takes marines too)
 FIGHT_CALM = 10 * 24                          # home_scvs: pulled or attack-moving workers are left alone this long
@@ -304,7 +310,7 @@ class Executor:
             if b["type"] not in g.production_types:
                 continue
             used = set(g.hotkeyed.values())
-            hk = next((k for k in (HK_CC if b["type"] in g.race.town_halls else HK_RAX) if k not in used), -1)
+            hk = next((k for k in key_pool(g, b["type"] in g.race.town_halls) if k not in used), -1)
             g.hotkeyed[b["tag"]] = hk
             if hk >= 0:
                 g.hi.hotkeys[hk] = [b["tag"]]
@@ -1023,7 +1029,7 @@ class Executor:
         where = "natural" if math.dist((t.data["x"], t.data["y"]), g.natural.center) < 10 * 32 else "main"
         if obs["selection"] == [tag]:
             if t.stage == "start":
-                pool = HK_CC if t.unit_type == g.race.town_hall else HK_RAX
+                pool = key_pool(g, t.unit_type == g.race.town_hall)
                 used = set(g.hotkeyed.values())
                 hk = next((k for k in pool if k not in used), None)
                 if hk is None:

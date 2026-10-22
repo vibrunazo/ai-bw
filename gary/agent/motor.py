@@ -96,6 +96,17 @@ class DirectMotor:
         keys = [(len(m & alive), k) for k, m in self.groups.items() if len(m & alive) >= 2 and m & alive <= tags]
         return max(keys)[1] if keys else None
 
+    def adopt_groups(self) -> None:
+        """For a game Gary takes over midway: the grouping provider's keys as if Gary had set them earlier."""
+        g = self.g
+        if self.grouping is None:
+            return
+        army = [u for u in g.hi.observe()["units"] if u["owner"] == g.slot and u["completed"] and u["type"] in g.army_types]
+        plan = self.grouping.step(g.army._clusters(army) if hasattr(g.army, "_clusters") else [army])
+        for key, tags in (plan or {}).items():
+            self.plan[key] = self.groups[key] = set(tags)
+            g.hi.hotkeys[key] = sorted(tags)
+
     def groups_chore(self, obs: dict, mine: list[dict], done: list[dict]) -> bool:
         """The grouping provider's plan carried out, one key at a time: a key whose units changed beyond arrivals is
         assigned again (its units selected, Ctrl+key), arrivals added (selected, Shift+key). True if Gary acted."""

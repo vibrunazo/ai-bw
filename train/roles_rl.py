@@ -186,10 +186,13 @@ def pipe(pool, args, device: str) -> None:
                                                 for k in range(args.val_draws)], chunksize=args.val_draws)
                 if "error" not in r]
         drawn = [k for r in rows for d in r.get("log", []) for k in d["roles"]]
+        turns = [d for r in rows for d in r.get("log", [])]
         mean = lambda key: float(np.mean([r[key] for r in rows if key in r]))
         print(f"{label:12s} {len(rows)} plays: commands a minute {mean('commands_min'):.1f}, units reached "
               f"{mean('reached'):.0%}, fight orders {mean('fight_orders'):.1f}, move decisions "
-              f"{np.isin(drawn, moves).mean() if drawn else 0:.1%} of {len(drawn)}, net {mean('net'):.0f}", flush=True)
+              f"{np.isin(drawn, moves).mean() if drawn else 0:.1%} of {len(drawn)}, net {mean('net'):.0f}; fight turns "
+              f"a play {len(turns) / max(1, len(rows)):.0f} of {args.seconds * 2:.0f}, {np.mean([d['executed'] for d in turns]):.0%} "
+              f"giving an order", flush=True)
 
 
 def main() -> None:
