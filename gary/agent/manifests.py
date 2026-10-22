@@ -326,7 +326,11 @@ MANIFESTS: dict[str, dict] = {
     # the larvae go on; the model's tempo; no tech path under 10%; an overlord ahead; the pros' history; a rolled
     # style; a roll waiting for supply or money held, 2026-10-20: LearnedMacro.hold, round G11 against G9). Its army
     # and fights from Gary-Z (Phase 2)
-    "gz1": {"version": "gz0.1", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True, "rotate": True,
+    # gz0.2: its army on control groups by type (gary/agent/grouping.py; 96 paired games twice against gt1, rounds
+    # GZ40a+b and GZ40c+d against L40a+b: Gary-T won 49 and 48 (57), lost 10 and 13 (8); Gary-Z's gap at 15-20
+    # minutes nearer the pros both times, -0.073 (-0.102 to -0.017) the second)
+    "gz1": {"version": "gz0.2", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True, "rotate": True,
+            "grouping": "types",
             "macro": {**_LEARNED, "builds": ["alarm"], "decoder": "dice", "odds_mass": 1.0, "hatch_mass": 0.5, "park": True, "pace": True,
                       "tech_min_p": 0.10, "wait_min_p": 0.05, "supply_ahead": True, "rax_by": 165 * 24, "history": "pro", "style": "roll",
                       "hold": True},
@@ -817,6 +821,12 @@ def manifest_of(name: str | dict) -> dict:
 # next step, self-play's). Changes are judged as options against it, and an adopted one goes in here
 MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords+hunt4+split+static+roles30+lone"),
                     "version": "gt0.5"}
+# gt1dev: the Terran Gary that learning is trained and judged in (AGENTS.md): gt1 with the role model deciding in
+# contact as well (attended pro units, Gary's own order rate as input, its moves kept current, several orders a
+# turn) and the army on control groups by type, a key's units drawing their decisions together. Weaker than gt1 today
+# (the state-selected suite: +110 against +141; Terran grouping 45 won 17 lost against 57 and 8 in 96 games); it
+# becomes gt1 when it beats it in 96 paired games
+MANIFESTS["gt1dev"] = {**manifest_of("gt1+att+refresh+incontact+batch+grouping+together"), "version": "gt0.5dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
