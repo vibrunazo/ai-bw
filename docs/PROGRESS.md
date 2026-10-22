@@ -860,6 +860,25 @@ plan and the full log).
   the in-contact start with grouping +107, with together +110 (+32, -20 to +83, over +93), against RoleAhead's +141.
 - **gt1dev (2026-10-22):** gt1+att+refresh+incontact+batch+grouping+together, the configuration learning is trained
   and judged in (AGENTS.md); gt1 stays what plays until gt1dev beats it in 96 paired games.
+- **Why Gary-T's grouping lost (2026-10-22): a key's members taken from the wrong place.** Its attacks were
+  unchanged (eval/attacks.py: the share of the army there 0.52-0.54 against 0.46, late arrivals 0.25 alike, trades
+  73-75 / 78-83 supply a game against 75 / 83); its fighters died more, 82-85 a game by 16:00 against 74, close-in
+  deaths 15 against 9.9 (the records' deaths). The motor took a key's members from the selection it saw before
+  pressing Ctrl+key (a moment old) while the interface records what the key got when the press landed; where they
+  differed, a recall gave its order to units it wasn't meant for. Read from the interface (b3025c0; that commit's
+  message says the parity hashes changed: they didn't, the parity games are 8 minutes, too short for the keys),
+  and no key's own selection during a fight: against gz0.2, 48 games (B50a, GT50a), Gary-T with grouping won 30 and
+  lost 7 (29 and 5 without), its fighters dead 75.8 a game against 85.6, the gap -0.010 (-0.038 to +0.020); the
+  Zerg's games unchanged (B50a played as GZ40c). The second 48 (B50b, GT50b) decides it.
+- **Whole keys ordered, and the learned grouping provider (2026-10-22).** Option bykey (a key whose deciding
+  members agree gets one order, 75% of it in the fight enough): of 599 keys in fights over 376 turns, 35% had
+  members outside the fight, 27% were split, 19% all kept; keys ordered whole 48 -> 53, recalls 0.32 -> 0.43 a fight
+  order, the pipe check's reach 70% -> 71%: diminishing. The pros' groups (after 5:00): Terran 3 / 5 / 9 units
+  (quartiles), one type 74%; Zerg 5 / 9 / 12, one type 36%. Of the pairs of a pro's fighters 23.5% share a key; "the
+  same type" names them with precision 41% and recall 92% (within 6 tiles 46% and 83%): the pros split a type over
+  keys. The grouping model (train/groups.py; gary/policy/grouping_model.py: per-unit embeddings, a pair's chance on
+  one key), held out, partitioned into up to 4 keys: precision 0.529, recall 0.779 (F1 0.630) against the type
+  rule's 0.530 and 0.706 (0.607). As the provider (option grouplearned): groups of 5 at assign in a smoke game.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
