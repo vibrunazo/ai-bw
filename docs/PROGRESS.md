@@ -803,6 +803,17 @@ plan and the full log).
      (more hands in fights can starve production).
   The stop rule: if it doesn't move off its start after the planned compute, the next step is a dedicated offset
   head imitated from the pros' re-issues (where a re-issued order goes), imitation again, not more RL.
+  The planned compute: 60 rounds of 32 training scenarios x 8 plays (362 training scenarios, 35 kept out for
+  validation). A first run started with RoleAhead (the hand rules in contact: the trained weights never reached
+  most fight commands) and was stopped at round 37 (validation -223, -191, -227, -269; KL to the start 0.038);
+  it doesn't count. The episodes and the 96 games play with the model deciding in contact too (option
+  incontact: roles.py learned/v1 with draw, refresh and the RL log).
+  Before a run, the pipe check (train/roles_rl.py --pipe 10: the start model against itself with +2 on the move
+  roles' logits, refresh on, 10 held-out scenarios over the kinds, 4 plays each): move decisions 13.9% -> 54.2%,
+  but commands a minute 60.0 -> 62.9, units reached 67% -> 61%, net -65 -> -344. The decisions reach the fight
+  (which units move), not its volume: the fight layer takes a turn every 12 frames and gives one group order of
+  one role a turn, and the next turn waits for the hands to carry it out; 42 of 90 possible turns in 45 s, 72%
+  of them giving an order (pushed: 35 turns, 90%). The pipe is closed for commands and reach: the run waits.
 - **Tried the same night, not adopted (48 games each, against G11/G13):** gz1+floor (no commitment drawn under 15%,
   as Gary-T's): Gary-T won 24 (19); gz1+noalarm again on the new economy: the Zerg won 2 (5) but was ahead at
   the limit in 6 (3), a wash; for Gary-T, a decoder floor down to 1% while 1,500 minerals float (`spend`): the

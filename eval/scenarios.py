@@ -326,10 +326,17 @@ def run_one(sc: dict, controller: str, seconds: float, version: str, style: int 
             bot, hi = make_gary(game, slot, version, style, verbose, fight_path, hands_seed)
             if sample_seed is not None:
                 bot.fight.rng, bot.fight.rl_log = np.random.default_rng(sample_seed), []
+        fighters0 = {u["tag"] for u in obs["units"] if u["owner"] == slot and fighter(u["type"])}
+        reached, n_commands, last_cmd = set(), 0, -1      # (attention: units given a command, commands given)
         while game.frame < end:
             if bot:
                 bot.act()
                 hi.step(2)
+                for c in hi.commands:
+                    if c[0] > last_cmd:
+                        reached.update(c[2])
+                        n_commands += 1
+                last_cmd = hi.commands[-1][0] if hi.commands else last_cmd
             else:
                 game.step(2)
             if on_step:
@@ -345,6 +352,9 @@ def run_one(sc: dict, controller: str, seconds: float, version: str, style: int 
         score.finish(game.observe(), game, fighter)
         row.update(score.result())
         row["stalled"] = stalled_buildings(game.observe(), slot)
+        if bot:
+            row["commands_min"] = round(n_commands * 60 / seconds, 1)
+            row["reached"] = round(len(reached & fighters0) / max(1, len(fighters0)), 3)
         if track is not None:
             row["diverged_s"] = round((split_at - sc["frame"]) * 42 / 1000, 1) if split_at is not None else None
             row["zerg_reacts"] = reactive.orders

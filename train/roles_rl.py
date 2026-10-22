@@ -4,9 +4,9 @@ Starts from a role model of decisions (default: the one imitated from attended p
 player's order rate, train/roles.py --attended --budget) and improves it on real pro positions: the
 state-selected scenarios from training games (eval/scenarios.py --suite kinds --split train: attacks,
 mixed fights, outnumbered units, harassment; --suite early: the home defenses), Gary playing with the
-model (--manifest, default gt1+att+refresh: the role model before contact, its moves kept current;
-told its own order rate from its hands, gary/policy/roles.py order_budget). Each round Gary plays a batch of them
-several times, drawing each unit's role from the model. Every turn is judged by what happened in
+model (--manifest, default gt1+att+refresh+incontact: the role model deciding before contact and in it,
+its moves kept current, told its own order rate from its hands, gary/policy/roles.py order_budget). Each
+round Gary plays a batch of them several times, drawing each unit's role from the model. Every turn is judged by what happened in
 the HORIZON_S seconds after it (eval/score.py's events: value killed and lost, damage...; each
 command Gary carried out costs a little), against the other plays of the same position over the
 same stretch (group-relative advantages). Each unit's role is an action of its own, sharing its
@@ -15,8 +15,10 @@ the model near where it started. Every few rounds the model plays the validation
 tenth of the training games', never trained on) without drawing (its likeliest roles), which
 picks the best checkpoint; the real test is afterwards, on the held-out games' scenarios:
 
+    python -m train.roles_rl --pipe 10          # first: do the weights reach the hands? (pipe())
     python -m train.roles_rl --rounds 60
-    python -m eval.scenarios --suite kinds --run 79 --version gt1+att+refresh --controllers gary --draws 8         --fight-model runs/roles_rl/<run>/model.pt
+    python -m eval.scenarios --suite kinds --run 79 --version gt1+att+refresh+incontact --controllers gary \
+        --draws 8 --fight-model runs/roles_rl/<run>/model.pt
 
 Its gates and stop rule, written before the first run: docs/PROGRESS.md, "The roles RL".
 """
@@ -156,11 +158,45 @@ def moved(pool, new: str, args, device: str) -> None:
                                                         if max(x, y) >= 0.005))
 
 
+MOVE_ROLES = ("retreat", "pull_back", "reposition")
+
+
+def pipe(pool, args, device: str) -> None:
+    """Before a run: is the pipe from the role model's weights to Gary's hands open? On args.pipe held-out scenarios
+    (spread over the kinds), the start model against itself pushed toward the move roles (args.bias added to their
+    logits), with the manifest's skills (refresh on): if commands a minute and the units reached don't move, what RL
+    changes in the weights can't reach the fight either."""
+    from eval import scenarios as S
+    test = [json.loads(line) for line in S.scenarios_path("test", args.suite).read_text(encoding="utf-8").splitlines()]
+    by: dict[str, list] = {}
+    for sc in test:
+        by.setdefault(sc.get("kind"), []).append(sc)
+    picked = [sc for group in zip(*by.values()) for sc in group][:args.pipe]
+    model = RoleModel.load(args.init_path, device)
+    names = model.config["roles"]
+    with torch.no_grad():
+        for r in MOVE_ROLES:
+            model.net.role.bias[names.index(r)] += args.bias
+    pushed = REPO_ROOT / "runs" / "roles_rl" / f"pipe_bias{args.bias:g}.pt"
+    pushed.parent.mkdir(parents=True, exist_ok=True)
+    model.save(pushed)
+    moves = [names.index(r) for r in MOVE_ROLES]
+    for label, path in (("start", args.init_path), (f"moves +{args.bias:g}", str(pushed))):
+        rows = [r for r in pool.map(play_real, [(sc, path, k, args.manifest, args.seconds) for sc in picked
+                                                for k in range(args.val_draws)], chunksize=args.val_draws)
+                if "error" not in r]
+        drawn = [k for r in rows for d in r.get("log", []) for k in d["roles"]]
+        mean = lambda key: float(np.mean([r[key] for r in rows if key in r]))
+        print(f"{label:12s} {len(rows)} plays: commands a minute {mean('commands_min'):.1f}, units reached "
+              f"{mean('reached'):.0%}, fight orders {mean('fight_orders'):.1f}, move decisions "
+              f"{np.isin(drawn, moves).mean() if drawn else 0:.1%} of {len(drawn)}, net {mean('net'):.0f}", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--init", help="role model of decisions to start from (default: the newest in runs/roles)")
     ap.add_argument("--rounds", type=int, default=60)
-    ap.add_argument("--manifest", default="gt1+att+refresh", help="the Gary that plays (its roles: the model trained)")
+    ap.add_argument("--manifest", default="gt1+att+refresh+incontact", help="the Gary that plays (its roles: the model trained)")
     ap.add_argument("--suite", default="kinds", choices=["kinds", "early"], help="eval/scenarios.py's scenario suite")
     ap.add_argument("--override", action="store_true",
                     help="the model only overrides the rules (join, hold, else the rules): manifest v017override")
@@ -179,6 +215,9 @@ def main() -> None:
     ap.add_argument("--minibatch", type=int, default=256)
     ap.add_argument("--parallel", type=int, default=max(1, (os.cpu_count() or 6) * 2 // 3))
     ap.add_argument("--moved", help="a trained model: the first gate only (moved off its start? see moved())")
+    ap.add_argument("--pipe", type=int, help="before a run: this many held-out scenarios, the start model against it "
+                                             "pushed toward move roles (see pipe())")
+    ap.add_argument("--bias", type=float, default=2.0, help="--pipe: added to the move roles' logits")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
@@ -189,6 +228,10 @@ def main() -> None:
     from gary.policy.roles import latest_trained_on
     init = Path(args.init or latest_trained_on("response_T_att.npz"))
     args.init_path = str(init)
+    if args.pipe:
+        with ProcessPoolExecutor(args.parallel) as pool:
+            pipe(pool, args, device)
+        return
     if args.moved:
         with ProcessPoolExecutor(args.parallel) as pool:
             moved(pool, args.moved, args, device)

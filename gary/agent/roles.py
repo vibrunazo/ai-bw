@@ -866,11 +866,13 @@ class RoleLearned(RoleRules):
     the same skills as the hand rules carry the groups out. Reposition, stand and other: no command;
     nor "keep", for a model of decisions (train/roles.py --decisions)."""
 
-    def __init__(self, g, model, where: bool = True, **options):
+    def __init__(self, g, model, where: bool = True, draw: bool = False, lone: bool = False, **options):
         super().__init__(g, **options)
         self.model = model
         self.use_where = where                  # option: move units where the model's where head says
         self.where: dict[int, tuple[float, float]] = {}   # unit -> where the model moves it (with a where head)
+        self.draw = draw                        # option: each unit's decision drawn from the model's odds (the league)
+        # (lone: RoleAhead's, a lone outnumbered unit the model's; here every unit is the model's already)
 
     def decide(self, obs: dict, snap) -> Intent | None:
         names = self.model.config.get("roles")
@@ -881,7 +883,8 @@ class RoleLearned(RoleRules):
             return None
         rows, tags, center, by_tag = snap
         from gary.policy.roles import order_budget
-        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000, order_budget(g.hi))
+        budget = order_budget(g.hi)
+        probs, moves = self.model.predict_move(rows, extra, obs["frame"] * 42 / 1000, budget)
         mine, enemy = self._units(snap)
         if not mine or not enemy:
             return None
@@ -895,20 +898,28 @@ class RoleLearned(RoleRules):
                     self.where[u["tag"]] = (u["x"] + fx * dx * WHERE_LEAD, u["y"] + fy * dy * WHERE_LEAD)
         logging = g.fight.rl_log is not None
         decided: dict[int, str] = {}
+        drawn: dict[int, int] = {}
         roles: dict[str, list[dict]] = {}
         for u in mine:
             p = probs[index[u["tag"]]].astype(np.float64)
-            k = int(g.fight.rng.choice(len(p), p=p / p.sum())) if logging else int(p.argmax())
-            decided[u["tag"]] = names[k]
-            roles.setdefault(names[k].upper(), []).append(u)
+            k = int(g.fight.rng.choice(len(p), p=p / p.sum())) if logging or self.draw else int(p.argmax())
+            decided[u["tag"]], drawn[u["tag"]] = names[k], k
+            role = names[k].upper()
+            if self.refresh and role == "KEEP" and u["tag"] in self.where:
+                told = self.told.get(u["tag"], ("", 0))[0]   # (a move kept current: sent on where the model moves it)
+                if told in ("RETREAT", "PULL_BACK", "REPOSITION") and self._stale(u, told, self.where[u["tag"]]):
+                    role = told
+            roles.setdefault(role, []).append(u)
         mx, my = _mid(mine)
         home = any(u["owner"] == g.slot and u["type"] in g.race.town_halls and math.dist((u["x"], u["y"]), (mx, my)) < HOME
                    for u in by_tag.values())
         fresh = lambda u, role: not (self.told.get(u["tag"], ("", -10**9))[0] == role
                                      and now - self.told[u["tag"]][1] < REPEAT)
         intent = self._act(roles, mine, enemy, by_tag, home, fresh)
-        if logging:
-            self._log(obs, snap, extra, mine, decided, intent)
+        if logging:                             # (train/roles_rl.py: the drawn decisions, inputs as the model saw them)
+            g.fight.rl_log.append({"rows": np.asarray(rows), "extra": self.model._with_budget(extra, budget),
+                                   "time": obs["frame"] * 42 / 1000, "units": [index[u["tag"]] for u in mine],
+                                   "roles": [drawn[u["tag"]] for u in mine], "executed": intent is not None})
         return intent
 
     def _act(self, roles, mine, enemy, by_tag, home: bool, fresh) -> Intent | None:
