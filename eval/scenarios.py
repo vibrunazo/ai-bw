@@ -363,6 +363,8 @@ def run_one(sc: dict, controller: str, seconds: float, version: str, style: int 
         if hi:
             acts = [e["act"] for e in hi.pov if "act" in e]
             row["acts"] = len(acts)
+            from collections import Counter
+            row["act_heads"] = dict(Counter(" ".join(a.split()[:2]) for a in acts))   # (what the hands did, by kind)
             # actions that are commands in a replay (camera moves aren't): comparable to EAPM
             row["command_acts"] = sum(1 for a in acts if "camera" not in a and not a.startswith(("F", "Shift+F", "arrow", "✗")))
             row["fight_orders"] = sum(1 for a in acts if a.startswith(("right-click", "A-click", "minimap right-click", "minimap attack", "S ", "H ", "T ", "C ")))

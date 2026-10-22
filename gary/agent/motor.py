@@ -70,6 +70,12 @@ def _names(units: list[dict]) -> str:
 
 
 GROUP_RETRY = 3 * 24                     # a key Gary set out to put units on: not tried again this soon
+# a key whose planned units differ from its members is set when an order's selection fits it (one keypress, as the
+# pros: their assigns cost one key, the units already selected for an order); a selection of its own (camera, box,
+# portrait, then the key: about 4 actions) only once it has been out of date this long. The selection of its own
+# every time cost Gary-T 45 actions a minute for 4 recalls and its macro (rounds GT40a against L40a)
+GROUP_STALE = 20 * 24
+FITS = 0.8                               # an order's selection fits a planned key: this share of each in the other
 
 
 class DirectMotor:
@@ -82,6 +88,7 @@ class DirectMotor:
         self.groups: dict[int, set[int]] = {}    # key -> the units Gary put on it
         self.plan: dict[int, set[int]] = {}      # key -> the units the provider wants on it
         self.tried: dict[int, int] = {}          # key -> when Gary last set out to put units on it
+        self.set_at: dict[int, int] = {}         # key -> when it was last assigned
         for kind, run in (("fight_cmd", self._run_command), ("pull", self._run_pull), ("unpull", self._run_pull),
                           ("load", self._run_load), ("unload", self._run_unload), ("scan", self._run_scan), ("repair", self._run_repair), ("reinforce", self._run_reinforce),
                           ("army_order", self._run_army_order), ("scout", self._run_scout),
@@ -107,6 +114,22 @@ class DirectMotor:
             self.plan[key] = self.groups[key] = set(tags)
             g.hi.hotkeys[key] = sorted(tags)
 
+    def assign_if_fits(self, sel: set[int], alive: set[int]) -> None:
+        """After an order: if what is selected fits a planned key that differs from its members, Ctrl+key (one
+        keypress; the pros' way, their units already selected for an order)."""
+        if self.grouping is None or getattr(self.grouping, "adds", True) or len(sel) < 2:
+            return
+        for key, want in self.plan.items():
+            want, have = want & alive, self.groups.get(key, set()) & alive
+            if want and want != have and len(sel & want) >= FITS * len(sel) and len(sel & want) >= FITS * len(want):
+                self.g.hi.hotkey_set(key)
+                self.groups[key] = set(sel)
+                self.set_at[key] = self.g.hi.frame
+                from gary.decision_log import LOG
+                LOG.decision(self.g.hi.side, "motor", self.g.hi.frame, f"group assign {key}", inputs={"units": len(sel)},
+                             by=f"grouping: {getattr(self.grouping, 'name', '?')}, the order's selection")
+                return
+
     def groups_chore(self, obs: dict, mine: list[dict], done: list[dict]) -> bool:
         """The grouping provider's plan carried out, one key at a time: a key whose units changed beyond arrivals is
         assigned again (its units selected, Ctrl+key), arrivals added (selected, Shift+key). True if Gary acted."""
@@ -125,6 +148,8 @@ class DirectMotor:
             have = self.groups.get(key, set()) & alive
             if not want or want == have or (not adds and want <= have) or g.hi.frame - self.tried.get(key, -10 ** 9) < GROUP_RETRY:
                 continue
+            if not adds and have and g.hi.frame - self.set_at.get(key, -10 ** 9) < GROUP_STALE:
+                continue                         # (set when an order's selection fits it, meanwhile)
             self.tried[key] = g.hi.frame
             mode = "add" if adds and have and have <= want else "assign"
             tags = want - have if mode == "add" else want
@@ -175,6 +200,7 @@ class DirectMotor:
         if d["mode"] == "assign":
             hi.hotkey_set(key)
             self.groups[key] = set(sel)
+            self.set_at[key] = hi.frame
         else:
             hi.hotkey_add(key)
             self.groups[key] = self.groups.get(key, set()) | sel
@@ -235,8 +261,14 @@ class DirectMotor:
             want = sel = set(d["tags"])           # (SCVs: whichever the clicks took)
         elif t.stage == "start":
             # the group is already selected (kiting the same units): straight to the order
+            key = self.key_within(want, {u["tag"] for u in mine}) if not d.get("keyed") else None
             if (want <= sel and len(sel) <= len(want) + 2) or (sel and sel <= want and len(sel) >= 0.7 * len(want)):
                 t.stage = "order"
+            elif key is not None:                       # (a key whose members all got this intent: the key, no camera;
+                hi.hotkey_recall(key)                   # the rest after the order, key by key or selected)
+                d["keyed"] = True
+                t.stage = "order"
+                return
             else:
                 on_screen = [u for u in units if screen_of(obs, u["x"], u["y"])]
                 if len(on_screen) < len(units) and not d.get("camera_moved"):
@@ -246,12 +278,6 @@ class DirectMotor:
                     return
                 if not on_screen:
                     g.task = None
-                    return
-                key = self.key_within(want, {u["tag"] for u in mine})
-                if key is not None:                      # (a key whose members all got this intent: the key; the
-                    hi.hotkey_recall(key)                # rest after the order, key by key or selected)
-                    d["keyed"] = True
-                    t.stage = "order"
                     return
                 if (g.fight.ctrl_click or d.get("ctrl_click")) and self._ctrl_click(obs, on_screen):
                     t.stage = "order"
@@ -319,6 +345,8 @@ class DirectMotor:
             g.leases.take(want, t.intent)
             if "bunker" in d:                    # a retreat into a bunker: they're its marines now
                 g.loaded.setdefault(d["bunker"], set()).update(want)
+            if not d.get("keyed"):
+                self.assign_if_fits(set(obs["selection"]), {u["tag"] for u in mine if u["type"] in g.army_types})
         rest = set(d["tags"]) - want
         if ordered and d.pop("keyed", False) and rest & {u["tag"] for u in mine}:
             d["tags"] = sorted(rest)             # (a key took some: the others get the order next)

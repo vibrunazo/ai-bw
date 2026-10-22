@@ -827,6 +827,20 @@ plan and the full log).
   full: the hands' time per order (cursor, camera, boxes) is the cap now. On the full suite the again start nets
   +63 (paired -38, -101 to +20, against the batch start without again; -85, -185 to +15, against RoleAhead's
   +141): more orders, not yet better ones.
+- **What an order costs the hands, and the minimap (2026-10-22).** The pros, 300 modern TvZ games (fight dataset
+  v3; replays don't say what was clicked on the minimap, so proxies): 92% of their in-fight point orders target
+  within a screen of the units ordered (median 5.7 tiles away), and of orders within 8 frames of each other 1.3%
+  are a screen apart: the fight stays on their screen, the minimap a small share. Their fight orders are small:
+  Terran one unit 57%, 2-3 units 16%, 4+ 27% (Zerg 35%, 14%, 51%). Gary (10 held-out scenarios, the again model,
+  several orders a turn): a role order takes the hands a median 6 frames (quartiles 4-12); per fight order 0.97
+  drag boxes, 0.76 screen orders, 0.24 minimap orders (the motor gives them when the target is off screen), 0.67
+  camera moves: camera, box around one or two units, order, over and over, the camera taken home by the macro and
+  brought back group by group. Cheaper selection: a key set when an order's selection fits a planned group (one
+  keypress), its own selection task only after 20 s out of date, a recall before any camera move, a turn's
+  queued orders on screen first: camera moves 0.56 an order (0.61 with grouping), assigns 0.02, recalls no more
+  in fights (0.16-0.24 an order, the production keys mostly): Gary's orders go to role groups of single units,
+  seldom a whole key; recalls would need decisions per key, a learned layer's. Pipe check with grouping, again
+  pushed: commands a minute 82.6 -> 89.4, reach 70% -> 72%, net -72 -> +68.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league

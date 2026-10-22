@@ -86,7 +86,7 @@ class FixedPriority:
         if posture_mode(g.posture) != mode:
             self._posture_record(mode)
         if g.fight is not None and g.task is None and not hi.pending and getattr(g.fight, "queue", None):
-            intent = g.fight.next_queued()          # (a turn's further orders, as the hands come free)
+            intent = g.fight.next_queued(hi.observe())   # (a turn's further orders, as the hands come free)
             if intent is not None:
                 LOG.owner[g.hi.side] = "fight"
                 g.motor.start(intent)

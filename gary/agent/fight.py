@@ -177,16 +177,24 @@ class FightLayer:
                 return None
             self.g.motor.start(intent)
             return "roles"
-
-    def next_queued(self) -> "Intent | None":
-        """The turn's next order still to give (QUEUE_FOR at most after its turn), or None."""
-        while self.queue:
-            made, intent = self.queue.pop(0)
-            if self.g.hi.frame - made <= QUEUE_FOR:
-                return intent
-        return None
         acted = self._per_unit(obs, mine) if self.kind == "per_unit" else self._command(obs, mine)
         return "fight" if acted else None
+
+    def next_queued(self, obs: dict | None = None) -> "Intent | None":
+        """The turn's next order still to give (QUEUE_FOR at most after its turn), or None: one whose units are on
+        the screen first (the camera stays where it is while it has work there; pros keep the fight on screen and
+        give their orders there, 92% of their in-fight point orders within a screen of the units)."""
+        from gary.interface import screen_of
+        self.queue = [(made, it) for made, it in self.queue if self.g.hi.frame - made <= QUEUE_FOR]
+        if not self.queue:
+            return None
+        k = 0
+        if obs is not None:
+            at = {u["tag"]: u for u in obs["units"] if u["owner"] == self.g.slot}
+            on = lambda it: sum(1 for t in it.units if t in at and screen_of(obs, at[t]["x"], at[t]["y"])) \
+                >= max(1, len([t for t in it.units if t in at]))
+            k = next((i for i, (_, it) in enumerate(self.queue) if on(it)), 0)
+        return self.queue.pop(k)[1]
 
     # --- the models -----------------------------------------------------------------------------
 
