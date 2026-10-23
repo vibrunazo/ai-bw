@@ -542,6 +542,11 @@ def report(scs: list[dict], rows: list[dict], args: argparse.Namespace) -> None:
     print(f"{'mean':15s} " + " ".join(
         f"{t[0] / max(1, t[3]):>6.0f} /{t[1] / max(1, t[3]):>5.0f} ({t[2] / max(1, t[3]):>4.1f})" for t in tot.values()))
     print(f"{'net (score)':15s} " + " ".join(f"{np.mean(v) if v else 0:>18.0f}" for v in nets.values()))
+    for c in cs:                            # (attention: commands a minute, the share of the fighters reached)
+        rs = [r for r in rows if r["controller"] == c and "commands_min" in r]
+        if rs:
+            print(f"{c}: commands a minute {np.mean([r['commands_min'] for r in rs]):.1f}, "
+                  f"fighters reached {np.mean([r['reached'] for r in rs]):.0%}")
     kinds = sorted({sc.get("kind") for sc in scs if sc.get("kind")})
     for k in kinds:                         # (suite kinds: net and orders by kind)
         for c in cs:

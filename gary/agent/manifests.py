@@ -601,6 +601,10 @@ OPTIONS = {
     # the role model decides in contact too (roles.py learned/v1, not RoleAhead's hand rules there), the same skills
     # carrying its groups out: what the roles RL trains reaches every fight command
     "incontact": lambda m: m["fight"].update(provider="roles"),
+    # the first roles RL run that moved and improved (train/roles_rl.py from gt1dev, round 50 of 60 by validation on
+    # the training games' scenarios): the held-out state-selected suite +195 against its start's +87 (paired +105,
+    # +44 to +169), against RoleAhead's +141 +50 (-51 to +151)
+    "rl1": lambda m: m["fight"].update(roles_model="runs/roles_rl/20261022_185355/model.pt"),
     # roles.py learned/v1 batch: up to 4 orders a fight turn, a group per role, given as the hands come free
     "batch": lambda m: m["fight"].setdefault("roles", {}).update(batch=4),
     # the attended model with the again decision and its offset head (train/roles.py --again: the pros' re-issues)
@@ -973,6 +977,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             models["fight"] = "roles/rules_v1"   # (the chat says so: as many lines as with a model)
         elif f["provider"] in ("roles", "role_override", "role_ahead"):
             from gary.policy.roles import RoleModel
+            if f.get("roles_model") and fight_path is None and fight_model is None:
+                fight_path = f["roles_model"]                # (a pinned checkpoint: an RL run's, say)
             if f.get("roles_data") and fight_path is None and fight_model is None:
                 from gary.policy.roles import latest_trained_on
                 fight_path = latest_trained_on(f["roles_data"])
