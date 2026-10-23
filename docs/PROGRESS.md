@@ -988,6 +988,18 @@ plan and the full log).
   the checkpoint chosen on another split) and the games didn't follow; the 45-second net value is not the game's.
   Next: a 24-game check of a checkpoint in games before the suite is trusted, and the macro features the fights
   move (unit counts, bank) watched as part of the objective.
+- **The macro check: the model has the pros' tech, Gary's states and keep_busy don't (2026-10-23).** The Terran macro
+  model (runs/macro_shared/T_all_20261019-102013) at 10-20 minutes on held-out modern pro TvZ states (237 player-games,
+  17,541 states): next decision against its odds, Siege Tank 7.7% / 8.9%, Goliath 5.8% / 4.8%, Vulture 3.3% / 3.3%,
+  Factory 1.1% / 0.9%, Machine Shop 0.7% / 1.1%, Science Vessel 4.0% / 4.1%, Marine 33.9% / 31.6%, Medic 6.5% / 7.8%:
+  calibrated, factory tech included. On gt1's own states (B60a+b re-simulated and encoded as it reads them), its odds
+  turn from mech: Siege Tank 5.3%, Goliath 0.0%, Vulture 0.1%, Factory 0.5%, Marine 42.3%, Medic 10.2%; the style input
+  hardly matters (style 1 or none: Marine 39-41%, Vulture 0.3-0.4%, Goliath 0.0%). Gary's next decisions: Marine
+  71.2%, Medic 4.6%. At 10-20 minutes it trained 86 marines a game of which the macro's decisions chose 44: the rest
+  were keep_busy (an idle Barracks repeats its last unit), spending the minerals the model's tech waits for and
+  writing marines into the history it reads, so its states look a marine player's and the model, as a pro would
+  there, asks for more. Options: nobusy (keep_busy off) and busymix (its unit drawn from the model's odds among the
+  producer's own), rounds NB60a and BM60a against B60a.
 - **Baselines and the promotion check (2026-10-23 morning).** gt1 gt0.6 (B60a+b, seeds 4004-4009 and 4010-4015,
   against gz0.2): won 49 lost 10. gt1dev gt0.7dev (D70a+b): won 48 lost 13. Paired: gt1dev better in 21, worse in 24
   (-0.018 +- 0.063); the gap +0.010 (-0.016 to +0.040), the fight features nearer the pros (-0.039, -0.064 to -0.009),
