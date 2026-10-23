@@ -9,7 +9,7 @@ commitment as an input, the hysteresis (pros attacking keep attacking).
 
 The model: the imitation army model, its move/attack head relearned as keep/engage/move, the numbers
 widened by the commitment (new weights from zero), the destination head trained on the orders among the
-samples, the rest fine-tuned at a tenth of the rate. Data: ingest/army_dataset.py v2 (its "tick" samples).
+samples, the rest fine-tuned at a tenth of the rate. Data: ingest/army_dataset.py v4 (its "tick" samples).
 Games split by replay as the army model's. Scored on held-out games:
 
   auc_order       an order (engage or move) vs keep
@@ -51,7 +51,7 @@ MAX_TICKS = 400                 # samples per player-game in training (held-out 
 KEEP, ENGAGE, MOVE = 0, 1, 2
 
 
-def jobs(matchup: str, race: str, version: str = "v3", keep=None) -> list[tuple]:
+def jobs(matchup: str, race: str, version: str = "v4", keep=None) -> list[tuple]:
     """(army npz, player index, held out, macro npz, the player's index there)."""
     army = data_root() / "interim" / "army" / version
     macro_dir = data_root() / "interim" / "macro" / "v1"
@@ -106,6 +106,8 @@ def load_player(args: tuple) -> tuple:
     grid = d[f"p{i}_tick_grid"][idx]
     if spec.losses:                                     # (the 10th channel: own losses lately, v3)
         grid = np.concatenate([grid, d[f"p{i}_tick_loss"][idx][:, None]], 1)
+    if spec.static:                                     # (then the enemy's static defense known, v4)
+        grid = np.concatenate([grid, d[f"p{i}_tick_static"][idx][:, None]], 1)
     commit = d[f"p{i}_tick_commit"][idx]
     glob = encode_global(spec, frames.astype(np.float32), d[f"p{i}_tick_eco"][idx].astype(np.float32),
                          grid[:, 8].sum(1).astype(np.float32), d[f"p{i}_tick_units"][idx].astype(np.float32),
@@ -126,8 +128,8 @@ def load(js: list, spec: ArmySpec, workers: int) -> dict:
 
 
 def widen(base: ArmyModel, spec: ArmySpec) -> ArmyNet:
-    """The army model's network with the numbers widened by the commitment and the map by the losses
-    channel (new weights zero: it starts as the army model) and a fresh keep/engage/move head."""
+    """The army model's network with the numbers widened by the commitment and the map by the losses (and
+    static defense) channels (new weights zero: it starts as the army model) and a fresh keep/engage/move head."""
     old = base.net
     ch = base.config["net"].get("ch", 64)
     net = ArmyNet(spec.n_global, ch=ch, n_kind=3, channels=spec.channels)
@@ -151,6 +153,8 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--others", action="store_true", help="the other clusters' commitments as inputs (ArmySpec.others)")
+    ap.add_argument("--static", action="store_true",
+                    help="the enemy's ground static defense as a map channel (ArmySpec.static; army dataset v4)")
     ap.add_argument("--eval", help="score this commit model on the held-out games and stop (no training)")
     ap.add_argument("--out", help="the run folder (default runs/commit/<matchup>_<race>_<time>: what Gary loads as newest)")
     priority.add_argument(ap)
@@ -160,7 +164,8 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     start = sorted((REPO / "runs" / "army").glob(f"{args.matchup}_{args.race}_*/model.pt"))[-1]
     base = ArmyModel.load(start)
-    spec = ArmySpec(base.spec.race, base.spec.own_types, base.spec.seen_types, commit=True, losses=True, others=args.others)
+    spec = ArmySpec(base.spec.race, base.spec.own_types, base.spec.seen_types, commit=True, losses=True, others=args.others,
+                    static=args.static)
     if args.eval:
         evaluated = ArmyModel.load(args.eval)
         spec = evaluated.spec

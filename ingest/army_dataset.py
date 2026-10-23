@@ -37,8 +37,13 @@ commitment follows the group on its way. And that order's age. Pros re-decide on
                       fighter its supply x2, a building 4; capped at 255): what a pro reacts to, a raid on
                       the mineral line, that the grid of where units stand doesn't show (v3; c10: Gary-Z's
                       army kept its commitment while its drones went from 13 to 2)
+  tick_static (256,)  the enemy's ground static defense the player knew of, where it stands (sunken, cannon,
+                      bunker, each STATIC_SUPPLY: gary/policy/army.py; capped at 255), known from the first look
+                      at its cell (an enemy building in sight there) until it dies: the other buildings' channel
+                      counts a sunken as an Evolution Chamber, so a model couldn't learn when pros attack into
+                      static defense (v4; the static guard, a stop-gap in AGENTS.md)
 
-Output: data/interim/army/v3/<sha1[:2]>/<sha1>.npz and data/interim/army/v3/index.jsonl. Needs a
+Output: data/interim/army/v4/<sha1[:2]>/<sha1>.npz and data/interim/army/v4/index.jsonl. Needs a
 gary_resim whose "gone" events carry the owner and the place (resim/gary_resim.cpp).
 
 Usage:
@@ -65,7 +70,7 @@ from inventory import data_root
 from eval import monitor, priority
 from macro_dataset import RACES, TOWN_HALLS, run_resim, select
 
-VERSION = "v3"
+VERSION = "v4"
 GRID, CELLS, CHANNELS = 16, 256, 9
 MIN_SUP = 8                  # at least 4 supply (x2) selected
 WINDOW = 48                  # at most one sample per player per 2 s
@@ -78,11 +83,30 @@ CLUSTERS = 3
 NEAR, MOVED = 1, 2           # engage: the target this close to enemy presence, the group sent this far
 
 
+def static_value(unit_type: int) -> int:
+    """A static defense's weight on the static channel (gary/policy/army.py STATIC_SUPPLY; 0 if none)."""
+    from gary.policy.army import STATIC_SUPPLY
+    return STATIC_SUPPLY.get(unit_type, 0)
+
+
 def loss_value(unit_type: int) -> int:
     """A loss's weight on the losses grid: a worker 2, a fighter its supply x2, a building 4 (else 0); as
     gary/policy/army.py's loss_value, which the army tracker uses in play."""
     from gary.policy.army import loss_value as value
     return value(unit_type)
+
+
+def _add_static(static: np.ndarray, frames: np.ndarray, g: np.ndarray, f_done: int, f_gone: int, c: int,
+                v: int) -> None:
+    """static[t, c] += v from the first snapshot after f_done with an enemy building in sight in cell c (g's
+    channel 5) to the last before f_gone."""
+    t0 = int(np.searchsorted(frames, f_done))
+    t1 = int(np.searchsorted(frames, f_gone))
+    if t0 >= t1:
+        return
+    seen = np.nonzero(g[t0:t1, 5, c] > 0)[0]
+    if len(seen):
+        static[t0 + int(seen[0]):t1, c] += v
 
 
 def cheb(a: int, b: int) -> int:
@@ -270,6 +294,21 @@ def build_game(rec: dict) -> dict:
                 if frames[t] - LOSS_S * 24 < f <= frames[t]:
                     loss[j, c] += v
         out[f"p{i}_tick_loss"] = np.minimum(loss, 255).astype(np.uint8)
+        # the enemy's static defense: each from its "done" to its "gone" (by tag), known once the player sees an
+        # enemy building in its cell after it is done
+        static = np.zeros((T, CELLS), np.int32)
+        built = {}
+        for r in lines:
+            if r["type"] != "event" or r.get("slot") in (s, None) or r["slot"] not in slots:
+                continue
+            if r["ev"] == "done" and static_value(r["unit"]) and "x" in r:
+                built[r["tag"]] = (r["frame"], cell_of(r["x"], r["y"], mw, mh, fx, fy), static_value(r["unit"]))
+            elif r["ev"] == "gone" and r["tag"] in built:
+                f, c, v = built.pop(r["tag"])
+                _add_static(static, frames, g, f, r["frame"], c, v)
+        for f, c, v in built.values():
+            _add_static(static, frames, g, f, frames[-1] + 1, c, v)
+        out[f"p{i}_tick_static"] = np.minimum(static[np.array(tk["t"], np.int64)], 255).astype(np.uint8)
         ti = np.array(tk["t"], np.int64)
         out[f"p{i}_tick_grid"] = np.array(tk["grid"], np.uint8).reshape(-1, CHANNELS, CELLS)
         out[f"p{i}_tick_frame"] = frames[ti] if len(ti) else np.zeros(0, np.int32)

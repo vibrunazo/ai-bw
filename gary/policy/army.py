@@ -17,6 +17,7 @@ model also says "stay": its best cell is then the one the group is already in.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -40,9 +41,14 @@ class ArmySpec:
     commit: bool = False          # the group's commitment in the numbers too (train/commit.py)
     losses: bool = False          # a 10th map channel: own losses in the last LOSS_S, where they died
     others: bool = False          # the other clusters' commitments in the numbers (others_inputs)
+    static: bool = False          # a map channel after the losses': the enemy's ground static defense known (STATIC_SUPPLY)
 
     @property
     def channels(self) -> int:
+        return CHANNELS + (1 if self.losses else 0) + (1 if self.static else 0)
+
+    @property
+    def static_channel(self) -> int:
         return CHANNELS + (1 if self.losses else 0)
 
     @property
@@ -61,6 +67,8 @@ COMMIT_INPUTS = 3                 # the group's commitment: engaging, moving (on
 OTHER_INPUTS = 4                  # the other clusters: supply shares committed to engage and to move, the nearest's
                                   # distance and whether it engages (others_inputs)
 COMMIT_AGE_S = 120                # an order older than this is no commitment (ingest/army_dataset.py COMMIT_S)
+STATIC_SUPPLY = {146: 12, 162: 12, 125: 12}   # ground static defense, each worth this (supply x2): sunken, cannon, bunker
+STATIC_GONE_PX = 7 * 32           # a known static defense is gone when own units are this close and don't see it
 
 
 def loss_value(unit_type: int) -> int:
@@ -210,6 +218,7 @@ class ArmyTracker:
         self.missing: dict[int, tuple[int, int, int]] = {}     # own tags out of sight: (frame, cell, value)
         self.lost: list[tuple[int, int, int]] = []             # (frame, cell, value) of own losses
         self.hidden: set[int] = set()                          # own tags not lost when unseen (in a bunker)
+        self.statics: dict[int, tuple[int, int, int]] = {}     # spec.static: enemy static defense tag -> (x, y, type)
 
     def cell(self, x: float, y: float) -> int:
         gx = min(GRID - 1, max(0, int(x * GRID // self.mw)))
@@ -261,6 +270,8 @@ class ArmyTracker:
         f0 = obs["frame"]
         if self.spec.losses:
             self._losses(obs)
+        if self.spec.static:
+            self._statics(obs)
         self.seen_buildings = np.maximum(self.seen_buildings, g[5])
         self.recent = [(f, a) for f, a in self.recent if f0 - f <= RECENT_S * 24] + [(f0, g[3])]
         self.seen_hist = [(f, a) for f, a in self.seen_hist if f0 - f <= MEMORY_S * 24] + [(f0, seen)]
@@ -283,6 +294,19 @@ class ArmyTracker:
         self.lost = [x for x in self.lost if f0 - x[0] <= LOSS_S * 24 + GONE_AFTER]
         self.own_last = {**{t: x for t, x in self.own_last.items() if t in self.missing}, **now}
 
+    def _statics(self, obs: dict) -> None:
+        """Enemy ground static defense seen (completed), remembered until own units stand near its place and don't
+        see it (the dataset: from the first look at its cell until it dies)."""
+        now = set()
+        for u in obs["units"]:
+            if u["owner"] not in (self.slot, 11) and u["type"] in STATIC_SUPPLY and u.get("completed", True):
+                self.statics[u["tag"]] = (u["x"], u["y"], u["type"])
+                now.add(u["tag"])
+        at = [(u["x"], u["y"]) for u in obs["units"] if u["owner"] == self.slot]
+        for tag, (x, y, _) in list(self.statics.items()):
+            if tag not in now and any(math.dist((x, y), q) < STATIC_GONE_PX for q in at):
+                del self.statics[tag]
+
     def inputs(self, obs: dict, group: list[dict], commit: tuple[int, float] | None = None) -> tuple[np.ndarray, np.ndarray]:
         """grid (9, 256) and numbers for ordering `group` (own units) now; commit: the group's commitment
         (0 none, 1 engage, 2 move) and its age in seconds, for a model with spec.commit."""
@@ -294,6 +318,9 @@ class ArmyTracker:
             for f, c, v in self.lost:
                 if obs["frame"] - f <= LOSS_S * 24 + GONE_AFTER:
                     g[9, c] += v
+        if self.spec.static:
+            for x, y, t in self.statics.values():
+                g[self.spec.static_channel, self.cell(x, y)] += STATIC_SUPPLY[t]
         group_sup = 0
         for u in group:
             s = supply_x2(u["type"])
