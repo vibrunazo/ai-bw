@@ -1009,6 +1009,18 @@ plan and the full log).
   QP60a): won 21 lost 10, rejected. Folded into gt1 (gt0.7) and gt1dev (gt0.8dev); the old manifests that had it
   play without it now. The rounds against these are next: the macro rules registered in AGENTS.md off one at a
   time (options nocaps, noscvcap, nodepots).
+- **Static defense as a commit-model input (2026-10-23; army dataset v4, branch static-input).** The commit model's
+  map counted a sunken as any building, so the static guard (a veto) stood in for it. v4 adds the enemy's ground
+  static defense the player knew of as a channel; two Terran commit models on the same 4,841 player-games (2,459
+  modern, 2,500 old), with and without it: held-out order AUC 0.770 / 0.767, engage AUC 0.768 / 0.768. Per defended
+  spot (the group's weight against the static defense within a cell), engages per 1,000 held-out ticks, pros /
+  with / without: under 0.75x 1.66 / 1.09 / 1.02, 0.75-1.5x 2.67 / 2.15 / 2.02, 1.5-3x 4.45 / 3.40 / 3.19, 3-6x
+  4.31 / 3.09 / 2.95; undefended spots 127 / 141 / 134. The pros don't avoid static defense much: 29% of their
+  engages into it are under the guard's 1.5x, so the guard departs from them; both models follow the pros'
+  pattern already, the channel adds ~5%, and both engage defended spots ~25% less than pros. So Gary's losses
+  into sunkens (human game 4) aren't a decision the pros' data teaches against; what it attacks with and how it
+  fights there is the likelier cause. In games: options noguard, cmstatic, cmnostatic (rounds NG70a, NGS70a,
+  NGC70a), judged on the attacks' trade.
 - **Three macro rules off, and why two of them still help (2026-10-23).** 48 games each against gt1 (Q60a: won 30
   lost 5, gap 0.28). The pros' caps off (NC70a): won 22 lost 10, paired -0.109 +- 0.152, the macro gap +0.070
   [+0.013, +0.125]. The SCV saturation cap off (NS70a): won 24 lost 4, -0.047 +- 0.102, the gap +0.041 [+0.007,
