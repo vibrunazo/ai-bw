@@ -433,7 +433,9 @@ HISTORY_FADE = 12                    # option history: minutes over which the pr
 
 def rolled_style(model, matchup: str, race: str, seed: int) -> int | None:
     """A build style rolled among the model's, by the pros' shares of them where the taxonomy is here
-    (data/interim/taxonomy/<matchup>_<race>_plan.json), else evenly (Gary-Z's plan roll)."""
+    (data/interim/taxonomy/<matchup>_<race>_plan.json, Gary-Z's plan roll; else the tech clusters', <matchup>_<race>
+    _tech.json: Terran TvZ 1 standard bio 81%, 2 Factory and vultures 13%, 3 Factory and Starport 4%, 4 two-Barracks
+    marines 2%), else evenly."""
     import json
     import random
     styles = model.spec.styles
@@ -447,8 +449,14 @@ def rolled_style(model, matchup: str, race: str, seed: int) -> int | None:
         for k in d["assignments"].values():
             counts[k] += 1
         shares = [c / max(1, sum(counts)) for c in counts]
-    except Exception:                         # (no taxonomy here)
-        pass
+    except Exception:                         # (no plan taxonomy here: the tech clusters', by style number)
+        try:
+            from ingest.inventory import data_root
+            d = json.loads((data_root() / "interim" / "taxonomy" / f"{matchup}_{race}_tech.json").read_text(encoding="utf-8"))
+            vals = list(d["assignments"].values())
+            shares = [vals.count(k) / max(1, len(vals)) for k in range(max(vals) + 1)]
+        except Exception:
+            pass
     weights = [shares[s] if shares and s < len(shares) else 1.0 for s in styles]
     return random.Random(seed).choices(styles, weights=weights)[0]
 
@@ -786,6 +794,11 @@ OPTIONS = {
     # On v0.18 (fresh seeds 101+, 333 games): lost 30 (57), won 64 (57); Zerg v2 on Fighting Spirit
     # lost 3 of 72 (22). In v0.19
     "selector": lambda m: m["macro"].update(selector="play"),
+    # the build style rolled per game by the pros' shares (rolled_style), not the selector's table: that was counted
+    # in eval/vs_rush.py's short games against rushes on the 1.16 maps (2026-10-13), where two-Barracks marines (style
+    # 4, 1.5% of pro Terrans: gas in 10% of them, no Factory) won most, and every 30-minute game on the ladder maps
+    # borrowed it: Gary-T played style 4 in all 96 of rounds R50a+b (its macro gap: no gas, no Factory, mass marines)
+    "styleroll": lambda m: m["macro"].update(selector=None, style="roll"),
     "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
     # fast pools that beat v0.12 on Heartbreak Ridge it kept a few more SCVs; the bunker's spot mattered
