@@ -1048,7 +1048,16 @@ plan and the full log).
 - **gt1dev without the stop-gaps (gt0.10dev, 2026-10-23).** Stop-gaps stay in gt1 while they help, but the learning
   is judged where the models own the decisions: gt1dev drops the army's (the static guard, the hunt with its search
   and scans, the overlord hunt) and the macro's (the pros' caps, the SCV cap, the bank escape), option unscripted.
-  Its new baseline: rounds DV90a+b. A stop-gap is imitated (the rule labelling the model's own states) where the
+  Its new baseline (DV90a+b, 96 games): won 7 lost 29 (gt1 gt0.9: 56 and 12), paired -0.346 +- 0.095; the gap
+  +0.128 (+0.088 to +0.153), the macro features +0.256 further from the pros, the fight features -0.060 nearer
+  (-0.095 to -0.031). What the learned layers have to close; most of it is the macro's (the bank escape alone cost
+  -0.203, the caps -0.109).
+- **The static guard as a nudge (gt1 gt0.10, 2026-10-23).** A spot the group doesn't outweigh 1.5 times keeps
+  (the group / 1.5 times its defense) squared of its odds instead of none (option softguard): 96 paired games
+  against the veto (SG80a+b against ND70a+b) better in 4, worse in 9, -0.016 +- 0.035, the gap +0.001: no
+  measurable difference, so the veto goes. The hunt's labels: gt1dev runs it in advice mode (huntadvice; play
+  unchanged, its decisions in the records), army dataset v5 has its inputs (enemy buildings known still standing,
+  cells unseen), train/commit.py --rule-labels imitates it. A stop-gap is imitated (the rule labelling the model's own states) where the
   pros' data lacks the behaviour, the model has the rule's inputs and can express its action: the hunt first (pros
   leave at GG, so their replays hardly show a game finished), once the commit model sees which enemy buildings are
   gone and which bases weren't seen lately.

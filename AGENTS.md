@@ -89,16 +89,16 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   quarter of gt1's attacks and goes into sunkens most (0.63 of its attacks, the commit model's 0.38: eval/attacks.py,
   2026-10-23); the static guard doesn't screen it. Tried on gz1 with the
   static guard (48 games against gt1): the Zerg won 1 (2), so off for Zerg.
-- **Static-defense guard on engages** (option `static`, in gt1; `army.py` static_odds). An engage only goes
-  where the group outweighs 1.5 times the ground static defense there (6 supply each) and the enemy
-  fighters seen near it. Scripted because the commit model doesn't weigh static defense (human game 4's
+- **Static-defense guard on engages** (options `static` and `softguard`, in gt1; `army.py` static_odds,
+  static_beta). An engage's spots where the group doesn't outweigh 1.5 times the ground static defense there (6
+  supply each) and the enemy fighters seen near it keep (the group / 1.5 times that) squared of their odds: a nudge
+  since gt0.10 (96 paired games against the veto it was: -0.016 +- 0.035, no measurable difference). Scripted because the commit model doesn't weigh static defense (human game 4's
   three attacks all went into sunkens). Replace with static defense as a commit-model input and its outcomes
   in training. Measure: the attacks' trade (`eval/attacks.py`): supply killed / lost 78.8 / 44.8 a game with
   it, 71.9 / 52.6 without; 2026-10-23 (NG70a against Q60a, gt0.7): lost / killed 70.9 / 92.6 off, 60.6 / 87.8 on,
   over 96 paired games (NG70a+b against Q60a+Q70b) worse off, -0.062 +- 0.044: it stays. The pros attack where it forbids (29% of their engages into
   static defense are under its 1.5x), and a commit model that sees static defense learned nothing more (army dataset
-  v4: docs/PROGRESS.md). It vetoes an engage the commit model chose, which this register's own rule forbids
-  (a rule may delay or shape a learned decision, never veto it): kept until the user decides (2026-10-23).
+  v4: docs/PROGRESS.md).
 - **Gather before engaging** (option `gather`, not adopted; `army.py` `_gather_start`, `_gather_step`). A commit
   engage with a quarter of the army's supply elsewhere first brings the whole army to its own middle (at least
   12 tiles from the target), then attacks once 75% of it is there or 20 s pass. It only delays the engage, never

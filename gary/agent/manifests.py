@@ -878,8 +878,10 @@ def manifest_of(name: str | dict) -> dict:
 # gt0.9: the model's units trained into a busy building's own queue, two deep (gamequeue; 96 paired games against
 # gt0.8, GQ80a+b against ND70a+b: won 56 lost 12 against 49 and 18, better in 34 and worse in 21, +0.068 +- 0.102, the
 # gap +0.018, -0.010 to +0.037; macro decisions 20.1 a minute, the pros' 20.3)
+# gt0.10: the static guard a nudge, not a veto (softguard; 96 paired games against the hard guard, SG80a+b against
+# ND70a+b: better in 4, worse in 9, -0.016 +- 0.035, the gap +0.001: no measurable difference, so the veto goes)
 MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords+hunt4+split+static+roles30+lone"
-                                  "+addonroom+gamequeue"), "version": "gt0.9"}
+                                  "+addonroom+gamequeue+softguard"), "version": "gt0.10"}
 # gt1dev: the Terran Gary that learning is trained and judged in (AGENTS.md): gt1 with the role model deciding in
 # contact as well (attended pro units with their re-issues as a decision, again, Gary's own order rate as input, its
 # moves kept current, several orders a turn) and the army on control groups by type, a key's units drawing their
@@ -890,8 +892,9 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # against D50a+b: won 54 lost 15 against 39 and 16, better in 34 games and worse in 20, the gap -0.046, -0.070 to
 # -0.012, macro features -0.053; against gt1 better in 28 and worse in 20, the gap even, macro +0.035, -0.009 to +0.070)
 # gt0.7dev: gt1's add-on room (gt0.6); gt0.8dev: gt1's queue without keep_busy (gt0.7); gt0.9dev: gt1's own depots
-# (gt0.8); gt0.10dev: gt1's in-building queue (gt0.9), without the army's and the macro's stop-gaps (unscripted)
-MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted"),
+# (gt0.8); gt0.10dev: gt1's in-building queue (gt0.9), without the army's and the macro's stop-gaps (unscripted), the
+# hunt in advice mode (huntadvice: its labels in the records, play unchanged; baseline DV90a+b)
+MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"),
                        "version": "gt0.10dev"}
 
 
