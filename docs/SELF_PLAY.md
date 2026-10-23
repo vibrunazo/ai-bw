@@ -503,9 +503,20 @@ held-out validation, then games. The rules:
    power check on the branch data that exists sets how many moments and repeats; then the collection.
 4. **Where Gary's strength came from, and so where to invest:** better and more recent imitation data,
    conditioned on era, map and matchup; the decoder's exposure-bias fixes (floor, mass, faded pro history,
-   holds); execution leaks found by the records (eval/why.py) and the humanlike table. Grouping is unproven:
-   by type it cost Gary-T games (round GT40a) and is pending 96 games for Gary-Z.
-5. **The pipe check and the pairs tool are standing diagnostics,** run before and after any change to a learned
+   holds); execution leaks found by the records (eval/why.py) and the humanlike table. Grouping: in gz1 (gz0.2); for
+   Gary-T even in 96 games once a key's members were read right (its earlier losses were that bug), in gt1dev.
+5. **What made the first run that held different from the four before it** (2026-10-22/23, docs/PROGRESS.md "The
+   first roles RL run that moved and improved"): the pipe check first (shifted logits moved commands and reach
+   before any compute was spent); the model owning the decision in contact during training and judging, not hand
+   rules beside it; the checkpoint chosen on a split other than the one it was scored on (the training games'
+   validation scenarios, then the held-out games' suite); and games as the last gate, not the first. That is the
+   recipe for the next run, with the same anchor (the first run's shifts toward fire and again did not drift the
+   fight gap).
+6. **Keep the hands apart from the learning in the record.** The hands work (the model in contact, several orders a
+   turn, again, control groups) moved attention: units reached at fight moments 33% -> 60%, commands into the fight
+   31 -> 78 a fight minute (eval/attention.py, first 10 minutes; pros 58% and 105). The RL learned better decisions
+   on top, not more orders. The next attention gain is hands and arbiter work too, not a run.
+7. **The pipe check and the pairs tool are standing diagnostics,** run before and after any change to a learned
    layer, not one-off probes.
 
 ## The loop
