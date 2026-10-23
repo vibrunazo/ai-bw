@@ -927,6 +927,18 @@ plan and the full log).
   by taking no gas. Next for macro: production added when money floats, as the pros do (the model's odds on its own
   banked states), before the style is let go. Also: the first producer's rule after the opening needs a buildable
   one for a Terran too (3c661c8; it set the goal up to 2,955 times a game in lost games).
+- **Production idle, and the fill decoder (2026-10-23).** Production buildings at 10-20 minutes (sampled every 10 s,
+  completed with nothing in training): gt1 (B50a, 24 games) Barracks 5.0 idle 44%, Factories 0.9 idle 79%, Starports
+  1.5 idle 79%, Command Centers 2.0 idle 93%, minerals banked 2,354; pros (30 games) 4.9 idle 47%, 1.8 idle 46%, 1.4
+  idle 54%, 2.8 idle 84%, 1,932. The Barracks are the pros'; the Factories and Starports are half as many and mostly
+  idle (no tanks, vultures, goliaths, vessels: the high-supply units, the unspent gas). The model's next decision adds
+  production as often as the pros' when money floats (10% of Gary's against 6%). Bases: the natural at 5 minutes
+  (pros 3), the third at 15 (12), as many games reaching them; workers even to 12 minutes, 41 against 46 at 16. Option
+  fill (keep_busy: an idle producer makes the model's likeliest of its own units when its last can't be made), 48
+  games each: gt1 won 24 lost 10 (B50a 29 and 5), Factories still idle 78%, the gap +0.007; gt1dev won 22 lost 4
+  (R50a 31 and 8), the gap +0.064 (+0.023 to +0.099). Not adopted (reverted on the branch); the units it picked were
+  likely held by the pros' per-minute caps (macro.py plan, capped). Next for macro: why an idle Factory isn't given
+  a unit, from the records (the caps, its add-on, the money held for a goal).
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
