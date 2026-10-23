@@ -943,6 +943,14 @@ plan and the full log).
   pros' cap for this minute" for vessels about 140, "no Machine Shop" 40. At the one "busy" moment replayed the
   Factory was training (queue 1), so the wait can be real; the idle 79% are the moments between, when keep_busy (on in
   gt1) doesn't train from it. Next: keep_busy's own records (what it tried for each idle producer and why not).
+- **The second roles RL run (2026-10-23), from rl1 by the same recipe** (60 rounds, 32 x 8 plays, the KL anchor to
+  its start, Gary's own order rate as input). Validation (the training games' scenarios) -152, -124, -161, -103,
+  -131, -119, -53 (round 60, kept: runs/roles_rl/20261023_014740, option rl2). Gate 1: KL to rl1 0.082 (median 0.052);
+  fire 16.2% -> 16.9%, close in 3.3% -> 4.1%, reposition 8.4% -> 6.5%, again 23.5% -> 24.1%. Gate 3, the held-out
+  suite: +255 against rl1's +195 (paired +67, +3 to +134; mixed +142, +33 to +279; outnumbered +120, +5 to +258;
+  attacks -22, harassment +10 within noise), against RoleAhead's +141 +117 (+12 to +231): the model in contact now
+  beats the hand rules there. Commands a minute 72.5, fighters reached 86% (rl1's 74.9, 90%). Gate 4: rounds
+  Q50a+b against R50a+b.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
