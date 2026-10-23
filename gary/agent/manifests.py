@@ -835,7 +835,10 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depot
 # decisions together (again in it since its pipe check moves reach: 67% -> 72% pushed, without it none). Weaker than gt1 today
 # (the state-selected suite: +110 against +141; Terran grouping 45 won 17 lost against 57 and 8 in 96 games); it
 # becomes gt1 when it beats it in 96 paired games
-MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together"), "version": "gt0.5dev"}
+# gt0.6dev: its role model from the first roles RL run (option rl1; 96 paired games against gt0.5dev, rounds R50a+b
+# against D50a+b: won 54 lost 15 against 39 and 16, better in 34 games and worse in 20, the gap -0.046, -0.070 to
+# -0.012, macro features -0.053; against gt1 better in 28 and worse in 20, the gap even, macro +0.035, -0.009 to +0.070)
+MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1"), "version": "gt0.6dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:

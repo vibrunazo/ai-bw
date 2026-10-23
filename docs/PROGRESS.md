@@ -879,6 +879,27 @@ plan and the full log).
   keys. The grouping model (train/groups.py; gary/policy/grouping_model.py: per-unit embeddings, a pair's chance on
   one key), held out, partitioned into up to 4 keys: precision 0.529, recall 0.779 (F1 0.630) against the type
   rule's 0.530 and 0.706 (0.607). As the provider (option grouplearned): groups of 5 at assign in a smoke game.
+- **The first roles RL run that moved and improved (2026-10-22/23).** From gt1dev with the again model (its pipe
+  check: again pushed, commands a minute 76.6 -> 80.5, reach 67% -> 72%; the suite +87): train/roles_rl.py, 60 rounds
+  of 32 training scenarios x 8 plays, the KL anchor to the start, Gary's own order rate as the budget input.
+  Validation (the training games' 35 scenarios) -209, -218, -214, -207, -177, -152 (round 50, kept), -193.
+  - Gate 1, moved off its start: on the held-out suite KL 0.094 (median 0.067); fire 13.7% -> 16.0%, again 20.9% ->
+    22.3%, reposition 12.7% -> 10.0%, retreat 2.6% -> 1.6%.
+  - Gate 3, the held-out suite (79 scenarios from games held out of training, not the ones that chose the
+    checkpoint; they did choose gt1dev's composition): +195 against the start's +87 (paired +105, +44 to +169; attacks
+    +179, harassment +82, outnumbered +95, mixed +70), against RoleAhead's +141 +50 (-51 to +151).
+  - Gate 4, 96 paired games against gz0.2 (R50a+b, option rl1, against D50a+b, gt1dev): won 54 lost 15 against 39 and
+    16; score a game (won 1, ahead at 30:00 0.75, even 0.5, behind 0.25, lost 0) +0.089 +- 0.076 (better in 34, worse
+    in 20); the Terran's gap -0.046 (-0.070 to -0.012), fight features -0.035 (-0.056 to +0.002; 0-20 minutes a
+    little further, 20-25 nearer), macro -0.053 (-0.098 to -0.002); the Zerg's gap against it -0.094. Against gt1
+    (B50a+b): +0.042 +- 0.075 (better in 28, worse in 18), the gap +0.008, fight -0.035 (-0.065 to +0.004), macro
+    +0.035 (-0.009 to +0.070): not yet beating gt1; macro the side to watch.
+  - Gate 2, attention (eval/attention.py, first 10 minutes; whole games in brackets): commands into the fight a fight
+    minute, fight moments attended, army units reached: gt1 31, 63%, 33%; gt1dev's start 78-81, 91-92%, 60% (75-78,
+    89-90%, 49%); rl1 75-79, 89-90%, 57-60% (74-75, 88-89%, 48%); pros 105, 70%, 58%. The RL learned better decisions,
+    not more orders; the hands work (the model in contact, several orders a turn, again, control groups) is what
+    moved attention, reach to the pros' level, and attended now passes the pros' (91% against 70%): a new tell.
+  - Adopted into gt1dev (gt0.6dev); gt1 stays what plays.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
