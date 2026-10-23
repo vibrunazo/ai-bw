@@ -900,6 +900,18 @@ plan and the full log).
     not more orders; the hands work (the model in contact, several orders a turn, again, control groups) is what
     moved attention, reach to the pros' level, and attended now passes the pros' (91% against 70%): a new tell.
   - Adopted into gt1dev (gt0.6dev); gt1 stays what plays.
+- **The hands in fights don't explain the macro lean (2026-10-23).** eval/attention.py now splits a player's
+  actions during fight moments (into the fight, other units, macro: Train, Build, Morph, Tech, Upgrade), Terran,
+  whole games: gt1 (B50a+b) 70-72 actions a fight minute, 41-44% into the fight, 27-30% other units, 28-29% macro;
+  gt1dev (R50a+b) 107-108, 69-70%, 13%, 17-18%; pros (100 games) 149, 63%, 23%, 14%. Macro actions a minute in fights
+  gt1 20, gt1dev 18-19, pros 21; out of fights 12.7, 12.3, 24 (the pros' counts include repeated train clicks). The
+  attended share (moments with a fight command in the last 2 s; gt1dev 89%, pros 67-70%) measures how evenly the
+  fight is touched, not how the hands split: gt1dev added actions in fights rather than taking them from
+  production, and Gary's macro gap is outside fights. Option attend (the share held at the pros', fight.py), 48
+  games against gt1dev's R50a: won 28 lost 6 (31 and 8), attended 77%, commands into the fight 52 a fight minute
+  (75), reach 37% (48%), macro in fights 19.9 (18), out of them 12.6 (12.4), the macro gap +0.049 (-0.008 to
+  +0.100), the fight gap -0.019: not adopted. The gap table now carries the attention features (fight_attended,
+  fight_reached; the modern pros' rows and rounds R50, B50, A50 augmented).
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league

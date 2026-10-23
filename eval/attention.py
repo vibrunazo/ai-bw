@@ -9,6 +9,10 @@ player and race, within a window of the game:
   attended         the share of snapshots where such a command in the ATTEND frames before (to NEAR after) reached
                    one of its army units there
   reached          the share of its army units in snapshots that such a command reached
+  the hands        during fight moments, the player's actions into the fight (as above), to its other units
+                   (unit commands to none of the fight's army units) and macro (Train, Build, Unit and Building
+                   Morph, Tech, Upgrade: the replay's own commands, ingest/cmdcache.py); and macro actions a minute
+                   in fights and out of them
 
     python -m eval.attention --gary runs/league/R50a runs/league/D50a --pros 100
     python -m eval.attention --gary runs/league/R50a --until 600          # the first 10 minutes only
@@ -42,6 +46,7 @@ FIGHT_EVERY = 12                       # frames between a player's fight snapsho
 NEAR = 12
 ATTEND = 48
 HALLS = {106: "T", 131: "Z", 154: "P"}
+MACRO = {"Train", "Build", "Unit Morph", "Building Morph", "Tech", "Upgrade"}
 
 
 def one(job: tuple) -> dict | None:
@@ -79,6 +84,20 @@ def one(job: tuple) -> dict | None:
             army = {u[0] for u in r["u"] if u[2] == 1 and not is_worker(u[1]) and not is_building(u[1])}
             if army:
                 snaps[r["slot"]].append((r["frame"], army))
+    macro = collections.defaultdict(list)          # race -> the frames of its player's macro commands
+    try:
+        import hashlib
+        from cmdcache import F, P, T, load_game
+        from inventory import find_screp
+        raw = Path(path).read_bytes()
+        cg = load_game(find_screp(None), Path(path), hashlib.sha1(raw).hexdigest(), data_root() / "interim" / "cmdcache" / "v1")
+        race_of_pid = {pl["id"]: pl["race"] for pl in cg["players"] if not pl["observer"]}
+        for cmd in cg["cmds"]:
+            if cmd[T] in MACRO and cmd[F] <= until * 24 and cmd[P] in race_of_pid:
+                macro[race_of_pid[cmd[P]]].append(cmd[F])
+    except Exception:
+        pass
+    last = max((r["frame"] for r in lines if "frame" in r), default=0)
     out = {}
     for slot, race in race_of.items():
         sl = snaps[slot]
@@ -89,10 +108,14 @@ def one(job: tuple) -> dict | None:
         per_min = collections.defaultdict(lambda: [0, 0, 0, 0])   # game minute (1-based) -> snaps, attended, units, reached
         frames = [f for f, _ in sl]
         cf = [f for f, _ in cmds[slot]]
+        in_fight = lambda f: (lambda k: k < len(sl) and abs(sl[k][0] - f) <= NEAR)(bisect.bisect_left(frames, f - NEAR))
         for f, us in cmds[slot]:                    # (commands into the fight: a snapshot within NEAR)
             k = bisect.bisect_left(frames, f - NEAR)
-            if k < len(sl) and abs(sl[k][0] - f) <= NEAR and us & sl[k][1]:
-                c["into"] += 1
+            if k < len(sl) and abs(sl[k][0] - f) <= NEAR:
+                c["into" if us & sl[k][1] else "elsewhere"] += 1
+        for f in macro.get(race, []):              # (macro actions, in fights or out of them)
+            c["macro in fights" if in_fight(f) else "macro out of fights"] += 1
+        c["game minutes"] = min(until * 24, last) / 1440
         for f, army in sl:
             reached = set()
             k = bisect.bisect_left(cf, f - ATTEND)
@@ -123,6 +146,13 @@ def show(name: str, paths: list[str], until: int, workers: int) -> None:
         print(f"{name} {race} ({games[race]} games, to {until // 60} min): {minutes / max(1, games[race]):.1f} fight "
               f"minutes a game; commands into the fight {c['into'] / max(1e-9, minutes):.0f} a fight minute; attended "
               f"{c['attended'] / max(1, c['snaps']):.0%} of fight moments; army units reached {c['reached'] / max(1, c['units']):.0%}",
+              flush=True)
+        hands = c["into"] + c["elsewhere"] + c["macro in fights"]
+        out_min = max(1e-9, c["game minutes"] - minutes)
+        print(f"  the hands in fights: into the fight {c['into'] / max(1, hands):.0%}, other units "
+              f"{c['elsewhere'] / max(1, hands):.0%}, macro {c['macro in fights'] / max(1, hands):.0%} "
+              f"({hands / max(1e-9, minutes):.0f} actions a fight minute); macro actions a minute in fights "
+              f"{c['macro in fights'] / max(1e-9, minutes):.1f}, out of them {c['macro out of fights'] / out_min:.1f}",
               flush=True)
 
 
