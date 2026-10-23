@@ -615,6 +615,9 @@ OPTIONS = {
     # the training games' scenarios): the held-out state-selected suite +195 against its start's +87 (paired +105,
     # +44 to +169), against RoleAhead's +141 +50 (-51 to +151)
     "rl1": lambda m: m["fight"].update(roles_model="runs/roles_rl/20261022_185355/model.pt"),
+    # the third roles RL run, from rl1 with each decision credited over 20 s (--horizon 20; rl2's 10 s won the suite
+    # and lost in games): the held-out suite +268 against rl1's +195 (paired +71, +12 to +135), against RoleAhead +122
+    "rl3": lambda m: m["fight"].update(roles_model="runs/roles_rl/20261023_043828/model.pt"),
     # the second roles RL run, from rl1 (60 rounds, its best validation at round 60, -53 against rl1's -152): the
     # held-out suite +255 against rl1's +195 (paired +67, +3 to +134), against RoleAhead's +141 +117 (+12 to +231)
     "rl2": lambda m: m["fight"].update(roles_model="runs/roles_rl/20261023_014740/model.pt"),
