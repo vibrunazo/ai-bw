@@ -937,8 +937,12 @@ plan and the full log).
   fill (keep_busy: an idle producer makes the model's likeliest of its own units when its last can't be made), 48
   games each: gt1 won 24 lost 10 (B50a 29 and 5), Factories still idle 78%, the gap +0.007; gt1dev won 22 lost 4
   (R50a 31 and 8), the gap +0.064 (+0.023 to +0.099). Not adopted (reverted on the branch); the units it picked were
-  likely held by the pros' per-minute caps (macro.py plan, capped). Next for macro: why an idle Factory isn't given
-  a unit, from the records (the caps, its add-on, the money held for a goal).
+  likely held by the pros' per-minute caps (macro.py plan, capped). Why an idle Factory isn't given a unit: at 10-20
+  minutes (B50a) Siege Tanks and Science Vessels are in the model's top odds a fifth of the time (1,211 and 1,291 of
+  5,736 decisions), and are passed over as "also waits: its Factory (Starport) is busy" 505 and 423 times, "the
+  pros' cap for this minute" for vessels about 140, "no Machine Shop" 40. At the one "busy" moment replayed the
+  Factory was training (queue 1), so the wait can be real; the idle 79% are the moments between, when keep_busy (on in
+  gt1) doesn't train from it. Next: keep_busy's own records (what it tried for each idle producer and why not).
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
