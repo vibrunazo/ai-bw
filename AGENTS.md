@@ -32,7 +32,10 @@ How to work in this repository, for coding agents and people alike. The design i
   (`--maps ladder --seeds 6 --first 4004`, 30 minutes) and the gap score to modern pros; 24 games are too
   noisy for close calls, and a single round's gap score needs its spread (`eval/gap_windows.py`, 96 paired games
   for a close call). An adopted option is folded into the manifest with a version bump, so the name
-  never grows into a chain of options.
+  never grows into a chain of options. A close 48-game round gets its second 48 (`--first 4010`) at the first
+  round's priority, without asking. A stop-gap that makes no measurable difference in 96 paired games goes. A
+  learned change that fails its 96 games is reviewed before the next try: a bug (the records, `eval.why`), inputs
+  the model lacks for the decision, or the limit of what the data teaches; the finding goes in docs/PROGRESS.md.
 - Before any learning run beyond imitation, the rules in docs/SELF_PLAY.md ("Learning beyond imitation"): the
   pipe check shows pushed logits move what Gary executes; the model owns the decision in play and in the judging
   games; branched decisions are locked for the window (the pros' hold lengths); the minimum detectable effect
