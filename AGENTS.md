@@ -25,7 +25,10 @@ How to work in this repository, for coding agents and people alike. The design i
   (`--vs`, default gt1) against Zerg (`--zerg`, default gz1); `gary/play.py --live` plays a human.
 - Two Terran manifests: `gt1` is what plays (the strongest measured: human games, the tests' parity, the league's
   default) and `gt1dev` is what learning is trained and judged in: gt1 with the role model deciding in contact and
-  the army on control groups, the configuration expected to win later. A learned layer's work (data, training, the
+  the army on control groups, the configuration expected to win later, and without the stop-gaps over the layers
+  being learned (option `unscripted`: the static guard, the hunt, the overlord hunt, the pros' caps, the SCV cap, the
+  bank escape), so the models own those decisions there; a stop-gap stays in gt1 while it measurably helps, and its
+  job in gt1dev is the learned layer's or nobody's. A learned layer's work (data, training, the
   pipe check, RL) is done and judged in gt1dev; gt1dev replaces gt1 when it beats it in 96 paired games, with a
   version bump. The suite's numbers for both, and how far apart they are, are in docs/PROGRESS.md.
 - A change is an option on them (`gt1+<option>`), judged in paired 48-game rounds on the ladder maps

@@ -803,6 +803,12 @@ OPTIONS = {
     # for, as pros queue; else it waits for the building and, its queue full, holds the macro (the bank escape covers
     # for that: off, 1,124 minerals banked at 5-15 minutes, pros 511)
     "gamequeue": lambda m: m.update(train_depth=2),
+    # the stop-gaps over the layers being learned off (AGENTS.md: gt1dev runs without them, so the models own those
+    # decisions and are judged without the rules): the static guard, the hunt (its search and scans), the overlord
+    # hunt; the pros' caps, the SCV saturation cap, the bank escape
+    "unscripted": lambda m: (m["army"].update(static_odds=None, hunt=False,
+                                              rules=[r for r in m["army"].get("rules", ()) if r != "lords"]),
+                             m["macro"].update(caps=False, bank_escape=False), m.update(scv_saturation=False)),
     # army.py static_odds off: the static guard's veto gone (pros attack spots it forbids: 29% of their engages into
     # static defense are under 1.5 times it, held-out modern TvZ)
     "noguard": lambda m: m["army"].update(static_odds=None),
@@ -863,8 +869,11 @@ def manifest_of(name: str | dict) -> dict:
 # gt0.8: depots ahead of production gone, the model's own depots (96 paired games against gt0.7, ND70a+b against
 # Q60a+b: won 49 lost 18 against 50 and 16, paired -0.018 +- 0.101, the gap -0.013, -0.040 to +0.012; blocked at 5-10
 # minutes 14% of the time, pros 9%, gt0.7 2%; at 10-20 minutes 2%, pros 14%, gt0.7 0.2%)
+# gt0.9: the model's units trained into a busy building's own queue, two deep (gamequeue; 96 paired games against
+# gt0.8, GQ80a+b against ND70a+b: won 56 lost 12 against 49 and 18, better in 34 and worse in 21, +0.068 +- 0.102, the
+# gap +0.018, -0.010 to +0.037; macro decisions 20.1 a minute, the pros' 20.3)
 MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords+hunt4+split+static+roles30+lone"
-                                  "+addonroom"), "version": "gt0.8"}
+                                  "+addonroom+gamequeue"), "version": "gt0.9"}
 # gt1dev: the Terran Gary that learning is trained and judged in (AGENTS.md): gt1 with the role model deciding in
 # contact as well (attended pro units with their re-issues as a decision, again, Gary's own order rate as input, its
 # moves kept current, several orders a turn) and the army on control groups by type, a key's units drawing their
@@ -875,8 +884,9 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # against D50a+b: won 54 lost 15 against 39 and 16, better in 34 games and worse in 20, the gap -0.046, -0.070 to
 # -0.012, macro features -0.053; against gt1 better in 28 and worse in 20, the gap even, macro +0.035, -0.009 to +0.070)
 # gt0.7dev: gt1's add-on room (gt0.6); gt0.8dev: gt1's queue without keep_busy (gt0.7); gt0.9dev: gt1's own depots
-# (gt0.8)
-MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1"), "version": "gt0.9dev"}
+# (gt0.8); gt0.10dev: gt1's in-building queue (gt0.9), without the army's and the macro's stop-gaps (unscripted)
+MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted"),
+                       "version": "gt0.10dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:

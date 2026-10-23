@@ -1042,7 +1042,16 @@ plan and the full log).
   +0.025 (-0.008 to +0.046), macro +0.010; macro decisions 20.1 a minute (pros 20.3, without 16.0), at 5-15 minutes
   workers 35.8 (pros 34.9), medics 2.43 (2.68), the bank 425 (511). A close call: its second 48 (GQ80b against
   ND70b). With the bank escape off as well (GQN80a): -0.130 +- 0.152 against gamequeue alone, 801 banked, the gap
-  +0.076: the escape still holds something up.
+  +0.076: the escape still holds something up. Its second 48 (GQ80b against ND70b): +0.062 +- 0.144; over 96 paired
+  games better in 34 and worse in 21, +0.068 +- 0.102, won 56 lost 12 (49, 18), the gap +0.018 (-0.010 to +0.037),
+  macro -0.002: no harm, Gary's decisions nearer the pros', and the fault it replaces gone, so adopted: gt1 gt0.9.
+- **gt1dev without the stop-gaps (gt0.10dev, 2026-10-23).** Stop-gaps stay in gt1 while they help, but the learning
+  is judged where the models own the decisions: gt1dev drops the army's (the static guard, the hunt with its search
+  and scans, the overlord hunt) and the macro's (the pros' caps, the SCV cap, the bank escape), option unscripted.
+  Its new baseline: rounds DV90a+b. A stop-gap is imitated (the rule labelling the model's own states) where the
+  pros' data lacks the behaviour, the model has the rule's inputs and can express its action: the hunt first (pros
+  leave at GG, so their replays hardly show a game finished), once the commit model sees which enemy buildings are
+  gone and which bases weren't seen lately.
 - **Three macro rules off, and why two of them still help (2026-10-23).** 48 games each against gt1 (Q60a: won 30
   lost 5, gap 0.28). The pros' caps off (NC70a): won 22 lost 10, paired -0.109 +- 0.152, the macro gap +0.070
   [+0.013, +0.125]. The SCV saturation cap off (NS70a): won 24 lost 4, -0.047 +- 0.102, the gap +0.041 [+0.007,
