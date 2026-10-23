@@ -806,6 +806,9 @@ OPTIONS = {
     # the stop-gaps over the layers being learned off (AGENTS.md: gt1dev runs without them, so the models own those
     # decisions and are judged without the rules): the static guard, the hunt (its search and scans), the overlord
     # hunt; the pros' caps, the SCV saturation cap, the bank escape
+    # army.py hunt_advice: with the hunt off, what it would do written to the records (the rule's labels on the
+    # model's own states, to imitate it)
+    "huntadvice": lambda m: m["army"].update(hunt_advice=True),
     "unscripted": lambda m: (m["army"].update(static_odds=None, hunt=False,
                                               rules=[r for r in m["army"].get("rules", ()) if r != "lords"]),
                              m["macro"].update(caps=False, bank_escape=False), m.update(scv_saturation=False)),
@@ -1027,6 +1030,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.army.hunt_split = m["army"].get("hunt_split", False)
             g.army.static_odds = m["army"].get("static_odds")
             g.army.static_beta = m["army"].get("static_beta")
+            g.army.hunt_advice = m["army"].get("hunt_advice", False)
             g.army.gather_on = m["army"].get("gather", False)
     if m["fight"] is not None and m["fight"]["provider"] == "zerg":
         from gary.agent.zerg_fight import ZergFight
