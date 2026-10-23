@@ -1009,6 +1009,18 @@ plan and the full log).
   QP60a): won 21 lost 10, rejected. Folded into gt1 (gt0.7) and gt1dev (gt0.8dev); the old manifests that had it
   play without it now. The rounds against these are next: the macro rules registered in AGENTS.md off one at a
   time (options nocaps, noscvcap, nodepots).
+- **Three macro rules off, and why two of them still help (2026-10-23).** 48 games each against gt1 (Q60a: won 30
+  lost 5, gap 0.28). The pros' caps off (NC70a): won 22 lost 10, paired -0.109 +- 0.152, the macro gap +0.070
+  [+0.013, +0.125]. The SCV saturation cap off (NS70a): won 24 lost 4, -0.047 +- 0.102, the gap +0.041 [+0.007,
+  +0.076]. Depots ahead off (ND70a): won 31 lost 8, -0.021 +- 0.129, the gap -0.029 [-0.060, +0.004], a close call:
+  its second 48 on seeds 4010 (ND70b against Q70b). The review of the two that help: with the caps off, turrets at
+  10-20 minutes 16.4 (pros 7.1, gt1 9.2), medics 1.3 (4.4); with the SCV cap off, workers 48.6 (42.4, gt1 39.0). Gary
+  takes 18 macro decisions a minute at 5-20 minutes, the pros' production commands 20 (200 modern games), so the
+  rate isn't it. The decoder is: of the 1,174 turrets, 677 were picked while the model's favorite, a Marine, waited
+  for Barracks already holding their one queued unit, 329 because they had half its odds and 341 only because the
+  bank was over 400; of the 2,206 SCVs, 1,335 the same way. A pro whose next action is a Marine queues it in the
+  building. The caps clean up after the decoder's substitutions, so the substitutions go first: options nobank
+  (the bank escape off, now a registered stop-gap) and qdepth2 (two of the model's units queued per producer).
 - **Baselines and the promotion check (2026-10-23 morning).** gt1 gt0.6 (B60a+b, seeds 4004-4009 and 4010-4015,
   against gz0.2): won 49 lost 10. gt1dev gt0.7dev (D70a+b): won 48 lost 13. Paired: gt1dev better in 21, worse in 24
   (-0.018 +- 0.063); the gap +0.010 (-0.016 to +0.040), the fight features nearer the pros (-0.039, -0.064 to -0.009),

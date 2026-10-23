@@ -108,17 +108,27 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   unlikely choice could run away (v0.14's era). Partly a consequence of keep_busy (removed in gt0.7: its marines
   pushed the counts over the cap): 0.63 options refused a decision with it, 0.46 without. Replace with the model's
   own odds (it knows the counts it has; calibrated on the pros' states, the macro check). Measure: option `nocaps`
-  against gt1, results and the macro gap.
+  against gt1, results and the macro gap. Off (round NC70a against Q60a, 2026-10-23): lost 10 (5), the macro gap
+  +0.070 [+0.013, +0.125], turrets at 10-20 minutes 16.4 (pros 7.1, with it 9.2), medics 1.3 (4.4): the caps clean
+  up after the decoder (the bank escape and the under-half rule take the runner-up while the favorite waits), so
+  they go after those.
 - **SCVs capped at the bases' saturation** (in gt1; `terran_executor.py`, "SCVs enough for its bases", MAX_SCVS 60).
   The model's SCV decisions are refused beyond the bases' saturation (2,673 times in 48 games, most at 5-15
   minutes). Scripted because Gary over-made SCVs (2026-10-09: 42-51 at 12:00 against the pros' 39). Gary-T's
   Command Centers stand idle 93% of 10-20 minutes, the pros' 84%. Replace with the model's own SCV decisions.
-  Measure: an option off: workers at 12-20 minutes against the pros', results and the macro gap.
+  Measure: an option off: workers at 12-20 minutes against the pros', results and the macro gap. Off (round NS70a,
+  2026-10-23): workers at 10-20 minutes 48.6 (pros 42.4, with it 39.0), the macro gap +0.077 [+0.031, +0.122]; 1,335
+  of its 2,206 SCVs at 5-20 minutes were the decoder's runner-up, not the model's favorite.
 - **Under half the waiting favorite's odds** (in gt1 and gz1; `macro.py`, the decoder). While the model's favorite
   waits for a busy building, alternatives under half its odds are passed over and the macro waits (2,104 times:
   depots 614, SCVs 458, Barracks 242, refineries 164, Engineering Bays 146, Siege Tanks 62). Scripted so a busy
   building doesn't hand the turn to unlikely choices. With the queue of waiting decisions (gt0.7) a favorite unit
   no longer holds the macro; measure how often this still fires there, and an option without it.
+- **The bank escape** (in gt1 and gz1; `macro.py` the decoder, BANK_ESCAPE 400). While the model's favorite waits, with
+  over 400 minerals anything Gary can do now is taken instead. With the caps off it made 341 of the 1,174 turrets at
+  5-20 minutes, and 759 of the 2,206 SCVs with the SCV cap off. Scripted so money doesn't bank behind a busy
+  building. Replace with the model's own odds (it reads its minerals: pros with a bank add production) and a deeper
+  queue of its waiting units (option `qdepth2`). Measure: option `nobank`, the bank, results and the macro gap.
 - **Odds summed into a decision** (`mass` for one-offs, in gt1: tech buildings, add-ons, research, upgrades;
   `expand_mass` for expansions; `macro.py` odds_mass, expand_odds). A one-off is decided once its odds, summed over
   the decisions taken while it was possible, reach one (278 times in 48 games), an expansion likewise (194).
