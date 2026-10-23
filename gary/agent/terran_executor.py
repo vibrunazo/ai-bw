@@ -17,12 +17,16 @@ from gary.interface import screen_of
 MAX_SCVS = 60                        # SCVs at most, whatever the bases' saturation
 
 
+ADDON_ROOM = {T.FACTORY: T.MACHINE_SHOP, T.STARPORT: T.CONTROL_TOWER, T.SCIENCE_FACILITY: T.PHYSICS_LAB}
+
+
 class TerranExecutor(Executor):
     def __init__(self, g: Gary):
         super().__init__(g)
         self.stalled_since: dict[int, int] = {}       # unfinished building -> since when nobody builds it
         self.basic["resume"] = self._task_resume
         g.task_runners["resume"] = self._run_basic
+        self.addon_room = False                       # option addonroom: room for its add-on (addon_fits)
 
     def carry_out(self, act: int, uid: int, obs: dict, mine: list[dict], done: list[dict], me: dict) -> dict | None:
         """What a macro decision means for Terran hands now (LearnedMacro.plan's gates passed): a command
@@ -105,8 +109,18 @@ class TerranExecutor(Executor):
         return None
 
     def site_ok(self, unit_type: int, tx: int, ty: int) -> bool:
-        """No creep under it, and off the spot of an add-on to come."""
-        return not self.on_addon_spot(unit_type, tx, ty) and not self.creep_coming(unit_type, tx, ty)
+        """No creep under it, off the spot of an add-on to come, and (option addon_room) room for its own add-on."""
+        return not self.on_addon_spot(unit_type, tx, ty) and not self.creep_coming(unit_type, tx, ty)             and (not self.addon_room or self.addon_fits(unit_type, tx, ty))
+
+    def addon_fits(self, unit_type: int, tx: int, ty: int) -> bool:
+        """A Factory, Starport or Science Facility placed here has room for its add-on (Command Centers stand on
+        the bases' own spots). At 16:00 of gt1's games 10 of 25 Starports had no Control Tower and no room for one,
+        and a Machine Shop passed over as "no Factory ... with room for one" in 134 of 192 games (no Science
+        Vessels, no Siege Tanks: the idle Factories and Starports, rounds B50a+b, R50a+b)."""
+        if unit_type not in ADDON_ROOM:
+            return True
+        ox, oy = T.ADDON_OFFSET
+        return bool(self.g.hi.game.can_place(self.g.slot, ADDON_ROOM[unit_type], tx + ox, ty + oy, 0))
 
     def command_build(self, obs: dict, b: dict, uid: int) -> bool:
         """An add-on, next to the selected building."""

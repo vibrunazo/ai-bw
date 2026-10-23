@@ -615,6 +615,9 @@ OPTIONS = {
     # the training games' scenarios): the held-out state-selected suite +195 against its start's +87 (paired +105,
     # +44 to +169), against RoleAhead's +141 +50 (-51 to +151)
     "rl1": lambda m: m["fight"].update(roles_model="runs/roles_rl/20261022_185355/model.pt"),
+    # the third roles RL run, from rl1 with each decision credited over 20 s (--horizon 20; rl2's 10 s won the suite
+    # and lost in games): the held-out suite +268 against rl1's +195 (paired +71, +12 to +135), against RoleAhead +122
+    "rl3": lambda m: m["fight"].update(roles_model="runs/roles_rl/20261023_043828/model.pt"),
     # the second roles RL run, from rl1 (60 rounds, its best validation at round 60, -53 against rl1's -152): the
     # held-out suite +255 against rl1's +195 (paired +67, +3 to +134), against RoleAhead's +141 +117 (+12 to +231)
     "rl2": lambda m: m["fight"].update(roles_model="runs/roles_rl/20261023_014740/model.pt"),
@@ -801,6 +804,8 @@ OPTIONS = {
     # in eval/vs_rush.py's short games against rushes on the 1.16 maps (2026-10-13), where two-Barracks marines (style
     # 4, 1.5% of pro Terrans: gas in 10% of them, no Factory) won most, and every 30-minute game on the ladder maps
     # borrowed it: Gary-T played style 4 in all 96 of rounds R50a+b (its macro gap: no gas, no Factory, mass marines)
+    # terran_executor.py addon_room: a Factory, Starport or Science Facility placed only where its add-on fits
+    "addonroom": lambda m: m.update(addon_room=True),
     "styleroll": lambda m: m["macro"].update(selector=None, style="roll"),
     "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
@@ -946,6 +951,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                m["macro"].get("park", False), m["macro"].get("pace", False), m["macro"].get("tech_min_p"),
                                m["macro"].get("hatch_mass"), m["macro"].get("wait_min_p"))
         g.macro.expand_mass = m["macro"].get("expand_mass")
+        if hasattr(g.executor, "addon_room"):
+            g.executor.addon_room = m.get("addon_room", False)
         g.macro.odds_mass = m["macro"].get("odds_mass")
         g.macro.supply_ahead = m["macro"].get("supply_ahead", False)
         g.macro.hold = m["macro"].get("hold", False)
