@@ -109,7 +109,11 @@ class LearnedMacro:
         # there too, the tech came late (a Lair by 7:00 in half the games, the pros' all; round G10)
         self.hold = False
         self.held: tuple[int, int] | None = None            # (the decision rolled and waited for, since)
-        self.queued: dict[tuple[int, int], int] = {}        # units decided whose producer is busy -> since
+        self.queued: list[tuple[tuple[int, int], int]] = []  # units decided whose producer is busy, since when
+        # option queue: up to one queued unit per producer of its kind (several Marines wait for several Barracks), the
+        # macro deciding on meanwhile; else one per kind, and a second decision of the same kind held the macro (its
+        # goal waited for the busy building: "waits: its Barracks is busy" 0.43 times a decision at 10-20 minutes)
+        self.queue_per_producer = False
         self.keep_busy = keep_busy
         self.decoder = decoder                              # "favorite" (the most likely), "dice" or "sample"
         self.rng = random.Random(seed)
@@ -463,11 +467,14 @@ class LearnedMacro:
             self.goal = None
             return
         if plan is WAIT:                    # e.g. the building is still busy: wait for it
-            if goal["act"] == TRAIN and (TRAIN, goal["id"]) not in self.queued:
+            same = sum(1 for k, _ in self.queued if k == (TRAIN, goal["id"]))
+            room = sum(1 for u in mine if u["type"] == g.race.producer.get(goal["id"]) and u["completed"]) \
+                if self.queue_per_producer else 1
+            if goal["act"] == TRAIN and same < max(1, room):
                 # a unit whose producer is busy is decided now and trained when it frees up, and
                 # the next decision comes meanwhile (as pros queue the SCV and send the depot's
                 # builder: one decision at a time held the 9th SCV's depot 12 s behind it)
-                self.queued[(TRAIN, goal["id"])] = hi.frame
+                self.queued.append(((TRAIN, goal["id"]), hi.frame))
                 self.tracker.note_decision(TRAIN, goal["id"], obs["frame"])
                 self.decisions.append((hi.frame, goal["name"], goal["p"]))
                 self.goal = None
@@ -537,10 +544,11 @@ class LearnedMacro:
         """A decided unit whose producer is free now: trained (first, as pros keep production going).
         True if this turn is spent."""
         g = self.g
-        for key, since in list(self.queued.items()):
+        for entry in list(self.queued):
+            key, since = entry
             plan = self.plan(*key, obs, mine, done, me)
             if plan is None or g.hi.frame - since > GOAL_TIMEOUT:
-                del self.queued[key]
+                self.queued.remove(entry)
                 continue
             if plan is WAIT or g.task is not None:
                 continue
@@ -549,7 +557,7 @@ class LearnedMacro:
                 continue
             g.task = Task("command", data=plan, started=g.hi.frame)
             g.spend(minerals)
-            del self.queued[key]
+            self.queued.remove(entry)
             self._note_unit(*key)
             return True
         return False
