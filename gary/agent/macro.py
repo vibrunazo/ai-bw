@@ -43,7 +43,6 @@ MIN_P = 0.05                    # never take a decision the model gives less tha
 WAIT = {"kind": "wait"}         # plan(): possible, but not right now
 ONE_OFF_BUILDINGS = {T.REFINERY, T.ACADEMY, T.EBAY, T.FACTORY, T.STARPORT, T.ARMORY, T.SCIENCE_FACILITY, T.COMSAT,
                      T.MACHINE_SHOP, T.CONTROL_TOWER, T.COVERT_OPS, T.PHYSICS_LAB}   # odds_mass: built once (or so)
-KEEP_BUSY = {T.RAX, T.FACTORY, T.STARPORT}   # producers that keep making their last unit (keep_busy)
 # Zerg's one-offs (Gary-Z's mass): a tech building, Lair / Hive / Greater Spire, research, an upgrade, a hatchery
 # or an expansion; and the buildings that open a tech path (option tech_min_p)
 Z_ONE_OFF_BUILDINGS = {135, 141, 138, 136, 140, 139, 131}    # Den, Spire, Queen's Nest, Defiler Mound, Ultralisk Cavern,
@@ -75,7 +74,7 @@ def describe(race, act: int, uid: int) -> str:
 
 class LearnedMacro:
     def __init__(self, g: Gary, model: MacroModel, style: int | None = None, builds: dict | None = None,
-                 natural_bunker: bool = False, rax_by: int = 90 * 24, keep_busy: bool = False,
+                 natural_bunker: bool = False, rax_by: int = 90 * 24,
                  decoder: str = "favorite", seed: int = 0, temperature: float = 1.0, park: bool = False,
                  pace: bool = False, tech_min_p: float | None = None, hatch_mass: float | None = None,
                  wait_min_p: float | None = None):
@@ -109,20 +108,13 @@ class LearnedMacro:
         # there too, the tech came late (a Lair by 7:00 in half the games, the pros' all; round G10)
         self.hold = False
         self.held: tuple[int, int] | None = None            # (the decision rolled and waited for, since)
-        self.queued: list[tuple[tuple[int, int], int]] = []  # units decided whose producer is busy, since when
-        # option queue: up to one queued unit per producer of its kind (several Marines wait for several Barracks), the
-        # macro deciding on meanwhile; else one per kind, and a second decision of the same kind held the macro (its
-        # goal waited for the busy building: "waits: its Barracks is busy" 0.43 times a decision at 10-20 minutes)
-        self.queue_per_producer = False
-        self.keep_busy = keep_busy
+        # units the model decided whose producer is busy, since when: up to one per producer of their kind (several
+        # Marines wait for several Barracks), the macro deciding on meanwhile; trained as producers free up, and nothing
+        # the model didn't decide (keep_busy, which trained idle producers' last unit again, made half of gt1's marines
+        # at 10-20 minutes; removed 2026-10-23: rounds Q60a against B60a, the same results and gap without it)
+        self.queued: list[tuple[tuple[int, int], int]] = []
         self.decoder = decoder                              # "favorite" (the most likely), "dice" or "sample"
         self.rng = random.Random(seed)
-        self.last_unit: dict[int, int] = {}                 # producer type -> the unit last decided for it
-        # option busy_mix (with keep_busy): an idle producer's unit drawn from the model's latest odds among the units
-        # it makes, not its last one (repeating the last, a Marine, made half of gt1's marines at 10-20 minutes, 71% of
-        # what it trained against the model's 42%, and half the medics it asked for: the macro check, rounds B60a+b)
-        self.busy_mix = False
-        self.last_probs = None
         self.natural_bunker = natural_bunker
         self.next_nat_bunker = 0
         self._nat_bunker_spot = None
@@ -281,7 +273,7 @@ class LearnedMacro:
         if halls > self.halls:
             self.expand_odds = 0.0          # (only once one stands: a Command Center that didn't start is asked again)
         self.halls = halls
-        if self._train_queued(obs, mine, done, me) or self._keep_busy(obs, mine, done, me):
+        if self._train_queued(obs, mine, done, me):
             return
         if self.goal is None:
             if hi.frame < self.next_query:
@@ -291,7 +283,6 @@ class LearnedMacro:
             # likely one that only needs a busy building to free up
             x = self.tracker.features(obs, self.in_production(mine))
             probs, secs = self.model.probs(x)
-            self.last_probs = probs[0]
             if self.pace:
                 self.next_query = hi.frame + int(min(PACE_MAX, max(QUERY_EVERY, float(secs[0]) * 24)))
             pick = waiting = waiting_why = None
@@ -468,8 +459,7 @@ class LearnedMacro:
             return
         if plan is WAIT:                    # e.g. the building is still busy: wait for it
             same = sum(1 for k, _ in self.queued if k == (TRAIN, goal["id"]))
-            room = sum(1 for u in mine if u["type"] == g.race.producer.get(goal["id"]) and u["completed"]) \
-                if self.queue_per_producer else 1
+            room = sum(1 for u in mine if u["type"] == g.race.producer.get(goal["id"]) and u["completed"])
             if goal["act"] == TRAIN and same < max(1, room):
                 # a unit whose producer is busy is decided now and trained when it frees up, and
                 # the next decision comes meanwhile (as pros queue the SCV and send the depot's
@@ -500,7 +490,6 @@ class LearnedMacro:
         else:
             g.task = Task(plan["kind"], data=plan, started=hi.frame)
             g.spend(minerals)
-            self._note_unit(goal["act"], goal["id"])
         self.tracker.note_decision(goal["act"], goal["id"], obs["frame"])
         self.decisions.append((hi.frame, goal["name"], goal["p"]))
         self.goal = None
@@ -558,65 +547,6 @@ class LearnedMacro:
             g.task = Task("command", data=plan, started=g.hi.frame)
             g.spend(minerals)
             self.queued.remove(entry)
-            self._note_unit(*key)
-            return True
-        return False
-
-    def _note_unit(self, act: int, uid: int) -> None:
-        if act == TRAIN and self.g.race.producer.get(uid) in KEEP_BUSY:
-            self.last_unit[self.g.race.producer[uid]] = uid
-
-    def _keep_busy(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> bool:
-        """An idle Barracks, Factory or Starport trains the unit the model last chose for it again,
-        with the money left after what the pending decision needs (pros keep production going by
-        habit; one decision at a time left 2 of Gary's 3 Barracks idle with 300 minerals banked, and
-        half the pros' army at 8:00). True if this turn is spent."""
-        g = self.g
-        if not self.keep_busy or g.task is not None:
-            return False
-        # (a building saved up for doesn't stop production: pros keep their Barracks going while the
-        # Command Center's 400 come in; held back for it, Gary's first Barracks idled from 2:30 to
-        # 5:00, 0-3 army units at 5:00 in the games it lost. Its money is spoken for once its
-        # builder walks there. Holding production for a pending add-on or research, its building
-        # and money kept, cost more: on 24 seeds the 9-pool lost 4 (2), Gary took no natural, and
-        # against the replayed pros it built 47 army supply by 12:00 (54))
-        reserve = 0
-        if self.goal is not None and self.goal["act"] == EXPAND and self.halls >= 2:
-            # (but a third base is saved for: production spent every mineral, the bank at 20-40, and the
-            # Command Center's 400 never came; on two bases 400 is about 10 s of mining)
-            reserve = g.race.costs[g.race.town_hall][0]
-        elif self.goal is not None and self.goal["act"] not in (BUILD, EXPAND):
-            p = self.plan(self.goal["act"], self.goal["id"], obs, mine, done, me)
-            reserve = p["cost"][0] if isinstance(p, dict) and p is not WAIT else 0
-        # ...but not from the building a pending add-on goes on: an SCV queued there just before its
-        # Comsat order, the game refused the add-on, twice (human game 2: no Comsat against lurkers)
-        addon_on = None
-        if self.goal is not None and self.goal["act"] == BUILD and self.goal["id"] in T.ADDON_PARENT:
-            p = self.plan(BUILD, self.goal["id"], obs, mine, done, me)
-            addon_on = p["building"]["tag"] if isinstance(p, dict) and p.get("kind") == "command" else None
-        units = list(self.last_unit.values())
-        if self.busy_mix and self.last_probs is not None:
-            units = []
-            for ptype in list(self.last_unit):
-                own = [(float(self.last_probs[k]), uid) for k, (act, uid) in enumerate(self.model.spec.decisions)
-                       if act == TRAIN and g.race.producer.get(uid) == ptype and self.last_probs[k] >= DICE_FLOOR]
-                if own:
-                    units.append(own[self.rng.choices(range(len(own)), weights=[q for q, _ in own])[0]][1])
-                else:
-                    units.append(self.last_unit[ptype])
-        for uid in units:
-            plan = self.plan(TRAIN, uid, obs, mine, done, me)
-            if not isinstance(plan, dict) or plan.get("kind") != "command":
-                continue
-            if addon_on is not None and plan.get("building", {}).get("tag") == addon_on:
-                continue
-            minerals, gas = plan["cost"]
-            if me["minerals"] - g.committed() - reserve < minerals or me["gas"] < gas:
-                continue
-            g.task = Task("command", data=plan, started=g.hi.frame)
-            g.spend(minerals)
-            self.tracker.note_decision(TRAIN, uid, obs["frame"])
-            self.expand_odds += self.p_expand   # (a decision too: pros' every unit is one, the odds count them all)
             return True
         return False
 

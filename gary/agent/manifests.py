@@ -105,10 +105,9 @@ MANIFESTS: dict[str, dict] = {
                        "rule_options": {"pull": {"per_enemy": 3}}},
              "arbiter": "fixed_priority/v1"},
     # v0.14: v0.13 whose idle Barracks, Factories and Starports make the model's last unit for them
-    # again (macro.py keep_busy)
+    # again (macro.py keep_busy; removed in gt0.7, so v0.14 to gt0.6 now play without it)
     "v014": {"version": "v0.14", "posture": "early_pool/v2", "leases": "enforced",
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24},
              "army": _ARMY,
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}}},
@@ -116,8 +115,7 @@ MANIFESTS: dict[str, dict] = {
     # v0.15: v0.14 that keeps its bunkers loaded, not only once zerg are near (fight.py, load rule):
     # speedlings cross the 9 tiles in under 2 s, and marines walking in don't shoot
     "v015": {"version": "v0.15", "posture": "early_pool/v2", "leases": "enforced",
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24},
              "army": _ARMY,
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
@@ -125,16 +123,14 @@ MANIFESTS: dict[str, dict] = {
     # v0.16: v0.15 whose army hunts once no enemy army has been seen for a minute, scanning the bases
     # (army.py hunt, scan), and whose posture calls a pool finished by 2:40 an early pool (v3)
     "v016": {"version": "v0.16", "posture": "early_pool/v3", "leases": "enforced",
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
     # v0.17: v0.16 that calls nothing seen an early pool only at 2:50 (posture v4)
     "v017": {"version": "v0.17", "posture": "early_pool/v4", "leases": "enforced",
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
@@ -142,16 +138,14 @@ MANIFESTS: dict[str, dict] = {
     # v0.18: v0.17 whose posture (v5) calls off an alarm from nothing seen until 4:00, and lets the
     # main's rush bunker out once the rush is over
     "v018": {"version": "v0.18", "posture": "early_pool/v5", "leases": "enforced",
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
              "arbiter": "fixed_priority/v1"},
     # v0.19: v0.18 whose build style is chosen per map by the strategy selector (gary/agent/selector.py)
     "v019": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play"},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play"},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
@@ -159,8 +153,7 @@ MANIFESTS: dict[str, dict] = {
     # v0.20: v0.19 whose new fighters gather as pros' marines do (executor.py rerally: inside the main's ramp,
     # at its bottom from 4:45, in front of the natural from 7:30)
     "v020": {"version": "v0.20", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play"},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play"},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
@@ -169,8 +162,7 @@ MANIFESTS: dict[str, dict] = {
     # to a new base (executor.py home_scvs, balance)
     "v021": {"version": "v0.21", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
              "home_scvs": True, "balance": True,
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play"},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play"},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
@@ -179,8 +171,7 @@ MANIFESTS: dict[str, dict] = {
     # force_at) and scans burrowed lurkers near its fighters (fight.py DetectRule)
     "v022": {"version": "v0.22", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
              "home_scvs": True, "balance": True, "defend_early": 150 * 24,
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play"},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play"},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "before": _V09_FIGHT["before"] + ["detect"],
@@ -190,8 +181,7 @@ MANIFESTS: dict[str, dict] = {
     # to one (macro.py expand_mass)
     "v023": {"version": "v0.23", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
              "home_scvs": True, "balance": True, "defend_early": 150 * 24,
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play", "expand_mass": 1.0},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play", "expand_mass": 1.0},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "before": _V09_FIGHT["before"] + ["detect"],
@@ -201,8 +191,7 @@ MANIFESTS: dict[str, dict] = {
     # a Science Facility, vessels, Irradiate, turrets one a base; a tech scan of their main at 6:30)
     "v024": {"version": "v0.24", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
              "home_scvs": True, "balance": True, "defend_early": 150 * 24,
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play", "expand_mass": 1.0, "answers": True},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "before": _V09_FIGHT["before"] + ["detect"],
@@ -213,8 +202,7 @@ MANIFESTS: dict[str, dict] = {
     # manifest is v0.24's; the version marks where the fixes came in
     "v025": {"version": "v0.25", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
              "home_scvs": True, "balance": True, "defend_early": 150 * 24,
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True},
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play", "expand_mass": 1.0, "answers": True},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
                        "before": _V09_FIGHT["before"] + ["detect"],
@@ -224,8 +212,7 @@ MANIFESTS: dict[str, dict] = {
     # parked build that keeps its SCV (executor.py, shared code)
     "v026": {"version": "v0.26", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
              "home_scvs": True, "balance": True, "defend_early": 150 * 24,
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play", "expand_mass": 1.0, "answers": True,
                        "answer_options": {"mutas": True}},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
@@ -241,8 +228,7 @@ MANIFESTS: dict[str, dict] = {
     # add-on's building isn't kept busy (an SCV queued just before its Comsat: the game refused it)
     "v027": {"version": "v0.27", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
              "home_scvs": True, "balance": True, "defend_early": 150 * 24, "builder_back": True,
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play", "expand_mass": 1.0, "answers": True,
                        "answer_options": {"mutas": True}},
              "army": {**_ARMY, "hunt": True, "scan": True},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
@@ -255,8 +241,7 @@ MANIFESTS: dict[str, dict] = {
     # it loses 5+ points of army share, or 5+ worse than staying (v0.27: 2 and 1, held ~90% of decisions at 5-6 min)
     "v028": {"version": "v0.28", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
              "home_scvs": True, "balance": True, "defend_early": 150 * 24, "builder_back": True,
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play", "expand_mass": 1.0, "answers": True,
                        "answer_options": {"mutas": True}},
              "army": {**_ARMY, "hunt": True, "scan": True, "hold_moves": False, "hold_margin": 0.05},
              "fight": {**_V09_FIGHT, "provider": "roles", "model": None, "roles": {"post": 3},
@@ -272,8 +257,7 @@ MANIFESTS: dict[str, dict] = {
     # alone +4 +- 5
     "v029": {"version": "v0.29", "posture": "early_pool/v5", "leases": "enforced", "rally": "ramp",
              "home_scvs": True, "balance": True, "defend_early": 150 * 24, "builder_back": True,
-             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                       "keep_busy": True, "selector": "play", "expand_mass": 1.0, "answers": True,
+             "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play", "expand_mass": 1.0, "answers": True,
                        "answer_options": {"mutas": True}},
              "army": {**_ARMY, "hunt": True, "scan": True, "hold_moves": False, "hold_margin": 0.05},
              "fight": {**_V09_FIGHT, "provider": "role_ahead", "model": "runs/roles/20261016-195206/model.pt",
@@ -286,8 +270,7 @@ MANIFESTS: dict[str, dict] = {
     # v0.19 with learned roles (gary/policy/roles.py, with the terrain inputs; the model: --fight-model /
     # fight_path, default the latest in runs/roles): the same rules around them
     "v019roleml": {"version": "v0.19", "posture": "early_pool/v5", "leases": "enforced",
-                   "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                             "keep_busy": True, "selector": "play"},
+                   "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24, "selector": "play"},
                    "army": {**_ARMY, "hunt": True, "scan": True},
                    "fight": {**_V09_FIGHT, "provider": "roles", "model": "roles/latest", "roles": {"post": 3},
                              "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
@@ -295,8 +278,7 @@ MANIFESTS: dict[str, dict] = {
     # v0.17 with learned roles (gary/policy/roles.py; the model: --fight-model / fight_path, default
     # the latest in runs/roles): the same rules around them, roles' options passed on (the post)
     "v017roleml": {"version": "v0.17", "posture": "early_pool/v4", "leases": "enforced",
-                   "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24,
-                             "keep_busy": True},
+                   "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True, "rax_by": 78 * 24},
                    "army": {**_ARMY, "hunt": True, "scan": True},
                    "fight": {**_V09_FIGHT, "provider": "roles", "model": "roles/latest", "roles": {"post": 3},
                              "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
@@ -305,7 +287,7 @@ MANIFESTS: dict[str, dict] = {
     # join, hold, or the rules; the model: --fight-model / fight_path, default the latest in runs/roles)
     "v017override": {"version": "v0.17", "posture": "early_pool/v4", "leases": "enforced",
                      "macro": {**_LEARNED, "builds": ["one_base_defense"], "natural_bunker": True,
-                               "rax_by": 78 * 24, "keep_busy": True},
+                               "rax_by": 78 * 24},
                      "army": {**_ARMY, "hunt": True, "scan": True},
                      "fight": {**_V09_FIGHT, "provider": "role_override", "model": "roles/latest",
                                "roles": {"post": 3}, "rule_options": {"pull": {"per_enemy": 3}, "load": {"always": True}}},
@@ -779,10 +761,6 @@ OPTIONS = {
     # posture.py v2: the rush bunker by the main's CC. On v0.12: replayed pros on three maps lost 3 of
     # 144 (19); the dummy's 9-pool 0 (2), its 7:00 rush 3 (0); won 3 and 3 (12 and 10)
     "bunker_cc": lambda m: m.update(posture="early_pool/v2"),
-    # macro.py: idle Barracks, Factories, Starports make the model's last unit for them again. On v0.13:
-    # army supply at 8:00 11-12 (7-9; pros 19), at 12:00 32-44 (25-34; pros 36); replayed pros lost 7 of
-    # 144 (10), the 9-pool 0 (0)
-    "busy": lambda m: m["macro"].update(keep_busy=True),
     # macro.py: roll the model's odds (a weighted shuffle) instead of taking the most likely decision.
     # Offline, on pros' states, it matched their Factory timing (63% by 8:00, theirs 62%; the
     # favorite 4%). In games on v0.14 (Fighting Spirit, replayed pros, 32 seeds): fewer SCVs (28 at
@@ -806,19 +784,10 @@ OPTIONS = {
     # borrowed it: Gary-T played style 4 in all 96 of rounds R50a+b (its macro gap: no gas, no Factory, mass marines)
     # terran_executor.py addon_room: a Factory, Starport or Science Facility placed only where its add-on fits
     "addonroom": lambda m: m.update(addon_room=True),
-    # macro.py keep_busy off: between 10 and 20 minutes half of gt1's marines (86 a game, 44 of them the model's
-    # decisions) came from idle Barracks repeating their last unit, the model's odds 42% Marines against 71% trained;
-    # on those marine-heavy states the model (calibrated on the pros') stopped asking for tech (macro check)
-    "nobusy": lambda m: m["macro"].update(keep_busy=False),
-    # macro.py queue_per_producer with keep_busy off: only the model's own decisions are trained, queued up to one per
-    # producer while they wait, the macro deciding on meanwhile (the user: never units the model didn't ask for)
-    "queue": lambda m: m["macro"].update(keep_busy=False, queue_per_producer=True),
     # the pros' decision history in the macro model's inputs, fading to its own over HISTORY_FADE minutes (as gz1's): on
     # gt1's own marine-heavy states the model, calibrated on the pros', asked for Marines 42% and no mech (the macro
     # check); its own past fed back on itself
     "prohist": lambda m: m["macro"].update(history="pro"),
-    # macro.py busy_mix: keep_busy's unit drawn from the model's odds among the idle producer's own units
-    "busymix": lambda m: m["macro"].update(busy_mix=True),
     "styleroll": lambda m: m["macro"].update(selector=None, style="roll"),
     "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
@@ -866,8 +835,11 @@ def manifest_of(name: str | dict) -> dict:
 # gt0.6: Factories, Starports and Science Facilities placed where their add-on fits (option addonroom; 96 paired games
 # against gt0.5, rounds AR50a+b against B50a+b: won 49 lost 10 against 48 and 13, better in 23 and worse in 13, the
 # gap even; Control Towers 0.82 -> 1.42 and Science Vessels 1.8 -> 2.9 at 16:00)
+# gt0.7: keep_busy gone (it trained idle producers' last unit, half the marines at 10-20 minutes), the model's waiting
+# decisions queued up to one per producer instead (48 games against gt0.6, Q60a against B60a: won 30 lost 5 against 29
+# and 5, the gap -0.002; macro decisions 13,203 -> 19,347, the caps fired 0.63 -> 0.46 a decision)
 MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords+hunt4+split+static+roles30+lone"
-                                  "+addonroom"), "version": "gt0.6"}
+                                  "+addonroom"), "version": "gt0.7"}
 # gt1dev: the Terran Gary that learning is trained and judged in (AGENTS.md): gt1 with the role model deciding in
 # contact as well (attended pro units with their re-issues as a decision, again, Gary's own order rate as input, its
 # moves kept current, several orders a turn) and the army on control groups by type, a key's units drawing their
@@ -877,8 +849,8 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depot
 # gt0.6dev: its role model from the first roles RL run (option rl1; 96 paired games against gt0.5dev, rounds R50a+b
 # against D50a+b: won 54 lost 15 against 39 and 16, better in 34 games and worse in 20, the gap -0.046, -0.070 to
 # -0.012, macro features -0.053; against gt1 better in 28 and worse in 20, the gap even, macro +0.035, -0.009 to +0.070)
-# gt0.7dev: gt1's add-on room (gt0.6)
-MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1"), "version": "gt0.7dev"}
+# gt0.7dev: gt1's add-on room (gt0.6); gt0.8dev: gt1's queue without keep_busy (gt0.7)
+MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1"), "version": "gt0.8dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
@@ -963,13 +935,11 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             style = rolled_style(macro, g.matchup, g.race.letter, seed)
             g.selected_style = style
         g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
-                               m["macro"].get("rax_by", 90 * 24), m["macro"].get("keep_busy", False),
+                               m["macro"].get("rax_by", 90 * 24),
                                m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0),
                                m["macro"].get("park", False), m["macro"].get("pace", False), m["macro"].get("tech_min_p"),
                                m["macro"].get("hatch_mass"), m["macro"].get("wait_min_p"))
         g.macro.expand_mass = m["macro"].get("expand_mass")
-        g.macro.busy_mix = m["macro"].get("busy_mix", False)
-        g.macro.queue_per_producer = m["macro"].get("queue_per_producer", False)
         if hasattr(g.executor, "addon_room"):
             g.executor.addon_room = m.get("addon_room", False)
         g.macro.odds_mass = m["macro"].get("odds_mass")

@@ -1000,6 +1000,15 @@ plan and the full log).
   writing marines into the history it reads, so its states look a marine player's and the model, as a pro would
   there, asks for more. Options: nobusy (keep_busy off) and busymix (its unit drawn from the model's odds among the
   producer's own), rounds NB60a and BM60a against B60a.
+- **gt1 gt0.7, gt1dev gt0.8dev: keep_busy removed, the model's decisions queued (2026-10-23).** keep_busy trained
+  units the model didn't decide (an idle Barracks, Factory or Starport repeated its last unit, half the marines at
+  10-20 minutes). In its place the model's units that wait for a busy producer are queued, up to one per producer of
+  their kind, and the macro decides on meanwhile; nothing else is trained. Round Q60a against B60a (48 games, seeds
+  4004-4009): won 30 lost 5 (29, 5), the gap 0.28 (0.29); the macro's decisions 13,203 to 19,347; the pros' caps
+  refused 0.46 options a decision (0.63). With the pros' history as the macro's input as well (option prohist, round
+  QP60a): won 21 lost 10, rejected. Folded into gt1 (gt0.7) and gt1dev (gt0.8dev); the old manifests that had it
+  play without it now. The rounds against these are next: the macro rules registered in AGENTS.md off one at a
+  time (options nocaps, noscvcap, nodepots).
 - **Baselines and the promotion check (2026-10-23 morning).** gt1 gt0.6 (B60a+b, seeds 4004-4009 and 4010-4015,
   against gz0.2): won 49 lost 10. gt1dev gt0.7dev (D70a+b): won 48 lost 13. Paired: gt1dev better in 21, worse in 24
   (-0.018 +- 0.063); the gap +0.010 (-0.016 to +0.040), the fight features nearer the pros (-0.039, -0.064 to -0.009),

@@ -98,21 +98,14 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   arrivals per fighter at attacks (`eval/attacks.py`: Gary-T 0.27, pros 0.06) and 96 paired games. Measured
   2026-10-20 (96 paired games against gt1): the 10-15 minute gap nearer the pros (-0.045, interval below zero),
   lost 6 (9), but won 47 (54), more games at 30:00; late arrivals 0.26 to 0.22 only.
-- **Idle producers kept busy** (`keep_busy`, in gt1 since v0.14; `macro.py` `_keep_busy`). An idle Barracks, Factory
-  or Starport trains its last unit again, whatever the model decides. Scripted because one decision at a time left
-  Barracks idle with money banked (2026-10-07). It makes decisions the model didn't: at 10-20 minutes half of gt1's
-  marines (86 a game, 44 the model's), 71% of what it trained against the model's 42%, and the marine-heavy history
-  that turns the model from tech. Replace with the model's own decisions only, queued while they wait for a producer
-  (option `queue`: `queue_per_producer`, keep_busy off), the decision rate the model's own if production falls short.
-  Measure: rounds Q60a and QP60a (queue, queue with the pros' history) against B60a: results, the macro gap, the bank.
 - **The pros' caps per minute** (in gt1 and gz1; `macro.py` plan, `capped`; the model's `cap`). A unit, building or
   expansion is refused once Gary has more than nine pros in ten ever had by that minute. The commonest veto of
   the model's decisions: 8,293 options set aside in 48 games of gt1 (Marines 2,963, Medics 1,320, Science Vessels
   988, turrets 781, Firebats 539, Barracks 483, depots 470, Control Towers 303). Scripted because a decoded
-  unlikely choice could run away (v0.14's era). Partly a consequence of keep_busy (its marines pushed the counts
-  over the cap, and the model's own marines and medics were then refused). Replace with the model's own odds
-  (it knows the counts it has; calibrated on the pros' states, the macro check). Measure: an option off against
-  the baseline, results and the macro gap; first, how often it fires once keep_busy is gone (option queue).
+  unlikely choice could run away (v0.14's era). Partly a consequence of keep_busy (removed in gt0.7: its marines
+  pushed the counts over the cap): 0.63 options refused a decision with it, 0.46 without. Replace with the model's
+  own odds (it knows the counts it has; calibrated on the pros' states, the macro check). Measure: option `nocaps`
+  against gt1, results and the macro gap.
 - **SCVs capped at the bases' saturation** (in gt1; `terran_executor.py`, "SCVs enough for its bases", MAX_SCVS 60).
   The model's SCV decisions are refused beyond the bases' saturation (2,673 times in 48 games, most at 5-15
   minutes). Scripted because Gary over-made SCVs (2026-10-09: 42-51 at 12:00 against the pros' 39). Gary-T's
@@ -121,7 +114,7 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
 - **Under half the waiting favorite's odds** (in gt1 and gz1; `macro.py`, the decoder). While the model's favorite
   waits for a busy building, alternatives under half its odds are passed over and the macro waits (2,104 times:
   depots 614, SCVs 458, Barracks 242, refineries 164, Engineering Bays 146, Siege Tanks 62). Scripted so a busy
-  building doesn't hand the turn to unlikely choices. With a queue of waiting decisions (option queue) the favorite
+  building doesn't hand the turn to unlikely choices. With the queue of waiting decisions (gt0.7) a favorite unit
   no longer holds the macro; measure how often this still fires there, and an option without it.
 - **Odds summed into a decision** (`mass` for one-offs, in gt1: tech buildings, add-ons, research, upgrades;
   `expand_mass` for expansions; `macro.py` odds_mass, expand_odds). A one-off is decided once its odds, summed over
