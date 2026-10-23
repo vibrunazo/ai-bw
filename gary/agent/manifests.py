@@ -812,6 +812,9 @@ OPTIONS = {
     # army.py static_odds off: the static guard's veto gone (pros attack spots it forbids: 29% of their engages into
     # static defense are under 1.5 times it, held-out modern TvZ)
     "noguard": lambda m: m["army"].update(static_odds=None),
+    # army.py static_beta 2: the static guard as a nudge, not a veto: a spot the group doesn't outweigh 1.5 times keeps
+    # its odds times (the group / 1.5 times its defense) squared (a quarter at half of it)
+    "softguard": lambda m: m["army"].update(static_beta=2.0),
     # Terran commit models on army dataset v4's 4,841 player-games (train/commit.py --out runs/commit_exp/...): with the
     # enemy's static defense as a map channel, and its control without it (the same games)
     "cmstatic": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v4_static/model.pt"),
@@ -1023,6 +1026,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.army.hunt_ahead = m["army"].get("hunt_ahead")
             g.army.hunt_split = m["army"].get("hunt_split", False)
             g.army.static_odds = m["army"].get("static_odds")
+            g.army.static_beta = m["army"].get("static_beta")
             g.army.gather_on = m["army"].get("gather", False)
     if m["fight"] is not None and m["fight"]["provider"] == "zerg":
         from gary.agent.zerg_fight import ZergFight
