@@ -980,8 +980,14 @@ plan and the full log).
   (paired +71 over rl1, +12 to +135; +122 over RoleAhead, +15 to +238). Gate 4 (T50a+b against R50a+b): won 47 lost 8
   (54 and 15), better in 22 and worse in 26 (-0.013 +- 0.076), the gap +0.069 (+0.038 to +0.096), macro +0.094, fight
   +0.031; the trade a little better than rl2's (the Terran's fighters dead +4-6 a game, the Zerg's +5-9). Both runs
-  moved the macro side of the gap the same way, which a fight model shouldn't; R50a+b were played before the first
-  producer rule's tidy (3c661c8), Q50 and T50 after: a fresh gt1dev baseline on the same code (D60a+b) is judging it.
+  moved the macro side of the gap the same way; R50a+b were played before the first producer rule's tidy (3c661c8),
+  Q50 and T50 after, so a fresh gt1dev baseline on the same code was played (D60a+b): its 96 games came out the same
+  as R50a+b's to the last outcome and gap (the tidy only acts in lost games and changed none here). Both runs fail
+  gate 4 against it: rl2 -0.036 +- 0.069, the gap +0.043 (macro +0.055); rl3 -0.013 +- 0.076, the gap +0.068 (macro
+  +0.094). Not adopted; gt1dev stays on rl1. The lesson for the next run: the held-out suite rose twice (+67, +71,
+  the checkpoint chosen on another split) and the games didn't follow; the 45-second net value is not the game's.
+  Next: a 24-game check of a checkpoint in games before the suite is trusted, and the macro features the fights
+  move (unit counts, bank) watched as part of the objective.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
