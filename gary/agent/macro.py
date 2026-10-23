@@ -50,6 +50,7 @@ Z_ONE_OFF_BUILDINGS = {135, 141, 138, 136, 140, 139, 131}    # Den, Spire, Queen
                                                              # Evolution Chamber, Hatchery
 Z_ONE_OFF_MORPHS = {132, 133, 137}                           # Lair, Hive, Greater Spire
 TECH_PATH = {"Z": {135, 141, 138, 136, 140}}
+FIRST_OPENING = 6 * 60 * 24            # until then the first producer's rule saves for one it can't build yet
 FIRST_PRODUCER = {"T": T.RAX, "Z": 142}  # the building that makes the army first: by rax_by (option), else one is built
 PACE_MAX = 10 * 24              # option pace: the longest wait for the next decision
 QUERY_EVERY = 12                # frames between the macro's looks at the model
@@ -235,9 +236,11 @@ class LearnedMacro:
         rax = sum(1 for u in mine if u["type"] == first) + sum(1 for r, *_ in g.reserved if r == first) + g.building(first) \
             if self.rax_by is not None and first is not None else 1
         if not rax and hi.frame >= self.rax_by and (self.goal is None or self.goal["id"] != first) \
-                and (g.race.letter == "T" or self.plan(BUILD, first, obs, mine, done, me) not in (None, WAIT)):
+                and ((g.race.letter == "T" and hi.frame < FIRST_OPENING)
+                     or self.plan(BUILD, first, obs, mine, done, me) not in (None, WAIT)):
             # (and one can be built now: a Zerg with its Pool killed and no drone free set the goal and dropped it
-            # 459 times in 15 s, its macro held: round G5)
+            # 459 times in 15 s, its macro held: round G5; a Terran too after the opening: with its Barracks all
+            # destroyed, in 15 of the 96 games of rounds R50a+b, all lost, it set the goal 7 to 2,955 times a game)
             fname = describe(g.race, BUILD, first)
             self.goal = {"act": BUILD, "id": first, "p": 1.0, "since": hi.frame, "name": fname}
             g.say(f"next: {fname} (none by {self.rax_by // 24 // 60}:{self.rax_by // 24 % 60:02d})")
