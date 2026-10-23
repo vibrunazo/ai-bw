@@ -33,7 +33,7 @@ WINDOW = 5                      # minutes
 FIGHT = ("army_standing", "orders_per_fighter", "army_home", "army_field", "army_enemy", "army_alone", "army_spread",
          "army_gone", "threatened", "threat_met", "response_s", "fighting", "hit_standing", "moving_between_shots",
          "harass_response_s", "harass_hp_lost", "sight_reorder", "sight_gather", "sight_stim", "air_sight_gather",
-         "air_sight_stim", "lone_away", "lone_attack")
+         "air_sight_stim", "lone_away", "lone_attack", "fight_attended", "fight_reached")
 
 
 def group_names(names: list[str], group: str) -> list[str]:
@@ -90,6 +90,8 @@ def main() -> None:
             arm[key].update(round_rows(r, args.side, args.workers))
     keys = sorted(set(arm["a"]) & set(arm["b"]))
     names = group_names(_names(args.side), args.group)
+    has = lambda key, n: any(r.get(n) == r.get(n) and r.get(n) is not None for k in keys for r in arm[key][k])
+    names = [n for n in names if n == "minute" or (has("a", n) and has("b", n))]   # (a feature both arms have)
     Xp, _, _ = matrix(pro_rows(args.side, 300, args.workers, "modern"), names)
     windows = [(a, a + WINDOW - 1) for a in range(0, args.minutes, WINDOW)]
 

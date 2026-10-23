@@ -12,6 +12,12 @@ player and race, within a window of the game:
 
     python -m eval.attention --gary runs/league/R50a runs/league/D50a --pros 100
     python -m eval.attention --gary runs/league/R50a --until 600          # the first 10 minutes only
+    python -m eval.attention --augment R50a D50a                          # into the rounds' feature rows
+    python -m eval.attention --augment-pros                               # into the pros' cached rows
+
+--augment writes, per side and game minute, fight_attended (the share of fight moments attended) and fight_reached
+(the share of army units reached) into rows.json.gz (eval/league.py), the humanlike gap's features (NaN in a minute
+without fight moments); --augment-pros the same into eval/humanlike.py's cache of the pros' rows.
 """
 from __future__ import annotations
 
@@ -80,6 +86,7 @@ def one(job: tuple) -> dict | None:
             continue
         c = collections.Counter()
         c["snaps"] = len(sl)
+        per_min = collections.defaultdict(lambda: [0, 0, 0, 0])   # game minute (1-based) -> snaps, attended, units, reached
         frames = [f for f, _ in sl]
         cf = [f for f, _ in cmds[slot]]
         for f, us in cmds[slot]:                    # (commands into the fight: a snapshot within NEAR)
@@ -95,6 +102,9 @@ def one(job: tuple) -> dict | None:
             c["attended"] += bool(reached)
             c["units"] += len(army)
             c["reached"] += len(reached)
+            pm = per_min[f // 1440 + 1]
+            pm[0] += 1; pm[1] += bool(reached); pm[2] += len(army); pm[3] += len(reached)
+        c["_per_min"] = dict(per_min)
         out[race] = c
     return out
 
@@ -105,6 +115,7 @@ def show(name: str, paths: list[str], until: int, workers: int) -> None:
     with ProcessPoolExecutor(workers) as pool:
         for res in monitor.track(pool.map(one, [(p, until) for p in paths]), len(paths), name):
             for race, c in (res or {}).items():
+                c.pop("_per_min", None)
                 tot[race] += c
                 games[race] += 1
     for race, c in sorted(tot.items()):
@@ -115,15 +126,65 @@ def show(name: str, paths: list[str], until: int, workers: int) -> None:
               flush=True)
 
 
+def put(rows: list[dict], per_min: dict) -> None:
+    """A side's per-minute rows given fight_attended and fight_reached (NaN in a minute without fight moments)."""
+    nan = float("nan")
+    for r in rows:
+        snaps, att, units, reached = per_min.get(int(r["minute"]), (0, 0, 0, 0))
+        r["fight_attended"] = att / snaps if snaps else nan
+        r["fight_reached"] = reached / units if units else nan
+
+
+def augment_round(folder: Path, workers: int) -> None:
+    """A league round's rows.json.gz given the attention features, both sides."""
+    import gzip
+    path = folder / "rows.json.gz"
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        saved = json.load(f)
+    rels = sorted(set(saved.get("T", {})) | set(saved.get("Z", {})))
+    with ProcessPoolExecutor(workers) as pool:
+        for rel, res in zip(rels, monitor.track(pool.map(one, [(str(folder / rel), 1800) for rel in rels]), len(rels),
+                                                folder.name)):
+            for side in ("T", "Z"):
+                if rel in saved.get(side, {}):
+                    put(saved[side][rel], (res or {}).get(side, {}).get("_per_min", {}))
+    with gzip.open(path, "wt", encoding="utf-8") as f:
+        json.dump(saved, f)
+    print(f"{folder.name}: attention features in {len(rels)} games' rows", flush=True)
+
+
+def augment_pros(workers: int) -> None:
+    """eval/humanlike.py's cached modern pro rows (both races; what eval/gap_windows.py compares with) given the attention features."""
+    from inventory import data_root
+    for cache in sorted((data_root() / "interim" / "humanlike").glob("pro_*_modern_*min.jsonl")):
+        race = cache.name.split("_")[1]
+        lines = [json.loads(l) for l in open(cache, encoding="utf-8")]
+        todo = [r for r in lines if not any("fight_attended" in row for row in r["rows"])]
+        jobs = [(str(data_root() / "raw" / r["rel_path"]), 1800) for r in todo]
+        with ProcessPoolExecutor(workers) as pool:
+            for r, res in zip(todo, monitor.track(pool.map(one, jobs), len(jobs), cache.stem)):
+                put(r["rows"], (res or {}).get(race, {}).get("_per_min", {}))
+        with open(cache, "w", encoding="utf-8") as f:
+            for r in lines:
+                f.write(json.dumps(r) + "\n")
+        print(f"{cache.name}: attention features in {len(todo)} games' rows", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--gary", nargs="*", default=[], help="league round folders")
     ap.add_argument("--pros", type=int, default=0, help="this many modern pro TvZ games (clean, 10+ minutes)")
     ap.add_argument("--until", type=int, default=1800, help="seconds of each game")
     ap.add_argument("--workers", type=int, default=6)
+    ap.add_argument("--augment", nargs="*", default=[], help="league rounds (names): their rows given the features")
+    ap.add_argument("--augment-pros", action="store_true", help="the pros' cached rows given the features")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
+    for name in args.augment:
+        augment_round(REPO / "runs" / "league" / name, args.workers)
+    if args.augment_pros:
+        augment_pros(args.workers)
     for folder in args.gary:
         show(Path(folder).name, sorted(glob.glob(f"{folder}/*/*.rep")), args.until, args.workers)
     if args.pros:

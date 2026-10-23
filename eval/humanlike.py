@@ -121,7 +121,7 @@ def _names(race: str) -> list[str]:
              "threatened", "threat_met", "response_s",
              "fighting", "hit_standing", "moving_between_shots", "harass_response_s", "harass_hp_lost",
              "sight_reorder", "sight_gather", "sight_stim", "air_sight_gather", "air_sight_stim", "lone_away",
-             "lone_attack"]
+             "lone_attack", "fight_attended", "fight_reached"]
             + [f"n_{k}" for k in kinds] + [f"b_{k}" for k in sorted(set(r["buildings"].values()))])
 
 
@@ -426,6 +426,8 @@ def _row(minute: int, acc: dict, me: dict, mine: list, workers: list, fight: lis
     n, fn = max(1, acc["n"]), acc["fight_n"]
     nan = float("nan")
     row = {k: 0.0 for k in names}
+    # (attention, from the replay's commands: eval/attention.py --augment fills them in; NaN until then)
+    row["fight_attended"] = row["fight_reached"] = nan
     row.update(minute=minute, workers=len(workers), halls=sum(1 for u in mine if u["type"] in R["halls"]),
                supply_used=me["supply_used"], supply_max=me["supply_max"], blocked=acc["blocked"] / n,
                minerals=acc["minerals"] / n, gas=acc["gas"] / n, workers_idle=acc["workers_idle"] / n,

@@ -104,6 +104,8 @@ def save_rows(out: Path, rows_t: dict, rows_z: dict) -> None:
     rel = lambda p: str(Path(p).resolve().relative_to(out.resolve())).replace("\\", "/")
     with gzip.open(out / "rows.json.gz", "wt", encoding="utf-8") as f:
         json.dump({"T": {rel(p): r for p, r in rows_t.items()}, "Z": {rel(p): r for p, r in rows_z.items()}}, f)
+    from eval.attention import augment_round      # (the attention features, from the replays' commands)
+    augment_round(out, 4)
 
 
 AHEAD = 1.4          # a game at time: the side whose supply used (workers and army) in the last minute is this many
