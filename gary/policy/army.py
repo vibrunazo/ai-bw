@@ -42,14 +42,23 @@ class ArmySpec:
     losses: bool = False          # a 10th map channel: own losses in the last LOSS_S, where they died
     others: bool = False          # the other clusters' commitments in the numbers (others_inputs)
     static: bool = False          # a map channel after the losses': the enemy's ground static defense known (STATIC_SUPPLY)
+    known: bool = False           # then: the enemy buildings known still standing (channel 6 never forgets one)
+    unseen: bool = False          # then: seconds / UNSEEN_PER since own units were last in each cell (bases not seen lately)
+
+    def _extra(self) -> list[str]:
+        return [n for n in ("losses", "static", "known", "unseen") if getattr(self, n)]
 
     @property
     def channels(self) -> int:
-        return CHANNELS + (1 if self.losses else 0) + (1 if self.static else 0)
+        return CHANNELS + len(self._extra())
+
+    def channel(self, name: str) -> int:
+        """The index of an optional map channel (losses, static, known, unseen), in that order after the 9."""
+        return CHANNELS + self._extra().index(name)
 
     @property
     def static_channel(self) -> int:
-        return CHANNELS + (1 if self.losses else 0)
+        return self.channel("static")
 
     @property
     def n_global(self) -> int:
@@ -68,7 +77,8 @@ OTHER_INPUTS = 4                  # the other clusters: supply shares committed 
                                   # distance and whether it engages (others_inputs)
 COMMIT_AGE_S = 120                # an order older than this is no commitment (ingest/army_dataset.py COMMIT_S)
 STATIC_SUPPLY = {146: 12, 162: 12, 125: 12}   # ground static defense, each worth this (supply x2): sunken, cannon, bunker
-STATIC_GONE_PX = 7 * 32           # a known static defense is gone when own units are this close and don't see it
+STATIC_GONE_PX = 7 * 32           # a known static defense (or building) is gone when own units are this close and don't see it
+UNSEEN_PER = 4                    # the unseen channel's unit: seconds (255: 17 minutes or more)
 
 
 def loss_value(unit_type: int) -> int:
@@ -219,6 +229,8 @@ class ArmyTracker:
         self.lost: list[tuple[int, int, int]] = []             # (frame, cell, value) of own losses
         self.hidden: set[int] = set()                          # own tags not lost when unseen (in a bunker)
         self.statics: dict[int, tuple[int, int, int]] = {}     # spec.static: enemy static defense tag -> (x, y, type)
+        self.buildings: dict[int, tuple[int, int]] = {}        # spec.known: enemy building tag -> (x, y), still standing
+        self.visited = np.zeros(CELLS, np.int64)               # spec.unseen: the frame own units were last in each cell
 
     def cell(self, x: float, y: float) -> int:
         gx = min(GRID - 1, max(0, int(x * GRID // self.mw)))
@@ -270,8 +282,12 @@ class ArmyTracker:
         f0 = obs["frame"]
         if self.spec.losses:
             self._losses(obs)
-        if self.spec.static:
+        if self.spec.static or self.spec.known:
             self._statics(obs)
+        if self.spec.unseen:
+            for u in obs["units"]:
+                if u["owner"] == self.slot:
+                    self.visited[self.cell(u["x"], u["y"])] = f0
         self.seen_buildings = np.maximum(self.seen_buildings, g[5])
         self.recent = [(f, a) for f, a in self.recent if f0 - f <= RECENT_S * 24] + [(f0, g[3])]
         self.seen_hist = [(f, a) for f, a in self.seen_hist if f0 - f <= MEMORY_S * 24] + [(f0, seen)]
@@ -295,17 +311,21 @@ class ArmyTracker:
         self.own_last = {**{t: x for t, x in self.own_last.items() if t in self.missing}, **now}
 
     def _statics(self, obs: dict) -> None:
-        """Enemy ground static defense seen (completed), remembered until own units stand near its place and don't
-        see it (the dataset: from the first look at its cell until it dies)."""
+        """Enemy buildings seen (and the completed ground static defense among them), remembered until own units stand
+        near the place and don't see it (the dataset: from the first look at its cell until it dies)."""
         now = set()
         for u in obs["units"]:
-            if u["owner"] not in (self.slot, 11) and u["type"] in STATIC_SUPPLY and u.get("completed", True):
+            if u["owner"] in (self.slot, 11) or not is_building(u["type"]):
+                continue
+            now.add(u["tag"])
+            self.buildings[u["tag"]] = (u["x"], u["y"])
+            if u["type"] in STATIC_SUPPLY and u.get("completed", True):
                 self.statics[u["tag"]] = (u["x"], u["y"], u["type"])
-                now.add(u["tag"])
         at = [(u["x"], u["y"]) for u in obs["units"] if u["owner"] == self.slot]
-        for tag, (x, y, _) in list(self.statics.items()):
-            if tag not in now and any(math.dist((x, y), q) < STATIC_GONE_PX for q in at):
-                del self.statics[tag]
+        for memory in (self.statics, self.buildings):
+            for tag, (x, y, *_) in list(memory.items()):
+                if tag not in now and any(math.dist((x, y), q) < STATIC_GONE_PX for q in at):
+                    del memory[tag]
 
     def inputs(self, obs: dict, group: list[dict], commit: tuple[int, float] | None = None) -> tuple[np.ndarray, np.ndarray]:
         """grid (9, 256) and numbers for ordering `group` (own units) now; commit: the group's commitment
@@ -317,10 +337,15 @@ class ArmyTracker:
         if self.spec.losses:                   # (where its units died in the last LOSS_S, as the pros' data)
             for f, c, v in self.lost:
                 if obs["frame"] - f <= LOSS_S * 24 + GONE_AFTER:
-                    g[9, c] += v
+                    g[self.spec.channel("losses"), c] += v
         if self.spec.static:
             for x, y, t in self.statics.values():
                 g[self.spec.static_channel, self.cell(x, y)] += STATIC_SUPPLY[t]
+        if self.spec.known:
+            for x, y in self.buildings.values():
+                g[self.spec.channel("known"), self.cell(x, y)] += 1
+        if self.spec.unseen:
+            g[self.spec.channel("unseen")] = (obs["frame"] - self.visited) / (24 * UNSEEN_PER)
         group_sup = 0
         for u in group:
             s = supply_x2(u["type"])

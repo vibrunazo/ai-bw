@@ -42,8 +42,13 @@ commitment follows the group on its way. And that order's age. Pros re-decide on
                       at its cell (an enemy building in sight there) until it dies: the other buildings' channel
                       counts a sunken as an Evolution Chamber, so a model couldn't learn when pros attack into
                       static defense (v4; the static guard, a stop-gap in AGENTS.md)
+  tick_known (256,)   the enemy buildings the player knew of still standing, by cell: as tick_static, from the
+                      first look at the cell after it was begun until it dies (channel 6 never forgets one, so
+                      a model couldn't tell no building left: the scripted hunt's trigger)
+  tick_unseen (256,)  seconds / UNSEEN_PER (gary/policy/army.py) since the player's own units were last in each cell,
+                      capped at 255 (the bases not seen lately: the hunt's search) (v5)
 
-Output: data/interim/army/v4/<sha1[:2]>/<sha1>.npz and data/interim/army/v4/index.jsonl. Needs a
+Output: data/interim/army/v5/<sha1[:2]>/<sha1>.npz and data/interim/army/v5/index.jsonl. Needs a
 gary_resim whose "gone" events carry the owner and the place (resim/gary_resim.cpp).
 
 Usage:
@@ -70,17 +75,23 @@ from inventory import data_root
 from eval import monitor, priority
 from macro_dataset import RACES, TOWN_HALLS, run_resim, select
 
-VERSION = "v4"
+VERSION = "v5"
 GRID, CELLS, CHANNELS = 16, 256, 9
 MIN_SUP = 8                  # at least 4 supply (x2) selected
 WINDOW = 48                  # at most one sample per player per 2 s
 RECENT = 30                  # channel 7 remembers enemy army for 30 s
+UNSEEN_PER = 4               # tick_unseen's unit, seconds (gary/policy/army.py UNSEEN_PER)
 KIND = {"move": 0, "amove": 1, "attack": 1, "patrol": 1}
 TICK = 5                     # seconds (snapshots) between commitment samples
 LOSS_S = 10                  # own losses counted this long (gary/policy/army.py LOSS_S)
 COMMIT_S = 120               # an order older than this is no commitment any more
 CLUSTERS = 3
 NEAR, MOVED = 1, 2           # engage: the target this close to enemy presence, the group sent this far
+
+
+def is_building(unit_type: int) -> bool:
+    from gary.policy.army import is_building as building
+    return building(unit_type)
 
 
 def static_value(unit_type: int) -> int:
@@ -309,6 +320,28 @@ def build_game(rec: dict) -> dict:
         for f, c, v in built.values():
             _add_static(static, frames, g, f, frames[-1] + 1, c, v)
         out[f"p{i}_tick_static"] = np.minimum(static[np.array(tk["t"], np.int64)], 255).astype(np.uint8)
+        # the enemy's buildings, each from its first "start" or "done" (a morph keeps its tag) to its "gone"
+        known = np.zeros((T, CELLS), np.int32)
+        begun = {}
+        for r in lines:
+            if r["type"] != "event" or r.get("slot") in (s, None) or r["slot"] not in slots:
+                continue
+            if r["ev"] in ("start", "done") and is_building(r["unit"]) and "x" in r and r["tag"] not in begun:
+                begun[r["tag"]] = (r["frame"], cell_of(r["x"], r["y"], mw, mh, fx, fy), 1)
+            elif r["ev"] == "gone" and r["tag"] in begun:
+                f, c, v = begun.pop(r["tag"])
+                _add_static(known, frames, g, f, r["frame"], c, v)
+        for f, c, v in begun.values():
+            _add_static(known, frames, g, f, frames[-1] + 1, c, v)
+        out[f"p{i}_tick_known"] = np.minimum(known[np.array(tk["t"], np.int64)], 255).astype(np.uint8)
+        # seconds since own units were last in each cell (snapshots a second apart)
+        last = np.zeros(CELLS, np.int64)
+        unseen = np.zeros((T, CELLS), np.int64)
+        present = g[:, :3].sum(1) > 0
+        for t in range(T):
+            last[present[t]] = t
+            unseen[t] = t - last
+        out[f"p{i}_tick_unseen"] = np.minimum(unseen[np.array(tk["t"], np.int64)] // UNSEEN_PER, 255).astype(np.uint8)
         ti = np.array(tk["t"], np.int64)
         out[f"p{i}_tick_grid"] = np.array(tk["grid"], np.uint8).reshape(-1, CHANNELS, CELLS)
         out[f"p{i}_tick_frame"] = frames[ti] if len(ti) else np.zeros(0, np.int32)
