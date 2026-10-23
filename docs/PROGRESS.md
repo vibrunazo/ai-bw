@@ -955,8 +955,15 @@ plan and the full log).
   fire 16.2% -> 16.9%, close in 3.3% -> 4.1%, reposition 8.4% -> 6.5%, again 23.5% -> 24.1%. Gate 3, the held-out
   suite: +255 against rl1's +195 (paired +67, +3 to +134; mixed +142, +33 to +279; outnumbered +120, +5 to +258;
   attacks -22, harassment +10 within noise), against RoleAhead's +141 +117 (+12 to +231): the model in contact now
-  beats the hand rules there. Commands a minute 72.5, fighters reached 86% (rl1's 74.9, 90%). Gate 4: rounds
-  Q50a+b against R50a+b.
+  beats the hand rules there. Commands a minute 72.5, fighters reached 86% (rl1's 74.9, 90%). Gate 4, 96 paired games
+  (Q50a+b against R50a+b): won 49 lost 16 (rl1's 54 and 15), better in 21 and worse in 25 (-0.036 +- 0.069), the gap
+  +0.044 (+0.014 to +0.068) further from the pros, macro +0.055 (+0.014 to +0.096), fight +0.028; against gt1 even on
+  results (+0.005 +- 0.082), macro +0.091. Failed: not adopted (gt1dev stays on rl1; the run from rl2 begun meanwhile
+  was stopped). Its hands are rl1's (105 actions a fight minute, 18-19% macro, macro 12.3-12.6 a minute out of
+  fights); it fights more: the Terran's fighters dead by 16:00 64.6 -> 72.0 and 79.0 -> 90.6 a game, the Zerg's 92.4
+  -> 101.7 and 107.1 -> 113.6, a slightly worse trade over the game, net value in 45-second scenarios. Credited with
+  the 10 s after each decision (train/roles_rl.py HORIZON_S), the run learned to win the next exchange; the next run
+  from rl1 credits 20 s.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
