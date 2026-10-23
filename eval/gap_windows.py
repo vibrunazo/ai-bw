@@ -8,6 +8,10 @@ on the paired games, the difference (B - A: positive, B further from the pros), 
 resampling the paired games (BOOT times).
 
     python -m eval.gap_windows --side T --a B30 B30b --b R30T R30Tb
+    python -m eval.gap_windows --side T --a D50a --b R50a --group fight      # the fight features only
+
+--group: all features, the macro ones (economy, unit counts, buildings) or the fight ones (where the army stands,
+its orders, threats met, fighting, what it does at a sighting, lone units).
 """
 from __future__ import annotations
 
@@ -26,6 +30,18 @@ sys.path.insert(0, str(REPO))
 from eval import monitor, priority  # noqa: E402
 
 WINDOW = 5                      # minutes
+FIGHT = ("army_standing", "orders_per_fighter", "army_home", "army_field", "army_enemy", "army_alone", "army_spread",
+         "army_gone", "threatened", "threat_met", "response_s", "fighting", "hit_standing", "moving_between_shots",
+         "harass_response_s", "harass_hp_lost", "sight_reorder", "sight_gather", "sight_stim", "air_sight_gather",
+         "air_sight_stim", "lone_away", "lone_attack")
+
+
+def group_names(names: list[str], group: str) -> list[str]:
+    """The minute and a group's features (eval/humanlike.py _names)."""
+    if group == "all":
+        return names
+    fight = [n for n in names if n in FIGHT]
+    return ["minute"] + (fight if group == "fight" else [n for n in names[1:] if n not in FIGHT])
 BOOT = 200
 
 
@@ -61,6 +77,7 @@ def main() -> None:
     ap.add_argument("--a", nargs="+", required=True, help="arm A's rounds")
     ap.add_argument("--b", nargs="+", required=True, help="arm B's rounds")
     ap.add_argument("--minutes", type=int, default=30)
+    ap.add_argument("--group", choices=("all", "macro", "fight"), default="all")
     ap.add_argument("--workers", type=int, default=8)
     priority.add_argument(ap)
     args = ap.parse_args()
@@ -72,7 +89,7 @@ def main() -> None:
         for r in rounds:
             arm[key].update(round_rows(r, args.side, args.workers))
     keys = sorted(set(arm["a"]) & set(arm["b"]))
-    names = _names(args.side)
+    names = group_names(_names(args.side), args.group)
     Xp, _, _ = matrix(pro_rows(args.side, 300, args.workers, "modern"), names)
     windows = [(a, a + WINDOW - 1) for a in range(0, args.minutes, WINDOW)]
 
@@ -89,7 +106,8 @@ def main() -> None:
         for i, (x, y) in enumerate(zip(sa, sb)):
             if x is not None and y is not None:
                 diffs[i].append(y - x)
-    print(f"{args.side}: {len(keys)} paired games; A {' '.join(args.a)}, B {' '.join(args.b)}; gap (lower: nearer the pros)")
+    print(f"{args.side}: {len(keys)} paired games; A {' '.join(args.a)}, B {' '.join(args.b)}; gap (lower: nearer the pros)"
+          + ("" if args.group == "all" else f", {args.group} features ({len(names) - 1})"))
     print(f"{'window':>10} {'A':>6} {'B':>6} {'B-A':>7}   90% interval")
     for i, label in enumerate([f"{a}-{b + 1} min" for a, b in windows] + ["all"]):
         x, y, d = base_a[i], base_b[i], diffs[i]
