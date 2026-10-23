@@ -47,6 +47,15 @@ from gary.policy.fight_memory import history_inputs
 
 ASK_EVERY = 12                       # frames between fight decisions (half a second)
 QUEUE_FOR = 24                       # a turn's further orders are given within this many frames, or dropped
+# option attend: the share of fight moments the hands attend held at the pros' (eval/attention.py: a moment attended
+# when a command reached one of the player's army units there in the 2 s before; modern pros, first 10 minutes,
+# Terran 70%, Zerg 68%; gt1dev 89-92%, its macro gap leaning behind gt1's). Over it, across the last ATTEND_WINDOW of
+# fight moments, the role model gives no new order that turn and the turn goes on to the army layer and production
+# (the fight rules, pulls and loads and repairs, keep theirs)
+ATTEND_SHARE = {"T": 0.70, "Z": 0.68, "P": 0.70}
+ATTEND_BACK = 48                      # frames: a command this recent attends the moment
+ATTEND_WINDOW = 60 * 24               # frames of fight moments the share is taken over
+ATTEND_MIN = 10                       # moments before the share is trusted
 LURKER = 103
 SIGHT = 7 * 32                      # detect: a spot Gary's units see (a marine's sight)
 DETECT_NEAR = 8 * 32                # detect: Gary's units this near a burrowed lurker: scan it
@@ -124,7 +133,7 @@ def command_intent(key: tuple, tags: list[int], center) -> Intent:
 class FightLayer:
     def __init__(self, g: Gary, model, kind: str, before: list = (), in_fight: list = (),
                  guard_rail: bool = False, workers: bool = True, seed: int = 0, ctrl_click: bool = False,
-                 watch: int = 0, role_options: dict | None = None):
+                 watch: int = 0, role_options: dict | None = None, attend: bool = False):
         self.g = g
         self.model = model
         self.kind = kind                         # "per_unit", "command" or "roles"
@@ -145,6 +154,8 @@ class FightLayer:
         # a turn's further orders (a role provider's batch, roles.py): started one after another as the hands come
         # free, before production's turn; the next fight turn replaces them
         self.queue: list[tuple[int, Intent]] = []
+        self.attend = ATTEND_SHARE.get(g.race.letter) if attend else None   # (option attend: the share held to)
+        self.moments: list[tuple[int, bool]] = []    # (frame, attended) of the fight moments in ATTEND_WINDOW
         self.center: tuple[float, float] | None = None
         self.told: dict[int, tuple[tuple, int]] = {}    # unit tag -> (order key, frame given)
         # sample (the default): draw each command from the model's distributions; it plays better
@@ -173,12 +184,28 @@ class FightLayer:
             intent = self.roles.decide(obs, snap)
             if snap is not None:
                 self.queue = [(self.g.hi.frame, it) for it in getattr(self.roles, "more", [])]
+                if self.attend is not None and self._over_attention(snap):
+                    self.queue = []
+                    return None              # (the hands elsewhere this turn: the pros' share of fight moments)
             if intent is None:
                 return None
             self.g.motor.start(intent)
             return "roles"
         acted = self._per_unit(obs, mine) if self.kind == "per_unit" else self._command(obs, mine)
         return "fight" if acted else None
+
+    def _over_attention(self, snap) -> bool:
+        """This fight moment noted (attended: a command reached one of Gary's army units in it within ATTEND_BACK),
+        and whether the attended share over the last ATTEND_WINDOW is above the pros'."""
+        g = self.g
+        f = g.hi.frame
+        rows, tags = snap[0], snap[1]
+        army = {t for t, r in zip(tags, rows) if r[1] == 1 and not is_worker(int(r[0])) and not is_building(int(r[0]))}
+        attended = any(c[0] >= f - ATTEND_BACK and army & set(c[2]) for c in g.hi.commands)
+        self.moments = [(m, a) for m, a in self.moments if m > f - ATTEND_WINDOW] + [(f, attended)]
+        if len(self.moments) < ATTEND_MIN:
+            return False
+        return sum(a for _, a in self.moments) / len(self.moments) > self.attend
 
     def next_queued(self, obs: dict | None = None) -> "Intent | None":
         """The turn's next order still to give (QUEUE_FOR at most after its turn), or None: one whose units are on

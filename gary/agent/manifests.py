@@ -601,6 +601,8 @@ OPTIONS = {
     # the role model decides in contact too (roles.py learned/v1, not RoleAhead's hand rules there), the same skills
     # carrying its groups out: what the roles RL trains reaches every fight command
     "incontact": lambda m: m["fight"].update(provider="roles"),
+    # fight.py attend: the fight's share of the hands held at the pros' attended share of fight moments
+    "attend": lambda m: m["fight"].update(attend=True),
     # the first roles RL run that moved and improved (train/roles_rl.py from gt1dev, round 50 of 60 by validation on
     # the training games' scenarios): the held-out state-selected suite +195 against its start's +87 (paired +105,
     # +44 to +169), against RoleAhead's +141 +50 (-51 to +151)
@@ -996,7 +998,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.fight = FightLayer(g, fight, f["provider"], [rule(r) for r in f.get("before", [])],
                              [rule(r) for r in f.get("in_fight", [])], f.get("guard_rail", False),
                              f.get("workers", True), seed, f.get("ctrl_click", False),
-                             f.get("watch_tiles", 0) * 32, f.get("roles", {}))
+                             f.get("watch_tiles", 0) * 32, f.get("roles", {}), f.get("attend", False))
     if m["arbiter"] == "drill/v1":
         g.arbiter = DrillArbiter(g, seed, interruptions)
     else:
