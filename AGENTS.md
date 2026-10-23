@@ -86,7 +86,8 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   fighters seen near it. Scripted because the commit model doesn't weigh static defense (human game 4's
   three attacks all went into sunkens). Replace with static defense as a commit-model input and its outcomes
   in training. Measure: the attacks' trade (`eval/attacks.py`): supply killed / lost 78.8 / 44.8 a game with
-  it, 71.9 / 52.6 without.
+  it, 71.9 / 52.6 without. It vetoes an engage the commit model chose, which this register's own rule forbids
+  (a rule may delay or shape a learned decision, never veto it): kept until the user decides (2026-10-23).
 - **Gather before engaging** (option `gather`, not adopted; `army.py` `_gather_start`, `_gather_step`). A commit
   engage with a quarter of the army's supply elsewhere first brings the whole army to its own middle (at least
   12 tiles from the target), then attacks once 75% of it is there or 20 s pass. It only delays the engage, never
@@ -104,12 +105,51 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   that turns the model from tech. Replace with the model's own decisions only, queued while they wait for a producer
   (option `queue`: `queue_per_producer`, keep_busy off), the decision rate the model's own if production falls short.
   Measure: rounds Q60a and QP60a (queue, queue with the pros' history) against B60a: results, the macro gap, the bank.
-- **Older rules, to review** (scripted before 2026-10-20; each needs a full entry when next worked on): the
-  early-pool posture and its builds (rush defense from scouting); Gary-Z's alarm and the natural colonies;
-  the first producer by a time (`rax_by`); supply ahead of production and the pros' caps per minute; the
-  answers to the enemy's tech (`answers.py`); the v0.16 hunt and base scans; the fight layer's rules
-  (repair, pull, load, reinforce, stim, detect; the Zerg roles' retreat when outweighed); Gary-Z's army
-  rules (posts, raid, join, sweep, press).
+- **The pros' caps per minute** (in gt1 and gz1; `macro.py` plan, `capped`; the model's `cap`). A unit, building or
+  expansion is refused once Gary has more than nine pros in ten ever had by that minute. The commonest veto of
+  the model's decisions: 8,293 options set aside in 48 games of gt1 (Marines 2,963, Medics 1,320, Science Vessels
+  988, turrets 781, Firebats 539, Barracks 483, depots 470, Control Towers 303). Scripted because a decoded
+  unlikely choice could run away (v0.14's era). Partly a consequence of keep_busy (its marines pushed the counts
+  over the cap, and the model's own marines and medics were then refused). Replace with the model's own odds
+  (it knows the counts it has; calibrated on the pros' states, the macro check). Measure: an option off against
+  the baseline, results and the macro gap; first, how often it fires once keep_busy is gone (option queue).
+- **SCVs capped at the bases' saturation** (in gt1; `terran_executor.py`, "SCVs enough for its bases", MAX_SCVS 60).
+  The model's SCV decisions are refused beyond the bases' saturation (2,673 times in 48 games, most at 5-15
+  minutes). Scripted because Gary over-made SCVs (2026-10-09: 42-51 at 12:00 against the pros' 39). Gary-T's
+  Command Centers stand idle 93% of 10-20 minutes, the pros' 84%. Replace with the model's own SCV decisions.
+  Measure: an option off: workers at 12-20 minutes against the pros', results and the macro gap.
+- **Under half the waiting favorite's odds** (in gt1 and gz1; `macro.py`, the decoder). While the model's favorite
+  waits for a busy building, alternatives under half its odds are passed over and the macro waits (2,104 times:
+  depots 614, SCVs 458, Barracks 242, refineries 164, Engineering Bays 146, Siege Tanks 62). Scripted so a busy
+  building doesn't hand the turn to unlikely choices. With a queue of waiting decisions (option queue) the favorite
+  no longer holds the macro; measure how often this still fires there, and an option without it.
+- **Odds summed into a decision** (`mass` for one-offs, in gt1: tech buildings, add-ons, research, upgrades;
+  `expand_mass` for expansions; `macro.py` odds_mass, expand_odds). A one-off is decided once its odds, summed over
+  the decisions taken while it was possible, reach one (278 times in 48 games), an expansion likewise (194).
+  Decoders, but they decide on their own schedule rather than the model's odds of the moment. Scripted because
+  the favorite (almost always a unit) never let a few-percent tech building come (a Factory by 8:00 in 4% of
+  games against the pros' 62%). Measure: their decisions' timings against the pros' (build orders), and an option
+  without them once the decoder draws (dice) everywhere.
+- **Depots ahead of production** (`supply_ahead`, in gt1 and gz1; `terran_executor.py` supply_due). A depot is built
+  while each producer has less than 2 supply left (295 forced depots in 48 games). Scripted because the model gave
+  the depot under its floor once blocked (42 of 48 games blocked at 4-8 minutes, round L5b). Gary is now
+  supply-blocked 0-2% of the time; the gap table's pros 9-19% (its code says pros are almost never blocked: the two
+  measures disagree and need reconciling first). Replace with the model's own depots once it is asked often
+  enough. Measure: blocked time against the pros', results, an option off.
+- **Answers to the enemy's plan** (`answers.py`, in gt1). Lurkers or mutalisks read from what Gary saw force Siege
+  Mode, tanks, vessels, Irradiate and turrets (443 forced decisions in 48 games) and veto turrets beyond one a base
+  (387). Scripted because the macro model didn't answer what it had seen (human games 1-2). Replace with the seen
+  enemy units as macro-model inputs (they are: the `seen` counts) and measure whether the model answers alone.
+  Measure: an option off, against lurker and mutalisk plans: results and the time to the answer.
+- **The early-pool posture's builds** (in gt1; rush defense from scouting: bunker at the ramp, marines first, no
+  expansion). Forces 454 decisions and blocks expansion 145 times in 48 games. Scripted for 9-pool and 12-pool
+  rushes (v0.11-v0.18, losses 27 of 48 to the pro-timed 9-pool before it). Replace with the posture as a learned
+  read of the scouting (the posture's alarm a model input). Measure: losses to early pools (eval/vs_rush.py) and
+  the gap at 0-10 minutes with it off.
+- **Older rules, to review** (scripted before 2026-10-20; each needs a full entry when next worked on): Gary-Z's
+  alarm and the natural colonies; the first producer by a time (`rax_by`); the v0.16 hunt and base scans; the fight
+  layer's rules (repair, pull, load, reinforce, stim, detect; the Zerg roles' retreat when outweighed; RoleAhead's
+  hand rules in contact, gt1's whole fight in contact); Gary-Z's army rules (posts, raid, join, sweep, press).
 
 ## When a new replay pack lands
 
