@@ -97,6 +97,13 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   arrivals per fighter at attacks (`eval/attacks.py`: Gary-T 0.27, pros 0.06) and 96 paired games. Measured
   2026-10-20 (96 paired games against gt1): the 10-15 minute gap nearer the pros (-0.045, interval below zero),
   lost 6 (9), but won 47 (54), more games at 30:00; late arrivals 0.26 to 0.22 only.
+- **Idle producers kept busy** (`keep_busy`, in gt1 since v0.14; `macro.py` `_keep_busy`). An idle Barracks, Factory
+  or Starport trains its last unit again, whatever the model decides. Scripted because one decision at a time left
+  Barracks idle with money banked (2026-10-07). It makes decisions the model didn't: at 10-20 minutes half of gt1's
+  marines (86 a game, 44 the model's), 71% of what it trained against the model's 42%, and the marine-heavy history
+  that turns the model from tech. Replace with the model's own decisions only, queued while they wait for a producer
+  (option `queue`: `queue_per_producer`, keep_busy off), the decision rate the model's own if production falls short.
+  Measure: rounds Q60a and QP60a (queue, queue with the pros' history) against B60a: results, the macro gap, the bank.
 - **Older rules, to review** (scripted before 2026-10-20; each needs a full entry when next worked on): the
   early-pool posture and its builds (rush defense from scouting); Gary-Z's alarm and the natural colonies;
   the first producer by a time (`rax_by`); supply ahead of production and the pros' caps per minute; the
