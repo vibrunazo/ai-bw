@@ -194,6 +194,7 @@ class LearnedArmy:
         self.belief_mem = belief.memory() if belief is not None else None   # hidden enemy army outweighs
         self.scan = scan            # option (with hunt): bases are scanned before the army walks there
         self.hunt = hunt            # option: with no enemy building known, the army visits the bases
+        self.hunt_advice = False    # option huntadvice (with the hunt off): what it would do, in the records only (labels)
         self.enemy_buildings: dict[int, tuple[int, int]] = {}   # tag -> where it was seen
         self.enemy_army_seen = 0                                 # frame an enemy fighter was last seen
         self.hunted: dict[tuple[int, int], int] = {}             # hunt target -> frame first sent there
@@ -262,6 +263,8 @@ class LearnedArmy:
             if self.gathering is not None or who:
                 return who
         hunt = self._hunt(obs, mine, done) if self.hunt else None
+        if not self.hunt and self.hunt_advice:
+            self._advise(obs, mine, done)
         if hunt is not None:                    # (the model isn't asked while the army hunts)
             return "army" if hunt else None
         if hi.frame < self.next_ask:
@@ -783,6 +786,25 @@ class LearnedArmy:
                                                           "fight": 0.0, "done": [], "boxes": 0,
                                                           "max_boxes": HUNT_BOXES, "hunt": True}, "army"))
         return True
+
+    def _advise(self, obs: dict, mine: list[dict], done: list[dict]) -> None:
+        """hunt_advice: the hunt run as if on, its orders caught rather than given, and each written to the records as a
+        "hunt advice" decision (its units and target): the rule's labels on the model's own states, for a commit model
+        to imitate the hunt where the pros' replays end at GG before any game is finished (AGENTS.md, the hunt)."""
+        from gary.decision_log import LOG
+        g = self.g
+        caught: list[Intent] = []
+        start, say = g.motor.start, g.say
+        g.motor.start, g.say = caught.append, (lambda *a, **k: None)
+        try:
+            self._hunt(obs, mine, done)
+        finally:
+            g.motor.start, g.say = start, say
+        for it in caught:
+            x, y = it.target
+            LOG.decision(g.hi.side, "hunt advice", g.hi.frame, f"{'scan' if it.kind == 'SCAN' else 'engage'} to "
+                         f"({x // 32},{y // 32})", by="rule: the hunt (advice)",
+                         inputs={"tags": list(it.units), "to": [x // 32, y // 32], "kind": it.kind})
 
     def _search(self, army: list[dict], todo: list[tuple], at: tuple) -> bool:
         """hunt_split: no enemy building known, the bases not seen lately searched at once by squads (pros split up
