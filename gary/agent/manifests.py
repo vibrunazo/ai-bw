@@ -798,8 +798,6 @@ OPTIONS = {
     # in eval/vs_rush.py's short games against rushes on the 1.16 maps (2026-10-13), where two-Barracks marines (style
     # 4, 1.5% of pro Terrans: gas in 10% of them, no Factory) won most, and every 30-minute game on the ladder maps
     # borrowed it: Gary-T played style 4 in all 96 of rounds R50a+b (its macro gap: no gas, no Factory, mass marines)
-    # macro.py fill: an idle Barracks, Factory or Starport that never trained takes the model's likeliest unit of its own
-    "fill": lambda m: m["macro"].update(fill=True),
     "styleroll": lambda m: m["macro"].update(selector=None, style="roll"),
     "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
@@ -945,7 +943,6 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                m["macro"].get("park", False), m["macro"].get("pace", False), m["macro"].get("tech_min_p"),
                                m["macro"].get("hatch_mass"), m["macro"].get("wait_min_p"))
         g.macro.expand_mass = m["macro"].get("expand_mass")
-        g.macro.fill = m["macro"].get("fill", False)
         g.macro.odds_mass = m["macro"].get("odds_mass")
         g.macro.supply_ahead = m["macro"].get("supply_ahead", False)
         g.macro.hold = m["macro"].get("hold", False)
