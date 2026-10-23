@@ -942,7 +942,13 @@ plan and the full log).
   5,736 decisions), and are passed over as "also waits: its Factory (Starport) is busy" 505 and 423 times, "the
   pros' cap for this minute" for vessels about 140, "no Machine Shop" 40. At the one "busy" moment replayed the
   Factory was training (queue 1), so the wait can be real; the idle 79% are the moments between, when keep_busy (on in
-  gt1) doesn't train from it. Next: keep_busy's own records (what it tried for each idle producer and why not).
+  gt1) doesn't train from it. keep_busy's own records (a probe on the branch, one 20-minute game of gt1): of 50
+  records of an idle Factory or Starport with nothing trained, the Factory had no last unit in all 50 (it had never
+  trained: a Siege Tank needs the Machine Shop it lacks, a Goliath the Armory, a Vulture is under the dice floor),
+  the Starport in 20; the Science Vessels "waited for a busy Starport" while the idle one had no Control Tower. Two
+  tries had no effect in that game (both discarded): the add-on built first when the chosen unit needs it (the tank's
+  odds, about 1.5%, rarely win the dice) and the fill decoder above. Next: the add-on and the unit decided together
+  (pros put a Machine Shop on their Factory at once), daytime work.
 - **The second roles RL run (2026-10-23), from rl1 by the same recipe** (60 rounds, 32 x 8 plays, the KL anchor to
   its start, Gary's own order rate as input). Validation (the training games' scenarios) -152, -124, -161, -103,
   -131, -119, -53 (round 60, kept: runs/roles_rl/20261023_014740, option rl2). Gate 1: KL to rl1 0.082 (median 0.052);
