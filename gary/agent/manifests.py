@@ -788,6 +788,11 @@ OPTIONS = {
     # gt1's own marine-heavy states the model, calibrated on the pros', asked for Marines 42% and no mech (the macro
     # check); its own past fed back on itself
     "prohist": lambda m: m["macro"].update(history="pro"),
+    # three registered rules off (AGENTS.md): the pros' caps per minute; SCVs capped at the bases' saturation (MAX_SCVS
+    # stays); depots ahead of production
+    "nocaps": lambda m: m["macro"].update(caps=False),
+    "noscvcap": lambda m: m.update(scv_saturation=False),
+    "nodepots": lambda m: m["macro"].update(supply_ahead=False),
     "styleroll": lambda m: m["macro"].update(selector=None, style="roll"),
     "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
@@ -940,6 +945,9 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                m["macro"].get("park", False), m["macro"].get("pace", False), m["macro"].get("tech_min_p"),
                                m["macro"].get("hatch_mass"), m["macro"].get("wait_min_p"))
         g.macro.expand_mass = m["macro"].get("expand_mass")
+        g.macro.caps_on = m["macro"].get("caps", True)
+        if hasattr(g.executor, "scv_saturation"):
+            g.executor.scv_saturation = m.get("scv_saturation", True)
         if hasattr(g.executor, "addon_room"):
             g.executor.addon_room = m.get("addon_room", False)
         g.macro.odds_mass = m["macro"].get("odds_mass")

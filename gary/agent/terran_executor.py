@@ -27,6 +27,7 @@ class TerranExecutor(Executor):
         self.basic["resume"] = self._task_resume
         g.task_runners["resume"] = self._run_basic
         self.addon_room = False                       # option addonroom: room for its add-on (addon_fits)
+        self.scv_saturation = True                    # SCVs capped at the bases' saturation (option noscvcap: off)
 
     def carry_out(self, act: int, uid: int, obs: dict, mine: list[dict], done: list[dict], me: dict) -> dict | None:
         """What a macro decision means for Terran hands now (LearnedMacro.plan's gates passed): a command
@@ -41,7 +42,8 @@ class TerranExecutor(Executor):
                     any(ut == T.DEPOT for ut, *_ in g.reserved) or \
                     g.building(T.DEPOT)
                 return self.wait("supply: a depot is coming") if coming else self.no("supply")
-            if uid == g.race.worker and sum(1 for u in mine if u["type"] == g.race.worker) >= min(MAX_SCVS, self.saturation(mine)):
+            if uid == g.race.worker and sum(1 for u in mine if u["type"] == g.race.worker) >= \
+                    (min(MAX_SCVS, self.saturation(mine)) if self.scv_saturation else MAX_SCVS):
                 return self.no("SCVs enough for its bases")
             addon = T.NEEDS_ADDON.get(uid)
             if addon is not None and not any(u["type"] == addon for u in done):

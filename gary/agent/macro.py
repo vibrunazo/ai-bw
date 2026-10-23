@@ -113,6 +113,7 @@ class LearnedMacro:
         # the model didn't decide (keep_busy, which trained idle producers' last unit again, made half of gt1's marines
         # at 10-20 minutes; removed 2026-10-23: rounds Q60a against B60a, the same results and gap without it)
         self.queued: list[tuple[tuple[int, int], int]] = []
+        self.caps_on = True                   # the pros' caps per minute (AGENTS.md register; option nocaps: off)
         self.decoder = decoder                              # "favorite" (the most likely), "dice" or "sample"
         self.rng = random.Random(seed)
         self.natural_bunker = natural_bunker
@@ -576,7 +577,8 @@ class LearnedMacro:
         # (a larva's unit and a morph too: without, gz1 made drones past the pros' cap at 1:00, and its
         # Extractor came at 3:05 where Gary-Z's dice, the drones capped, came to it by 1:25)
         # (capped: not a rule's goal that ignores the caps, as Gary-Z's overlord rule did)
-        cap = self.model.cap(uid, obs["frame"]) if capped and act in (TRAIN, MORPH, BMORPH, BUILD, EXPAND) else None
+        cap = self.model.cap(uid, obs["frame"]) if capped and self.caps_on and act in (TRAIN, MORPH, BMORPH, BUILD, EXPAND) \
+            else None
         if cap is not None and self.count(mine, uid) >= cap:
             return self._no(f"the pros' cap for this minute ({cap})")   # as many as nine pros in ten ever had by now
         g.executor.why = None
