@@ -973,6 +973,15 @@ plan and the full log).
   -0.012, fight -0.011; Control Towers 0.77 -> 1.25 at 12:00 and 0.82 -> 1.42 at 16:00, vessels 0.2 -> 0.5 and 1.8 ->
   2.9, Machine Shops 0.32 -> 0.39 and 0.39 -> 0.45, supply at 16:00 87 -> 96, Starports idle 79% -> 72%. A placement
   fix (the hands): into gt1 and gt1dev.
+- **The third roles RL run (2026-10-23), from rl1 with each decision credited over 20 s** (--horizon 20; rl2's 10 s
+  won the suite and failed in games). Validation -152, -115, -98, -104, -99, -107, -83 (round 60, kept:
+  runs/roles_rl/20261023_043828, option rl3). Gate 1: KL to rl1 0.089; fire 16.1% -> 17.2%, keep 29.9% -> 32.1%, stand
+  7.2% -> 6.0%, reposition 8.6% -> 7.2%, close in barely (3.4% -> 3.6%; rl2 3.3% -> 4.1%). Gate 3: the suite +268
+  (paired +71 over rl1, +12 to +135; +122 over RoleAhead, +15 to +238). Gate 4 (T50a+b against R50a+b): won 47 lost 8
+  (54 and 15), better in 22 and worse in 26 (-0.013 +- 0.076), the gap +0.069 (+0.038 to +0.096), macro +0.094, fight
+  +0.031; the trade a little better than rl2's (the Terran's fighters dead +4-6 a game, the Zerg's +5-9). Both runs
+  moved the macro side of the gap the same way, which a fight model shouldn't; R50a+b were played before the first
+  producer rule's tidy (3c661c8), Q50 and T50 after: a fresh gt1dev baseline on the same code (D60a+b) is judging it.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
