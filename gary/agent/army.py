@@ -800,11 +800,15 @@ class LearnedArmy:
             self._hunt(obs, mine, done)
         finally:
             g.motor.start, g.say = start, say
+        where = {u["tag"]: (u["x"], u["y"]) for u in mine}
         for it in caught:
             x, y = it.target
+            at = [where[t] for t in it.units if t in where]
+            cx, cy = (sum(p[0] for p in at) / len(at), sum(p[1] for p in at) / len(at)) if at else (-32, -32)
             LOG.decision(g.hi.side, "hunt advice", g.hi.frame, f"{'scan' if it.kind == 'SCAN' else 'engage'} to "
                          f"({x // 32},{y // 32})", by="rule: the hunt (advice)",
-                         inputs={"tags": list(it.units), "to": [x // 32, y // 32], "kind": it.kind})
+                         inputs={"tags": list(it.units), "to": [x // 32, y // 32], "at": [int(cx) // 32, int(cy) // 32],
+                                 "kind": it.kind})
 
     def _search(self, army: list[dict], todo: list[tuple], at: tuple) -> bool:
         """hunt_split: no enemy building known, the bases not seen lately searched at once by squads (pros split up

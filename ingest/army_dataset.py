@@ -305,6 +305,7 @@ def build_game(rec: dict) -> dict:
                 if frames[t] - LOSS_S * 24 < f <= frames[t]:
                     loss[j, c] += v
         out[f"p{i}_tick_loss"] = np.minimum(loss, 255).astype(np.uint8)
+        out[f"p{i}_flip"] = np.array([fx, fy, mw, mh], np.int32)     # (the mirroring, to place other labels: v5)
         # the enemy's static defense: each from its "done" to its "gone" (by tag), known once the player sees an
         # enemy building in its cell after it is done
         static = np.zeros((T, CELLS), np.int32)
