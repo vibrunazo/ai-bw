@@ -927,6 +927,30 @@ plan and the full log).
   by taking no gas. Next for macro: production added when money floats, as the pros do (the model's odds on its own
   banked states), before the style is let go. Also: the first producer's rule after the opening needs a buildable
   one for a Terran too (3c661c8; it set the goal up to 2,955 times a game in lost games).
+- **Production idle, and the fill decoder (2026-10-23).** Production buildings at 10-20 minutes (sampled every 10 s,
+  completed with nothing in training): gt1 (B50a, 24 games) Barracks 5.0 idle 44%, Factories 0.9 idle 79%, Starports
+  1.5 idle 79%, Command Centers 2.0 idle 93%, minerals banked 2,354; pros (30 games) 4.9 idle 47%, 1.8 idle 46%, 1.4
+  idle 54%, 2.8 idle 84%, 1,932. The Barracks are the pros'; the Factories and Starports are half as many and mostly
+  idle (no tanks, vultures, goliaths, vessels: the high-supply units, the unspent gas). The model's next decision adds
+  production as often as the pros' when money floats (10% of Gary's against 6%). Bases: the natural at 5 minutes
+  (pros 3), the third at 15 (12), as many games reaching them; workers even to 12 minutes, 41 against 46 at 16. Option
+  fill (keep_busy: an idle producer makes the model's likeliest of its own units when its last can't be made), 48
+  games each: gt1 won 24 lost 10 (B50a 29 and 5), Factories still idle 78%, the gap +0.007; gt1dev won 22 lost 4
+  (R50a 31 and 8), the gap +0.064 (+0.023 to +0.099). Not adopted (reverted on the branch); the units it picked were
+  likely held by the pros' per-minute caps (macro.py plan, capped). Why an idle Factory isn't given a unit: at 10-20
+  minutes (B50a) Siege Tanks and Science Vessels are in the model's top odds a fifth of the time (1,211 and 1,291 of
+  5,736 decisions), and are passed over as "also waits: its Factory (Starport) is busy" 505 and 423 times, "the
+  pros' cap for this minute" for vessels about 140, "no Machine Shop" 40. At the one "busy" moment replayed the
+  Factory was training (queue 1), so the wait can be real; the idle 79% are the moments between, when keep_busy (on in
+  gt1) doesn't train from it. Next: keep_busy's own records (what it tried for each idle producer and why not).
+- **The second roles RL run (2026-10-23), from rl1 by the same recipe** (60 rounds, 32 x 8 plays, the KL anchor to
+  its start, Gary's own order rate as input). Validation (the training games' scenarios) -152, -124, -161, -103,
+  -131, -119, -53 (round 60, kept: runs/roles_rl/20261023_014740, option rl2). Gate 1: KL to rl1 0.082 (median 0.052);
+  fire 16.2% -> 16.9%, close in 3.3% -> 4.1%, reposition 8.4% -> 6.5%, again 23.5% -> 24.1%. Gate 3, the held-out
+  suite: +255 against rl1's +195 (paired +67, +3 to +134; mixed +142, +33 to +279; outnumbered +120, +5 to +258;
+  attacks -22, harassment +10 within noise), against RoleAhead's +141 +117 (+12 to +231): the model in contact now
+  beats the hand rules there. Commands a minute 72.5, fighters reached 86% (rl1's 74.9, 90%). Gate 4: rounds
+  Q50a+b against R50a+b.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
