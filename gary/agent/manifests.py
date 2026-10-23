@@ -843,8 +843,11 @@ def manifest_of(name: str | dict) -> dict:
 # gt0.7: keep_busy gone (it trained idle producers' last unit, half the marines at 10-20 minutes), the model's waiting
 # decisions queued up to one per producer instead (48 games against gt0.6, Q60a against B60a: won 30 lost 5 against 29
 # and 5, the gap -0.002; macro decisions 13,203 -> 19,347, the caps fired 0.63 -> 0.46 a decision)
-MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords+hunt4+split+static+roles30+lone"
-                                  "+addonroom"), "version": "gt0.7"}
+# gt0.8: depots ahead of production gone, the model's own depots (96 paired games against gt0.7, ND70a+b against
+# Q60a+b: won 49 lost 18 against 50 and 16, paired -0.018 +- 0.101, the gap -0.013, -0.040 to +0.012; blocked at 5-10
+# minutes 14% of the time, pros 9%, gt0.7 2%; at 10-20 minutes 2%, pros 14%, gt0.7 0.2%)
+MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords+hunt4+split+static+roles30+lone"
+                                  "+addonroom"), "version": "gt0.8"}
 # gt1dev: the Terran Gary that learning is trained and judged in (AGENTS.md): gt1 with the role model deciding in
 # contact as well (attended pro units with their re-issues as a decision, again, Gary's own order rate as input, its
 # moves kept current, several orders a turn) and the army on control groups by type, a key's units drawing their
@@ -854,8 +857,9 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depot
 # gt0.6dev: its role model from the first roles RL run (option rl1; 96 paired games against gt0.5dev, rounds R50a+b
 # against D50a+b: won 54 lost 15 against 39 and 16, better in 34 games and worse in 20, the gap -0.046, -0.070 to
 # -0.012, macro features -0.053; against gt1 better in 28 and worse in 20, the gap even, macro +0.035, -0.009 to +0.070)
-# gt0.7dev: gt1's add-on room (gt0.6); gt0.8dev: gt1's queue without keep_busy (gt0.7)
-MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1"), "version": "gt0.8dev"}
+# gt0.7dev: gt1's add-on room (gt0.6); gt0.8dev: gt1's queue without keep_busy (gt0.7); gt0.9dev: gt1's own depots
+# (gt0.8)
+MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1"), "version": "gt0.9dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:

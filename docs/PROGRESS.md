@@ -1025,7 +1025,10 @@ plan and the full log).
   lost 5, gap 0.28). The pros' caps off (NC70a): won 22 lost 10, paired -0.109 +- 0.152, the macro gap +0.070
   [+0.013, +0.125]. The SCV saturation cap off (NS70a): won 24 lost 4, -0.047 +- 0.102, the gap +0.041 [+0.007,
   +0.076]. Depots ahead off (ND70a): won 31 lost 8, -0.021 +- 0.129, the gap -0.029 [-0.060, +0.004], a close call:
-  its second 48 on seeds 4010 (ND70b against Q70b). The review of the two that help: with the caps off, turrets at
+  its second 48 on seeds 4010 (ND70b against Q70b): over 96 paired games no measurable difference (won 49 lost 18
+  against 50 and 16, paired -0.018 +- 0.101, the gap -0.013, -0.040 to +0.012, macro -0.017, -0.057 to +0.017), blocked
+  at 5-10 minutes 14% of the time (pros 9%, with the rule 2%), so the rule goes: gt1 gt0.8, gt1dev gt0.9dev (Gary-Z's
+  overlords ahead stay until measured). The review of the two that help: with the caps off, turrets at
   10-20 minutes 16.4 (pros 7.1, gt1 9.2), medics 1.3 (4.4); with the SCV cap off, workers 48.6 (42.4, gt1 39.0). Gary
   takes 18 macro decisions a minute at 5-20 minutes, the pros' production commands 20 (200 modern games), so the
   rate isn't it. The decoder is: of the 1,174 turrets, 677 were picked while the model's favorite, a Marine, waited
