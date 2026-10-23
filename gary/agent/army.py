@@ -35,7 +35,7 @@ from gary import terran as T
 from gary.agent.gary import Gary
 from gary.agent.intents import Intent
 from gary.policy.attribution import explain_army
-from gary.policy.army import GRID, ArmyModel, ArmyTracker, is_building, supply_x2
+from gary.policy.army import GRID, STATIC_SUPPLY, ArmyModel, ArmyTracker, is_building, supply_x2
 from gary.policy.belief import ARMY_SUPPLY
 
 WAVE = 16
@@ -72,8 +72,7 @@ GATHER_BACK = 12 * 32               # ...at the army's middle, at least this far
 GATHER_NEAR = 6 * 32                # ...the army there once this near it...
 GATHER_READY = 0.75                 # ...with this share of its supply; or after GATHER_FOR
 GATHER_FOR = 20 * 24
-STATIC_NEAR = 8 * 32                # option static_odds: ground static defense this near an engage's cell defends it...
-STATIC_SUPPLY = {146: 12, 162: 12, 125: 12}   # ...each worth this (supply x2): sunken, cannon, bunker
+STATIC_NEAR = 8 * 32                # option static_odds: ground static defense (STATIC_SUPPLY) this near an engage's cell...
 DEFENDERS_NEAR = 12 * 32            # ...with the enemy fighters seen in the last minute this near
 HUNT_AHEAD_MIN = 80                 # option hunt_ahead: at least this much army (supply x2) to hunt while enemy fighters are seen
 HUNT_BOXES = 8                      # hunt: drag boxes for the whole army (4 left 29 of 77 units standing)

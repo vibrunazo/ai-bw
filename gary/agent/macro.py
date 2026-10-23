@@ -36,6 +36,7 @@ TOWN_HALLS = {106, 131, 132, 133, 154}
 WALK_AHEAD = 6                  # seconds: a building's worker sets out this much income before the money is there
 MINING = 1.0                    # minerals a second an SCV mines (about)
 GOAL_TIMEOUT = 24 * 30          # a decision Gary can't afford or do within 30 s is dropped
+BANK_ESCAPE = 400               # minerals over which the waiting favorite no longer holds the macro (bank_escape)
 DICE_FLOOR = 0.01               # decoder "dice": decisions less likely than this are never rolled
 HOLD_FOR = 30 * 24              # option hold: a roll waited for this long at most
 MIN_P = 0.05                    # never take a decision the model gives less than this: unlikely
@@ -113,6 +114,10 @@ class LearnedMacro:
         # the model didn't decide (keep_busy, which trained idle producers' last unit again, made half of gt1's marines
         # at 10-20 minutes; removed 2026-10-23: rounds Q60a against B60a, the same results and gap without it)
         self.queued: list[tuple[tuple[int, int], int]] = []
+        self.queue_depth = 1                  # the model's waiting units queued per producer (option qdepth2: 2)
+        # STOP-GAP (AGENTS.md): with more than BANK_ESCAPE minerals, anything Gary can do now is taken while the
+        # model's favorite waits (option nobank: off; the model reads its minerals)
+        self.bank_escape = True
         self.caps_on = True                   # the pros' caps per minute (AGENTS.md register; option nocaps: off)
         self.decoder = decoder                              # "favorite" (the most likely), "dice" or "sample"
         self.rng = random.Random(seed)
@@ -417,7 +422,7 @@ class LearnedMacro:
                             break
                         over.append([name(k), f"rule: under {self.wait_min_p:.0%} while {name(waiting)} waits"])
                         continue
-                    if waiting is None or probs[0, k] >= 0.5 * probs[0, waiting] or me["minerals"] > 400:
+                    if waiting is None or probs[0, k] >= 0.5 * probs[0, waiting]                             or (self.bank_escape and me["minerals"] > BANK_ESCAPE):
                         pick = k
                     else:
                         over.append([name(k), f"under half the odds of {name(waiting)}, which it waits for"])
@@ -461,7 +466,7 @@ class LearnedMacro:
         if plan is WAIT:                    # e.g. the building is still busy: wait for it
             same = sum(1 for k, _ in self.queued if k == (TRAIN, goal["id"]))
             room = sum(1 for u in mine if u["type"] == g.race.producer.get(goal["id"]) and u["completed"])
-            if goal["act"] == TRAIN and same < max(1, room):
+            if goal["act"] == TRAIN and same < max(1, room) * self.queue_depth:
                 # a unit whose producer is busy is decided now and trained when it frees up, and
                 # the next decision comes meanwhile (as pros queue the SCV and send the depot's
                 # builder: one decision at a time held the 9th SCV's depot 12 s behind it)
