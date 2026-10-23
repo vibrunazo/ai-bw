@@ -988,6 +988,11 @@ plan and the full log).
   the checkpoint chosen on another split) and the games didn't follow; the 45-second net value is not the game's.
   Next: a 24-game check of a checkpoint in games before the suite is trusted, and the macro features the fights
   move (unit counts, bank) watched as part of the objective.
+- **Baselines and the promotion check (2026-10-23 morning).** gt1 gt0.6 (B60a+b, seeds 4004-4009 and 4010-4015,
+  against gz0.2): won 49 lost 10. gt1dev gt0.7dev (D70a+b): won 48 lost 13. Paired: gt1dev better in 21, worse in 24
+  (-0.018 +- 0.063); the gap +0.010 (-0.016 to +0.040), the fight features nearer the pros (-0.039, -0.064 to -0.009),
+  the macro further (+0.043, +0.003 to +0.088). gt1dev doesn't beat gt1: gt1 stays what plays. These four rounds are
+  the baselines for the next changes to either.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
