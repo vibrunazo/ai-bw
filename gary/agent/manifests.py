@@ -850,8 +850,11 @@ def manifest_of(name: str | dict) -> dict:
 # contact decided by the roles model, not the hand rules (96 paired games against gt0.4: won 57 (54), lost 8 (9),
 # gap within noise; retreats doubled, though the model still rarely backs a lone unit off: its calibration is the
 # next step, self-play's). Changes are judged as options against it, and an adopted one goes in here
-MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords+hunt4+split+static+roles30+lone"),
-                    "version": "gt0.5"}
+# gt0.6: Factories, Starports and Science Facilities placed where their add-on fits (option addonroom; 96 paired games
+# against gt0.5, rounds AR50a+b against B50a+b: won 49 lost 10 against 48 and 13, better in 23 and worse in 13, the
+# gap even; Control Towers 0.82 -> 1.42 and Science Vessels 1.8 -> 2.9 at 16:00)
+MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depots+lords+hunt4+split+static+roles30+lone"
+                                  "+addonroom"), "version": "gt0.6"}
 # gt1dev: the Terran Gary that learning is trained and judged in (AGENTS.md): gt1 with the role model deciding in
 # contact as well (attended pro units with their re-issues as a decision, again, Gary's own order rate as input, its
 # moves kept current, several orders a turn) and the army on control groups by type, a key's units drawing their
@@ -861,7 +864,8 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+depot
 # gt0.6dev: its role model from the first roles RL run (option rl1; 96 paired games against gt0.5dev, rounds R50a+b
 # against D50a+b: won 54 lost 15 against 39 and 16, better in 34 games and worse in 20, the gap -0.046, -0.070 to
 # -0.012, macro features -0.053; against gt1 better in 28 and worse in 20, the gap even, macro +0.035, -0.009 to +0.070)
-MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1"), "version": "gt0.6dev"}
+# gt0.7dev: gt1's add-on room (gt0.6)
+MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1"), "version": "gt0.7dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
