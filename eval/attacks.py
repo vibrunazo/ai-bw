@@ -115,7 +115,10 @@ def attacks(path: str) -> list[dict] | None:
                 cur = {"start": f, "at": (px, py), "share": 0.0, "medics": None, "there": set(), "late": 0,
                        "late_new": 0, "late_at": [], "late_src": {}, "sunkens": sum(1 for u in o["units"] if u["owner"] == zs and u["type"] == Z.SUNKEN
                                       and math.dist((u["x"], u["y"]), (px, py)) < NEAR),
-                       "lost": 0.0, "killed": 0.0, "lost_mid": None, "killed_mid": None}
+                       "lost": 0.0, "killed": 0.0, "lost_mid": None, "killed_mid": None, "src": None}
+                if orders is not None:              # (what sent most of the fighters that began it)
+                    srcs = [_sent_by(orders.get(u["tag"], []), f, (px, py)) for u in near]
+                    cur["src"] = max(set(srcs), key=srcs.count)
             last_near = f
             if len(near) >= ATTACK_N:
                 last_big = f
@@ -162,7 +165,7 @@ def attacks(path: str) -> list[dict] | None:
                             "late_n": cur["late"], "late_new": cur["late_new"], "late_at": cur["late_at"],
                             "late_src": cur["late_src"],
                             "length": (f - cur["start"]) / 24,
-                            "medics": cur["medics"], "sunkens": cur["sunkens"], "lost": cur["lost"],
+                            "medics": cur["medics"], "sunkens": cur["sunkens"], "lost": cur["lost"], "src": cur["src"],
                             "killed": cur["killed"], "losing": lm > km, "stayed": still})
                 cur = None
         prev = {u["tag"]: u for u in o["units"] if u["owner"] in (ts, zs)}
@@ -228,6 +231,15 @@ def summary(name: str, games: list[list[dict]]) -> None:
     print(f"  lost / killed supply a game {mean([a['lost'] for a in rows]) * len(rows) / len(games):.1f} / "
           f"{mean([a['killed'] for a in rows]) * len(rows) / len(games):.1f}; per attack median {med([a['lost'] for a in rows])} / "
           f"{med([a['killed'] for a in rows])}")
+    by_src: dict = {}
+    for a in rows:
+        if a.get("src") is not None:
+            by_src.setdefault(a["src"], []).append(a)
+    if by_src:
+        print("  attacks begun by: " + "; ".join(
+            f"{k} {len(v)} (into sunkens {mean([a['sunkens'] > 0 for a in v])}, lost / killed a game "
+            f"{sum(a['lost'] for a in v) / len(games):.1f} / {sum(a['killed'] for a in v) / len(games):.1f})"
+            for k, v in sorted(by_src.items(), key=lambda x: -len(x[1]))))
     losing = [a for a in rows if a["losing"]]
     print(f"  attacks losing by their middle {len(losing) / len(rows):.0%}; of those, fighters still there at the end "
           f"{mean([a['stayed'] for a in losing])}")

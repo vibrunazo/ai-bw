@@ -1021,7 +1021,14 @@ plan and the full log).
   into sunkens (human game 4) aren't a decision the pros' data teaches against; what it attacks with and how it
   fights there is the likelier cause. In games, 48 each against Q60a (gt0.7): the guard off (NG70a) paired -0.052
   +- 0.064, the gap +0.011 (-0.010 to +0.038), lost / killed supply a game 70.9 / 92.6 (60.6 / 87.8), into sunkens
-  0.49 of attacks (0.45): a close call, its second 48 on seeds 4010 (NG70b). With the static model (NGS70a) against
+  0.49 of attacks (0.45): a close call, its second 48 on seeds 4010 (NG70b): over 96 paired games the guard off is
+  worse, better 8 worse 23, -0.062 +- 0.044 (the gap +0.010, -0.012 to +0.032), so the guard stays. Why it helps
+  while the commit model matches the pros offline: not what Gary knows (on its ticks it knows an undefended enemy
+  building 99% of the time, pros 97%; it engages as often, 152 per 1,000 ticks to their 155), but where its attacks
+  go: 0.21 of Gary's engages into defended cells, the pros' 0.11. By what began each attack (eval/attacks.py, Q60a):
+  the commit model's engages 79, into sunkens 0.38 (0.45 with the guard off); the scripted hunt 62, into sunkens
+  0.63; units sent elsewhere 46 (0.35); no recent order 32 (0.50). The scripted hunt (a stop-gap) goes into static
+  defense most, and the guard doesn't screen it. With the static model (NGS70a) against
   its control (NGC70a, the same games without the channel): -0.073 +- 0.102, medics along 0.76 (1.05): not adopted.
 - **The decoder's bank escape is load-bearing (2026-10-23).** Off (NB70a): paired -0.203 +- 0.123, the gap +0.126,
   macro +0.208; minerals banked at 5-15 minutes 1,124 (pros 511, gt1 387), fewer Barracks, Starports, medics. While
