@@ -964,6 +964,15 @@ plan and the full log).
   -> 101.7 and 107.1 -> 113.6, a slightly worse trade over the game, net value in 45-second scenarios. Credited with
   the 10 s after each decision (train/roles_rl.py HORIZON_S), the run learned to win the next exchange; the next run
   from rl1 credits 20 s.
+- **Room for add-ons (2026-10-23).** A Machine Shop was passed over as "no Factory without an add-on, with room for
+  one" in 134 of 192 of gt1's and gt1dev's games (33 of them 50 times or more), and at 16:00 of 16 gt1 games 10 of 25
+  Starports had no Control Tower and no room for one (Factories 1 of 14, Command Centers 0 of 31): no Science
+  Vessels, the Starports idle. Pros put a Machine Shop on their first Factory in 63% of games, a median 77 s after
+  ordering it. Option addonroom (terran_executor.py addon_fits: a Factory, Starport or Science Facility placed only
+  where its add-on fits), 48 games against B50a: won 29 lost 5 (the same), the gap -0.012 (-0.035 to +0.009), macro
+  -0.012, fight -0.011; Control Towers 0.77 -> 1.25 at 12:00 and 0.82 -> 1.42 at 16:00, vessels 0.2 -> 0.5 and 1.8 ->
+  2.9, Machine Shops 0.32 -> 0.39 and 0.39 -> 0.45, supply at 16:00 87 -> 96, Starports idle 79% -> 72%. A placement
+  fix (the hands): into gt1 and gt1dev.
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
