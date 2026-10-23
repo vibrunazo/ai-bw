@@ -160,6 +160,10 @@ def main() -> None:
                     help="the enemy buildings known still standing as a map channel (ArmySpec.known; army dataset v5)")
     ap.add_argument("--unseen", action="store_true",
                     help="seconds since own units were in each cell as a map channel (ArmySpec.unseen; army dataset v5)")
+    ap.add_argument("--rule-labels", nargs="+", default=[],
+                    help="league rounds whose games ran a rule in advice mode (huntadvice): its decisions as engage labels "
+                         "on Gary's own states (train/rule_labels.py)")
+    ap.add_argument("--rule-weight", type=int, default=4, help="each rule label this many times among the pros' samples")
     ap.add_argument("--eval", help="score this commit model on the held-out games and stop (no training)")
     ap.add_argument("--out", help="the run folder (default runs/commit/<matchup>_<race>_<time>: what Gary loads as newest)")
     priority.add_argument(ap)
@@ -179,6 +183,12 @@ def main() -> None:
     js = jobs(args.matchup, args.race, keep=keep)
     print(f"{len(js)} player-games ({keep.describe()})", flush=True)
     data = load(js, spec, args.workers)
+    rule = None
+    if args.rule_labels:
+        from train.rule_labels import rule_samples
+        rule = rule_samples(args.rule_labels, spec, args.workers)
+        print(f"rule labels: train {len(rule['train'][2]):,} (x{args.rule_weight}), test {len(rule['test'][2]):,}", flush=True)
+        data["train"] = tuple(np.concatenate([a] + [b] * args.rule_weight) for a, b in zip(data["train"], rule["train"]))
     grid, glob, label, target, commit, _ = data["train"]
     tg, tglob, tl, tt, tc, tf = data["test"]
     print(f"{len(js)} player-games; ticks train {len(label):,} (keep/engage/move {np.bincount(label, minlength=3)}), "
@@ -215,6 +225,11 @@ def main() -> None:
         out["hysteresis"] = {name: [round(float((tl[tc == c] == ENGAGE).mean()), 3), round(float(p[tc == c, ENGAGE].mean()), 3)]
                              for c, name in ((1, "committed engage"), (2, "committed move"), (0, "none")) if (tc == c).any()}
         out["where_top5"] = round(float((w5[o] == tt[o, None]).any(1).mean()), 3) if o.any() else None
+        if rule is not None and len(rule["test"][2]):        # (where the rule acts: does the model do as it does?)
+            rg, rx, _, rt, _, _ = rule["test"]
+            rp, rw5 = predict(rg, rx)
+            out["rule"] = {"p_engage": round(float(rp[:, ENGAGE].mean()), 3),
+                           "where_top5": round(float((rw5 == rt[:, None]).any(1).mean()), 3), "n": int(len(rt))}
         return out
     print("before:", evaluate(), flush=True)
     if args.eval:
