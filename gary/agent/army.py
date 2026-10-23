@@ -134,6 +134,9 @@ class LearnedArmy:
             if any(r in rules for r in ("join", "sweep", "press")) else None
         self.hunt_ahead: float | None = None   # option: the hunt also this many times the enemy fighters seen (a manifest's)
         self.static_odds: float | None = None  # option: an engage only with this many times its spot's defense
+        # option softguard: instead, a cell short of it keeps its odds times (the group / static_odds times its defense)
+        # to this power: a nudge, never a veto (the model's engage always goes somewhere)
+        self.static_beta: float | None = None
         self.gather_on = False                 # option: an engage gathers the army first (a manifest's)
         self.gathering: dict | None = None     # gather: the target, the staging point, the army's tags, since
         self.scout = scout          # option: a worker scouts the enemy's start (a Zerg's overlords do: its posture)
@@ -533,9 +536,14 @@ class LearnedArmy:
                 near |= np.roll(np.roll(enemy, dy, 0), dx, 1)
         far = np.array([cell_dist(c, here) >= MOVE_CELLS for c in range(GRID * GRID)])
         mask = far & (near.reshape(-1) if k == 1 else ~near.reshape(-1))
+        weight = 1.0
         if k == 1 and self.static_odds is not None and self.memory is not None:
-            mask &= self._breakable(obs, mine, group)
-        p = where[0] * mask
+            ratio = self._outweighs(obs, mine, group)
+            if self.static_beta is None:
+                mask &= ratio >= 1.0
+            else:
+                weight = np.minimum(1.0, ratio) ** self.static_beta
+        p = where[0] * mask * weight
         if p.sum() <= 0:
             LOG.decision(g.hi.side, "commit", hi.frame, names[k], q[k], options, self._seen, by,
                          then="no cell on that side: its commitment stands", rl=rl, why=why)
@@ -639,9 +647,10 @@ class LearnedArmy:
                                   {"tags": list(tags), "x": x, "y": y, "attack": attack, "p": 1.0, "fight": 0.0,
                                    "done": [], "boxes": 0, "max_boxes": HUNT_BOXES}, "army"))
 
-    def _breakable(self, obs: dict, mine: list[dict], group: list[dict]) -> np.ndarray:
-        """static_odds: the cells an engage may go to, those whose ground static defense (each STATIC_SUPPLY) and the
-        enemy fighters seen near them in the last minute the group outweighs static_odds times (human game 4's three
+    def _outweighs(self, obs: dict, mine: list[dict], group: list[dict]) -> np.ndarray:
+        """static_odds: per cell, the group against static_odds times the ground static defense there (each
+        STATIC_SUPPLY) and the enemy fighters seen near it in the last minute (inf where there is none): an engage may
+        go where it is 1 or more, or (static_beta) is nudged away from the others (human game 4's three
         attacks all went into 2-4 sunkens and lost 24 supply for 1.5; against gz1, 38% of its attacks went into
         sunkens to the pros' 28%: eval/attacks.py). STOP-GAP (AGENTS.md): until the commit model weighs static
         defense itself."""
@@ -651,17 +660,17 @@ class LearnedArmy:
         # (one remembered where Gary's units now stand and don't see it is gone: the memory keeps every building seen)
         static = [(x, y, STATIC_SUPPLY[t]) for tag, (x, y, t) in self.memory.buildings.items() if t in STATIC_SUPPLY
                   and (tag in seen or not any(math.dist((x, y), q) < GONE_PX for q in at))]
-        ok = np.ones(GRID * GRID, bool)
+        ratio = np.full(GRID * GRID, np.inf)
         if not static:
-            return ok
+            return ratio
         fighters = list(self.memory.fighters.values())
         for c in range(GRID * GRID):
             cx, cy = self.tracker.center(c)
             walls = sum(w for x, y, w in static if math.dist((x, y), (cx, cy)) < STATIC_NEAR)
             if walls:
                 guard = walls + sum(v[1] for v in fighters if math.dist((v[2], v[3]), (cx, cy)) < DEFENDERS_NEAR)
-                ok[c] = ours >= self.static_odds * guard
-        return ok
+                ratio[c] = ours / (self.static_odds * guard)
+        return ratio
 
     def _cell_name(self, cell: int) -> str:
         x, y = self.tracker.center(cell)
