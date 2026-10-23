@@ -793,6 +793,12 @@ OPTIONS = {
     "nocaps": lambda m: m["macro"].update(caps=False),
     "noscvcap": lambda m: m.update(scv_saturation=False),
     "nodepots": lambda m: m["macro"].update(supply_ahead=False),
+    # macro.py bank_escape off: the runner-up isn't taken just because the bank is over 400 while the favorite waits
+    # (with the caps off it made 341 of 1,174 turrets at 5-20 minutes, and 759 of 2,206 SCVs with the SCV cap off)
+    "nobank": lambda m: m["macro"].update(bank_escape=False),
+    # macro.py queue_depth 2: two of the model's waiting units per producer (pros queue in the building; one each,
+    # the favorite blocked, the decoder took the runner-up: 58% of the turrets with the caps off)
+    "qdepth2": lambda m: m["macro"].update(queue_depth=2),
     "styleroll": lambda m: m["macro"].update(selector=None, style="roll"),
     "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
@@ -946,6 +952,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                m["macro"].get("hatch_mass"), m["macro"].get("wait_min_p"))
         g.macro.expand_mass = m["macro"].get("expand_mass")
         g.macro.caps_on = m["macro"].get("caps", True)
+        g.macro.bank_escape = m["macro"].get("bank_escape", True)
+        g.macro.queue_depth = m["macro"].get("queue_depth", 1)
         if hasattr(g.executor, "scv_saturation"):
             g.executor.scv_saturation = m.get("scv_saturation", True)
         if hasattr(g.executor, "addon_room"):
