@@ -912,6 +912,21 @@ plan and the full log).
   (75), reach 37% (48%), macro in fights 19.9 (18), out of them 12.6 (12.4), the macro gap +0.049 (-0.008 to
   +0.100), the fight gap -0.019: not adopted. The gap table now carries the attention features (fight_attended,
   fight_reached; the modern pros' rows and rounds R50, B50, A50 augmented).
+- **Gary-T's macro gap is its build style, and what the standard one exposes (2026-10-23).** The macro features
+  furthest from the pros (gt1dev and gt1 alike): Factories 1.0 against 3.5 at 20-30 minutes, machine shops, armories,
+  refineries and gas behind, no vultures or goliaths, mass marines; bases and supply behind late (supply 90 against
+  119 at 15-20 minutes); never supply-blocked (0-2% against 9-19%). The strategy selector (gary/agent/selector.py)
+  played style 4, two-Barracks marines (1.5% of pro Terran games: gas in 10%, no Factory), in all 96 games of R50a+b:
+  its table was counted on 2026-10-13 in eval/vs_rush.py's short games against rushes on the 1.16 maps, and the
+  ladder maps borrow it. The style rolled by the pros' shares instead (option styleroll: standard bio 82%), 48 games
+  each: gt1dev won 26 lost 8 (R50a 31 and 8), the macro gap +0.025 (-0.042 to +0.091); gt1 won 23 lost 13 (B50a 29
+  and 5), the macro gap -0.009. Not adopted. On the standard plan Gary mines gas and doesn't spend it (873 banked
+  against the pros' 520 at 10-15 minutes, 1,681 against 978 at 15-20), its supply and army fall behind (76 and 30
+  against 119 and 60 at 15-20): its marines and medics wait for busy Barracks (0.43 and 0.33 a macro decision) while
+  the model almost never adds production (Barracks 0.8% of its odds, no Factory in its top). The rush style hid that
+  by taking no gas. Next for macro: production added when money floats, as the pros do (the model's odds on its own
+  banked states), before the style is let go. Also: the first producer's rule after the opening needs a buildable
+  one for a Terran too (3c661c8; it set the goal up to 2,955 times a game in lost games).
 - **Rules for learning beyond imitation (2026-10-22):** docs/SELF_PLAY.md, from an outside review of the RL
   results above checked against this file: the pipe check, the model owning the decision, branches locked by the
   pros' hold lengths, the minimum detectable effect before a gate, counterfactual learning offline; the league
