@@ -28,6 +28,7 @@ class TerranExecutor(Executor):
         g.task_runners["resume"] = self._run_basic
         self.addon_room = False                       # option addonroom: room for its add-on (addon_fits)
         self.scv_saturation = True                    # SCVs capped at the bases' saturation (option noscvcap: off)
+        self.train_depth = 1                          # units in a building's own queue Gary trains into (option gamequeue: 2)
 
     def carry_out(self, act: int, uid: int, obs: dict, mine: list[dict], done: list[dict], me: dict) -> dict | None:
         """What a macro decision means for Terran hands now (LearnedMacro.plan's gates passed): a command
@@ -48,7 +49,7 @@ class TerranExecutor(Executor):
             addon = T.NEEDS_ADDON.get(uid)
             if addon is not None and not any(u["type"] == addon for u in done):
                 return self.no(f"no {T.NAMES[addon]}")    # e.g. tanks: no Machine Shop yet
-            b = self.free_building(obs, mine, done, g.race.producer[uid], addon)
+            b = self.free_building(obs, mine, done, g.race.producer[uid], addon, depth=self.train_depth)
             return self._command_or_wait(b, done, g.race.producer[uid], act, uid, g.race.costs[uid])
         if act == BUILD and uid in T.ADDON_PARENT:
             ox, oy = T.ADDON_OFFSET                      # (only where the add-on fits)

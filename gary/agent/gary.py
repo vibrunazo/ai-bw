@@ -77,7 +77,7 @@ class Gary:
         self.failed_at: dict[tuple[int, int, int], int] = {}    # spot -> frame a build there failed
         self.retry_with: dict[int, int] = {}                    # building type -> the SCV to retry it with
         self.build_failed: dict[int, int] = {}                  # building type -> frame one failed
-        self.producing: dict[int, int] = {}              # building tag -> unit type it last started
+        self.producing: dict[int, list[int]] = {}        # building tag -> unit types it started, the last in its queue
         self.researched: set[int] = set()
         self.researched_at: dict[int, int] = {}          # tech -> frame its research was ordered
         self.stimmed_at: dict[int, int] = {}             # unit tag -> frame Gary stimmed it

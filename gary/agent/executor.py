@@ -525,8 +525,10 @@ class Executor:
         buildings' queues and what Gary last started in each."""
         out: Counter = Counter()
         for b in mine:
-            if b["completed"] and b.get("queue", 0) > 0 and b["tag"] in self.g.producing:
-                out[self.g.producing[b["tag"]]] += 1
+            q = b.get("queue", 0)
+            if b["completed"] and q > 0 and b["tag"] in self.g.producing:
+                for uid in self.g.producing[b["tag"]][-q:]:     # (the queue holds the last q started)
+                    out[uid] += 1
         return out
 
     def no(self, why: str) -> None:
@@ -578,11 +580,13 @@ class Executor:
         return sum(2 * len(b.minerals) + 3 * len(b.geysers) for b in bases) + BUILDERS
 
     def free_building(self, obs: dict, mine: list[dict], done: list[dict], kind: int,
-                      addon: int | None = None) -> dict | None:
+                      addon: int | None = None, depth: int = 1) -> dict | None:
+        """A building of this kind that can take an order now: an empty queue, or (depth) fewer than depth in it,
+        the shortest first."""
         g = self.g
         blind = round(g.hi.p.reaction_ms / 42) + g.hi.act_latency_frames + 4
-        for b in done:
-            if b["type"] != kind or b.get("queue", 0) > 0 or b["order"] in BUSY_BUILDING:
+        for b in sorted(done, key=lambda u: u.get("queue", 0)):
+            if b["type"] != kind or b.get("queue", 0) >= depth or b["order"] in BUSY_BUILDING:
                 continue
             if obs["now"] - g.ordered_at.get(b["tag"], -10**9) <= blind:
                 continue
@@ -1212,7 +1216,7 @@ class Executor:
         act, uid = d["act"], d["id"]
         if act == TRAIN:
             if hi.train(uid).accepted:
-                g.producing[b["tag"]] = uid
+                g.producing[b["tag"]] = (g.producing.get(b["tag"], []) + [uid])[-5:]
                 g.ordered_at[b["tag"]] = obs["now"]
         elif act == RESEARCH:
             if hi.research(uid).accepted:

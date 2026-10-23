@@ -799,6 +799,10 @@ OPTIONS = {
     # macro.py queue_depth 2: two of the model's waiting units per producer (pros queue in the building; one each,
     # the favorite blocked, the decoder took the runner-up: 58% of the turrets with the caps off)
     "qdepth2": lambda m: m["macro"].update(queue_depth=2),
+    # terran_executor.py train_depth 2: the model's unit trained into a busy building's own queue (two deep) and paid
+    # for, as pros queue; else it waits for the building and, its queue full, holds the macro (the bank escape covers
+    # for that: off, 1,124 minerals banked at 5-15 minutes, pros 511)
+    "gamequeue": lambda m: m.update(train_depth=2),
     # army.py static_odds off: the static guard's veto gone (pros attack spots it forbids: 29% of their engages into
     # static defense are under 1.5 times it, held-out modern TvZ)
     "noguard": lambda m: m["army"].update(static_odds=None),
@@ -967,6 +971,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro.queue_depth = m["macro"].get("queue_depth", 1)
         if hasattr(g.executor, "scv_saturation"):
             g.executor.scv_saturation = m.get("scv_saturation", True)
+            g.executor.train_depth = m.get("train_depth", 1)
         if hasattr(g.executor, "addon_room"):
             g.executor.addon_room = m.get("addon_room", False)
         g.macro.odds_mass = m["macro"].get("odds_mass")
