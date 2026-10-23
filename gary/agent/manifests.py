@@ -806,6 +806,10 @@ OPTIONS = {
     # borrowed it: Gary-T played style 4 in all 96 of rounds R50a+b (its macro gap: no gas, no Factory, mass marines)
     # terran_executor.py addon_room: a Factory, Starport or Science Facility placed only where its add-on fits
     "addonroom": lambda m: m.update(addon_room=True),
+    # macro.py keep_busy off: between 10 and 20 minutes half of gt1's marines (86 a game, 44 of them the model's
+    # decisions) came from idle Barracks repeating their last unit, the model's odds 42% Marines against 71% trained;
+    # on those marine-heavy states the model (calibrated on the pros') stopped asking for tech (macro check)
+    "nobusy": lambda m: m["macro"].update(keep_busy=False),
     "styleroll": lambda m: m["macro"].update(selector=None, style="roll"),
     "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
