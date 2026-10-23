@@ -810,6 +810,8 @@ OPTIONS = {
     # decisions) came from idle Barracks repeating their last unit, the model's odds 42% Marines against 71% trained;
     # on those marine-heavy states the model (calibrated on the pros') stopped asking for tech (macro check)
     "nobusy": lambda m: m["macro"].update(keep_busy=False),
+    # macro.py busy_mix: keep_busy's unit drawn from the model's odds among the idle producer's own units
+    "busymix": lambda m: m["macro"].update(busy_mix=True),
     "styleroll": lambda m: m["macro"].update(selector=None, style="roll"),
     "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
@@ -959,6 +961,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                                m["macro"].get("park", False), m["macro"].get("pace", False), m["macro"].get("tech_min_p"),
                                m["macro"].get("hatch_mass"), m["macro"].get("wait_min_p"))
         g.macro.expand_mass = m["macro"].get("expand_mass")
+        g.macro.busy_mix = m["macro"].get("busy_mix", False)
         if hasattr(g.executor, "addon_room"):
             g.executor.addon_room = m.get("addon_room", False)
         g.macro.odds_mass = m["macro"].get("odds_mass")

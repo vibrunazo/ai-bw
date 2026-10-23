@@ -114,6 +114,11 @@ class LearnedMacro:
         self.decoder = decoder                              # "favorite" (the most likely), "dice" or "sample"
         self.rng = random.Random(seed)
         self.last_unit: dict[int, int] = {}                 # producer type -> the unit last decided for it
+        # option busy_mix (with keep_busy): an idle producer's unit drawn from the model's latest odds among the units
+        # it makes, not its last one (repeating the last, a Marine, made half of gt1's marines at 10-20 minutes, 71% of
+        # what it trained against the model's 42%, and half the medics it asked for: the macro check, rounds B60a+b)
+        self.busy_mix = False
+        self.last_probs = None
         self.natural_bunker = natural_bunker
         self.next_nat_bunker = 0
         self._nat_bunker_spot = None
@@ -282,6 +287,7 @@ class LearnedMacro:
             # likely one that only needs a busy building to free up
             x = self.tracker.features(obs, self.in_production(mine))
             probs, secs = self.model.probs(x)
+            self.last_probs = probs[0]
             if self.pace:
                 self.next_query = hi.frame + int(min(PACE_MAX, max(QUERY_EVERY, float(secs[0]) * 24)))
             pick = waiting = waiting_why = None
@@ -580,7 +586,17 @@ class LearnedMacro:
         if self.goal is not None and self.goal["act"] == BUILD and self.goal["id"] in T.ADDON_PARENT:
             p = self.plan(BUILD, self.goal["id"], obs, mine, done, me)
             addon_on = p["building"]["tag"] if isinstance(p, dict) and p.get("kind") == "command" else None
-        for uid in self.last_unit.values():
+        units = list(self.last_unit.values())
+        if self.busy_mix and self.last_probs is not None:
+            units = []
+            for ptype in list(self.last_unit):
+                own = [(float(self.last_probs[k]), uid) for k, (act, uid) in enumerate(self.model.spec.decisions)
+                       if act == TRAIN and g.race.producer.get(uid) == ptype and self.last_probs[k] >= DICE_FLOOR]
+                if own:
+                    units.append(own[self.rng.choices(range(len(own)), weights=[q for q, _ in own])[0]][1])
+                else:
+                    units.append(self.last_unit[ptype])
+        for uid in units:
             plan = self.plan(TRAIN, uid, obs, mine, done, me)
             if not isinstance(plan, dict) or plan.get("kind") != "command":
                 continue
