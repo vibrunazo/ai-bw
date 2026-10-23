@@ -114,6 +114,12 @@ class LearnedMacro:
         self.decoder = decoder                              # "favorite" (the most likely), "dice" or "sample"
         self.rng = random.Random(seed)
         self.last_unit: dict[int, int] = {}                 # producer type -> the unit last decided for it
+        # option fill (with keep_busy): a Barracks, Factory or Starport that never trained takes the model's likeliest
+        # unit among the ones it makes, by the last odds asked (a decoder: the odds conditioned on the idle building).
+        # Gary-T's Factories and Starports stood idle 79% of 10-20 minutes (the pros' 46% and 54%) with gas banked,
+        # the overall favorite a Marine: no tanks, vultures, goliaths, vessels (rounds B50a, SG50a)
+        self.fill = False
+        self.last_probs = None
         self.natural_bunker = natural_bunker
         self.next_nat_bunker = 0
         self._nat_bunker_spot = None
@@ -282,6 +288,7 @@ class LearnedMacro:
             # likely one that only needs a busy building to free up
             x = self.tracker.features(obs, self.in_production(mine))
             probs, secs = self.model.probs(x)
+            self.last_probs = probs[0]
             if self.pace:
                 self.next_query = hi.frame + int(min(PACE_MAX, max(QUERY_EVERY, float(secs[0]) * 24)))
             pick = waiting = waiting_why = None
@@ -580,7 +587,18 @@ class LearnedMacro:
         if self.goal is not None and self.goal["act"] == BUILD and self.goal["id"] in T.ADDON_PARENT:
             p = self.plan(BUILD, self.goal["id"], obs, mine, done, me)
             addon_on = p["building"]["tag"] if isinstance(p, dict) and p.get("kind") == "command" else None
-        for uid in self.last_unit.values():
+        units = list(self.last_unit.values())
+        if self.fill and self.last_probs is not None:
+            # (after each producer's last unit, the model's likeliest of its other units, so a Factory whose last
+            # was a Siege Tank without a Machine Shop yet, or that never trained, still makes something)
+            for ptype in KEEP_BUSY:
+                if not any(u["type"] == ptype for u in done):
+                    continue
+                own = sorted(((float(self.last_probs[k]), uid) for k, (act, uid) in enumerate(self.model.spec.decisions)
+                              if act == TRAIN and g.race.producer.get(uid) == ptype and self.last_probs[k] >= DICE_FLOOR),
+                             reverse=True)
+                units += [uid for _, uid in own if uid not in units]
+        for uid in units:
             plan = self.plan(TRAIN, uid, obs, mine, done, me)
             if not isinstance(plan, dict) or plan.get("kind") != "command":
                 continue
