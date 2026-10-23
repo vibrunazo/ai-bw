@@ -1029,6 +1029,13 @@ plan and the full log).
   again, so it never adds production with the bank. The escape covers for that. Two units queued per producer as
   well (QD70a): 675 banked, -0.078 +- 0.126, the gap +0.052 (+0.009 to +0.090). Pros queue in the building and pay
   up front; that is the next option.
+- **The model's units queued in the building (option gamequeue, 2026-10-23).** A unit the model decides is trained
+  into a busy building's own queue, two deep, and paid for, as pros queue; each building's queued units are
+  counted as coming. 48 games against gt0.8's (ND70a): won 34 lost 6 (31, 8), paired +0.073 +- 0.145, the gap
+  +0.025 (-0.008 to +0.046), macro +0.010; macro decisions 20.1 a minute (pros 20.3, without 16.0), at 5-15 minutes
+  workers 35.8 (pros 34.9), medics 2.43 (2.68), the bank 425 (511). A close call: its second 48 (GQ80b against
+  ND70b). With the bank escape off as well (GQN80a): -0.130 +- 0.152 against gamequeue alone, 801 banked, the gap
+  +0.076: the escape still holds something up.
 - **Three macro rules off, and why two of them still help (2026-10-23).** 48 games each against gt1 (Q60a: won 30
   lost 5, gap 0.28). The pros' caps off (NC70a): won 22 lost 10, paired -0.109 +- 0.152, the macro gap +0.070
   [+0.013, +0.125]. The SCV saturation cap off (NS70a): won 24 lost 4, -0.047 +- 0.102, the gap +0.041 [+0.007,
