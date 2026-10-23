@@ -89,7 +89,10 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   fighters seen near it. Scripted because the commit model doesn't weigh static defense (human game 4's
   three attacks all went into sunkens). Replace with static defense as a commit-model input and its outcomes
   in training. Measure: the attacks' trade (`eval/attacks.py`): supply killed / lost 78.8 / 44.8 a game with
-  it, 71.9 / 52.6 without. It vetoes an engage the commit model chose, which this register's own rule forbids
+  it, 71.9 / 52.6 without; 2026-10-23 (NG70a against Q60a, gt0.7): lost / killed 70.9 / 92.6 off, 60.6 / 87.8 on,
+  paired -0.052 +- 0.064, its second 48 running (NG70b). The pros attack where it forbids (29% of their engages into
+  static defense are under its 1.5x), and a commit model that sees static defense learned nothing more (army dataset
+  v4: docs/PROGRESS.md). It vetoes an engage the commit model chose, which this register's own rule forbids
   (a rule may delay or shape a learned decision, never veto it): kept until the user decides (2026-10-23).
 - **Gather before engaging** (option `gather`, not adopted; `army.py` `_gather_start`, `_gather_step`). A commit
   engage with a quarter of the army's supply elsewhere first brings the whole army to its own middle (at least
@@ -128,7 +131,11 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   over 400 minerals anything Gary can do now is taken instead. With the caps off it made 341 of the 1,174 turrets at
   5-20 minutes, and 759 of the 2,206 SCVs with the SCV cap off. Scripted so money doesn't bank behind a busy
   building. Replace with the model's own odds (it reads its minerals: pros with a bank add production) and a deeper
-  queue of its waiting units (option `qdepth2`). Measure: option `nobank`, the bank, results and the macro gap.
+  queue of its waiting units (option `qdepth2`). Measure: option `nobank`, the bank, results and the macro gap. Off
+  (NB70a against Q60a, 2026-10-23): paired -0.203 +- 0.123, the macro gap +0.208, minerals banked at 5-15 minutes
+  1,124 (pros 511, with it 387): while the favorite waits it stays the macro's goal and the model isn't asked again,
+  so it never gets to add production; with qdepth2 too (QD70a) 675 banked, -0.078, the gap +0.052. It covers for
+  the one goal at a time; next, the model's units queued in the building and paid for, as pros do.
 - **Odds summed into a decision** (`mass` for one-offs, in gt1: tech buildings, add-ons, research, upgrades;
   `expand_mass` for expansions; `macro.py` odds_mass, expand_odds). A one-off is decided once its odds, summed over
   the decisions taken while it was possible, reach one (278 times in 48 games), an expansion likewise (194).

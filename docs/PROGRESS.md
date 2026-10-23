@@ -1019,8 +1019,16 @@ plan and the full log).
   engages into it are under the guard's 1.5x, so the guard departs from them; both models follow the pros'
   pattern already, the channel adds ~5%, and both engage defended spots ~25% less than pros. So Gary's losses
   into sunkens (human game 4) aren't a decision the pros' data teaches against; what it attacks with and how it
-  fights there is the likelier cause. In games: options noguard, cmstatic, cmnostatic (rounds NG70a, NGS70a,
-  NGC70a), judged on the attacks' trade.
+  fights there is the likelier cause. In games, 48 each against Q60a (gt0.7): the guard off (NG70a) paired -0.052
+  +- 0.064, the gap +0.011 (-0.010 to +0.038), lost / killed supply a game 70.9 / 92.6 (60.6 / 87.8), into sunkens
+  0.49 of attacks (0.45): a close call, its second 48 on seeds 4010 (NG70b). With the static model (NGS70a) against
+  its control (NGC70a, the same games without the channel): -0.073 +- 0.102, medics along 0.76 (1.05): not adopted.
+- **The decoder's bank escape is load-bearing (2026-10-23).** Off (NB70a): paired -0.203 +- 0.123, the gap +0.126,
+  macro +0.208; minerals banked at 5-15 minutes 1,124 (pros 511, gt1 387), fewer Barracks, Starports, medics. While
+  the model's favorite waits for a busy building (its queue full) it stays the macro's goal: the model isn't asked
+  again, so it never adds production with the bank. The escape covers for that. Two units queued per producer as
+  well (QD70a): 675 banked, -0.078 +- 0.126, the gap +0.052 (+0.009 to +0.090). Pros queue in the building and pay
+  up front; that is the next option.
 - **Three macro rules off, and why two of them still help (2026-10-23).** 48 games each against gt1 (Q60a: won 30
   lost 5, gap 0.28). The pros' caps off (NC70a): won 22 lost 10, paired -0.109 +- 0.152, the macro gap +0.070
   [+0.013, +0.125]. The SCV saturation cap off (NS70a): won 24 lost 4, -0.047 +- 0.102, the gap +0.041 [+0.007,
