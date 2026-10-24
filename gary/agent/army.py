@@ -185,8 +185,8 @@ class LearnedArmy:
         self.engage_bias = 0.0
         # option holdtarget (a decoder): when the model decides the cluster's commitment again (engage after engage,
         # move after move), its destination stays where it was while it is still among the model's five likeliest
-        # cells on that side; else a fresh draw (the redraw sent over half the redirected units elsewhere: 52-67% of
-        # a commitment's units were sent elsewhere within 30 s, the pros' about a third to a half; eval/commit_pipe.py)
+        # cells on that side; else a fresh draw (tried for the pipe check, issue #47: no measurable difference; the
+        # army's redirects are the pros' rate when measured the same way)
         self.hold_target = False
         # option unitcommits (the pipe, not a rule): a cluster's order leaves out units still on another cluster's
         # commitment (younger than UNIT_COMMIT_S, not arrived, going elsewhere); clusters re-form as units move, and

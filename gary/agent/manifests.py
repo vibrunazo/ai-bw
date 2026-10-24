@@ -854,10 +854,16 @@ OPTIONS = {
     # moments engaging beat moving by +0.81 a pair, +0.42 to +1.24, the deployed model engaging 55% of them)
     "engagebias": lambda m: m["army"].update(engage_bias=0.693),
     # army.py hold_target: a commitment decided again keeps its destination while the model still rates it among the
-    # five likeliest cells (a decoder; the redraw redirected the army twice as fast as pros redirect theirs)
+    # five likeliest cells (a decoder, tried for the pipe check, issue #47; HT120a against DC100a -0.011 +- 0.087: not
+    # adopted, the army's redirects are the pros' rate on the same measure)
     "holdtarget": lambda m: m["army"].update(hold_target=True),
-    # army.py unit_commits: a cluster's order leaves out units on another cluster's fresh commitment (the pipe, issue #47)
+    # army.py unit_commits: a cluster's order leaves out units on another cluster's fresh commitment (issue #47; UC120a
+    # against BL120a -0.048 +- 0.064: not adopted)
     "unitcommits": lambda m: m["army"].update(unit_commits=True),
+    # the deployed commit model fine-tuned 2 epochs on army dataset v3, with the hunt's labels (x4) and without (the
+    # control): the labels' effect apart from v5's data change (issue #3; FH120a against FC120a -0.078 +- 0.090)
+    "cmfthunt": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_ft_hunt/model.pt"),
+    "cmftctl": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_ft_control/model.pt"),
     "cmv5plain": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_plain/model.pt"),
     # the hunt imitated only where its target has no known static defense (401 of its 644 labels; the first copied its
     # attacks into sunkens, 0.51 of its engages)

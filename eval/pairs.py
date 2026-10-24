@@ -115,6 +115,12 @@ class Brancher:
         # a nondeterministic crash in a deterministic system is memory corruption, and corruption that
         # doesn't crash gives silently wrong outcomes (Fable): a sample of branches replayed every game
         self.checks_ok = self.checks_bad = 0
+        # army mode: the critic's view of the Terran (gary/policy/value.py), looking once a second from the game's
+        # start, copied into each arm with the bots, so an arm is also judged by the value network at its end (90 s
+        # of net value may be too short for a commitment: issue #28)
+        self.view = None
+        self.value = None
+        self.view_tried = False
 
     @property
     def on(self) -> bool:
@@ -188,13 +194,49 @@ class Brancher:
         game.restore()
         self.pairs.append({"frame": f, "ab": ab, "arms": arms})
 
+    def _critic(self, objs: dict) -> None:
+        """The value network and its view of the Terran, once (none if a model is missing: arms then carry no
+        value read)."""
+        self.view_tried = True
+        try:
+            from gary.agent.manifests import model_for
+            from gary.policy.belief import BeliefModel
+            from gary.policy.value import ValueModel, ValueView
+            self.value = ValueModel.load(model_for("value", "TvZ", "T"))
+            self.view = ValueView(objs["gary"], BeliefModel.load(model_for("belief", "TvZ", "T")))
+        except Exception:  # noqa: BLE001 - the pairs go on without the critic
+            self.view = self.value = None
+
+    def _value_now(self, view, gary) -> list[float]:
+        """The critic's read of the Terran now: win logit, discounted net value, net value of the next 180 s."""
+        if view is None or self.value is None:
+            return [float("nan")] * 3
+        try:
+            obs = gary.hi.observe()
+            view.look(obs)
+            p = self.value.predict(view.features(obs))
+            return [float(p["win"][0]), float(p["disc"][0]), float(p["net180"][0])]
+        except StopIteration:
+            return [float("nan")] * 3
+        except ValueError as e:              # (the critic trained on other inputs than this Gary's: said once, then off)
+            print(f"pairs: the value network can't read this Gary ({e}); arms carry no value read", flush=True)
+            self.view = self.value = None
+            return [float("nan")] * 3
+
     def _maybe_army(self, game, objs: dict) -> None:
         """Army mode: at a moment the Terran's army is big enough, two arms of ARMY_WINDOW in which its army
         layer draws its decisions with different dice (training) or another model (A/B); the outcome is
-        the whole map's net value on the Terran's side."""
+        the whole map's net value on the Terran's side, and the critic's read at the arm's end."""
         from gary.env import GameError
         from gary.policy.army import supply_x2
         f = game.frame
+        if not self.view_tried:
+            self._critic(objs)
+        if self.view is not None and f % 24 < 2:
+            try:
+                self.view.look(objs["gary"].hi.observe())
+            except StopIteration:
+                pass
         if f < max(self.next, ARMY_FROM):
             return
         self.next = f + CHECK
@@ -227,9 +269,10 @@ class Brancher:
         if ab:
             dice = [dice[0], dice[0], dice[2]]
         arms, end0 = [], None
+        value_start = self._value_now(self.view, objs["gary"]) if self.view is not None else [float("nan")] * 3
         for arm in range(2):
             game.restore()
-            c = _copy(objs)
+            c = _copy({**objs, "view": self.view} if self.view is not None else objs)
             layer = c["gary"].army
             if ab and arm == 1:
                 if self.layer == "engage_t":
@@ -252,7 +295,8 @@ class Brancher:
             end = snap(game.observe())
             end0 = end if arm == 0 else end0
             arms.append({"reward": -_net(start, end, self.slot_z), "away": 0.0, "moved": 0.0, "field": False,
-                         "units": len(mine),
+                         "units": len(mine), "value_start": value_start,
+                         "value_end": self._value_now(c["view"], c["gary"]) if "view" in c else [float("nan")] * 3,
                          "model": str(getattr(layer.engage if self.layer == "engage_t" else layer.model, "path", "?")),
                          "decisions": layer.record[:1], "records": recs})
         if self.kind_turn % CHECK_EVERY == 1:
@@ -315,7 +359,8 @@ class Brancher:
                         f.write(json.dumps({**r, "pair": i, "arm": j}) + "\n")
 
     def _save_army(self) -> None:
-        out = {"frame": [], "ab": [], "reward": [], "away": [], "moved": [], "field": [], "units": [], "model": []}
+        out = {"frame": [], "ab": [], "reward": [], "away": [], "moved": [], "field": [], "units": [], "model": [],
+               "value_start": [], "value_end": []}         # (the critic's win logit, discounted net, net180)
         keys = {"engage_t": ("grid", "glob", "engage", "logp"), "commit_t": ("grid", "glob", "choice", "logp")}.get(
             self.layer, ("grid", "glob", "cell", "attack", "logp"))
         dec = {"pair": [], "arm": [], **{k: [] for k in keys}}
@@ -324,6 +369,8 @@ class Brancher:
             out["ab"].append(p["ab"])
             for k in ("reward", "away", "moved", "field", "units", "model"):
                 out[k].append([arm[k] for arm in p["arms"]])
+            out["value_start"].append(p["arms"][0].get("value_start", [float("nan")] * 3))
+            out["value_end"].append([arm.get("value_end", [float("nan")] * 3) for arm in p["arms"]])
             for j, arm in enumerate(p["arms"]):
                 for d in arm["decisions"]:
                     dec["pair"].append(i)
@@ -414,6 +461,7 @@ def _play(game, objs: dict, frames: int) -> list[dict]:
         his = objs["his"]
         end = his["T"].frame + frames
         slots = set(objs["slot_of"].values())
+        view = objs.get("view")
         while his["T"].frame < end:
             if not slots <= {p["slot"] for p in game.observe()["players"]}:
                 break
@@ -421,6 +469,11 @@ def _play(game, objs: dict, frames: int) -> list[dict]:
             objs["zerg"].act()
             for i, hi in enumerate(his.values()):
                 hi.step(2, advance_game=(i == 0))
+            if view is not None and his["T"].frame % 24 < 2:      # (the arm's critic looks once a second)
+                try:
+                    view.look(objs["gary"].hi.observe())
+                except StopIteration:
+                    pass
     finally:
         quiet.__exit__(None, None, None)
         LOG.path = path
