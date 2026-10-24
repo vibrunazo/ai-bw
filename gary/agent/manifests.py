@@ -850,6 +850,10 @@ OPTIONS = {
     # army.py engage_bias ln 2: the commit model's engage odds doubled against move's (issue #28: at the locked pairs'
     # moments engaging beat moving by +0.81 a pair, +0.42 to +1.24, the deployed model engaging 55% of them)
     "engagebias": lambda m: m["army"].update(engage_bias=0.693),
+    # the deployed commit model fine-tuned 2 epochs on army dataset v3, with the hunt's labels (x4) and without (the
+    # control): the labels' effect apart from v5's data change (issue #3)
+    "cmfthunt": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_ft_hunt/model.pt"),
+    "cmftctl": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_ft_control/model.pt"),
     "cmv5plain": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_plain/model.pt"),
     # the hunt imitated only where its target has no known static defense (401 of its 644 labels; the first copied its
     # attacks into sunkens, 0.51 of its engages)
