@@ -115,6 +115,10 @@ class LearnedMacro:
         # at 10-20 minutes; removed 2026-10-23: rounds Q60a against B60a, the same results and gap without it)
         self.queued: list[tuple[tuple[int, int], int]] = []
         self.queue_depth = 1                  # the model's waiting units queued per producer (option qdepth2: 2)
+        # option rethink: a unit decided whose producers' queues are full isn't held as the goal (the model wasn't
+        # asked again while it waited, so it never added production with the bank: the bank escape covered for that);
+        # the model is asked again at its next look
+        self.rethink = False
         # STOP-GAP (AGENTS.md): with more than BANK_ESCAPE minerals, anything Gary can do now is taken while the
         # model's favorite waits (option nobank: off; the model reads its minerals)
         self.bank_escape = True
@@ -473,6 +477,10 @@ class LearnedMacro:
                 self.queued.append(((TRAIN, goal["id"]), hi.frame))
                 self.tracker.note_decision(TRAIN, goal["id"], obs["frame"])
                 self.decisions.append((hi.frame, goal["name"], goal["p"]))
+                self.goal = None
+            elif goal["act"] == TRAIN and self.rethink:
+                LOG.order(g.hi.side, hi.frame, goal["name"], "dropped", "its buildings' queues are full: asked again",
+                          by="macro")
                 self.goal = None
             return
         minerals, gas = plan["cost"]

@@ -809,6 +809,8 @@ OPTIONS = {
     # army.py hunt_advice: with the hunt off, what it would do written to the records (the rule's labels on the
     # model's own states, to imitate it)
     "huntadvice": lambda m: m["army"].update(hunt_advice=True),
+    # macro.py rethink: a unit whose producers' queues are full isn't held as the goal; the model is asked again
+    "rethink": lambda m: m["macro"].update(rethink=True),
     "unscripted": lambda m: (m["army"].update(static_odds=None, hunt=False,
                                               rules=[r for r in m["army"].get("rules", ()) if r != "lords"]),
                              m["macro"].update(caps=False, bank_escape=False), m.update(scv_saturation=False)),
@@ -988,6 +990,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro.caps_on = m["macro"].get("caps", True)
         g.macro.bank_escape = m["macro"].get("bank_escape", True)
         g.macro.queue_depth = m["macro"].get("queue_depth", 1)
+        g.macro.rethink = m["macro"].get("rethink", False)
         if hasattr(g.executor, "scv_saturation"):
             g.executor.scv_saturation = m.get("scv_saturation", True)
             g.executor.train_depth = m.get("train_depth", 1)
