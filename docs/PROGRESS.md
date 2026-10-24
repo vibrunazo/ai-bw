@@ -1162,7 +1162,17 @@ plan and the full log).
   in the state predicts where engaging pays (held-out correlation at best +0.09); engaging beats moving at nearly
   every stage (8-10 minutes the exception, -0.31 +- 0.91). The one-parameter improvement it supports: engage's odds
   over move's raised (option engagebias, doubled, keep's odds as they were), judged in 96 paired games (EB120a+b
-  against DC100a+b): a 90 s gain may cost the game later, and only games show that.
+  against DC100a+b): a 90 s gain may cost the game later, and only games show that. Result: +0.003 +- 0.065 over 96 paired
+  games (won 12 lost 21 against 7 and 18), the gap -0.036 (-0.062 to -0.010) and macro -0.052 nearer the pros, the
+  engage share of orders 0.83 (0.51; the pros' in the army data 0.58) at the same order rate, the attacks' trade
+  about the same (lost / killed 28.3 / 49.3 a game, 32.5 / 58.6). It didn't beat its start in games, the gate for a
+  change learned from counterfactuals: not adopted. The pairs' 90 s advantage (+0.81 a pair) didn't carry to results:
+  the case for a longer horizon, the value network's read at each arm's end (issue #46, the critic stale).
+  The commit models in gt1dev's games (issue #29, from the records): the deployed one keeps 0.85 of its decisions,
+  engages at 0.51 of its orders, 1.76 orders a game-minute; v5's plain model 0.88, 0.49, 1.46 (more passive,
+  -0.176), with the new channels 0.81, 0.13, 2.24 (it hardly engages, -0.069), with the hunt's labels 0.78, 0.82, 2.40
+  (into sunkens, -0.090): offline AUC ranked them the other way; a commit model's in-game rate and engage share are
+  checked in a short round before a full one.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
