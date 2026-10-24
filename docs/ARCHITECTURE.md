@@ -7,7 +7,7 @@ it plays with pro-level game sense, but with **human hands** (human APM, attenti
 and mistakes), it can be **told what to play** ("go 2 hatch muta", "play the PvT build from this
 replay"), and it can **explain why** it did what it did.
 
-**What is built (2026-10-13).** This document is the design; [PROGRESS.md](PROGRESS.md) says what
+**What is built (2026-10-24).** This document is the design; [PROGRESS.md](PROGRESS.md) says what
 exists, and [CONTROL.md](CONTROL.md) replaced the single-policy plan with layers of deciders and
 skills. Per section:
 
@@ -19,19 +19,19 @@ skills. Per section:
 | §6.2 `HumanProfile` | Built (pro and lower profiles); select-to-order times fitted to pro replays, the rest placeholders |
 | §6.3 `HumanAction` | Built as the human interface every executor clicks through; no model emits these actions directly (deciders choose in their own spaces) |
 | §6.4 `Intent` | Built as each layer's intents (`gary/agent/intents.py`); the single intent head with alternatives is deferred |
-| §6.5 trace | Partly: decision and POV logs; no formal schema |
+| §6.5 trace | Partly: decision records for every layer of both sides beside each game's replay (`<game>.records.jsonl`, read by `eval/why.py`), POV and trace logs; no formal schema |
 | §6.6 slots | Built as manifests and options (`gary/agent/manifests.py`) |
-| §6.7 executors and arbiter | Built: one task at a time by fixed priority, production every other turn in fights; no minimum macro share by profile |
+| §6.7 executors and arbiter | Built: a shared executor with a race plug (Terran, Zerg); one task at a time by fixed priority (Gary-Z's turns as its `rotate` option), production every other turn in fights; leases enforced by priority since v0.10; no `Candidate`, no minimum macro share by profile |
 | §6.8 strategy selector | Built light: a win-rate table per map with a Beta posterior (v0.19), from Gary's own games; no pro statistics, no conditioning on what was scouted yet |
 | §6.9 hidden enemy status | Partly: enemy HP hidden unless selected; no upgrade estimates |
 | §6.10 fog memory | Built: enemy buildings, and the army seen in the last 3 minutes |
 | §7.1-7.3 data, taxonomy | Built (taxonomy unreviewed) |
 | §7.4 camera logger | Not started |
-| §7.5 opponent model | Started: the belief model (the enemy's army, hidden or not); no inference of the enemy's *z* |
+| §7.5 opponent model | Started: the belief model (the enemy's army, hidden or not), each side of TvZ; no inference of the enemy's *z* |
 | §7.6 feature discovery, §7.7 guide mining | Deferred: unbuilt, they cost nothing |
-| §8 explainability, §8.1 broadcast | The POV viewer and the decision log exist; no narrator, no broadcast |
-| §9 experiments | Built: manifests, benchmarks against scripted and replayed Zergs, pro scenarios and episodes, branches, a run monitor |
-| §10 deployment | The Remastered bridge for offline games |
+| §8 explainability, §8.1 broadcast | The POV viewer and the decision records (`eval/why.py`: who decided what, with what odds, and each order's fate) exist; no narrator, no broadcast |
+| §9 experiments | Built: manifests and options, the league (Gary-T against Gary-Z, paired 96-game rounds, the gap to modern pros with a bootstrap spread), pro scenarios and episodes, paired branches with locked commitments, a run monitor |
+| §10 deployment | The Remastered bridge for offline games, 1:1 with OpenBW |
 
 ---
 

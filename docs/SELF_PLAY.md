@@ -10,16 +10,19 @@ side; TvZ is only the first pair the league runs.
 
 ## What exists
 
+As of 2026-10-24 (the table as written on 2026-10-15 is in git history):
+
 | Piece | State |
 |---|---|
-| Zerg macro model | trained 2026-10-04 on the Zerg side of the 14k TvZ games (runs/macro/TvZ_Z_*, 50% top-1), never used; predates later dataset changes |
-| Zerg army model | `train/army.py --race Z` runs on the existing dataset (both players' orders are in it); not trained yet |
-| Zerg execution | Zerg v3 (gary/bots/zerg_v3.py) through the same human interface: building jobs, larva production, tech, lurker morphs, groups, a mutalisk flock that raids the mineral line with the least anti-air |
-| Zerg build styles | taxonomy/discover.py clusters pro builds per race (the Terran macro is steered by its own) |
-| Two players in one game | HumanInterface steps several players on one OpenBW game (one advances it) |
-| Opponent model | the belief model (gary/policy/belief.py) over what the enemy has; not yet over its plan (z) |
+| The Zerg Gary | Gary on the shared agent playing Zerg (`gz1`, gz0.2; docs/REFACTOR.md): the Zerg executor, the learned macro, army (commitments, control groups by type) and fight roles, Gary-Z's rules as options; `gz1dev` (gz0.3dev) without the stop-gaps over its learned layers |
+| The Terran Gary | `gt1` (gt0.10) plays; `gt1dev` (gt0.11dev) is where learning is judged (AGENTS.md) |
+| The league | `eval/league.py`: Terran against Zerg, paired 96-game rounds on the ladder maps, the gap to modern pros per window with a spread (`eval/gap_windows.py`) |
+| The self-play pairing | gt1dev against gz1dev: balanced, each side winning or leading in 38% of 96 games (docs/PROGRESS.md) |
+| Paired branches | `eval/pairs.py`: both bots live, the game restored per arm, every few pairs one replayed to check it ends the same; the commit decision's arms locked at the pros' hazard |
+| Learning from branches | `train/commit_pairs.py`: offline, advantage-weighted, KL-anchored on the pros' ticks (at chance so far) |
+| Opponent model | the belief model (gary/policy/belief.py) over what the enemy has, each side; not yet over its plan (z) |
 | Critic | the value network: reads who is ahead, not yet who will get ahead |
-| Parity | the bridge matches OpenBW (adapters/scr_bridge/tools/parity.py), so headless lessons hold live |
+| Anchors | the humanlikeness classifier and the gap to modern pros (`eval/humanlike.py`); human games through the bridge, 1:1 with OpenBW |
 
 ## Gary-Z v0
 
@@ -554,6 +557,10 @@ held-out validation, then games. The rules:
   complete.
 
 ## Order of work
+
+Status (2026-10-24): steps 1-4 and 7's harness are done (the Zerg on the shared agent; the classifier; the
+league and paired branches), the Zerg fight roles of step 6 too; step 5 (target inference) and the kiting drill
+are not started; RL updates: the Terran's roles (rl1) held, the commit decision is the target now.
 
 1. The vocabulary check; the Zerg macro model retrained; Zerg style steering; the creep-spot search.
 2. The Zerg army model; Gary-Z v0 (macro and army learned, v3's execution, raid skill, micro).

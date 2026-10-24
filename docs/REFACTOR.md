@@ -1,5 +1,9 @@
 # One Gary: the refactor plan (2026-10-19)
 
+**Status (2026-10-24): done.** Phases 0-3 landed on 2026-10-19/20 (each phase's "Done" note below): one agent
+for every race, the Zerg on it as `gz1`, one launcher (eval/match.py). Gary-Z's separate stack (gary/bots/) is
+deleted. Phase 4 (Protoss) is not started. The rest of this file is the plan as written, kept as the record.
+
 A plan for a session to build. The goal is RACES.md step 3: one agent that plays any race, where
 a race is a plug and everything above the plug is shared. Gary-Z's separate stack (gary/bots/,
 3,400 lines) is retired when the shared agent playing Zerg matches its league record. No

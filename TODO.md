@@ -1,253 +1,116 @@
-# TODO: from an outside review of the architecture (2026-10-13)
+# TODO: open work
 
-An outside review of ARCHITECTURE.md, CONTROL.md and PROGRESS.md, checked against the code. What
-held up, in the order to do it. Pick these up once the early-switch work (`train/early_switch.py`)
-is done and its runs have finished; none of them should run while it does (shared code, shared
-CPU). Delete this file once each item is done or moved to an issue.
+What is left to do, newest first. Each section is dated; when an item is done it leaves this file (git history
+and docs/PROGRESS.md keep what was done and how it measured). The GitHub issues are older and partly
+overtaken: this file is the current list.
 
 ## Open threads (2026-10-24)
 
 - **Commit pairs:** 1,004 pairs collected (CP110a, CP120a), the learner at chance and overfitting
   (train/commit_pairs.py); try the value network's read at the arm's end as the outcome (90 s of net value may be too
-  short for a commitment) and the advantage's size rather than its sign; the same lock and pairs for Gary-Z's commit
-  decisions.
+  short for a commitment) and the advantage's size rather than its sign, against a fixed rule ("engage at 10-15
+  minutes") as the bar; the same lock and pairs for Gary-Z's commit decisions once something beats that bar.
 - **Why v5's commit models trail the deployed one in games** (all of them, with or without the new channels, while
   scoring better offline): the era mix (weight the modern games as the macro's recipe does), ticks per game, how the
-  deployed one was chosen. Until then the deployed commit model stays.
+  deployed one was chosen; compare the deployed model's in-game behaviour with theirs (attack rate, commitment
+  lengths, attacks into sunkens). Until then the deployed commit model stays.
+- **The hunt's labels on the deployed commit model** (fine-tuned with a KL anchor to it, not retrained on v5), so the
+  labels' effect is read apart from the data change.
 - **gz1 with ownsupply and without overlords ahead,** against gt1: whether gz1 loses that stop-gap too.
-- **TvT and ZvZ health rounds** on the dev manifests, read for absurd records (docs/PROGRESS.md: mirrors catch
-  hidden race assumptions); the Protoss macro models' offline check on held-out pro states.
+- **TvT and ZvZ health rounds** on the dev manifests, read for absurd records (mirrors catch hidden race
+  assumptions); the Protoss macro models' offline check on held-out pro states.
 - **The gap score disagreed with results twice** (rethink, nosave: nearer the pros, worse games) and with the Zerg's
   counts once (ownsupply): judge decoder changes on results first; find what in the gap rewards it.
+- **Runs:** a pre-flight test that plays one paired episode (the deep-copy bug broke every pair for days unseen); a
+  way to stop a chain that also kills its workers and re-simulator calls (a stopped build marked 11,583 replays
+  failed); requirements.txt pinned to the versions that work.
 
-## Open threads (from the 2026-10-19 handoff)
+## Data and races (2026-10-19, updated 2026-10-24)
 
-- **More modern replays.** The curve flattens around 3,000 clean games per matchup: about 4,500 raw replays
-  per matchup at today's yield, four to five times the first pack (data/raw/cwal/2026-10); PvT and TvT yield
-  least. cwal.gg has no API and its robots.txt disallows crawling: packs are downloaded by hand. Confirmed
-  ladder bots are in ingest/inventory.py KNOWN_BOT_NAMES (the APM rule caught 226 of their 258 games alone).
-  The remaining 4% of desyncs (Attitude SE, Colorless Fate, TvT, PvT) are an SC:R-vs-1.16 unit-movement
-  difference, traced with GARY_TRACE_UNIT / GARY_TRACE_ORDER (docs/DATA_ERAS.md); Aiolos fails with
-  "unsupported map version 64".
-- **TvT Gary-T.** TvT plays (tests/test_matchups.py) on the TvZ-trained parts its `vs` section leaves on;
-  it needs TvT models for macro, army, fight, belief, plan, engage and commit (hours of training: ask first).
-- **Protoss** (docs/RACES.md step 4, docs/REFACTOR.md Phase 4): the executor and PvT/PvZ/PvP models.
-- **Human game 4's list** (docs/PROGRESS.md): attacks (measured, partly done), SCV pulls and the early
-  zerglings, single-unit micro, turrets, vision, the late game, building placement.
-
-## Direction (2026-10-15)
-
-A second outside review (2026-10-15, after v0.25) of the docs, the last 40 commits and the latest runs.
-Its findings, kept here so they aren't lost:
-
-- **The yardstick is wrong, the architecture right.** v0.16-v0.25 followed one loop: 432 games against
-  Zerg v2, Zerg v3 and the replayed pros, read the losses, add a rule or option, keep it if the win
-  count moves. It has run out of signal:
-  - the opponents are self-authored: rules learned against them exploit their habits (hunting on "no
-    army seen" was adopted because it "pays against these Zergs");
-  - about two thirds of games end undecided, which can't rank options (and the bars were missed by
-    noise: v0.22 adopted 3 wins short, v0.25 with 2 more losses);
-  - nobody plays the sparring partner: no human game since about v0.11;
-  - none of the goals is on the scoreboard: humanlikeness (G2) is measured ad hoc (deaths alone 48%
-    against pros' 12%, 1.5 move orders a fighting minute against 8.4), steerability (G3) is a style
-    flag, adjustable skill (G4) and explanations (G5) are untouched.
-- **The learning program needs a decision.** CONTROL.md step 7 said decisions must be learned
-  together, then roles RL, the value network, the early switch and hunt_belief all ended at or below
-  the hand rules, and the work went back to tuning rules one failure at a time. Answer taken: rules
-  for execution and reflexes, learned models for decisions; the learning failed for want of signal
-  (a decision worth sd 130 against chaos's 512, scripted opponents, short horizons), which self-play
-  against a pro-derived opponent is meant to supply.
-- **Keep:** the layered design, manifests, deterministic seeds and branching, the run monitor, the
-  honest "not adopted" records, the macro model from pro replays and the fight estimate, and the
-  executor competence (hunts that finish, the camera on a unit, remembered buildings forgotten).
-
-What to do, in order:
-
-1. **Freeze the v3 loop.** v0.25 stays the default; no options adopted on Zerg v2/v3 win counts. When
-   something must be ranked, weight the replayed pros (the least self-authored opponent).
-2. **A human in the loop.** The Remastered bridge's known gaps fixed (adapters/scr_bridge README; done
-   2026-10-15 offline, pinning live), then short sets against a human; that losses list sets the next
-   version. This is the product; the rest is proxy.
-   Human game 2 (2026-10-16, runs/live/v026_human2, the user's Zerg won at ~17:00; parity clean).
-   "Gary improved his build a lot. But there were still too many mistakes":
-   - the first lings did little: marines and an SCV pull forced them off (a few units caught off
-     position, more than should be);
-   - turrets came, but not first in the mineral lines and not where the mutas came first: the
-     user went through the natural to the main, natural minerals first; neither had turrets when
-     they arrived, the turrets showed up as they left. Pros repair the first mineral turrets with
-     several SCVs;
-   - idle SCVs all over (at the base, with the army);
-   - medics, but stim never heard: the marine-medic ball with stim, Terran's super power, unused;
-   - lone marines running between main and natural (the rally) get hunted: harass main and
-     natural, then pick off the stragglers on the ramp;
-   - no Comsat when lurkers came: a late turret stood where the main's Comsat goes;
-   - still AFK when lone units are picked off: reacts late, never, or wrong (attention elsewhere,
-     never re-prioritized). Measured (replay + snapshots): 25 lone units hit (17 SCVs), Gary
-     touched the unit or its spot within 0.9 s (median) in 21, and 19 of the 25 died within 10 s:
-     mostly the wrong reaction, not a late one (learned responses and anticipation, Direction 3).
-     Found overnight and fixed in v0.27: the bunker-load rule re-sent one marine every 2 s all
-     game (it took Gary's hands 20-26 times a minute), and the scout stood idle by the minerals.
-   Human game 1 (2026-10-16, runs/live/v025_human1, the user's Zerg won at 12:17; the bridge matched
-   OpenBW over the whole replay, so every failure is Gary's). The user's notes, and Gary's log:
-   - 4 lings did far too much: Gary reacts very slowly; a lone SCV walks out to build, gets
-     killed, and the next one walks into the same lings. Kiting (hit one SCV, pull back, repeat)
-     beats it: Gary never met an opponent who micros (the self-play Zerg's job);
-   - stuck in rush defense: no Academy, no gas, one base until 8:30; the expansion late and
-     undefended;
-   - mutas (read at 7:36) and no turret ever (the muta answer was dropped in v0.24); it can't hold
-     main and natural against mutas;
-   - pulled workers against 4 to 23 units, 9:07-11:43: SCVs 26 to 0;
-   - not inhuman to watch, other than slow: "could be a newbie human".
-   Gary's failures in the live games against the computer Zerg so far (runs/live, 2026-10-15):
-   - marines and medics trickle up the enemy ramp one by one, and the 8:00 hunt throws the army
-     away (games 3 and 5: 14 marines to 5);
-   - the computer's early zergling rush lost game 2;
-   - refused builds: the game refused 13 turrets at 13 spots in game 5. In LAN game 1 (replayed in
-     OpenBW, identical to the live game) a depot and a Starport were refused because Gary's own
-     parked SCV stood on the spot while the build went to another SCV (an empty drag box kept the
-     old selection; fixed in executor.py reselect). LAN game 2's 17 turret orders, replayed in
-     OpenBW: 10 built; the rest had their builder stop 45-210 px short of a valid spot (spots it
-     can't reach well, behind the mineral line), get re-tasked by Gary before arriving, or once find
-     an SCV on the spot. Headless has the same (~2 a game); trace with Game.scenario on the replay;
-   - minerals float on two bases (game 5: 1,207 at 14:00), and turrets only in the main (game 1).
-3. **A self-play skeleton** (the user's priority): every piece of ARCHITECTURE.md present and
-   connected, crude where it has to be, training together:
-   - a Zerg Gary from the same pro-replay pipeline (Zerg macro and army imitation from the 14k TvZ
-     games), on Zerg v3's execution code;
-   - the opponent model's belief over the enemy's z, and a strategy layer conditioned on it;
-   - anticipation (human game 1, the user: "like playing against someone AFK"; Gary acts on what is,
-     never on what is coming), as target inference: which asset each enemy group reaches in the
-     next 15-20 s (a mineral line, the natural, the army, a building, none), learned from the pro
-     games, judged as a classifier first, then as the trigger of a learned response;
-   - how much to commit to defense, and acting first instead of waiting: learned from outcomes in
-     the league (RL against a Zerg that kites and punishes waiting), not scripted (the user's call:
-     pros pull back just enough to survive, not a marine more);
-   - a trace schema, once its first reader (the narrator) needs it;
-   - a league loop that updates at least one learned piece from outcomes, with the critic grading
-     unfinished games and the pro data as an anchor (KL to the imitation policy).
-   Risks: two crude imitation agents may mostly produce passive, undecided games; keep anchors outside
-   the loop (pro distributions, human games). Compute is shared: segments from mid-game states (T2a)
-   and nightly batches first; full-game league training is rented compute.
-4. **Humanlikeness, measured:** a classifier telling a Gary game from a pro game per minute, from
-   one player's decision-level features (docs/SELF_PLAY.md "Before any RL"), with a frozen copy and
-   the raw pro-distance table so progress can't hide; built before the league harness, a metric on
-   every version and human game, not a reward until stable. No subjective ratings.
-5. **Explainability.** A narrator over the existing records (decision log, trace, the analyses written
-   by hand): cheap once the trace schema exists, one of the goals, and no other bot has it.
-
-Items 3, 5 and 7 below wait for the skeleton's opponent; 6 (the engine edge error) stands.
+- **More modern replays.** The curve flattens around 3,000 clean games per matchup (docs/DATA_ERAS.md); the cwal.gg
+  packs hold about 3,000 raw a matchup now (18,886), so roughly half again as many. cwal.gg has no API and its
+  robots.txt disallows crawling: packs are downloaded by hand. Confirmed ladder bots are in ingest/inventory.py
+  KNOWN_BOT_NAMES. The remaining desyncs (Attitude SE, Colorless Fate, TvT, PvT) are an SC:R-vs-1.16 unit-movement
+  difference, traced with GARY_TRACE_UNIT / GARY_TRACE_ORDER (docs/DATA_ERAS.md); Aiolos fails with "unsupported map
+  version 64".
+- **TvT Gary-T.** TvT plays (tests/test_matchups.py); macro, army and commit models exist for it (2026-10-19); fight,
+  belief, plan and engage are still TvZ's (hours of training: ask first).
+- **Protoss** (docs/RACES.md step 4, docs/REFACTOR.md Phase 4): the executor (its data and macro, army and commit
+  models exist); after TvZ self-play shows a measured gain. Its old replay packs aren't re-simulated yet.
+- **Human game 4's list** (docs/PROGRESS.md): attacks (measured, partly done), SCV pulls and the early zerglings,
+  single-unit micro, turrets, vision, the late game, building placement.
 
 ## Map mechanics on the current ladder maps (2026-10-18)
 
-Colorless Fate has an egg wall and a half-mineral wall, Odyssey stacked minerals, Attitude SE
-critters; the 2026 pros' builds, placements and fights on these maps depend on them. Today Gary
-cannot see any of it: the re-simulation emits no neutral units except minerals and geysers (the eggs
-are in no dataset), the army grid skips neutral units, and no model has a map input. The plan
-(docs/RACES.md principle: inputs rich enough for the per-map pro data to teach it, no rule per map):
+Colorless Fate has an egg wall and a half-mineral wall, Odyssey stacked minerals, Attitude SE critters; the 2026
+pros' builds, placements and fights on these maps depend on them. Gary cannot see any of it: the re-simulation emits
+no neutral units except minerals and geysers (the eggs are in no dataset) and the army grid skips neutral units. The
+plan (docs/RACES.md principle: inputs rich enough for the per-map pro data to teach it, no rule per map):
 
-1. Neutral units become first-class in the re-simulation, the macro features and the army grid;
-   chokes and ramps recomputed from current walkability when a wall dies or is mined out.
-2. The map hash as a conditioning input, like the build style and the era input (one change).
+1. Neutral units become first-class in the re-simulation, the macro features and the army grid; chokes and ramps
+   recomputed from current walkability when a wall dies or is mined out.
+2. ~~The map hash as a conditioning input~~: done for the macro (2026-10-19, with the year).
 3. A per-map placement prior from the pros' building positions, replacing the hand-made walls table.
-4. Executor abilities the behaviors need: attack a neutral unit, gather from a chosen patch,
-   saturation counted by position (stacked minerals).
-5. The league and self-play on the current ladder pool, extracted from the replays' map data; every
-   new map gets a re-simulation check first (Aiolos fails with "unsupported map version 64").
+4. Executor abilities the behaviors need: attack a neutral unit, gather from a chosen patch, saturation counted by
+   position (stacked minerals).
+5. The league and self-play on the current ladder pool, extracted from the replays' map data; every new map gets a
+   re-simulation check first.
 
-Do 2 together with the era input and 1 when the one-Gary refactor touches the re-simulation; 3 to 5
-after the modern data is the training set.
+## Direction (2026-10-15)
 
-## 3. The army model's fight estimate, from Gary's own fights
+From the second outside review (after v0.25). It stands: rules for execution and reflexes, learned models for
+decisions; the learning had failed for want of signal (a decision worth sd 130 against chaos's 512, scripted
+opponents, short horizons), which self-play against a pro-derived opponent is meant to supply. Its steps since:
+the v3 loop is frozen (the scripted Zergs are deleted; the league plays gz1); human games 1-4 were played through
+the bridge (their failure lists are in docs/PROGRESS.md); the self-play skeleton is built (docs/SELF_PLAY.md); the
+humanlikeness classifier and the gap to modern pros are on every round. Still open from it:
 
-The fight estimate is trained on what the pro got: the change in army share in the 45 s after the
-pro's order (`train/army.py`, lines 96-97). Gary holds or attacks by what a pro would get from that
-fight, with hands that are weaker in fights (1.5 move orders a fighting minute, pros 8.4; v0.10's
-vultures 1.3 tiles/s, pros 2.9, losing twice as many). It fits the second kind of v0.19 loss: the
-6-7 minute fight against Zerg v2, deaths outnumbered 2:1 or worse 53% (pros 29%).
+- **Anticipation as target inference** (human game 1: "like playing against someone AFK"): which asset each enemy
+  group reaches in the next 15-20 s, learned from the pro games, judged as a classifier first, then as the trigger
+  of a learned response.
+- **The opponent model's belief over the enemy's plan (z)**, and a strategy layer conditioned on it.
+- **How much to commit to defense, and acting first:** learned from outcomes in the league, not scripted (pros pull
+  back just enough to survive).
+- **Explainability:** a narrator over the decision records, once a trace schema has its first reader.
 
-- Sample army-order moments from the pro data; let Gary take over from each (as `eval/scenarios.py`
-  does) with the pro's order, several draws of its hands; label with Gary's own 45 s change.
-- Train two heads on the same state, the pro's outcome and Gary's: their gap maps where Gary falls
-  short of pros (compositions, terrain, sizes), a diagnostic on its own.
-- Play with Gary's head; judge on Zerg v2 (losses, deaths outnumbered, deaths alone) and the
-  replayed pros.
-- Caveat: once a game leaves the pro's, the Zerg reacts by script, so the labels are "against a
-  scripted reaction". 45 s is still noisy: several draws per state.
+## The army model's fight estimate, from Gary's own fights (2026-10-13)
 
-Not this: crediting mid-game decisions by full-game branches (CONTROL.md step 7 already found a
-decision worth sd 130 against chaos's 512).
+The fight estimate is trained on what the pro got: the change in army share in the 45 s after the pro's order
+(`train/army.py`). Gary holds or attacks by what a pro would get from that fight, with hands that are weaker in
+fights (1.5 move orders a fighting minute in v0.19's era, pros 8.4).
 
-## 4. Zerg v3: a greedy Zerg that punishes passive play
+- Sample army-order moments from the pro data; let Gary take over from each (as `eval/scenarios.py` does) with the
+  pro's order, several draws of its hands; label with Gary's own 45 s change.
+- Train two heads on the same state, the pro's outcome and Gary's: their gap maps where Gary falls short of pros
+  (compositions, terrain, sizes), a diagnostic on its own.
+- Play with Gary's head; judge in the league against gz1.
 
-The selector table (v0.19) counts only early-aggression opponents, and the replayed Zerg's own
-docstring says never to judge Gary's economic choices with it, yet the build style is one. So
-"style 4 on Fighting Spirit and Heartbreak Ridge" means "best against early aggression". Also check
-whether styles 2 and 3 lose for the opponents or for Gary's vulture micro (`eval/losses.py` on their
-games): the macro picks a pro's Factory build that Gary's hands can't play.
+## The strategy selector's table (2026-10-13, updated 2026-10-24)
 
-A Python bot (`gary/bots/zerg_v3.py`), not a BWAPI one yet: `env/gary_env.cpp` has no BWAPI, so
-Steamhammer and the like need BWAPI built on OpenBW and a bot hosted in our loop (real C++ work),
-and a foreign bot's own randomness threatens what branching and the paired tests rest on: games
-deterministic per seed. A Python bot keeps that, plays through the human interface like Zerg v2
-(human hands, unlike Steamhammer's micro), and runs in `eval/vs_rush.py` as is. Classic bots stay
-on P0's list for later.
+The selector's table (v0.19) was counted against the scripted Zergs, now deleted, and against early aggression
+only: rebuild it from league games against gz1, per map and style; then re-learn and re-test the early-defense
+switch (`train/early_switch.py`) on that pool.
 
-Keep it minimal: it has to punish passivity, not be strong (a scripted Zerg through the interface
-lags pros by minutes; mutas and lurkers would be played badly). On Zerg v2's code:
-
-- greedy: a third base early, drones to 40+, no 6:00 all-in;
-- hydralisks (attack-move, no micro), one big attack at about 9:00 sized by its economy;
-- zerglings back home when Gary's army moves out;
-- some seeds open hatch first with a pool at ~2:00 and send a few early zerglings to poke without
-  committing: the moment a false alarm is tempting (item 1).
-
-Done: `gary/bots/zerg_v3.py` (PROGRESS.md: it punishes the always-defend switch, outcome −0.18 ± 0.06).
-Then: add it to the selector table's opponent pool and rebuild the table; re-learn and re-test the
-early-defense switch (`train/early_switch.py`; without it: always defends early, losses 40 -> 39 of
-432, false alarms 285 of 287 quiet games).
-
-## 5. Scattered fighters back into the main group
+## Scattered fighters back into the main group (2026-10-13)
 
 Two different problems; don't solve them with one rule.
 
-- **Housekeeping, no fight on:** a fighter standing idle far from Gary's main group, no zerg near,
-  walks (attack-moving) back to it, as `home_scvs` sends stray SCVs back to mining. A chore, not a
-  decision. Small today: of fighters alone more than 15 tiles from the main group (0.65 a look
-  every 10 s, 16 games against Zerg v2/v3), most were walking to the rally (shorter since
-  `rally_ramp`) or chasing an attack or close-in order; idle and lost only ~4%. Measure first
-  (the stray tracker), then a rule, judged over the whole pool.
-- **In a fight:** whether a new unit joins now or waits for the group. Pros lose 12% of their army
-  alone, Gary ~48% in its losses; rules to hold new units back (`reinforce_pack`, `regroup`,
-  `safe_rally`), a learned join/hold override and RL on the role choice all measured worse or
-  equal. A real decision with exceptions (one more marine saves a bunker; one more dies alone for
-  nothing): for the learned layer, once the critic and longer episodes value a fighter kept alive
-  (the 120 s episodes reward fighting now).
+- **Housekeeping, no fight on:** a fighter standing idle far from Gary's main group, no enemy near, walks back to
+  it, as `home_scvs` sends stray SCVs back to mining. A chore, not a decision. Measure first (the stray tracker).
+- **In a fight:** whether a new unit joins now or waits for the group. Pros lose 12% of their army alone, Gary ~48%
+  in its losses; rules to hold new units back, a learned join/hold override and RL on the role choice all measured
+  worse or equal, and the gather stop-gap (AGENTS.md) only partly. A real decision with exceptions: for the learned
+  layer, once the critic and longer episodes value a fighter kept alive.
 
-## 6. An engine error at the map's edge
+## An engine error at the map's edge (2026-10-13)
 
-OpenBW stops a game ("attempt to get tile index for invalid position -7 263") when a unit's path
-leaves the map: seen once in 40 games, an SCV standing in a main's corner behind its edge minerals
-sent to mine one of them (v0.21 against Zerg v3, Fighting Spirit seed 7). Such games count as errors
-(eval/vs_rush.py), not results. Find what puts SCVs in that corner (a depot spot by the edge?) and
-keep them out of it; the engine itself is external code.
+OpenBW stops a game ("attempt to get tile index for invalid position -7 263") when a unit's path leaves the map: seen
+once in 40 games, an SCV in a main's corner behind its edge minerals sent to mine one of them. Such games count as
+errors, not results. Find what puts SCVs in that corner (a depot spot by the edge?) and keep them out of it; the
+engine itself is external code.
 
-## 7. The macro reads the scout, then the scout is worth testing
+## The macro reads the scout (2026-10-13)
 
-Gary builds the same tech whatever Zerg v3 plays (Engineering Bay ~6:00, turrets from ~7:00 against
-mutalisks, lurkers and the zergling pressure alike; 40 games, PROGRESS.md 2026-10-14), and nothing
-but the early-pool rules reads what the scout sees. The touring scout (`watch`) stays in the
-Zerg's base no longer than the plain one (65 s against 64 s median, 858 games: it leaves when 3
-zerglings come near, at ~3:00) and lost more without a reader (30 against 25 of 432, before v3's
-three plans).
-
-- First: answers to each plan as pros play them, triggered by what Gary has seen (the scout, later
-  sightings, scans): turrets and an Engineering Bay against mutalisks, Comsat, Science Vessels and
-  tanks against lurkers, bunkers and marines against the zergling pressure. Judge per Zerg v3 plan
-  (seed % 3) and over the whole pool.
-  Done for lurkers: v0.24 (`gary/agent/answers.py`), lurker games won 11 of 32 (7). Mutalisks:
-  the model's turrets already do, an answer on top lost games. The tech scan seldom happens (the
-  model's Comsat often after 10:00); 21 lurker games still end undecided.
-  The touring scout on v0.24 against Zerg v3: plans read ~1.5 min earlier, won 53 (51) but lost 4 (1),
-  the losses against the zergling pressure: not adopted (PROGRESS.md).
-- Then: v0.22 with and without `watch` against Zerg v3, results per plan, to see whether a longer
-  look pays once something reads it (and whether the scout should dodge zerglings to stay longer).
+Only the early-pool rules and the answers (`gary/agent/answers.py`, a stop-gap: AGENTS.md) read what the scout sees;
+the macro model has the seen counts as inputs. Judge whether it answers alone (the answers' register entry), then
+whether a longer scouting look (`watch`) pays once something reads it.

@@ -142,6 +142,9 @@ right era counts roughly double.
 
 ## What to do with it
 
+Since (2026-10-24): the cwal.gg packs hold 18,886 replays, about 3,000 raw per matchup (docs/RACES.md has
+the counts); the game's year and map are macro-model inputs since 2026-10-19 (docs/PROGRESS.md).
+
 - **Get more modern replays**: about 3,000 clean human games per matchup is where the curve
   flattens, which at today's yield (81% human, 81% of those clean) means roughly 4,500 raw
   replays per matchup, four to five times the first pack. PvT and TvT, the lowest yields, need
@@ -149,7 +152,7 @@ right era counts roughly double.
 - **Train on both eras with the modern games weighted** (`--weight-modern 10` is the measured
   point; between 5 and 20 is the range to tune as the modern set grows). The old data keeps the
   rare situations and the reactions; the weight hands the openings to the modern games.
-- **Era as an input** (planned): the model gets the game's year the way it gets the build style,
+- **Era as an input** (done 2026-10-19 for the macro: the year and the map as inputs): the model gets the game's year the way it gets the build style,
   and plays with it set to now. It learns what depends on era and what does not, so no weight
   has to be chosen. The same conditioning gives "play like 2012" for free.
 - **Judge on the modern held-out set** from now on; the old held-out set measures the past.

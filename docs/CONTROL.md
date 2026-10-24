@@ -2,11 +2,14 @@
 
 Who decides what, at which timescale, and how each layer becomes a swappable part. This note
 applies [ARCHITECTURE.md](ARCHITECTURE.md) §6.4 (intents), §6.6 (decision slots and providers),
-§6.7 (executors and the Attention Arbiter) and §9.1 (run manifests) to the code as it is at v0.9,
-and plans the way from here to there. Status: steps 1-3 of the plan are done (`gary/agent/`: the
-layers as providers, every Gary version a manifest; the arbiter with a trace; intents, leases and
-the "direct" motor layer). Not yet: `Candidate` (the arbiter still hands the one task slot to the
-first layer that wants it), and leases are recorded, not enforced.
+§6.7 (executors and the Attention Arbiter) and §9.1 (run manifests) to the code, written at v0.9, with
+the plan from there. Status (2026-10-24): steps 1-5 are done (`gary/agent/`: the layers as providers, every
+Gary a manifest; the arbiter with a trace; intents and the "direct" motor layer; leases **enforced** by
+priority since v0.10, `intents.priority`: the rules, then the fight's decisions, then the army; roles per
+unit, by hand rules and by a model learned from the pros); step 7 is under way (docs/SELF_PLAY.md). Not
+yet: `Candidate` (the arbiter still hands the one task slot to the first layer that wants it, by fixed
+priority; Gary-Z's turns are its `rotate` option). Today's manifests are `gt1`, `gt1dev`, `gz1` and
+`gz1dev` (AGENTS.md); the v0.9 examples below show the contract.
 
 ## Why now
 
@@ -192,7 +195,7 @@ earlier speedups).
    (`gary/agent/intents.py`: kind, units, target, the skill's data, source, ttl); the motor layer
    (`gary/agent/motor.py`, `direct/v1`) carries each out with a skill, today's clicks moved there.
    A skill's order takes its units' leases; an order to units another source still holds is
-   traced (`lease_conflict`), not prevented yet. Same actions in all 110 parity games and
+   traced (`lease_conflict`); enforced from v0.10 on (step 4). Same actions in all 110 parity games and
    scenarios. A first look (v0.9, immediate 9-pool, seed 1): the fight model and the bunker-load
    rule took marines from each other 9 times in 8 minutes.
 4. **Roles and their skills; leases enforced.** Revised after watching pro fights: a label per
@@ -203,9 +206,13 @@ earlier speedups).
    half second (`gary/agent/roles.py`, hand rules first: `rules/v1`), each role's skill picking
    where to go from the threats (weapon ranges, walkable ground), carried out by the command
    skill; leases enforced by priority (rules, then the fight's decisions, then the army).
-   Manifests `v09lease` (leases alone) and `v09roles` against v0.9 on the three benchmarks.
+   Manifests `v09lease` (leases alone) and `v09roles` against v0.9 on the three benchmarks. Done: every
+   manifest since v0.10 enforces leases (`"leases": "enforced"`); gt1's roles in contact are hand rules
+   (RoleAhead), gt1dev's the learned model.
 5. **A learned role model:** imitation on the pros' role labels (per unit, every half second),
-   then RL on the home defenses; variant B with a learned L4 instead of the hand rules.
+   then RL on the home defenses; variant B with a learned L4 instead of the hand rules. Done: the role
+   model learned from the pros' units before contact (v0.29) and in it (gt1dev: attended units, the "again"
+   decision, several orders a turn), each side; its first RL run that held (rl1, in gt1dev since gt0.6dev).
 6. **The rest as needed:** KITE, SCREEN, LOAD as skills; §6.7's arbiter rules (fight priority
    with a minimum macro share); posture from more than rules.
 7. **Every decision a policy, trained together.** Rules tuned one failure at a time traded one
@@ -274,6 +281,9 @@ earlier speedups).
    chaos (crediting one takes ~15 replays of it), not a fault of the critic; the learning stays
    per game (the strategy selector) and per fight (episodes paired on the same positions), and a
    macro learned from branches would need tens of thousands of them, judged by the critic at 30 s.
+   Since (2026-10-24): the army's commit decision on paired branches with the forced arm locked at the
+   pros' hazard (eval/pairs.py, commit_t), learned offline (train/commit_pairs.py); on 1,004 pairs it is at
+   chance so far (docs/SELF_PLAY.md, "Learning beyond imitation").
 
 Steps 1–3 are refactoring with parity checks, and they carry the risk of the plan: they touch
 everything. They're worth it only if they stay small, so: no layer gets a provider it doesn't need
