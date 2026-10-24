@@ -916,8 +916,12 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
                                      "+dice"), "version": "gt0.11dev"}
 
-# gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted"), "version": "gz0.2dev"}
+# gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
+# gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
+# so the model thought one was coming; 48 paired games against gt1dev, ZO110a against ZD110a: the Terran's score
+# -0.286 +- 0.117, the Zerg winning or ahead at 30:00 in 22 of 48 (4), blocked at 3:00 1% (42%), drones at 10:00 30
+# (20, pros 28))
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+ownsupply"), "version": "gz0.3dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
