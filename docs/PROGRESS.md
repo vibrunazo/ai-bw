@@ -1071,8 +1071,11 @@ plan and the full log).
   against the deployed commit model (DC100a): the control (cmv5all, HB120a) -0.069 +- 0.096, the hunt model
   (cmhuntall, HA120a) -0.090 +- 0.098, the two -0.031 +- 0.093 apart; its commit engages into sunkens 0.45 (0.35).
   The third time v5 models trail the deployed one in games while scoring better offline: offline AUC doesn't
-  predict play here. A v5 model with the deployed inputs (cmv5plain: 0.767 / 0.778 offline) plays HP120a to tell
-  the channels from the data. dice07 (dice from the odds raised to 1/0.7; D07110a against DC100a): +0.011 +- 0.145,
+  predict play here. A v5 model with the deployed inputs (cmv5plain: 0.767 / 0.778 offline, HP120a): -0.176 +-
+  0.099 against the deployed one, -0.104 +- 0.112 against the channels' control, lost 19: not the channels but the
+  data or the recipe. Candidates for the review: the era mix (all of v5 is 85% old games; the macro's measured recipe
+  weights the modern ones ten to one, docs/DATA_ERAS.md), 60 ticks a player-game over many games against 400 over
+  fewer, and what the deployed model was selected on (games, not its offline score). dice07 (dice from the odds raised to 1/0.7; D07110a against DC100a): +0.011 +- 0.145,
   at 5-15 minutes workers 33.3 (27.8, pros 34.9), bases 2.01 (1.73, 2.10), army 21.2 (17.7, 25.1), bunkers 2.59
   (3.43, 0.55), the macro gap +0.073 (-0.004 to +0.148): a close call, its second 48 D07110b. Over 96 paired games
   (against DC100a+b): +0.037 +- 0.099, won 14 lost 24 (7, 18), the gap +0.031 (-0.018 to +0.072), macro +0.048: no
