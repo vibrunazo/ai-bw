@@ -1129,7 +1129,13 @@ plan and the full log).
   passed. Engage won 54% of the training pairs and 62% of the held-out ones: at these moments a constant "engage"
   beats the model, the one signal so far. Under the MDE (1,000-2,000 pairs for an effect of 0.3-0.5) nothing
   state-dependent is learnable yet; the collection goes on, and a 90 s net value may be too short a horizon for a
-  commitment (a candidate: the value network's read at the end of the arm).
+  commitment (a candidate: the value network's read at the end of the arm). The collection done (CP120a, 96 games of
+  20 minutes against gz1: 905 training pairs, replay checks 266 of 266 identical): the engage arm less the move arm
+  +0.82 +- 0.51 a pair (at 10-15 minutes +1.25 +- 0.92), but engage won only 49% of them: when engaging wins it wins
+  bigger. On all 1,004 labelled pairs (CP110a+CP120a; 125 held out) the start model picks the better arm 0.50 (train)
+  and 0.53 (held), at chance; fine-tuned, train 0.54 and held 0.46: it overfits again, the gate not passed. With
+  these inputs and this outcome, which arm wins isn't predictable from the moment; next, the outcome's horizon (the
+  value network at the arm's end) and the advantage's size rather than its sign.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

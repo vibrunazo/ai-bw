@@ -507,8 +507,8 @@ held-out validation, then games. The rules:
    (CP110a, 233 pairs, replay checks all identical): the engage arm less the move arm +0.7, sd 7.2; the minimum
    detectable effect 1.0 at 200 pairs, 0.5 at 1,000, 0.3 at 2,000. The collection plays gz1 (gt1dev never lost to
    gz1dev before its fix). train/commit_pairs.py learns from the pairs offline (advantage-weighted, KL-anchored on the
-   pros' ticks); its first read on 626 pairs is at chance and overfits (held-out 0.40), the one signal engage winning
-   54-62% of pairs. Next: more pairs, a longer horizon (the value network's read at the arm's end), the same for
+   pros' ticks); on all 1,004 pairs (CP110a+CP120a) it is at chance and overfits (held-out 0.46); engaging pays
+   +0.82 +- 0.51 a pair on average but wins only 49% of them. Next: more pairs, a longer horizon (the value network's read at the arm's end), the same for
    Gary-Z's commit decisions. The pairing for self-play, gt1dev against gz1dev (gz0.3dev), is balanced (38% each).
 4. **Where Gary's strength came from, and so where to invest:** better and more recent imitation data,
    conditioned on era, map and matchup; the decoder's exposure-bias fixes (floor, mass, faded pro history,

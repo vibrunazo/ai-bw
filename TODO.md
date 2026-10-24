@@ -7,9 +7,10 @@ CPU). Delete this file once each item is done or moved to an issue.
 
 ## Open threads (2026-10-24)
 
-- **Commit pairs:** finish the collection (CP120a, gt1dev against gz1, 96 games of 20 minutes) and learn from them
-  again (train/commit_pairs.py) once past 1,000 pairs; try the value network's read at the arm's end as the outcome
-  (90 s of net value may be too short for a commitment); the same lock and pairs for Gary-Z's commit decisions.
+- **Commit pairs:** 1,004 pairs collected (CP110a, CP120a), the learner at chance and overfitting
+  (train/commit_pairs.py); try the value network's read at the arm's end as the outcome (90 s of net value may be too
+  short for a commitment) and the advantage's size rather than its sign; the same lock and pairs for Gary-Z's commit
+  decisions.
 - **Why v5's commit models trail the deployed one in games** (all of them, with or without the new channels, while
   scoring better offline): the era mix (weight the modern games as the macro's recipe does), ticks per game, how the
   deployed one was chosen. Until then the deployed commit model stays.
