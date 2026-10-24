@@ -835,6 +835,11 @@ OPTIONS = {
     # 0.80 and its target among the five likeliest cells 0.94, the control's 0.16 and 0.12), and the control
     "cmhunt": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_hunt/model.pt"),
     "cmv5": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_inputs/model.pt"),
+    # the same on all of army dataset v5 (16,549 TvZ games, 60 ticks a player-game): the control and the hunt imitated
+    # (held-out order AUC 0.767 / 0.765, engage 0.778 / 0.776; where the hunt acts 0.81 engage, its target in the
+    # five likeliest 0.91)
+    "cmv5all": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_inputs/model.pt"),
+    "cmhuntall": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_hunt/model.pt"),
     # the hunt imitated only where its target has no known static defense (401 of its 644 labels; the first copied its
     # attacks into sunkens, 0.51 of its engages)
     "cmhuntu": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_hunt_undef/model.pt"),
