@@ -28,7 +28,10 @@ How to work in this repository, for coding agents and people alike. The design i
   the army on control groups, the configuration expected to win later, and without the stop-gaps over the layers
   being learned (option `unscripted`: the static guard, the hunt, the overlord hunt, the pros' caps, the SCV cap, the
   bank escape), so the models own those decisions there; a stop-gap stays in gt1 while it measurably helps, and its
-  job in gt1dev is the learned layer's or nobody's. A learned layer's work (data, training, the
+  job in gt1dev is the learned layer's or nobody's. `gz1dev` is the same for the Zerg (gz1 with `unscripted`: join,
+  sweep, press, the hunt, the caps, the bank escape and overlords ahead off; its overlord posts and mutalisk raid
+  kept, as no model moves those units; decoders such as the tech floor are not stop-gaps and stay). gt1dev against
+  gz1dev is the TvZ self-play pairing (balanced: each side wins or leads in 38% of 96 games, docs/PROGRESS.md). A learned layer's work (data, training, the
   pipe check, RL) is done and judged in gt1dev; gt1dev replaces gt1 when it beats it in 96 paired games, with a
   version bump. The suite's numbers for both, and how far apart they are, are in docs/PROGRESS.md.
 - A change is an option on them (`gt1+<option>`), judged in paired 48-game rounds on the ladder maps
@@ -87,7 +90,10 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   army model trained with a reward for ending games (self-play) and searching as a learned scouting skill.
   Measure: games won against gz1 in 48 (24 with it, 21 without) and leads unfinished at 20:00. The hunt begins a
   quarter of gt1's attacks and goes into sunkens most (0.63 of its attacks, the commit model's 0.38: eval/attacks.py,
-  2026-10-23); the static guard doesn't screen it. Tried on gz1 with the
+  2026-10-23); the static guard doesn't screen it. Imitated (2026-10-24): gt1dev runs it in advice mode
+  (`huntadvice`, play unchanged) and train/commit.py --rule-labels learns its advice; the models follow it where it
+  acts (0.81) and finish more leads, but copy its attacks into sunkens, and on v5's data trail the deployed commit
+  model in games, so not adopted yet (docs/PROGRESS.md). Tried on gz1 with the
   static guard (48 games against gt1): the Zerg won 1 (2), so off for Zerg.
 - **Static-defense guard on engages** (options `static` and `softguard`, in gt1; `army.py` static_odds,
   static_beta). An engage's spots where the group doesn't outweigh 1.5 times the ground static defense there (6
@@ -140,7 +146,9 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   (NB70a against Q60a, 2026-10-23): paired -0.203 +- 0.123, the macro gap +0.208, minerals banked at 5-15 minutes
   1,124 (pros 511, with it 387): while the favorite waits it stays the macro's goal and the model isn't asked again,
   so it never gets to add production; with qdepth2 too (QD70a) 675 banked, -0.078, the gap +0.052. It covers for
-  the one goal at a time; next, the model's units queued in the building and paid for, as pros do.
+  the one goal at a time; next, the model's units queued in the building and paid for, as pros do (gamequeue,
+  adopted in gt0.9; the escape still holds with it: off as well, -0.130 +- 0.152). In gt1dev (escape off) the macro
+  draws from the model's odds (dice, gt0.11dev); rethink and nosave, which drop a waiting goal, were worse in games.
 - **Odds summed into a decision** (`mass` for one-offs, in gt1: tech buildings, add-ons, research, upgrades;
   `expand_mass` for expansions; `macro.py` odds_mass, expand_odds). A one-off is decided once its odds, summed over
   the decisions taken while it was possible, reach one (278 times in 48 games), an expansion likewise (194).
@@ -152,7 +160,9 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   while the larvae's production has less than 2 supply left. Scripted because the model gave supply under its floor
   once blocked. Gone from gt1 in gt0.8 (the Terran's depots: 96 paired games with it off, no measurable difference,
   paired -0.018 +- 0.101, the gap -0.013, -0.040 to +0.012). Replace with the model's own overlords. Measure: option
-  `nodepots` on gz1 against gt1, blocked time against the pros', results.
+  `nodepots` on gz1 against gt1, blocked time against the pros', results. Off in gz1dev: the model's own overlords
+  came once its inputs held its own overlord history (`ownsupply`, gz0.3dev: blocked at 3:00 1%, 42% without it);
+  next, gz1 with ownsupply and without this rule, against gt1.
 - **Answers to the enemy's plan** (`answers.py`, in gt1). Lurkers or mutalisks read from what Gary saw force Siege
   Mode, tanks, vessels, Irradiate and turrets (443 forced decisions in 48 games) and veto turrets beyond one a base
   (387). Scripted because the macro model didn't answer what it had seen (human games 1-2). Replace with the seen

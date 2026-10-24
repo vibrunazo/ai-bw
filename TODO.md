@@ -5,6 +5,20 @@ held up, in the order to do it. Pick these up once the early-switch work (`train
 is done and its runs have finished; none of them should run while it does (shared code, shared
 CPU). Delete this file once each item is done or moved to an issue.
 
+## Open threads (2026-10-24)
+
+- **Commit pairs:** finish the collection (CP120a, gt1dev against gz1, 96 games of 20 minutes) and learn from them
+  again (train/commit_pairs.py) once past 1,000 pairs; try the value network's read at the arm's end as the outcome
+  (90 s of net value may be too short for a commitment); the same lock and pairs for Gary-Z's commit decisions.
+- **Why v5's commit models trail the deployed one in games** (all of them, with or without the new channels, while
+  scoring better offline): the era mix (weight the modern games as the macro's recipe does), ticks per game, how the
+  deployed one was chosen. Until then the deployed commit model stays.
+- **gz1 with ownsupply and without overlords ahead,** against gt1: whether gz1 loses that stop-gap too.
+- **TvT and ZvZ health rounds** on the dev manifests, read for absurd records (docs/PROGRESS.md: mirrors catch
+  hidden race assumptions); the Protoss macro models' offline check on held-out pro states.
+- **The gap score disagreed with results twice** (rethink, nosave: nearer the pros, worse games) and with the Zerg's
+  counts once (ownsupply): judge decoder changes on results first; find what in the gap rewards it.
+
 ## Open threads (from the 2026-10-19 handoff)
 
 - **More modern replays.** The curve flattens around 3,000 clean games per matchup: about 4,500 raw replays

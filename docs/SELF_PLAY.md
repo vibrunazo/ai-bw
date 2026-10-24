@@ -501,6 +501,15 @@ held-out validation, then games. The rules:
    hold lengths, several repeats an arm, moments spread over states that look like the pros' games (else it
    learns to win only what Gary-Z concedes). First the lock in the deployed commit model, judged alone; then a
    power check on the branch data that exists sets how many moments and repeats; then the collection.
+   **Where it stands (2026-10-24):** the lock is in (eval/pairs.py commit_t: a training arm's forced commitment held,
+   reversed at the pros' hazard by its age and kind); two bugs that had broken every paired episode since the
+   refactor are fixed (the race's module in the bots' deep copy; GARY_TCOMMIT_MODEL pinning gz1's model). The pilot
+   (CP110a, 233 pairs, replay checks all identical): the engage arm less the move arm +0.7, sd 7.2; the minimum
+   detectable effect 1.0 at 200 pairs, 0.5 at 1,000, 0.3 at 2,000. The collection plays gz1 (gt1dev never lost to
+   gz1dev before its fix). train/commit_pairs.py learns from the pairs offline (advantage-weighted, KL-anchored on the
+   pros' ticks); its first read on 626 pairs is at chance and overfits (held-out 0.40), the one signal engage winning
+   54-62% of pairs. Next: more pairs, a longer horizon (the value network's read at the arm's end), the same for
+   Gary-Z's commit decisions. The pairing for self-play, gt1dev against gz1dev (gz0.3dev), is balanced (38% each).
 4. **Where Gary's strength came from, and so where to invest:** better and more recent imitation data,
    conditioned on era, map and matchup; the decoder's exposure-bias fixes (floor, mass, faded pro history,
    holds); execution leaks found by the records (eval/why.py) and the humanlike table. Grouping: in gz1 (gz0.2); for
