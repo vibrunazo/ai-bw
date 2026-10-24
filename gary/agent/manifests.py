@@ -824,6 +824,11 @@ OPTIONS = {
     # enemy's static defense as a map channel, and its control without it (the same games)
     "cmstatic": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v4_static/model.pt"),
     "cmnostatic": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v4_nostatic/model.pt"),
+    # Terran commit models on army dataset v5 (the hunt's inputs: enemy buildings known still standing, cells unseen):
+    # imitating the scripted hunt (its advice in 96 gt1dev games as engage labels, x4: where it acts, held-out, engage
+    # 0.80 and its target among the five likeliest cells 0.94, the control's 0.16 and 0.12), and the control
+    "cmhunt": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_hunt/model.pt"),
+    "cmv5": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_inputs/model.pt"),
     "styleroll": lambda m: m["macro"].update(selector=None, style="roll"),
     "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the

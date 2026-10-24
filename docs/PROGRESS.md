@@ -1052,6 +1052,18 @@ plan and the full log).
   +0.128 (+0.088 to +0.153), the macro features +0.256 further from the pros, the fight features -0.060 nearer
   (-0.095 to -0.031). What the learned layers have to close; most of it is the macro's (the bank escape alone cost
   -0.203, the caps -0.109).
+- **The hunt imitated, and the macro's decoder in gt1dev (2026-10-24).** Army dataset v5 (4,933 TvZ games: the
+  enemy buildings known still standing, the cells own units haven't been in lately). The hunt's advice in 96 gt1dev
+  games (HL100a+b, seeds 4016-4027: 1,126 pieces of advice, 677 labels joined to ticks) as engage labels, x4, on the
+  same games as its control (option cmv5): on the pros' held-out ticks both as before (order AUC 0.768 / 0.766);
+  where the hunt acts (held-out games, 33 labels) the model engages 0.80 of the time and has the hunt's target among
+  its five likeliest cells 0.94, the control 0.16 and 0.12. In games: options cmhunt, cmv5 (HM100a, HC100a). The
+  macro in gt1dev (no caps, SCV cap or bank escape) drawing from the model's odds (option dice, DC100a against DV90a):
+  lost 6 (13), paired +0.080 +- 0.127, the gap -0.078 (-0.113 to -0.018), macro -0.123 (-0.176 to -0.035), the bank
+  at 5-15 minutes 263 (pros 511, the favorite 843): nearer the pros, its second 48 next (DC100b). With rethink too (a
+  unit whose queues are full not held as the goal, RT100a): macro -0.197, but bases 1.28 at 5-15 minutes (pros 2.10)
+  and lost 17, -0.165 +- 0.128 against dice alone: everything spent on units, nothing saved for a Command Center; not
+  adopted.
 - **The static guard as a nudge (gt1 gt0.10, 2026-10-23).** A spot the group doesn't outweigh 1.5 times keeps
   (the group / 1.5 times its defense) squared of its odds instead of none (option softguard): 96 paired games
   against the veto (SG80a+b against ND70a+b) better in 4, worse in 9, -0.016 +- 0.035, the gap +0.001: no
