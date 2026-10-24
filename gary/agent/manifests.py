@@ -1033,7 +1033,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)
         else:
-            pinned = os.environ.get("GARY_TCOMMIT_MODEL" if m["army"].get("commit") else "GARY_TARMY_MODEL")                 if m["army"].get("draw") else None                                               # (the league loop's)
+            pinned = os.environ.get("GARY_TCOMMIT_MODEL" if m["army"].get("commit") else "GARY_TARMY_MODEL")                 if m["army"].get("draw") and g.race.letter == "T" else None                      # (the league loop's; the Terran's)
             army = load("army", pinned or str(model_path(m["army"]["model"], g.matchup, g.race.letter)))
             models["army"] = getattr(army, "path", "?")
             belief = None
