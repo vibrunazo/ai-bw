@@ -39,8 +39,6 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 
 ## Evaluation and tools
 
-- [#33](https://github.com/vibrunazo/gary/issues/33) Run hardening: a paired-episode pre-flight test, stopping chains
-  cleanly, pinned requirements
 - [#31](https://github.com/vibrunazo/gary/issues/31) Mirror health rounds (TvT, ZvZ) and the Protoss macro models' offline check
 - [#32](https://github.com/vibrunazo/gary/issues/32) The gap score disagrees with results
 - [#44](https://github.com/vibrunazo/gary/issues/44) Engine error at the map's edge
