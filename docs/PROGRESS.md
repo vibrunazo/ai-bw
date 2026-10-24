@@ -1209,6 +1209,14 @@ plan and the full log).
   BL120a, a baseline on the code that records every order's units: identical to DC100a game for game) fixed a
   problem that wasn't there; neither adopted, and the verdicts judged through it stand. The pipe fault found is the
   macro's placement.
+  widespot (with no spot at Gary's bases, the main's box widened to 24 tiles, its own level first, then the natural's
+  area; WS120a against BL120a): the "no spot" drops gone, buildings carried out more (Science Facility 0.18 to 0.46,
+  Starport 0.51 to 0.61), but games worse: lost 18 (6), paired -0.128 +- 0.134, the gap -0.028 (-0.075 to +0.015).
+  The review: a bug of the option. Nothing kept the natural's own site clear, and its buildings stood where its
+  Command Center goes: expansion orders dropped 2.5 times as often ("not carried out in 30 s" 1.7 a game against 0.7,
+  "its SCV didn't get to the base" 1.1 against 0.4), 1.5 bases at 12:00 against 1.7 and 2.0 at 18:00 against 2.5,
+  and "no free SCV" drops 6.5 a game, nearly all after 13:00 in the games it was losing. Fixed (the town hall's
+  ground, its add-on's and 3 tiles around kept free) and judged again in WS121a.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

@@ -55,6 +55,7 @@ BUSY_ORDERS = {25, 26, 30, 31, 33, 70}   # placing / constructing a building (a 
                                          # there, morphing: 70 is DroneLand, and a drone re-sent then never started)
 BAD_FOR = 60 * 24                     # a spot where a build failed (not for money) isn't tried again for this long
 WIDE_SPOT = 24                  # option widespot: the main's search box this many tiles each way
+HALL_CLEAR = 3                  # option widespot: tiles kept free around the natural's town hall site
 LOST_ORDER = 6 * 24                   # a reserved spot with no SCV on its way after this: the order was lost
 RESUME_AFTER = 24                     # an unfinished building nobody has built for a second gets an SCV
 RESUME_RETRY = 24 * 4                 # ...and if that one doesn't arrive either, another after 4 s
@@ -659,18 +660,22 @@ class Executor:
                     break
         if spot is None and self.wide_spot:
             # (option widespot: the main's box widened, its own ground level first, then the natural's area with no
-            # town hall yet; a full main on one base dropped 16.8 builds a game in gt1dev, eval/macro_pipe.py, while
-            # the wider box had 26-74 spots and the natural 60-147 at the same moments)
+            # town hall yet, its town hall's ground kept clear; a full main on one base dropped 16.8 builds a game in
+            # gt1dev, eval/macro_pipe.py, while the wider box had 26-74 spots and the natural 60-147 at the same
+            # moments. Without the clearance its buildings stood on the natural's own site: expansions dropped 2.5
+            # times as often, 1.5 bases at 12:00 against 1.7, round WS120a)
             g = self.g
             spot = self._base_spot(unit_type, g.main, builder, radius=WIDE_SPOT, level_of=g.main.center)
             if spot is None and g.natural is not None:
-                spot = self._base_spot(unit_type, g.natural, builder)
+                spot = self._base_spot(unit_type, g.natural, builder, clear=g.natural.tile)
         return spot
 
     def _base_spot(self, unit_type: int, base: Base, builder: int, radius: int = 16,
-                   level_of: tuple[int, int] | None = None) -> tuple[int, int] | None:
+                   level_of: tuple[int, int] | None = None,
+                   clear: tuple[int, int] | None = None) -> tuple[int, int] | None:
         """A free spot near the base, on the side away from the minerals, within radius tiles of that side's
-        anchor; with level_of, on that point's ground level if any spot there fits."""
+        anchor; with level_of, on that point's ground level if any spot there fits; with clear (a town hall's
+        tile), off that town hall's ground and its add-on's, HALL_CLEAR tiles around them."""
         mx = sum(x for x, _ in base.minerals) / len(base.minerals)
         my = sum(y for _, y in base.minerals) / len(base.minerals)
         ax = base.center[0] + (base.center[0] - mx) * 0.9
@@ -688,6 +693,12 @@ class Executor:
             cands = [(d, tx, ty) for _, d, tx, ty in sorted(cands)]
         else:
             cands = sorted(cands)
+        if clear is not None:
+            hw, hh = self.g.race.sizes[self.g.race.town_hall]
+            bx, by = clear
+            cands = [(d, tx, ty) for d, tx, ty in cands
+                     if not (tx < bx + hw + 2 + HALL_CLEAR and tx + w > bx - HALL_CLEAR
+                             and ty < by + hh + HALL_CLEAR and ty + h > by - HALL_CLEAR)]
         for _, tx, ty in cands:
             if any(abs(tx - rx) < self.g.race.sizes[rt][0] + 1 and abs(ty - ry) < self.g.race.sizes[rt][1] + 1 for rt, rx, ry in self.g.reserved) \
                     or self._bad(unit_type, tx, ty):
