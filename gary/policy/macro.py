@@ -236,6 +236,7 @@ class MacroTracker:
         # attribution, round g12), 60-70% drones at 6:00-7:30 where pros decide drones 17-24% of the time
         self.history: np.ndarray | None = None
         self.history_weight = 1.0        # the pros' share in the history the model sees (1: theirs alone; 0.5: half its own)
+        self.own_keys: list[int] = []    # decisions whose history is always its own (option ownsupply: the supply provider)
         self.history_until = 0           # minutes over which that share fades to 0 (0: constant). With the pros' history
                                          # all game Gary-Z over-droned late (53 workers at 15-20 min, pros 35: the pros'
                                          # typical past kept telling the model to drone past what it had), with its
@@ -279,6 +280,9 @@ class MacroTracker:
             pro = (1.0 - a) * self.history[m] + a * self.history[min(m + 1, top)]
             w = self.history_weight * (max(0.0, 1.0 - obs["frame"] / (self.history_until * 1440)) if self.history_until else 1.0)
             decided = w * pro + (1.0 - w) * self.decided
+            if self.own_keys:            # (the pros' 9-supply overlord in it: the model thought one was coming, and at 9/9
+                decided = decided.copy()     # gave Overlord under 1% while Gary-Z had none: blocked 67% of 2:00, gz1dev)
+                decided[self.own_keys] = self.decided[self.own_keys]
         return encode(self.spec, frame, eco, units, seen[None], self.seen_max[None], decided[None],
                       np.array([(obs["frame"] - self.last_decision_frame) / 24.0], dtype=np.float32), self.style,
                       self.map_hash, None, self.matchup)

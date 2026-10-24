@@ -788,6 +788,9 @@ OPTIONS = {
     # gt1's own marine-heavy states the model, calibrated on the pros', asked for Marines 42% and no mech (the macro
     # check); its own past fed back on itself
     "prohist": lambda m: m["macro"].update(history="pro"),
+    # gary/policy/macro.py own_keys: with the pros' history, the supply provider's entry its own (the pros' early
+    # overlord in it told Gary-Z's model one was coming: at 9/9 it gave Overlord under 1%, blocked 67% of 2:00)
+    "ownsupply": lambda m: m["macro"].update(own_supply=True),
     # three registered rules off (AGENTS.md): the pros' caps per minute; SCVs capped at the bases' saturation (MAX_SCVS
     # stays); depots ahead of production
     "nocaps": lambda m: m["macro"].update(caps=False),
@@ -1023,6 +1026,9 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.macro.tracker.history = pro_history(g.race.letter, style, g.matchup)
             g.macro.tracker.history_weight = 1.0
             g.macro.tracker.history_until = HISTORY_FADE
+            if m["macro"].get("own_supply"):
+                spec = g.macro.model.spec
+                g.macro.tracker.own_keys = [k for k, (act, uid) in enumerate(spec.decisions) if uid == g.race.supply_provider]
         if m["macro"].get("answers"):
             from gary.agent.answers import Answers
             g.macro.answers = Answers(g, **m["macro"].get("answer_options", {}))
