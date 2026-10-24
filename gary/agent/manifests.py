@@ -840,6 +840,8 @@ OPTIONS = {
     # five likeliest 0.91)
     "cmv5all": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_inputs/model.pt"),
     "cmhuntall": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_hunt/model.pt"),
+    # all of v5 with the deployed model's inputs (no new channels): whether the v5 models trail it for the channels
+    "cmv5plain": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_plain/model.pt"),
     # the hunt imitated only where its target has no known static defense (401 of its 644 labels; the first copied its
     # attacks into sunkens, 0.51 of its engages)
     "cmhuntu": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_hunt_undef/model.pt"),
