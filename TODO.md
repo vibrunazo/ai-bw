@@ -6,6 +6,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 
 ## Learning (the self-play program, docs/SELF_PLAY.md)
 
+- [#47](https://github.com/vibrunazo/gary/issues/47) Pipe checks: do the learned layers' decisions reach the game? (the army's
+  orders are redirected twice as fast as the pros'; first fix `holdtarget`), before judging what they learn
 - [#28](https://github.com/vibrunazo/gary/issues/28) Commit decision: a learning signal from locked paired branches
   (1,004 pairs, the learner at chance; the outcome's horizon and the advantage's size next)
 - [#46](https://github.com/vibrunazo/gary/issues/46) The value network is stale (trained on 217 macro features, the macro now
