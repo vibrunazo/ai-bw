@@ -81,6 +81,7 @@ class LearnedMacro:
                  wait_min_p: float | None = None):
         self.g = g
         self.temperature = temperature                      # decoder "sample": the draw's temperature
+        self.dice_t = 1.0                                   # decoder "dice": its odds raised to 1 / this (option dice07)
         self.draws: list[dict] = []                         # decoder "sample", or log: every decision (training)
         self.log = False                                    # training: log the favorite's decisions too
         self.force: tuple[int, int] | None = None           # training: (frame, decision) taken instead there
@@ -327,8 +328,12 @@ class LearnedMacro:
                 # are a few percent each ask: the favorite, almost always a unit, never let them
                 # come on time; on the pros' own states, a Factory by 8:00 in 4% of games against
                 # their 62%, rolled 63%)
-                order = [k for _, k in sorted(((self.rng.random() ** (1 / p), k) for k, p in enumerate(probs[0])
-                                               if p >= DICE_FLOOR), reverse=True)]
+                w = probs[0]
+                if self.dice_t != 1.0:
+                    w = w ** (1.0 / self.dice_t)
+                    w = w / w.sum()
+                order = [k for _, k in sorted(((self.rng.random() ** (1 / w[k]), k) for k, p in enumerate(probs[0])
+                                               if p >= DICE_FLOOR and w[k] > 0), reverse=True)]
                 floor = DICE_FLOOR
                 if self.hold and self.held is not None:
                     if hi.frame - self.held[1] < HOLD_FOR and probs[0, self.held[0]] >= DICE_FLOOR:
