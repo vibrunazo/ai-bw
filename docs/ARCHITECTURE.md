@@ -115,8 +115,8 @@ file, and holds the order in which it gets paid.
    hands: the human interface, the same in training and at runtime. Reinforcement learning on
    fights and roles plays through that real interface, so what it learns already pays the hands'
    costs. There are no action masks, and no deciding model sees the state of the hands (APM left,
-   camera, selection, actions waiting): whether that costs Gary games is being measured
-   (TODO.md item 2). The design as first written, for a single policy emitting actions:
+   camera, selection, actions waiting): whether that costs Gary games was to be measured
+   (the 2026-10-13 review's item 2, in TODO.md's history). The design as first written, for a single policy emitting actions:
    - **Hard limits are action masks inside the policy:** off-screen targets, more than 12 units selected, empty APM bucket. Illegal actions are never sampled. They are not silently dropped.
    - **Interface state is part of the observation:** APM tokens left, camera rectangle, current selection, pending delayed actions.
    - **The Human Interface only adds noise:** click scatter, misclicks, lapses. **Reaction delay is applied to observations**: the bot sees events late.

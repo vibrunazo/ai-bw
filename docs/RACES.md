@@ -130,4 +130,4 @@ deleted, its league record matched first (round G6 against L9). The enemy is rea
    gateway, robotics and stargate production, archon merges, shuttles) and the PvT, PvZ and PvP
    models from the data, old and modern. First test: Gary-P vs Gary-Z in the league. The data side is
    largely there (the table above; macro, army and commit models for PvT, PvZ, PvP since 2026-10-19); the
-   executor is what's missing, and it waits until TvZ self-play shows a measured gain (TODO.md).
+   executor is what's missing, and it waits until TvZ self-play shows a measured gain (issue #36).

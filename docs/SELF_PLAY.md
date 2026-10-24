@@ -1,6 +1,6 @@
 # Self-play: the plan (draft for review)
 
-Direction 3 in TODO.md: every piece of ARCHITECTURE.md present and connected, crude where it has to
+Direction 3 of the 2026-10-15 review (TODO.md's history; its open items are GitHub issues now): every piece of ARCHITECTURE.md present and connected, crude where it has to
 be, training together. The first milestone is a learned Zerg Gary that is a real opponent for the
 Terran Gary in OpenBW, from the same pro-replay pipeline. It's the opponent the rest needs, and it is
 Gary: Gary plays every race and matchup (ARCHITECTURE.md §1), so "Gary-Z" is Gary playing Zerg, a

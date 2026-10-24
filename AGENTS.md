@@ -2,7 +2,8 @@
 
 How to work in this repository, for coding agents and people alike. The design is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); what each version did and how it measured is in
-[docs/PROGRESS.md](docs/PROGRESS.md) (keep it updated after each milestone); open work is in [TODO.md](TODO.md).
+[docs/PROGRESS.md](docs/PROGRESS.md) (keep it updated after each milestone); open work is in the GitHub issues, indexed in [TODO.md](TODO.md) (a done item's issue is closed
+and its line removed; a new one gets an issue and a line).
 
 ## Where things are
 
