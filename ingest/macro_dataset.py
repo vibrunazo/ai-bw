@@ -102,6 +102,11 @@ def restyle(matchup: str) -> None:
     print(f"restyled: {changed} player styles changed")
 
 
+class ResimInterrupted(RuntimeError):
+    """The re-simulator ended with an error and no message: killed (a stopped job), not a bad replay. Builders leave
+    such a game out of their index, so the next run builds it (a stopped chain once marked 11,583 games failed)."""
+
+
 def run_resim(rel_path: str) -> list[dict]:
     data = (data_root() / "raw" / rel_path).read_bytes()
     args = [str(resim_exe()), "--data", str(data_root() / "gamedata" / "scr"), "--replay", "-",
@@ -111,7 +116,10 @@ def run_resim(rel_path: str) -> list[dict]:
         data = scr_format.to_flat(data)
     proc = subprocess.run(args, input=data, capture_output=True, timeout=900)
     if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.decode("utf-8", "replace").strip()[:300])
+        message = proc.stderr.decode("utf-8", "replace").strip()
+        if not message:
+            raise ResimInterrupted(f"gary_resim ended with code {proc.returncode} and no message")
+        raise RuntimeError(message[:300])
     return [json.loads(line) for line in proc.stdout.decode("utf-8", "replace").splitlines()]
 
 
@@ -181,7 +189,7 @@ def build_game(rec: dict, styles: dict[str, int]) -> dict:
     try:
         lines = run_resim(rec["rel_path"])
     except Exception as e:  # noqa: BLE001 - one bad replay must not stop the batch
-        row.update(ok=False, error=str(e)[:300])
+        row.update(ok=False, error=str(e)[:300], interrupted=type(e).__name__ == "ResimInterrupted")
         return row
     header = next(r for r in lines if r["type"] == "header")
     snaps = [r for r in lines if r["type"] == "snapshot"]
@@ -298,7 +306,10 @@ def main() -> None:
             ProcessPoolExecutor(args.workers) as pool:
         futures = [pool.submit(build_game, r, styles) for r in todo]
         for n, fut in enumerate(as_completed(futures), 1):
-            index.write(json.dumps(fut.result(), ensure_ascii=False) + "\n")
+            res = fut.result()
+            if res.get("interrupted"):          # (killed, not failed: left out, so the next run builds it)
+                continue
+            index.write(json.dumps(res, ensure_ascii=False) + "\n")
             if n % 100 == 0 or n == len(todo):
                 index.flush()
                 print(f"{n}/{len(todo)}  {time.time() - t0:.0f} s", flush=True)

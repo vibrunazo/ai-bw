@@ -55,9 +55,11 @@ and its line removed; a new one gets an issue and a line).
 ## Working rules
 
 - Never edit agent code while a league round runs: each game is a new process importing the code.
-- Stopping a job leaves its pool workers running: kill them by parent PID. Kill leftover `gary_resim.exe`
-  before rebuilding the simulator (the link fails otherwise).
-- After executor or macro edits run `tests/test_smoke_game.py`; a change of behaviour records the parity
+- Stopping a job's shell leaves its pool workers running: stop a run with `python -m eval.stop <pid>` (or
+  `--match <text>`), which kills its whole process tree. Killed re-simulator calls aren't indexed as failures, so
+  a rerun builds them. Kill leftover `gary_resim.exe` before rebuilding the simulator (the link fails otherwise).
+- After executor or macro edits run `tests/test_smoke_game.py`, and `tests/test_pairs.py` before any run with
+  paired branches (the bots' deep copy and a branch's replay, in under a minute); a change of behaviour records the parity
   hashes again (`tests/test_parity.py --record`) in its commit, with the reason; `tests/test_matchups.py`
   plays every matchup that can play.
 - "Why did Gary do that?" is answered from the game's records (`python -m eval.why`) before writing a

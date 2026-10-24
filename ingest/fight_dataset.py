@@ -114,7 +114,7 @@ def build_game(rec: dict) -> dict:
     try:
         lines = run_resim(rec["rel_path"])
     except Exception as e:  # noqa: BLE001 - one bad replay must not stop the batch
-        row.update(ok=False, error=str(e)[:300])
+        row.update(ok=False, error=str(e)[:300], interrupted=type(e).__name__ == "ResimInterrupted")
         return row
     header = next(r for r in lines if r["type"] == "header")
     mw, mh = header.get("map_w", 4096), header.get("map_h", 4096)
@@ -245,7 +245,10 @@ def main() -> None:
             ProcessPoolExecutor(args.workers) as pool:
         futures = [pool.submit(build_game, r) for r in todo]
         for n, fut in enumerate(as_completed(futures), 1):
-            index.write(json.dumps(fut.result(), ensure_ascii=False) + "\n")
+            res = fut.result()
+            if res.get("interrupted"):          # (killed, not failed: left out, so the next run builds it)
+                continue
+            index.write(json.dumps(res, ensure_ascii=False) + "\n")
             if n % 100 == 0 or n == len(todo):
                 index.flush()
                 print(f"{n}/{len(todo)}  {time.time() - t0:.0f} s", flush=True)
