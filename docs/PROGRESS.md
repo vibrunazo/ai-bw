@@ -1064,6 +1064,16 @@ plan and the full log).
   unit whose queues are full not held as the goal, RT100a): macro -0.197, but bases 1.28 at 5-15 minutes (pros 2.10)
   and lost 17, -0.165 +- 0.128 against dice alone: everything spent on units, nothing saved for a Command Center; not
   adopted.
+- **The TvZ self-play pairing's baseline, and the hunt model under dice (2026-10-24).** gt1dev gt0.11dev against
+  gz1dev gz0.2dev, 96 games (ZD110a+b): the Terran won 30 and lost 5, ahead at 30:00 in 39, the Zerg ahead in 12,
+  even 10: the Zerg wins or leads 18% of games, the Terran 72%, short of the ~25% each side needs before self-play.
+  gz1dev's gap is much nearer the pros than gz1's in the same pairing (0.316 against 0.509) but it is weaker:
+  without overlords ahead it supply-blocks (8 drones at 2:00 on 9/9). The Zerg's strength is the next fix before
+  self-play. The hunt model imitating only undefended targets (cmhuntu, HU110a) against its control (cmv5, HV110a),
+  both gt1dev with dice: +0.068 +- 0.092, won 3 (1), but its commit engages into sunkens 0.46 (0.23) and lost /
+  killed 32.0 / 53.9 a game (18.1 / 45.8): leaving the defended targets' labels out didn't stop it learning to
+  attack bases, which have sunkens. Both v5 models are weaker than gt1dev's deployed commit model (-0.021 and
+  -0.096 against DC100a); not the training set's size (the deployed one had 740,740 ticks, these 912,760).
 - **gt1dev's early economy under dice, and two decoder tries (2026-10-24).** With dice gt1dev builds bunkers it
   can't use (2.7 at 5-10 minutes, pros 0.5: 8.9 decisions a game at 4.5% odds, the caps that refused them off in
   gt1dev) and fewer SCVs (18.8 at 5:00, pros 25.3, gt1 24.0): a drawn building the money doesn't cover holds the
