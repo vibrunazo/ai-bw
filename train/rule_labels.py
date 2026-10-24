@@ -66,7 +66,13 @@ def _cell(tx: int, ty: int, flip: np.ndarray) -> int:
     return cell_of(tx * 32 + 16, ty * 32 + 16, mw, mh, bool(fx), bool(fy))
 
 
-def _samples(info: dict, spec: ArmySpec) -> tuple | None:
+def _defended(static: np.ndarray, cell: int) -> bool:
+    """Known static defense within a cell of this one (tick_static)."""
+    y, x = divmod(cell, 16)
+    return bool(static.reshape(16, 16)[max(0, y - 1):y + 2, max(0, x - 1):x + 2].sum() > 0)
+
+
+def _samples(info: dict, spec: ArmySpec, undefended: bool = False) -> tuple | None:
     d = np.load(info["npz"])
     i = info["i"]
     frames, grid9 = d[f"p{i}_tick_frame"], d[f"p{i}_tick_grid"]
@@ -89,9 +95,12 @@ def _samples(info: dict, spec: ArmySpec) -> tuple | None:
         dist = [max(abs(int(grid9[j, 8].argmax()) // 16 - at // 16), abs(int(grid9[j, 8].argmax()) % 16 - at % 16))
                 for j in same]
         j = int(same[int(np.argmin(dist))])
+        to = _cell(*r["in"]["to"], d[f"p{i}_flip"])
+        if undefended and _defended(d[f"p{i}_tick_static"][j], to):
+            continue                                # (the rule's attacks into static defense not imitated)
         if min(dist) <= NEAR_CLUSTER and j not in picked:
             picked.append(j)
-            targets.append(_cell(*r["in"]["to"], d[f"p{i}_flip"]))
+            targets.append(to)
     if not picked:
         return None
     idx = np.array(picked, np.int64)
@@ -113,7 +122,7 @@ def _samples(info: dict, spec: ArmySpec) -> tuple | None:
             commit.astype(np.int64), frames[idx])
 
 
-def rule_samples(rounds: list[str], spec: ArmySpec, workers: int = 6) -> dict:
+def rule_samples(rounds: list[str], spec: ArmySpec, workers: int = 6, undefended: bool = False) -> dict:
     """{"train": arrays, "test": arrays} as train/commit.py's load(): the advice-labelled ticks of these league
     rounds' games, split by game (a tenth held out)."""
     league = REPO / "runs" / "league"
@@ -122,7 +131,7 @@ def rule_samples(rounds: list[str], spec: ArmySpec, workers: int = 6) -> dict:
         infos = [x for x in pool.map(_build, jobs) if x]
     parts = {False: [], True: []}
     for info in infos:
-        s = _samples(info, spec)
+        s = _samples(info, spec, undefended)
         if s is not None:
             parts[info["held"]].append(s)
     empty = lambda: tuple(np.zeros((0,) + shape, dt) for shape, dt in

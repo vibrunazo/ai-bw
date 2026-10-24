@@ -163,6 +163,8 @@ def main() -> None:
     ap.add_argument("--rule-labels", nargs="+", default=[],
                     help="league rounds whose games ran a rule in advice mode (huntadvice): its decisions as engage labels "
                          "on Gary's own states (train/rule_labels.py)")
+    ap.add_argument("--rule-undefended", action="store_true",
+                    help="only the rule's labels whose target has no known static defense within a cell")
     ap.add_argument("--rule-weight", type=int, default=4, help="each rule label this many times among the pros' samples")
     ap.add_argument("--eval", help="score this commit model on the held-out games and stop (no training)")
     ap.add_argument("--out", help="the run folder (default runs/commit/<matchup>_<race>_<time>: what Gary loads as newest)")
@@ -186,7 +188,7 @@ def main() -> None:
     rule = None
     if args.rule_labels:
         from train.rule_labels import rule_samples
-        rule = rule_samples(args.rule_labels, spec, args.workers)
+        rule = rule_samples(args.rule_labels, spec, args.workers, args.rule_undefended)
         print(f"rule labels: train {len(rule['train'][2]):,} (x{args.rule_weight}), test {len(rule['test'][2]):,}", flush=True)
         data["train"] = tuple(np.concatenate([a] + [b] * args.rule_weight) for a, b in zip(data["train"], rule["train"]))
     grid, glob, label, target, commit, _ = data["train"]
