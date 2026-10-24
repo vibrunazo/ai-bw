@@ -1079,8 +1079,14 @@ plan and the full log).
   4.8%, 16.3% to 3.8%), then the model decides (e1 and e2's arms were undone by the model within 14-34 s). Two bugs
   found on the way: every paired episode had failed since the refactor (the bots' deep copy met the race's data
   module; a race is now shared), and GARY_TCOMMIT_MODEL pinned gz1's commit model too. One 12-minute game: three
-  pairs, locks held 0-78 s, the replay check identical. Pilot for the power check: CP110a (24 games of 20 minutes,
-  gt1dev against gz1dev).
+  pairs, locks held 0-78 s, the replay check identical. Pilot for the power check (CP110a, 24 games of 20 minutes,
+  gt1dev against gz1dev): 233 training pairs, replay checks 70 of 70 identical (the arms differ only by the forced
+  decision and what follows from it: the dice are shared after it); engage arm less move arm +0.7 a pair, sd 7.2
+  (at 5-10 minutes -1.1, 10-15 +1.6, 15-20 +1.0). The minimum detectable effect written down before any gate (2
+  standard errors): 1.0 at 200 pairs, 0.5 at 1,000, 0.3 at 2,000. The gate for a model learned from them: offline,
+  it picks the better arm on held-out moments more often than chance (the interval above 0.5); then 96 paired
+  games. gt1dev never lost to gz1dev in the pilot (7 won, 17 at time), so the collection plays gz1 (the Zerg won 29
+  of 96 against gt1dev): moments against a side that concedes teach a model to beat only it (SELF_PLAY.md rule 3).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
