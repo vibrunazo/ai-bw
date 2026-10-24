@@ -1064,6 +1064,17 @@ plan and the full log).
   unit whose queues are full not held as the goal, RT100a): macro -0.197, but bases 1.28 at 5-15 minutes (pros 2.10)
   and lost 17, -0.165 +- 0.128 against dice alone: everything spent on units, nothing saved for a Command Center; not
   adopted.
+- **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
+  lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
+  gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
+  0.101, but won 8 (3) with T ahead at 30:00 in 7 (10): of the games it led it finished 8 of 15, the control 3 of
+  13; the gap -0.047 (-0.075 to -0.010) nearer the pros. It copied the hunt's attacks into sunkens too (0.51 of its
+  commit engages, the control's 0.35, lost / killed 51.6 / 60.1 a game against 38.9 / 45.2), so a second model
+  imitates only the hunt's undefended targets (cmhuntu, --rule-undefended: 401 of 644 labels; where they act it
+  engages 0.50, the target in its five likeliest 0.95). gz1dev gz0.2dev: gz1 without join, sweep, press, the hunt,
+  the caps, the bank escape and overlords ahead (unscripted for both races; its overlord posts and mutalisk raid
+  kept, no model moves those units, and the decoders: without the tech floor dice drew a Lair and a Hydralisk Den on
+  8 drones); one game: 14 drones at 7:00 (gz1 22).
 - **The static guard as a nudge (gt1 gt0.10, 2026-10-23).** A spot the group doesn't outweigh 1.5 times keeps
   (the group / 1.5 times its defense) squared of its odds instead of none (option softguard): 96 paired games
   against the veto (SG80a+b against ND70a+b) better in 4, worse in 9, -0.016 +- 0.035, the gap +0.001: no

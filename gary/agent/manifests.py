@@ -833,6 +833,9 @@ OPTIONS = {
     # 0.80 and its target among the five likeliest cells 0.94, the control's 0.16 and 0.12), and the control
     "cmhunt": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_hunt/model.pt"),
     "cmv5": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_inputs/model.pt"),
+    # the hunt imitated only where its target has no known static defense (401 of its 644 labels; the first copied its
+    # attacks into sunkens, 0.51 of its engages)
+    "cmhuntu": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_hunt_undef/model.pt"),
     "styleroll": lambda m: m["macro"].update(selector=None, style="roll"),
     "selector_explore": lambda m: m["macro"].update(selector="explore"),
     # fight.py: pull workers only for zerg in the mineral line (not at a bunker further out). On the
@@ -904,11 +907,14 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # -0.012, macro features -0.053; against gt1 better in 28 and worse in 20, the gap even, macro +0.035, -0.009 to +0.070)
 # gt0.7dev: gt1's add-on room (gt0.6); gt0.8dev: gt1's queue without keep_busy (gt0.7); gt0.9dev: gt1's own depots
 # (gt0.8); gt0.10dev: gt1's in-building queue (gt0.9), without the army's and the macro's stop-gaps (unscripted), the
-# hunt in advice mode (huntadvice: its labels in the records, play unchanged; baseline DV90a+b)
+# hunt in advice mode (huntadvice: its labels in the records, play unchanged; baseline DV90a+b); gt0.11dev: the macro
+# draws from the model's odds (dice; 96 paired games against gt0.10dev, DC100a+b against DV90a+b: lost 18 against 29,
+# +0.058 +- 0.083, the gap -0.073, -0.096 to -0.035, macro -0.105; the bank at 5-15 minutes 263, pros 511, 843 before)
+MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
+                                     "+dice"), "version": "gt0.11dev"}
+
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play
 MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted"), "version": "gz0.2dev"}
-MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"),
-                       "version": "gt0.10dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
