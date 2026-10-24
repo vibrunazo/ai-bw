@@ -808,6 +808,8 @@ OPTIONS = {
     "huntadvice": lambda m: m["army"].update(hunt_advice=True),
     # macro.py rethink: a unit whose producers' queues are full isn't held as the goal; the model is asked again
     "rethink": lambda m: m["macro"].update(rethink=True),
+    # macro.py nosave: a goal the money doesn't cover yet isn't held; the model is asked again at its next look
+    "nosave": lambda m: m["macro"].update(nosave=True),
     # the stop-gaps over the layers being learned off (AGENTS.md: gt1dev and gz1dev run without them, so the models
     # own those decisions and are judged without the rules): over the army the commit model moves, the static guard,
     # the hunt (its search and scans), the overlord hunt, Gary-Z's join, sweep and press; over the macro, the pros'
@@ -1008,6 +1010,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro.bank_escape = m["macro"].get("bank_escape", True)
         g.macro.queue_depth = m["macro"].get("queue_depth", 1)
         g.macro.rethink = m["macro"].get("rethink", False)
+        g.macro.nosave = m["macro"].get("nosave", False)
         if hasattr(g.executor, "scv_saturation"):
             g.executor.scv_saturation = m.get("scv_saturation", True)
             g.executor.train_depth = m.get("train_depth", 1)
