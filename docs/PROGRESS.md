@@ -1195,6 +1195,12 @@ plan and the full log).
   moved (engage way covered 0.29 either way, moves 0.12 against 0.10): the 15-minute check's gain was noise of 7-8
   short games. Not adopted. What redirects the army is mostly the model switching its commitments and other clusters'
   orders sweeping up committed units (issue #47).
+  The macro's pipe check (eval/macro_pipe.py: each macro decision matched to the unit or building of its type that
+  appears within 120 s): gt1dev carries out 0.86 of its decisions (gt1 0.90); units 0.91-0.96 either way; buildings
+  far less, Barracks / Factory / Starport 0.57 / 0.53 / 0.51 in gt1dev (0.66 / 0.75 / 0.58), Science Facility 0.18
+  (0.31). The biggest named leak is placement: builds dropped for "no spot for it" 16.8 a game in gt1dev (4.6 in gt1;
+  depots 4.3, Barracks 2.9, turrets 2.5, Science Facility 2.4, bunkers 2.0): its main fills. The game's refusals are
+  mostly the hands' (right-clicks, shift-selects, unload all: ~26 a game), not the macro's (builds 0.3).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
