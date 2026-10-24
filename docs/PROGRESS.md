@@ -1064,6 +1064,15 @@ plan and the full log).
   unit whose queues are full not held as the goal, RT100a): macro -0.197, but bases 1.28 at 5-15 minutes (pros 2.10)
   and lost 17, -0.165 +- 0.128 against dice alone: everything spent on units, nothing saved for a Command Center; not
   adopted.
+- **Gary-Z's first overlord, and the pairing balanced (gz1dev gz0.3dev, 2026-10-24).** Why gz1dev supply-blocked:
+  gz1's macro reads the pros' decision history early in the game (so its own drone-heavy past doesn't feed back), and
+  that history holds their 9-supply overlord, so the model thought one was coming: at 60 s on 9/9 it gave Drone 0.99,
+  Overlord under 0.01, and gz1dev (no overlords ahead) had supply 9 at 2:00 (pros 16.9), blocked 67% of that minute.
+  Option ownsupply: the supply provider's history entry always Gary's own. Against gt1dev (ZO110a against ZD110a, 48
+  paired games): the Terran's score -0.286 +- 0.117; the Zerg winning or ahead at 30:00 in 22 of 48 (4), the Terran
+  in 17 (37); blocked at 3:00 1% (42%); drones at 10:00 30 (20, pros 28). Adopted, gz1dev gz0.3dev; the pairing's
+  balance criterion (each side ~25%+) met on these 48, its second half ZO110b. The Zerg's gap moved +0.208 further
+  (to gz1's), with its counts much nearer the pros': the gap and the counts disagree for the Zerg as well.
 - **The TvZ self-play pairing's baseline, and the hunt model under dice (2026-10-24).** gt1dev gt0.11dev against
   gz1dev gz0.2dev, 96 games (ZD110a+b): the Terran won 30 and lost 5, ahead at 30:00 in 39, the Zerg ahead in 12,
   even 10: the Zerg wins or leads 18% of games, the Terran 72%, short of the ~25% each side needs before self-play.
