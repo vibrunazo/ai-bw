@@ -853,6 +853,8 @@ OPTIONS = {
     # army.py hold_target: a commitment decided again keeps its destination while the model still rates it among the
     # five likeliest cells (a decoder; the redraw redirected the army twice as fast as pros redirect theirs)
     "holdtarget": lambda m: m["army"].update(hold_target=True),
+    # army.py unit_commits: a cluster's order leaves out units on another cluster's fresh commitment (the pipe, issue #47)
+    "unitcommits": lambda m: m["army"].update(unit_commits=True),
     "cmv5plain": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_plain/model.pt"),
     # the hunt imitated only where its target has no known static defense (401 of its 644 labels; the first copied its
     # attacks into sunkens, 0.51 of its engages)
@@ -1086,6 +1088,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.army.hunt_advice = m["army"].get("hunt_advice", False)
             g.army.engage_bias = m["army"].get("engage_bias", 0.0)
             g.army.hold_target = m["army"].get("hold_target", False)
+            g.army.unit_commits_on = m["army"].get("unit_commits", False)
             g.army.gather_on = m["army"].get("gather", False)
     if m["fight"] is not None and m["fight"]["provider"] == "zerg":
         from gary.agent.zerg_fight import ZergFight

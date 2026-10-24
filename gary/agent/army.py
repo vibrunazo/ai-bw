@@ -44,6 +44,7 @@ ASK_EVERY = 24 * 2                  # how often Gary asks the model about its ar
 # HAZARD_AGE (army dataset v3, 1,500 modern TvZ player-games a race: docs/PROGRESS.md, how long commitments stand)
 HAZARD = {("T", 1): (0.105, 0.056), ("T", 2): (0.163, 0.049), ("Z", 1): (0.148, 0.048), ("Z", 2): (0.163, 0.038)}
 HAZARD_AGE = 50.0
+UNIT_COMMIT_S = 30                # option unitcommits: a unit's commitment shields it from other clusters' orders this long
 SCOUT_RETRY = 24 * 3               # a scout's worker not picked: asked again this much later
 COMMIT_TICK = 24 * 5                # commit: each cluster asked this often (the pros' data: ingest/army_dataset.py TICK)
 MOVE_CELLS = 2                      # destinations closer than this are "stay"
@@ -186,7 +187,12 @@ class LearnedArmy:
         # move after move), its destination stays where it was while it is still among the model's five likeliest
         # cells on that side; else a fresh draw (the redraw sent over half the redirected units elsewhere: 52-67% of
         # a commitment's units were sent elsewhere within 30 s, the pros' about a third to a half; eval/commit_pipe.py)
-        self.hold_target = False                # ...and kept (a training arm): reversed at the pros' hazard, not the model's
+        self.hold_target = False
+        # option unitcommits (the pipe, not a rule): a cluster's order leaves out units still on another cluster's
+        # commitment (younger than UNIT_COMMIT_S, not arrived, going elsewhere); clusters re-form as units move, and
+        # another cluster's order swept up about a quarter of the units redirected within 30 s (eval/commit_pipe.py)
+        self.unit_commits_on = False
+        self.unit_commit: dict[int, tuple] = {}            # tag -> the commitment its last army order carried out                # ...and kept (a training arm): reversed at the pros' hazard, not the model's
         self.locked: tuple | None = None        # (the forced commitment, the frame its lock was last rolled)
         self.move_tokens, self.tokens_at = 1.0, 0  # draw: moves paced at the pros' rate (PRO_MOVES)
         # option: whether the fight estimate may hold a plain move (positioning), and by how much going must
@@ -606,7 +612,23 @@ class LearnedArmy:
             by = f"{by}, its destination held"
         else:
             best = int(self.rng.choice(len(p), p=p / p.sum())) if self.draw else int(p.argmax())
+        if self.unit_commits_on:
+            own = self._commitment_entry(here)
+            free = []
+            for u in group:
+                c = self.unit_commit.get(u["tag"])
+                if c is not None and c is not own and hi.frame - c[0] < UNIT_COMMIT_S * 24 and                         cell_dist(self.tracker.cell(u["x"], u["y"]), c[2]) > 1 and cell_dist(c[2], best) > 1:
+                    continue                    # (on another cluster's commitment, on its way elsewhere)
+                free.append(u)
+            if not free:
+                LOG.decision(g.hi.side, "commit", hi.frame, f"{names[k]} to {self._cell_name(best)}", q[k], options,
+                             self._seen, by, then="its units are on other commitments", rl=rl, why=why)
+                return None
+            group = free
         self.commitments.append((hi.frame, here, best, k))
+        if self.unit_commits_on:
+            for u in group:
+                self.unit_commit[u["tag"]] = self.commitments[-1]
         if by == "forced (a paired arm)" and self.lock_forced:
             self.locked = (self.commitments[-1], hi.frame)
         LOG.decision(g.hi.side, "commit", hi.frame, f"{names[k]} to {self._cell_name(best)}", q[k], options, self._seen, by,
