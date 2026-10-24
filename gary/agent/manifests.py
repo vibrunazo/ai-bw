@@ -811,6 +811,8 @@ OPTIONS = {
     "huntadvice": lambda m: m["army"].update(hunt_advice=True),
     # macro.py rethink: a unit whose producers' queues are full isn't held as the goal; the model is asked again
     "rethink": lambda m: m["macro"].update(rethink=True),
+    # macro.py nosave: a goal the money doesn't cover yet isn't held; the model is asked again at its next look
+    "nosave": lambda m: m["macro"].update(nosave=True),
     # the stop-gaps over the layers being learned off (AGENTS.md: gt1dev and gz1dev run without them, so the models
     # own those decisions and are judged without the rules): over the army the commit model moves, the static guard,
     # the hunt (its search and scans), the overlord hunt, Gary-Z's join, sweep and press; over the macro, the pros'
@@ -836,6 +838,13 @@ OPTIONS = {
     # 0.80 and its target among the five likeliest cells 0.94, the control's 0.16 and 0.12), and the control
     "cmhunt": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_hunt/model.pt"),
     "cmv5": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_inputs/model.pt"),
+    # the same on all of army dataset v5 (16,549 TvZ games, 60 ticks a player-game): the control and the hunt imitated
+    # (held-out order AUC 0.767 / 0.765, engage 0.778 / 0.776; where the hunt acts 0.81 engage, its target in the
+    # five likeliest 0.91)
+    "cmv5all": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_inputs/model.pt"),
+    "cmhuntall": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_hunt/model.pt"),
+    # all of v5 with the deployed model's inputs (no new channels): whether the v5 models trail it for the channels
+    "cmv5plain": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_plain/model.pt"),
     # the hunt imitated only where its target has no known static defense (401 of its 644 labels; the first copied its
     # attacks into sunkens, 0.51 of its engages)
     "cmhuntu": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5_hunt_undef/model.pt"),
@@ -1015,6 +1024,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro.bank_escape = m["macro"].get("bank_escape", True)
         g.macro.queue_depth = m["macro"].get("queue_depth", 1)
         g.macro.rethink = m["macro"].get("rethink", False)
+        g.macro.nosave = m["macro"].get("nosave", False)
         if hasattr(g.executor, "scv_saturation"):
             g.executor.scv_saturation = m.get("scv_saturation", True)
             g.executor.train_depth = m.get("train_depth", 1)
@@ -1040,7 +1050,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if m["army"]["provider"] == "waves":
             g.army = WaveArmy(g)
         else:
-            pinned = os.environ.get("GARY_TCOMMIT_MODEL" if m["army"].get("commit") else "GARY_TARMY_MODEL")                 if m["army"].get("draw") else None                                               # (the league loop's)
+            pinned = os.environ.get("GARY_TCOMMIT_MODEL" if m["army"].get("commit") else "GARY_TARMY_MODEL")                 if m["army"].get("draw") and g.race.letter == "T" else None                      # (the league loop's; the Terran's)
             army = load("army", pinned or str(model_path(m["army"]["model"], g.matchup, g.race.letter)))
             models["army"] = getattr(army, "path", "?")
             belief = None

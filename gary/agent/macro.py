@@ -119,6 +119,10 @@ class LearnedMacro:
         # asked again while it waited, so it never added production with the bank: the bank escape covered for that);
         # the model is asked again at its next look
         self.rethink = False
+        # option nosave: a goal the money doesn't cover yet (even with its builder walking ahead) isn't held either;
+        # the model is asked again at its next look (with dice, gt1dev's drawn buildings held the macro while they
+        # saved, the Command Center idle: 18.8 SCVs at 5:00, the pros' 25.3)
+        self.nosave = False
         # STOP-GAP (AGENTS.md): with more than BANK_ESCAPE minerals, anything Gary can do now is taken while the
         # model's favorite waits (option nobank: off; the model reads its minerals)
         self.bank_escape = True
@@ -493,6 +497,8 @@ class LearnedMacro:
             # 6 s of income short, nothing else decided, the second hatchery came by 4:00 in 13 of 32 games, 21)
             walk_ahead = max(walk_ahead, PARK_AHEAD)
         if budget < minerals - walk_ahead or me["gas"] - self._saved_cost()[1] < gas:
+            if self.nosave:
+                self.goal = None
             return
         if plan["kind"] == "build" and g.parked is not None:
             return                          # one builder walking ahead at a time (the parked build)

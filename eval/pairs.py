@@ -241,8 +241,9 @@ class Brancher:
             if self.layer == "engage_t" and not ab:
                 layer.force_engage = arm == 0              # (training: the first decision attack in one arm, hold in the other)
             if self.layer == "commit_t" and not ab:
-                layer.force_commit = 1 if arm == 0 else 2  # (the first commitment engage in one arm, move in the other;
-                                                           # then each arm keeps or changes it as the model does)
+                layer.force_commit = 1 if arm == 0 else 2  # (the first commitment engage in one arm, move in the other,
+                layer.lock_forced = True                   # held and reversed at the pros' hazard: undone by the model
+                                                           # 85-94% of the time within 14-34 s otherwise, e1 and e2)
             layer.record = []
             if self.candidate is not None:               # (the other model's odds of each choice, recorded)
                 mine_model = gary.army.engage if self.layer == "engage_t" else gary.army.model
@@ -263,6 +264,7 @@ class Brancher:
                 c["gary"].army.force_engage = True
             if self.layer == "commit_t" and not ab:
                 c["gary"].army.force_commit = 1
+                c["gary"].army.lock_forced = True
             _play(game, c, ARMY_WINDOW)
             if snap(game.observe()) == end0:
                 self.checks_ok += 1

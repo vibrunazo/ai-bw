@@ -40,6 +40,10 @@ from gary.policy.belief import ARMY_SUPPLY
 
 WAVE = 16
 ASK_EVERY = 24 * 2                  # how often Gary asks the model about its army
+# a paired arm's forced commitment, locked: reversed at the pros' chance per 5 s by its age, from the first to past
+# HAZARD_AGE (army dataset v3, 1,500 modern TvZ player-games a race: docs/PROGRESS.md, how long commitments stand)
+HAZARD = {("T", 1): (0.105, 0.056), ("T", 2): (0.163, 0.049), ("Z", 1): (0.148, 0.048), ("Z", 2): (0.163, 0.038)}
+HAZARD_AGE = 50.0
 SCOUT_RETRY = 24 * 3               # a scout's worker not picked: asked again this much later
 COMMIT_TICK = 24 * 5                # commit: each cluster asked this often (the pros' data: ingest/army_dataset.py TICK)
 MOVE_CELLS = 2                      # destinations closer than this are "stay"
@@ -173,6 +177,8 @@ class LearnedArmy:
                                         # the drawn one (the pros') over human game 3 and round c10
         self.commitments: list[tuple[int, int, int, int]] = []   # (frame, from cell, to cell, 1 engage / 2 move)
         self.force_commit: int | None = None   # a paired episode's arm: its first decision forced
+        self.lock_forced = False                # ...and kept (a training arm): reversed at the pros' hazard, not the model's
+        self.locked: tuple | None = None        # (the forced commitment, the frame its lock was last rolled)
         self.move_tokens, self.tokens_at = 1.0, 0  # draw: moves paced at the pros' rate (PRO_MOVES)
         # option: whether the fight estimate may hold a plain move (positioning), and by how much going must
         # look worse than staying (and lose outright) to hold. v0.27's 1 and 2 points held about 90% of its
@@ -495,6 +501,22 @@ class LearnedArmy:
         cy = sum(u["y"] for u in group) / len(group)
         here = self.tracker.cell(cx, cy)
         held, age = self._commitment(here)
+        if self.locked is not None and self.force_commit is None:
+            c, rolled = self.locked
+            from gary.policy.army import path_dist
+            if c in self.commitments and path_dist(here, c[1], c[2]) <= 2:
+                start, end = HAZARD.get((g.race.letter, c[3]), (0.12, 0.05))
+                a = (hi.frame - c[0]) / 24
+                per5 = start - (start - end) * min(1.0, a / HAZARD_AGE)
+                p = 1.0 - (1.0 - per5) ** ((hi.frame - rolled) / (5 * 24))
+                if self.rng.random() >= p:
+                    self.locked = (c, hi.frame)
+                    LOG.decision(g.hi.side, "commit", hi.frame, "keep", None, None, None, "locked (a paired arm)",
+                                 then=f"its forced commitment stands ({a:.0f} s, the pros' reversal {per5:.0%} per 5 s)")
+                    return None
+                self.locked = None             # (reversed at the pros' chance: the model decides from now on)
+            elif c not in self.commitments:
+                self.locked = None
         grid, glob = self.tracker.inputs(obs, group, (held, age))
         where, kind = self.model.predict(grid, glob)
         q = kind[0].astype(np.float64)
@@ -558,6 +580,8 @@ class LearnedArmy:
             p = pf
         best = int(self.rng.choice(len(p), p=p / p.sum())) if self.draw else int(p.argmax())
         self.commitments.append((hi.frame, here, best, k))
+        if by == "forced (a paired arm)" and self.lock_forced:
+            self.locked = (self.commitments[-1], hi.frame)
         LOG.decision(g.hi.side, "commit", hi.frame, f"{names[k]} to {self._cell_name(best)}", q[k], options, self._seen, by,
                      then="sent", rl=rl, why=why)
         x, y = self.tracker.center(best)

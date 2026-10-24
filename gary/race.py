@@ -46,6 +46,9 @@ class Race:
     def __post_init__(self):
         object.__setattr__(self, "minerals", {u: m for u, (m, _gas) in self.costs.items()})
 
+    def __deepcopy__(self, memo: dict) -> "Race":
+        return self             # (fixed data, shared: a paired episode's deep copy of the bots met its module)
+
     def meets(self, have: set, uid: int) -> bool:
         """Every requirement of uid is among what exists (completed): with Zerg's tech equivalences (a Lair or
         Hive is a Hatchery, a Hive a Lair, a Greater Spire a Spire)."""
