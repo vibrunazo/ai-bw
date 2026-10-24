@@ -1187,7 +1187,10 @@ plan and the full log).
   sunkens 0.42 of attacks (0.30), no more leads finished; the fine-tune alone matches the deployed model (+0.027 +-
   0.090). Not adopted for now, to be judged again through a fixed pipe. gz1 with ownsupply and without overlords
   ahead (ZS100a against B100a, gt1 gt0.10): the Terran's score -0.057 +- 0.138, its gap +0.043 (-0.033 to +0.098),
-  blocked at 6:00 22% (pros 8%, gz1 3%): a close call, second halves B100b and ZS100b.
+  blocked at 6:00 22% (pros 8%, gz1 3%): a close call, second halves B100b and ZS100b. Over 96 paired games (ZS100a+b
+  against B100a+b): the Terran's score -0.029 +- 0.103, the Zerg's gap +0.026 (-0.024 to +0.083), macro -0.020: no
+  measurable difference, so the stop-gap goes: gz1 gz0.3 (ownsupply in, overlords ahead out; supply ahead of
+  production is now in neither race's Gary).
   holdtarget's full round (HT120a against DC100a): -0.011 +- 0.087, the gap +0.008; over whole games the pipe barely
   moved (engage way covered 0.29 either way, moves 0.12 against 0.10): the 15-minute check's gain was noise of 7-8
   short games. Not adopted. What redirects the army is mostly the model switching its commitments and other clusters'

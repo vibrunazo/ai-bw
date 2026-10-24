@@ -159,13 +159,6 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   the favorite (almost always a unit) never let a few-percent tech building come (a Factory by 8:00 in 4% of
   games against the pros' 62%). Measure: their decisions' timings against the pros' (build orders), and an option
   without them once the decoder draws (dice) everywhere.
-- **Overlords ahead of production** (`supply_ahead`, in gz1 only; the Zerg executor's supply_due). An overlord is made
-  while the larvae's production has less than 2 supply left. Scripted because the model gave supply under its floor
-  once blocked. Gone from gt1 in gt0.8 (the Terran's depots: 96 paired games with it off, no measurable difference,
-  paired -0.018 +- 0.101, the gap -0.013, -0.040 to +0.012). Replace with the model's own overlords. Measure: option
-  `nodepots` on gz1 against gt1, blocked time against the pros', results. Off in gz1dev: the model's own overlords
-  came once its inputs held its own overlord history (`ownsupply`, gz0.3dev: blocked at 3:00 1%, 42% without it);
-  next, gz1 with ownsupply and without this rule, against gt1.
 - **Answers to the enemy's plan** (`answers.py`, in gt1). Lurkers or mutalisks read from what Gary saw force Siege
   Mode, tanks, vessels, Irradiate and turrets (443 forced decisions in 48 games) and veto turrets beyond one a base
   (387). Scripted because the macro model didn't answer what it had seen (human games 1-2). Replace with the seen

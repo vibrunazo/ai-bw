@@ -311,10 +311,13 @@ MANIFESTS: dict[str, dict] = {
     # gz0.2: its army on control groups by type (gary/agent/grouping.py; 96 paired games twice against gt1, rounds
     # GZ40a+b and GZ40c+d against L40a+b: Gary-T won 49 and 48 (57), lost 10 and 13 (8); Gary-Z's gap at 15-20
     # minutes nearer the pros both times, -0.073 (-0.102 to -0.017) the second)
-    "gz1": {"version": "gz0.2", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True, "rotate": True,
+    # gz0.3: the overlord's history its own (ownsupply) and overlords ahead of production gone, the model's own (96
+    # paired games against gt1, ZS100a+b against B100a+b: the Terran's score -0.029 +- 0.103, the Zerg's gap +0.026,
+    # -0.024 to +0.083: no measurable difference, so the stop-gap goes)
+    "gz1": {"version": "gz0.3", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True, "rotate": True,
             "grouping": "types",
             "macro": {**_LEARNED, "builds": ["alarm"], "decoder": "dice", "odds_mass": 1.0, "hatch_mass": 0.5, "park": True, "pace": True,
-                      "tech_min_p": 0.10, "wait_min_p": 0.05, "supply_ahead": True, "rax_by": 165 * 24, "history": "pro", "style": "roll",
+                      "tech_min_p": 0.10, "wait_min_p": 0.05, "own_supply": True, "rax_by": 165 * 24, "history": "pro", "style": "roll",
                       "hold": True},
             # the army: clusters with commitments, drawn (Gary-Z's GARY_Z_COMMIT=latest), its ground army (the flyers
             # and lurkers have their own rules); no worker scout (its overlords)
@@ -936,7 +939,7 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # so the model thought one was coming; 48 paired games against gt1dev, ZO110a against ZD110a: the Terran's score
 # -0.286 +- 0.117, the Zerg winning or ahead at 30:00 in 22 of 48 (4), blocked at 3:00 1% (42%), drones at 10:00 30
 # (20, pros 28))
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+ownsupply"), "version": "gz0.3dev"}
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted"), "version": "gz0.3dev"}     # (ownsupply in gz1 since gz0.3)
 
 
 def _against(m: dict, vs: dict) -> dict:
