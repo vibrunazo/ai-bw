@@ -1201,6 +1201,14 @@ plan and the full log).
   (0.31). The biggest named leak is placement: builds dropped for "no spot for it" 16.8 a game in gt1dev (4.6 in gt1;
   depots 4.3, Barracks 2.9, turrets 2.5, Science Facility 2.4, bunkers 2.0): its main fills. The game's refusals are
   mostly the hands' (right-clicks, shift-selects, unload all: ~26 a game), not the macro's (builds 0.3).
+  Correction to the army's pipe check above: "twice as fast as the pros" compared Gary's per-order redirects with
+  the pros' commitment hold times, two different measures. On the same measure (the re-simulator's group orders: an
+  order to 8+ supply, redirected if a later order to a group on its path sends it 16+ tiles elsewhere within 30 s)
+  modern pros redirect 0.79 of their orders within 30 s (80 TvZ games), gt1dev 0.70 (BL120a): the churn is the pros'
+  pattern and the commit decisions reach the game. holdtarget and unitcommits (-0.048 +- 0.064, UC120a against
+  BL120a, a baseline on the code that records every order's units: identical to DC100a game for game) fixed a
+  problem that wasn't there; neither adopted, and the verdicts judged through it stand. The pipe fault found is the
+  macro's placement.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
