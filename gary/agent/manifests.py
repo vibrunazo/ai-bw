@@ -767,6 +767,9 @@ OPTIONS = {
     # 12:00 against 41: the SCV is rolled less often than it's the favorite), army built 40 by 12:00
     # (57), a Factory by 8:00 in 9% (19%), lost 3 (2). Not adopted
     "dice": lambda m: m["macro"].update(decoder="dice"),
+    # macro.py dice_t 0.7: dice from the odds raised to 1/0.7 (a 4.5% option about 1%, a 30% one about 30%): gt1dev's
+    # dice drew 8.9 bunkers a game at 4.5% (pros build 0.5-1 by 10:00)
+    "dice07": lambda m: m["macro"].update(dice_t=0.7),
     # training (docs/CONTROL.md step 7): the macro draws its next decision at temperature 1 (or
     # sample_t05: 0.5), each draw logged (g.macro.draws)
     "sample": lambda m: m["macro"].update(decoder="sample", temperature=1.0),
@@ -1025,6 +1028,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro.queue_depth = m["macro"].get("queue_depth", 1)
         g.macro.rethink = m["macro"].get("rethink", False)
         g.macro.nosave = m["macro"].get("nosave", False)
+        g.macro.dice_t = m["macro"].get("dice_t", 1.0)
         if hasattr(g.executor, "scv_saturation"):
             g.executor.scv_saturation = m.get("scv_saturation", True)
             g.executor.train_depth = m.get("train_depth", 1)
