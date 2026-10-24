@@ -1182,6 +1182,12 @@ plan and the full log).
   commitment decided again keeps its destination while the model rates it among its five likeliest cells). The
   results judged through this pipe (the engage bias, the v5 commit models, the hunt imitation) are to be judged
   again once it holds.
+  The hunt's labels on the deployed commit model (fine-tuned 2 epochs on v3 with them, FH120a, against the same
+  without, FC120a; 48 games each): -0.078 +- 0.090, won 5 lost 10 (7, 7), engaging at 0.83 of its orders (0.60), into
+  sunkens 0.42 of attacks (0.30), no more leads finished; the fine-tune alone matches the deployed model (+0.027 +-
+  0.090). Not adopted for now, to be judged again through a fixed pipe. gz1 with ownsupply and without overlords
+  ahead (ZS100a against B100a, gt1 gt0.10): the Terran's score -0.057 +- 0.138, its gap +0.043 (-0.033 to +0.098),
+  blocked at 6:00 22% (pros 8%, gz1 3%): a close call, second halves B100b and ZS100b.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
