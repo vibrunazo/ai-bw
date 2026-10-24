@@ -1064,6 +1064,23 @@ plan and the full log).
   unit whose queues are full not held as the goal, RT100a): macro -0.197, but bases 1.28 at 5-15 minutes (pros 2.10)
   and lost 17, -0.165 +- 0.128 against dice alone: everything spent on units, nothing saved for a Command Center; not
   adopted.
+- **gt1dev's early economy under dice, and two decoder tries (2026-10-24).** With dice gt1dev builds bunkers it
+  can't use (2.7 at 5-10 minutes, pros 0.5: 8.9 decisions a game at 4.5% odds, the caps that refused them off in
+  gt1dev) and fewer SCVs (18.8 at 5:00, pros 25.3, gt1 24.0): a drawn building the money doesn't cover holds the
+  macro while it saves and the Command Center idles; the high bunker odds come in those states (11-17 workers at
+  3-6 minutes, a pro behind and bracing). Gary-Z's park (a building waits for its money, other decisions go on)
+  deadlocked a Terran at 6 SCVs (an SCV parked behind a building whose goal waited on it): not for Terran. nosave
+  (a goal the money doesn't cover isn't held, the model asked again; NS110a against DC100a): lost 23 (6), -0.271 +-
+  0.106, workers at 5-15 minutes 25.6 (27.8), army 12.1 (17.7), although the macro gap -0.075 nearer the pros: not
+  adopted. Twice now (rethink, nosave) the macro gap moved toward the pros while the games got worse: a decoder
+  change is judged on results first, the gap second.
+- **Commit pairs locked (2026-10-24).** The pairs tool's training arms now hold their forced commitment, reversed
+  at the pros' hazard (Terran engages 10.5% per 5 s falling to 5.6% past 40 s, moves 16.3% to 4.9%; Zerg 14.8% to
+  4.8%, 16.3% to 3.8%), then the model decides (e1 and e2's arms were undone by the model within 14-34 s). Two bugs
+  found on the way: every paired episode had failed since the refactor (the bots' deep copy met the race's data
+  module; a race is now shared), and GARY_TCOMMIT_MODEL pinned gz1's commit model too. One 12-minute game: three
+  pairs, locks held 0-78 s, the replay check identical. Pilot for the power check: CP110a (24 games of 20 minutes,
+  gt1dev against gz1dev).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
