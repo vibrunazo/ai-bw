@@ -48,6 +48,7 @@ from train.macro import is_test  # noqa: E402
 from train.select import GameFilter  # noqa: E402
 
 MAX_TICKS = 400                 # samples per player-game in training (held-out games: all)
+HELD_TIMES = 3                  # with --max-ticks below the default, held-out games this many times as many
 KEEP, ENGAGE, MOVE = 0, 1, 2
 
 
@@ -90,13 +91,14 @@ def _others(d, i: int) -> np.ndarray:
 
 
 def load_player(args: tuple) -> tuple:
-    (path, i, held, mpath, mi), spec_d = args
+    (path, i, held, mpath, mi), spec_d, cap = args
     spec = ArmySpec(**spec_d)
     d = np.load(path)
     n = len(d[f"p{i}_tick_label"])
     others = _others(d, i) if spec.others else None       # (before sampling: a frame's clusters together)
     rng = np.random.default_rng(hash(path) % 2**32 + i)
-    idx = np.sort(rng.choice(n, MAX_TICKS, replace=False)) if n > MAX_TICKS and not held else np.arange(n)
+    most = cap * HELD_TIMES if held and cap != MAX_TICKS else None if held else cap   # (held-out: all, at the default)
+    idx = np.sort(rng.choice(n, most, replace=False)) if most is not None and n > most else np.arange(n)
     frames = d[f"p{i}_tick_frame"][idx]
     m = np.load(mpath)
     mf, seen_all = m["frames"], m["seen"][:, mi].astype(np.float32)
@@ -118,10 +120,10 @@ def load_player(args: tuple) -> tuple:
             d[f"p{i}_tick_target"][idx].astype(np.int64), commit.astype(np.int64), frames)
 
 
-def load(js: list, spec: ArmySpec, workers: int) -> dict:
+def load(js: list, spec: ArmySpec, workers: int, max_ticks: int = MAX_TICKS) -> dict:
     parts = {False: [], True: []}
     with ProcessPoolExecutor(workers) as pool:
-        results = pool.map(load_player, [(j, spec.to_dict()) for j in js], chunksize=16)
+        results = pool.map(load_player, [(j, spec.to_dict(), max_ticks) for j in js], chunksize=16)
         for job, res in zip(js, monitor.track(results, len(js), "player-games loaded")):
             parts[job[2]].append(res)
     return {("test" if held else "train"): tuple(np.concatenate([r[k] for r in rs]) for k in range(6))
@@ -160,6 +162,8 @@ def main() -> None:
                     help="the enemy buildings known still standing as a map channel (ArmySpec.known; army dataset v5)")
     ap.add_argument("--unseen", action="store_true",
                     help="seconds since own units were in each cell as a map channel (ArmySpec.unseen; army dataset v5)")
+    ap.add_argument("--max-ticks", type=int, default=MAX_TICKS,
+                    help="samples per player-game (all of army dataset v5's 16,549 TvZ games fit at 60)")
     ap.add_argument("--rule-labels", nargs="+", default=[],
                     help="league rounds whose games ran a rule in advice mode (huntadvice): its decisions as engage labels "
                          "on Gary's own states (train/rule_labels.py)")
@@ -184,7 +188,7 @@ def main() -> None:
     keep = GameFilter.from_args(args)
     js = jobs(args.matchup, args.race, keep=keep)
     print(f"{len(js)} player-games ({keep.describe()})", flush=True)
-    data = load(js, spec, args.workers)
+    data = load(js, spec, args.workers, args.max_ticks)
     rule = None
     if args.rule_labels:
         from train.rule_labels import rule_samples
