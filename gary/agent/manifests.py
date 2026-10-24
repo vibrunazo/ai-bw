@@ -847,6 +847,9 @@ OPTIONS = {
     "cmv5all": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_inputs/model.pt"),
     "cmhuntall": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_hunt/model.pt"),
     # all of v5 with the deployed model's inputs (no new channels): whether the v5 models trail it for the channels
+    # army.py engage_bias ln 2: the commit model's engage odds doubled against move's (issue #28: at the locked pairs'
+    # moments engaging beat moving by +0.81 a pair, +0.42 to +1.24, the deployed model engaging 55% of them)
+    "engagebias": lambda m: m["army"].update(engage_bias=0.693),
     "cmv5plain": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_v5all_plain/model.pt"),
     # the hunt imitated only where its target has no known static defense (401 of its 644 labels; the first copied its
     # attacks into sunkens, 0.51 of its engages)
@@ -1078,6 +1081,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.army.static_odds = m["army"].get("static_odds")
             g.army.static_beta = m["army"].get("static_beta")
             g.army.hunt_advice = m["army"].get("hunt_advice", False)
+            g.army.engage_bias = m["army"].get("engage_bias", 0.0)
             g.army.gather_on = m["army"].get("gather", False)
     if m["fight"] is not None and m["fight"]["provider"] == "zerg":
         from gary.agent.zerg_fight import ZergFight

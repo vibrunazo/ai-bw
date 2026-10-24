@@ -1155,6 +1155,14 @@ plan and the full log).
   and 0.53 (held), at chance; fine-tuned, train 0.54 and held 0.46: it overfits again, the gate not passed. With
   these inputs and this outcome, which arm wins isn't predictable from the moment; next, the outcome's horizon (the
   value network at the arm's end) and the advantage's size rather than its sign.
+  The advantage's size, offline (issue #28; 1,119 pairs from 117 games, cross-validated by game, judged as a
+  policy's value: the mean of d where it engages): always engage +0.81 a pair (+0.42 to +1.24); engage at 10-15
+  minutes +0.52; the deployed commit model's own preference +0.48 (it engages at 55% of the moments); ridge on the
+  model's numbers +0.82 (engaging at 98%), gradient boosting on the numbers and grid summaries +0.84 (63%). Nothing
+  in the state predicts where engaging pays (held-out correlation at best +0.09); engaging beats moving at nearly
+  every stage (8-10 minutes the exception, -0.31 +- 0.91). The one-parameter improvement it supports: engage's odds
+  over move's raised (option engagebias, doubled, keep's odds as they were), judged in 96 paired games (EB120a+b
+  against DC100a+b): a 90 s gain may cost the game later, and only games show that.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

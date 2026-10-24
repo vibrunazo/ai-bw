@@ -177,7 +177,11 @@ class LearnedArmy:
                                         # the drawn one (the pros') over human game 3 and round c10
         self.commitments: list[tuple[int, int, int, int]] = []   # (frame, from cell, to cell, 1 engage / 2 move)
         self.force_commit: int | None = None   # a paired episode's arm: its first decision forced
-        self.lock_forced = False                # ...and kept (a training arm): reversed at the pros' hazard, not the model's
+        self.lock_forced = False
+        # option engagebias: the commit model's engage odds times exp(this) against move's (learned from the locked
+        # commit pairs: engaging beat moving by +0.81 a pair at the moments the deployed model engaged 55% of, and
+        # nothing in the state predicted where it didn't; issue #28)
+        self.engage_bias = 0.0                # ...and kept (a training arm): reversed at the pros' hazard, not the model's
         self.locked: tuple | None = None        # (the forced commitment, the frame its lock was last rolled)
         self.move_tokens, self.tokens_at = 1.0, 0  # draw: moves paced at the pros' rate (PRO_MOVES)
         # option: whether the fight estimate may hold a plain move (positioning), and by how much going must
@@ -520,6 +524,10 @@ class LearnedArmy:
         grid, glob = self.tracker.inputs(obs, group, (held, age))
         where, kind = self.model.predict(grid, glob)
         q = kind[0].astype(np.float64)
+        if self.engage_bias:                   # (between engage and move only: keep's odds, so the order rate, as they were)
+            q = q.copy()
+            act, e = q[1] + q[2], q[1] * np.exp(self.engage_bias)
+            q[1], q[2] = act * e / (e + q[2]), act * q[2] / (e + q[2])
         if self.force_commit is not None:
             k, self.force_commit = int(self.force_commit), None
             by = "forced (a paired arm)"
