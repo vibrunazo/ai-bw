@@ -26,7 +26,6 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 
 ## Gameplay
 
-- [#30](https://github.com/vibrunazo/gary/issues/30) gz1: the overlord's own history, and without overlords ahead
 - [#2](https://github.com/vibrunazo/gary/issues/2) Hold early zergling harass and all-ins (and how much to commit to defense)
 - [#4](https://github.com/vibrunazo/gary/issues/4) Micro: spreading, sieging, spells as learned decisions
 - [#26](https://github.com/vibrunazo/gary/issues/26) Strategy layer: pick among proven builds and follow the timeline
