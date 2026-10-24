@@ -860,6 +860,9 @@ OPTIONS = {
     # army.py unit_commits: a cluster's order leaves out units on another cluster's fresh commitment (issue #47; UC120a
     # against BL120a -0.048 +- 0.064: not adopted)
     "unitcommits": lambda m: m["army"].update(unit_commits=True),
+    # executor.py wide_spot: with no spot at Gary's bases, the main's box widened (its own level first), then the
+    # natural's area with no town hall yet (a full main on one base dropped 16.8 builds a game in gt1dev; issue #47)
+    "widespot": lambda m: m.update(wide_spot=True),
     # the deployed commit model fine-tuned 2 epochs on army dataset v3, with the hunt's labels (x4) and without (the
     # control): the labels' effect apart from v5's data change (issue #3; FH120a against FC120a -0.078 +- 0.090)
     "cmfthunt": lambda m: m["army"].update(model="runs/commit_exp/TvZ_T_ft_hunt/model.pt"),
@@ -1049,6 +1052,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if hasattr(g.executor, "scv_saturation"):
             g.executor.scv_saturation = m.get("scv_saturation", True)
             g.executor.train_depth = m.get("train_depth", 1)
+        g.executor.wide_spot = m.get("wide_spot", False)
         if hasattr(g.executor, "addon_room"):
             g.executor.addon_room = m.get("addon_room", False)
         g.macro.odds_mass = m["macro"].get("odds_mass")

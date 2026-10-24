@@ -54,6 +54,7 @@ RALLY_DOWN, RALLY_OUT = 285 * 24, 450 * 24   # rally_ramp: inside the main's ram
 BUSY_ORDERS = {25, 26, 30, 31, 33, 70}   # placing / constructing a building (a drone: walking to its spot, landing
                                          # there, morphing: 70 is DroneLand, and a drone re-sent then never started)
 BAD_FOR = 60 * 24                     # a spot where a build failed (not for money) isn't tried again for this long
+WIDE_SPOT = 24                  # option widespot: the main's search box this many tiles each way
 LOST_ORDER = 6 * 24                   # a reserved spot with no SCV on its way after this: the order was lost
 RESUME_AFTER = 24                     # an unfinished building nobody has built for a second gets an SCV
 RESUME_RETRY = 24 * 4                 # ...and if that one doesn't arrive either, another after 4 s
@@ -119,6 +120,7 @@ class Executor:
         self.next_transfer = 0
         self._bases_by_walk: list | None = None       # free_base: the bases by a worker's walk from the natural
         self.why: str | None = None                   # why carry_out's last None or WAIT (no, wait)
+        self.wide_spot = False                        # option widespot: spot() widens the main, then the natural
         # the map's own creep (map knowledge, read now: at the start of a game, before any zerg's)
         creep = getattr(g.hi.game, "creep", None)
         self._map_creep = creep() if creep else None
@@ -655,20 +657,38 @@ class Executor:
             for other in self.my_bases([u for u in self.g.hi.observe()["units"] if u["owner"] == self.g.slot]):
                 if other is not base and (spot := self._base_spot(unit_type, other, builder)):
                     break
+        if spot is None and self.wide_spot:
+            # (option widespot: the main's box widened, its own ground level first, then the natural's area with no
+            # town hall yet; a full main on one base dropped 16.8 builds a game in gt1dev, eval/macro_pipe.py, while
+            # the wider box had 26-74 spots and the natural 60-147 at the same moments)
+            g = self.g
+            spot = self._base_spot(unit_type, g.main, builder, radius=WIDE_SPOT, level_of=g.main.center)
+            if spot is None and g.natural is not None:
+                spot = self._base_spot(unit_type, g.natural, builder)
         return spot
 
-    def _base_spot(self, unit_type: int, base: Base, builder: int) -> tuple[int, int] | None:
-        """A free spot near the base, on the side away from the minerals."""
+    def _base_spot(self, unit_type: int, base: Base, builder: int, radius: int = 16,
+                   level_of: tuple[int, int] | None = None) -> tuple[int, int] | None:
+        """A free spot near the base, on the side away from the minerals, within radius tiles of that side's
+        anchor; with level_of, on that point's ground level if any spot there fits."""
         mx = sum(x for x, _ in base.minerals) / len(base.minerals)
         my = sum(y for _, y in base.minerals) / len(base.minerals)
         ax = base.center[0] + (base.center[0] - mx) * 0.9
         ay = base.center[1] + (base.center[1] - my) * 0.9
         w, h = self.g.race.sizes[unit_type]
         cands = []
-        for ty in range(int(ay // 32) - 16, int(ay // 32) + 16):
-            for tx in range(int(ax // 32) - 16, int(ax // 32) + 16):
+        for ty in range(int(ay // 32) - radius, int(ay // 32) + radius):
+            for tx in range(int(ax // 32) - radius, int(ax // 32) + radius):
                 cands.append((math.dist((tx * 32 + w * 16, ty * 32 + h * 16), (ax, ay)), tx, ty))
-        for _, tx, ty in sorted(cands):
+        terrain = self.terrain() if level_of is not None else None
+        if terrain is not None:                  # (its level's tiles first, the rest after)
+            level = int(terrain[1][int(level_of[1]) // 8, int(level_of[0]) // 8])
+            off = lambda tx, ty: bool((terrain[1][max(0, ty) * 4:(ty + h) * 4, max(0, tx) * 4:(tx + w) * 4] != level).any())
+            cands = [(off(tx, ty), d, tx, ty) for d, tx, ty in cands]
+            cands = [(d, tx, ty) for _, d, tx, ty in sorted(cands)]
+        else:
+            cands = sorted(cands)
+        for _, tx, ty in cands:
             if any(abs(tx - rx) < self.g.race.sizes[rt][0] + 1 and abs(ty - ry) < self.g.race.sizes[rt][1] + 1 for rt, rx, ry in self.g.reserved) \
                     or self._bad(unit_type, tx, ty):
                 continue
