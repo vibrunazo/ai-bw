@@ -815,7 +815,12 @@ class HumanInterface:
             at = (mx + a.args["x"] * mw / self.map_size[0], my + a.args["y"] * mh / self.map_size[1])
         self._log_pov(click, act, at, cmd)
         if a.kind in ORDER_KINDS and self._sent_ok:       # (a refusal on the spot is recorded as one)
-            LOG.order(self.side, self.frame, f"{act} ({len(self.selection)} selected)", "sent", by=a.by)
+            # (its units, and the map point or target unit of the command it sent: which layer moved which units
+            # where, for the pipe checks, eval/commit_pipe.py, issue #47)
+            last = self.commands[-1] if self.commands and self.commands[-1][0] == self.frame else None
+            LOG.order(self.side, self.frame, f"{act} ({len(self.selection)} selected)", "sent", by=a.by,
+                      units=list(self.selection), to=[int(last[3]), int(last[4])] if last and (last[3] or last[4]) else None,
+                      target=int(last[5]) if last and last[5] else None)
 
     def _own_tags(self) -> set[int]:
         last = self._snapshot(self.history[-1])
