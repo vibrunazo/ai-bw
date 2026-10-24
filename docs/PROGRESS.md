@@ -1117,6 +1117,13 @@ plan and the full log).
   it picks the better arm on held-out moments more often than chance (the interval above 0.5); then 96 paired
   games. gt1dev never lost to gz1dev in the pilot (7 won, 17 at time), so the collection plays gz1 (the Zerg won 29
   of 96 against gt1dev): moments against a side that concedes teach a model to beat only it (SELF_PLAY.md rule 3).
+  First offline read (train/commit_pairs.py, CP110a and the first 52 games of CP120a: 626 labelled pairs, 78 held
+  out, every replay check identical): the deployed commit model picks the better arm 0.50 of the time (train 0.495,
+  held 0.51: chance); fine-tuned 20 epochs, train 0.55 and held 0.40 (0.29 to 0.51): it overfits, the gate not
+  passed. Engage won 54% of the training pairs and 62% of the held-out ones: at these moments a constant "engage"
+  beats the model, the one signal so far. Under the MDE (1,000-2,000 pairs for an effect of 0.3-0.5) nothing
+  state-dependent is learnable yet; the collection goes on, and a 90 s net value may be too short a horizon for a
+  commitment (a candidate: the value network's read at the end of the arm).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
