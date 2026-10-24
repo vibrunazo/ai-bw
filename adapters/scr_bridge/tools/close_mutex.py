@@ -34,6 +34,7 @@ SystemExtendedHandleInformation = 64
 ObjectNameInformation = 1
 ObjectTypeInformation = 2
 STATUS_INFO_LENGTH_MISMATCH = 0xC0000004
+MAX_HANDLE_TABLE = 1 << 30      # bytes: a stray process with ~2.7 million handles passed 64 MB (issue #8)
 PROCESS_DUP_HANDLE = 0x0040
 DUPLICATE_SAME_ACCESS = 0x2
 DUPLICATE_CLOSE_SOURCE = 0x1
@@ -150,13 +151,14 @@ def enable_debug_privilege() -> bool:
 
 def system_handles() -> list[_SYSTEM_HANDLE_ENTRY]:
     size = 1 << 20
-    while size <= 1 << 26:
+    while size <= MAX_HANDLE_TABLE:
         buf = ctypes.create_string_buffer(size)
         ret = wintypes.ULONG(0)
         status = ntdll.NtQuerySystemInformation(SystemExtendedHandleInformation, buf, size,
                                                 ctypes.byref(ret)) & 0xFFFFFFFF
         if status == STATUS_INFO_LENGTH_MISMATCH:
-            size *= 2
+            # (the table grows between calls: what it asked for, with room, or twice the size)
+            size = max(size * 2, ret.value + (1 << 20))
             continue
         if status != 0:
             raise OSError(f"NtQuerySystemInformation failed: 0x{status & 0xFFFFFFFF:08X}")
@@ -165,7 +167,7 @@ def system_handles() -> list[_SYSTEM_HANDLE_ENTRY]:
         return [ctypes.cast(base + i * ctypes.sizeof(_SYSTEM_HANDLE_ENTRY),
                             ctypes.POINTER(_SYSTEM_HANDLE_ENTRY)).contents
                 for i in range(info.NumberOfHandles)]
-    raise OSError("handle table larger than 64MB — giving up")
+    raise OSError(f"handle table larger than {MAX_HANDLE_TABLE >> 20} MB — giving up")
 
 
 def query_object_name(handle: int) -> str:
