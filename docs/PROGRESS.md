@@ -1173,6 +1173,25 @@ plan and the full log).
   -0.176), with the new channels 0.81, 0.13, 2.24 (it hardly engages, -0.069), with the hunt's labels 0.78, 0.82, 2.40
   (into sunkens, -0.090): offline AUC ranked them the other way; a commit model's in-game rate and engage share are
   checked in a short round before a full one.
+  The commit decision's pipe check (eval/commit_pipe.py, issue #47; DC100a): an engage order's units cover 29% of
+  the way in 30 s, a move's 10%; 52% of an engage's units and 67% of a move's are sent elsewhere within 30 s (median
+  13 and 11 s), against the pros' commitments, about a third and a half within 30 s (half held 55 and 35 s); over
+  half of the redirects are the model deciding the same kind again and the decoder drawing a fresh destination. So
+  the commit model's decisions mostly don't play out in Gary's games, while the locked pairs kept theirs: a likely
+  reason why engaging paid in the pairs (+0.81) and not in play (engagebias). First fix, a decoder: holdtarget (a
+  commitment decided again keeps its destination while the model rates it among its five likeliest cells). The
+  results judged through this pipe (the engage bias, the v5 commit models, the hunt imitation) are to be judged
+  again once it holds.
+  The hunt's labels on the deployed commit model (fine-tuned 2 epochs on v3 with them, FH120a, against the same
+  without, FC120a; 48 games each): -0.078 +- 0.090, won 5 lost 10 (7, 7), engaging at 0.83 of its orders (0.60), into
+  sunkens 0.42 of attacks (0.30), no more leads finished; the fine-tune alone matches the deployed model (+0.027 +-
+  0.090). Not adopted for now, to be judged again through a fixed pipe. gz1 with ownsupply and without overlords
+  ahead (ZS100a against B100a, gt1 gt0.10): the Terran's score -0.057 +- 0.138, its gap +0.043 (-0.033 to +0.098),
+  blocked at 6:00 22% (pros 8%, gz1 3%): a close call, second halves B100b and ZS100b.
+  holdtarget's full round (HT120a against DC100a): -0.011 +- 0.087, the gap +0.008; over whole games the pipe barely
+  moved (engage way covered 0.29 either way, moves 0.12 against 0.10): the 15-minute check's gain was noise of 7-8
+  short games. Not adopted. What redirects the army is mostly the model switching its commitments and other clusters'
+  orders sweeping up committed units (issue #47).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
