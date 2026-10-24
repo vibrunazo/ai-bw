@@ -114,10 +114,17 @@ class DecisionLog:
         self._put(r)
         return r
 
-    def order(self, side: str, frame: int, what: str, fate: str, why: str = "", by: str | None = None) -> None:
+    def order(self, side: str, frame: int, what: str, fate: str, why: str = "", by: str | None = None,
+              units: list | None = None, to: list | None = None, target: int | None = None) -> None:
         r = {"f": int(frame), "kind": "order", "side": side, "what": what, "fate": fate}
         if why:
             r["why"] = why
+        if units:
+            r["units"] = units                              # (the selection the order went to)
+        if to:
+            r["to"] = to                                    # (its map point, px)
+        if target:
+            r["target"] = target                            # (its target unit)
         r["by"] = by if by is not None else self.owner.get(self._who(side), "?")
         self._put(r)
 
