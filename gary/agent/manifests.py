@@ -803,17 +803,21 @@ OPTIONS = {
     # for, as pros queue; else it waits for the building and, its queue full, holds the macro (the bank escape covers
     # for that: off, 1,124 minerals banked at 5-15 minutes, pros 511)
     "gamequeue": lambda m: m.update(train_depth=2),
-    # the stop-gaps over the layers being learned off (AGENTS.md: gt1dev runs without them, so the models own those
-    # decisions and are judged without the rules): the static guard, the hunt (its search and scans), the overlord
-    # hunt; the pros' caps, the SCV saturation cap, the bank escape
     # army.py hunt_advice: with the hunt off, what it would do written to the records (the rule's labels on the
     # model's own states, to imitate it)
     "huntadvice": lambda m: m["army"].update(hunt_advice=True),
     # macro.py rethink: a unit whose producers' queues are full isn't held as the goal; the model is asked again
     "rethink": lambda m: m["macro"].update(rethink=True),
+    # the stop-gaps over the layers being learned off (AGENTS.md: gt1dev and gz1dev run without them, so the models
+    # own those decisions and are judged without the rules): over the army the commit model moves, the static guard,
+    # the hunt (its search and scans), the overlord hunt, Gary-Z's join, sweep and press; over the macro, the pros'
+    # caps, the SCV saturation cap, the bank escape, supply ahead of production. Kept: the rules that alone move units
+    # no model decides (Gary-Z's overlord posts and mutalisk raid), and the decoders (the tech path's floor: without it
+    # dice drew Gary-Z a Lair and a Hydralisk Den on 8 drones)
     "unscripted": lambda m: (m["army"].update(static_odds=None, hunt=False,
-                                              rules=[r for r in m["army"].get("rules", ()) if r != "lords"]),
-                             m["macro"].update(caps=False, bank_escape=False), m.update(scv_saturation=False)),
+                                              rules=[r for r in m["army"].get("rules", ()) if r in ("posts", "raid")]),
+                             m["macro"].update(caps=False, bank_escape=False, supply_ahead=False),
+                             m.update(scv_saturation=False)),
     # army.py static_odds off: the static guard's veto gone (pros attack spots it forbids: 29% of their engages into
     # static defense are under 1.5 times it, held-out modern TvZ)
     "noguard": lambda m: m["army"].update(static_odds=None),
@@ -901,6 +905,8 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # gt0.7dev: gt1's add-on room (gt0.6); gt0.8dev: gt1's queue without keep_busy (gt0.7); gt0.9dev: gt1's own depots
 # (gt0.8); gt0.10dev: gt1's in-building queue (gt0.9), without the army's and the macro's stop-gaps (unscripted), the
 # hunt in advice mode (huntadvice: its labels in the records, play unchanged; baseline DV90a+b)
+# gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted"), "version": "gz0.2dev"}
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"),
                        "version": "gt0.10dev"}
 
