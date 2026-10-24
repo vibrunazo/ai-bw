@@ -1084,7 +1084,8 @@ plan and the full log).
   Option ownsupply: the supply provider's history entry always Gary's own. Against gt1dev (ZO110a against ZD110a, 48
   paired games): the Terran's score -0.286 +- 0.117; the Zerg winning or ahead at 30:00 in 22 of 48 (4), the Terran
   in 17 (37); blocked at 3:00 1% (42%); drones at 10:00 30 (20, pros 28). Adopted, gz1dev gz0.3dev; the pairing's
-  balance criterion (each side ~25%+) met on these 48, its second half ZO110b. The Zerg's gap moved +0.208 further
+  balance criterion (each side ~25%+) met on these 48, and over 96 (ZO110a+b): each side wins or leads in 36 games
+  (38%), 24 even at 30:00. The pairing gt1dev gt0.11dev against gz1dev gz0.3dev is the TvZ self-play baseline. The Zerg's gap moved +0.208 further
   (to gz1's), with its counts much nearer the pros': the gap and the counts disagree for the Zerg as well.
 - **The TvZ self-play pairing's baseline, and the hunt model under dice (2026-10-24).** gt1dev gt0.11dev against
   gz1dev gz0.2dev, 96 games (ZD110a+b): the Terran won 30 and lost 5, ahead at 30:00 in 39, the Zerg ahead in 12,
