@@ -171,6 +171,8 @@ def main() -> None:
                     help="only the rule's labels whose target has no known static defense within a cell")
     ap.add_argument("--rule-weight", type=int, default=4, help="each rule label this many times among the pros' samples")
     ap.add_argument("--eval", help="score this commit model on the held-out games and stop (no training)")
+    ap.add_argument("--init", help="fine-tune this commit model (its spec and weights) instead of widening the army model")
+    ap.add_argument("--data", default="v5", help="the army dataset version (v3: what the 2026-10-17 commit models had)")
     ap.add_argument("--out", help="the run folder (default runs/commit/<matchup>_<race>_<time>: what Gary loads as newest)")
     priority.add_argument(ap)
     args = ap.parse_args()
@@ -184,9 +186,12 @@ def main() -> None:
     if args.eval:
         evaluated = ArmyModel.load(args.eval)
         spec = evaluated.spec
+    if args.init:
+        initial = ArmyModel.load(args.init)
+        spec = initial.spec
     t0 = time.time()
     keep = GameFilter.from_args(args)
-    js = jobs(args.matchup, args.race, keep=keep)
+    js = jobs(args.matchup, args.race, version=args.data, keep=keep)
     print(f"{len(js)} player-games ({keep.describe()})", flush=True)
     data = load(js, spec, args.workers, args.max_ticks)
     rule = None
@@ -199,7 +204,7 @@ def main() -> None:
     tg, tglob, tl, tt, tc, tf = data["test"]
     print(f"{len(js)} player-games; ticks train {len(label):,} (keep/engage/move {np.bincount(label, minlength=3)}), "
           f"test {len(tl):,} ({time.time() - t0:.0f} s)", flush=True)
-    net = (evaluated.net if args.eval else widen(base, spec)).to(device)
+    net = (evaluated.net if args.eval else initial.net if args.init else widen(base, spec)).to(device)
     head = list(net.kind.parameters()) + list(net.glob.parameters())
     trunk = [p for n, p in net.named_parameters() if not n.startswith(("kind.", "glob."))]
     opt = torch.optim.AdamW([{"params": head, "lr": args.lr}, {"params": trunk, "lr": args.lr / 10}], weight_decay=1e-4)
