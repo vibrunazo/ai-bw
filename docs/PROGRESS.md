@@ -1074,7 +1074,9 @@ plan and the full log).
   predict play here. A v5 model with the deployed inputs (cmv5plain: 0.767 / 0.778 offline) plays HP120a to tell
   the channels from the data. dice07 (dice from the odds raised to 1/0.7; D07110a against DC100a): +0.011 +- 0.145,
   at 5-15 minutes workers 33.3 (27.8, pros 34.9), bases 2.01 (1.73, 2.10), army 21.2 (17.7, 25.1), bunkers 2.59
-  (3.43, 0.55), the macro gap +0.073 (-0.004 to +0.148): a close call, its second 48 D07110b.
+  (3.43, 0.55), the macro gap +0.073 (-0.004 to +0.148): a close call, its second 48 D07110b. Over 96 paired games
+  (against DC100a+b): +0.037 +- 0.099, won 14 lost 24 (7, 18), the gap +0.031 (-0.018 to +0.072), macro +0.048: no
+  measurable difference, more games decided either way; not adopted (gt1dev keeps dice).
 - **Gary-Z's first overlord, and the pairing balanced (gz1dev gz0.3dev, 2026-10-24).** Why gz1dev supply-blocked:
   gz1's macro reads the pros' decision history early in the game (so its own drone-heavy past doesn't feed back), and
   that history holds their 9-supply overlord, so the model thought one was coming: at 60 s on 9/9 it gave Drone 0.99,
