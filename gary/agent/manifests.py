@@ -945,8 +945,11 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # hunt in advice mode (huntadvice: its labels in the records, play unchanged; baseline DV90a+b); gt0.11dev: the macro
 # draws from the model's odds (dice; 96 paired games against gt0.10dev, DC100a+b against DV90a+b: lost 18 against 29,
 # +0.058 +- 0.083, the gap -0.073, -0.096 to -0.035, macro -0.105; the bank at 5-15 minutes 263, pros 511, 843 before)
+# gt0.12dev: buildings placed in a wider box at the main, then the natural, when its bases are full (widespot; 96 paired
+# games against gt0.11dev, WS121a+b against BL121a+b: -0.013 +- 0.029, the gap -0.021, 25-30 minutes -0.062, -0.098 to
+# -0.030; builds dropped for "no spot" 17.3 a game to 3.4, decisions carried out 0.82 to 0.86, eval/macro_pipe.py)
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
-                                     "+dice"), "version": "gt0.11dev"}
+                                     "+dice+widespot"), "version": "gt0.12dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
