@@ -1271,6 +1271,12 @@ plan and the full log).
   smallest lift of any race), the vocabulary sound.
   The self-play pairing after seenall (ZP141a, gt1dev gt0.13dev against gz1dev gz0.4dev, 48 games): the Terran won 7
   and led at 30:00 in 10 (35%), the Zerg won 8 and led in 12 (42%), 11 even: still balanced (ZO110a 35% and 46%).
+  armyseen in gt1dev over 96 paired games (AS141a+b against SA125a+b): +0.016 +- 0.050 (better 27, worse 20), lost 18
+  (22), the gap -0.010 (-0.036 to +0.013), fight -0.002: no measurable difference, the army model's own counts now its
+  dataset's; tried on the Zerg (ZA141a+b against ZP141a+b) before it goes into both dev manifests.
+  The Zerg's critic (runs/value/TvZ_Z_20261025-053628, 2,448 league games from the Zerg's side, Gary-Z won 19% and lost
+  30%): held-out win AUC on Gary-Z's games 0.88 (0-5 minutes 0.56-0.66, 5-10 0.75-0.87, 10-20 0.87-1.00), the
+  discounted head 33% of the score to the end; its net heads had no Gary-Z games before.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
