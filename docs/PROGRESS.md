@@ -1307,6 +1307,14 @@ plan and the full log).
   among the next 3 decisions) leaves the gap where it was (PvT 0.59, the Terran's in PvT 0.66), so it isn't order;
   its misses are the two Gateway units (Zealot precision 0.27-0.34) and reactive buildings (cannons 0.06-0.17,
   observers, shuttles), and its odds are most spread in PvT and PvZ (about 7 choices a moment, 5-6 elsewhere).
+- **The input test (tests/test_inputs.py, 2026-10-25).** Gary plays itself for 9 minutes; every 5 s the vectors its
+  macro model, army model and critic would be fed (their own code, on copies of the trackers) are held against the
+  dataset builders' for the same game's replay, block by block. On gt1dev and gz1dev it passes with the known faults:
+  the eggs (#48); and new ones (#50): workers inside gas buildings out of sight in play (Zerg drones off by up to 3,
+  the army model's own units at every tick), the tanks' turrets the replays count among the enemy seen, and the
+  in-building queue's second unit counted as in production since gt0.9 (2 SCVs where the game trains 1). It fails
+  on gt0.12dev (the empty enemy history, 77% of moments) and on gt1 (the bunkered marines, 88% of the army's ticks):
+  the faults found by hand would have failed it the day they came.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
