@@ -41,6 +41,8 @@ class Race:
     upgrade_names: dict
     supply: dict                # unit -> supply it uses
     supply_provided: dict       # unit or building -> supply it gives
+    production_in_sight: bool = False    # what it makes shows while made (Zerg: an egg, the morphing building still the
+                                         # old one), as the replays count it; Terran and Protoss units in training don't
     minerals: dict = field(init=False)   # unit -> its mineral cost
 
     def __post_init__(self):
@@ -69,7 +71,7 @@ class Race:
         if letter == "Z":
             return Race("Z", Z, Z.DRONE, frozenset(Z.TOWN_HALLS), Z.HATCHERY, Z.OVERLORD, Z.EXTRACTOR, frozenset(Z.PRODUCTION),
                         Z.PRODUCER, Z.COST, Z.SIZE, Z.REQUIRES, Z.RESEARCH, Z.UPGRADE, frozenset(Z.ARMY), Z.NAMES,
-                        Z.TECH_NAMES, Z.UPGRADE_NAMES, Z.SUPPLY, Z.SUPPLY_PROVIDED)
+                        Z.TECH_NAMES, Z.UPGRADE_NAMES, Z.SUPPLY, Z.SUPPLY_PROVIDED, production_in_sight=True)
         if letter == "P":
             return Race("P", P, P.PROBE, frozenset(P.TOWN_HALLS), P.NEXUS, P.PYLON, P.ASSIMILATOR, frozenset(P.PRODUCTION),
                         P.PRODUCER, P.COST, P.SIZE, P.REQUIRES, P.RESEARCH, P.UPGRADE, frozenset(P.ARMY), P.NAMES,

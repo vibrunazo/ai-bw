@@ -804,6 +804,9 @@ OPTIONS = {
     # gary/policy/army.py extra_units: the army model's own unit counts with the units in production and inside a
     # bunker, as its dataset counts them (in play: 5-6 marines where the dataset had 13-15, issue #29)
     "armyseen": lambda m: m["army"].update(army_seen=True),
+    # macro.py eggs_seen: a race whose production is in sight (the Zerg's eggs) doesn't add its units in production to
+    # the macro model's own counts, as the replays don't (22 zerglings read at 6:00 where the replay had 6)
+    "eggs": lambda m: m["macro"].update(eggs_seen=True),
     # three registered rules off (AGENTS.md): the pros' caps per minute; SCVs capped at the bases' saturation (MAX_SCVS
     # stays); depots ahead of production
     "nocaps": lambda m: m["macro"].update(caps=False),
@@ -1079,6 +1082,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro.hold = m["macro"].get("hold", False)
         if hasattr(g.macro, "tracker"):
             g.macro.tracker.look_every = 24 if m["macro"].get("look_seen") else 0
+            g.macro.eggs_seen = bool(m["macro"].get("eggs_seen")) and g.race.production_in_sight
         if m["macro"].get("history") == "pro":
             # (Gary-Z's: the pros' decision history in the model's inputs, fading to its own over HISTORY_FADE
             # minutes, so its own drone-heavy past doesn't feed back on itself)

@@ -109,6 +109,10 @@ class LearnedMacro:
         # drones at 4:00 to their 16 (round O6). A roll waiting for a larva still lets others by (wait_min_p): held
         # there too, the tech came late (a Lair by 7:00 in half the games, the pros' all; round G10)
         self.hold = False
+        # option eggs: for a race whose production is in sight (Race.production_in_sight: the Zerg's eggs), its units in
+        # production not added to the model's own counts, as the replays count them (gz1dev read 22 zerglings at 6:00
+        # where its replay had 6 and 16 in eggs)
+        self.eggs_seen = False
         self.held: tuple[int, int] | None = None            # (the decision rolled and waited for, since)
         # units the model decided whose producer is busy, since when: up to one per producer of their kind (several
         # Marines wait for several Barracks), the macro deciding on meanwhile; trained as producers free up, and nothing
@@ -296,7 +300,8 @@ class LearnedMacro:
             self.next_query = hi.frame + QUERY_EVERY
             # the most likely decision Gary can carry out now; if none can, wait for the most
             # likely one that only needs a busy building to free up
-            x = self.tracker.features(obs, self.in_production(mine), self.inside(mine) if self.tracker.look_every else ())
+            x = self.tracker.features(obs, {} if self.eggs_seen else self.in_production(mine),
+                                      self.inside(mine) if self.tracker.look_every else ())
             probs, secs = self.model.probs(x)
             if self.pace:
                 self.next_query = hi.frame + int(min(PACE_MAX, max(QUERY_EVERY, float(secs[0]) * 24)))

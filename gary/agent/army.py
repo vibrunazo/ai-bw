@@ -249,7 +249,9 @@ class LearnedArmy:
         """Own units the observation doesn't show and the replays count: in production, inside a bunker (option
         armyseen: gary/policy/army.py ArmyTracker.extra_units)."""
         mine = [u for u in obs["units"] if u["owner"] == self.g.slot]
-        out = dict(self.g.executor.in_production(mine))
+        # (the Zerg's eggs and morphing buildings are in sight already: adding what they become counted zerglings and a
+        # Lair twice, and armyseen leaned worse on the Zerg, ZA141a+b)
+        out = {} if self.g.race.production_in_sight else dict(self.g.executor.in_production(mine))
         seen = {u["tag"] for u in mine}
         for tags in self.g.loaded.values():
             for tag in tags:
