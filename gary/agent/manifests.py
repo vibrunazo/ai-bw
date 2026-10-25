@@ -958,8 +958,11 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # gt0.13dev: the macro model's inputs as the replays it learned from count them (seenall: what is in sight looked at
 # every second, the units inside a bunker counted; in play its most-enemies-seen inputs had stayed 0). A fix: 96 paired
 # games against gt0.12dev, SA125a+b against WS121a+b: +0.031 +- 0.069, lost 22 (32), the gap -0.023, -0.076 to +0.028
+# gt0.14dev: the army model's own unit counts as its dataset's (armyseen: the units in production and inside a bunker;
+# in play it read 5-6 marines where the dataset had 13-15). A fix: 96 paired games against gt0.13dev, AS141a+b against
+# SA125a+b: +0.016 +- 0.050, lost 18 (22), the gap -0.010. (On the Zerg it leaned worse, -0.044 +- 0.053: not in gz1dev.)
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
-                                     "+dice+widespot+seenall"), "version": "gt0.13dev"}
+                                     "+dice+widespot+seenall+armyseen"), "version": "gt0.14dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
