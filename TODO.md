@@ -11,6 +11,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#28](https://github.com/vibrunazo/gary/issues/28) Commit decision: a learning signal from locked paired branches
   (1,004 pairs, the learner at chance; engagebias didn't carry to games; next, the arms scored by the critic's read at
   their end, CP130a)
+- [#48](https://github.com/vibrunazo/gary/issues/48) The Zerg's macro model counts the units in its eggs twice; the fix
+  (option eggs) lost 96 paired games: what leaned on the double count
 - [#29](https://github.com/vibrunazo/gary/issues/29) Why army dataset v5's commit models trail the deployed one in games
 - [#3](https://github.com/vibrunazo/gary/issues/3) Close out won games (the hunt imitated: its labels on the deployed
   commit model next)

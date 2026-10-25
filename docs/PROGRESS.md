@@ -1286,7 +1286,10 @@ plan and the full log).
   morphing. Fixed with a race-keyed flag (Race.production_in_sight, the Zerg's): armyseen then adds nothing for the
   Zerg, whose counts match its dataset's. The same fault was in the Zerg's macro model all along: at 6:00 gz1dev read
   22 zerglings where its replay had 6, the other 16 in eggs (the tracker adds the units in production, as the
-  Terran's need). Option eggs leaves them out for such a race; judged in EG141a+b against ZP141a+b. The v5 commit model again with armyseen (#29: V5141a+b against AS141a+b): -0.039 +-
+  Terran's need). Option eggs leaves them out for such a race. Over 96 paired games (EG141a+b against ZP141a+b, both
+  against gt0.13dev): the Zerg's score -0.117 +- 0.063 (better 24, worse 45), its gap -0.076 (-0.150 to 0.000) nearer
+  but the macro at 5-10 minutes +0.036 (+0.002 to +0.073) further: worse in games, not adopted; the inputs it fixes are
+  the replays', so what leaned on the double count is the review's question (issue #48). The v5 commit model again with armyseen (#29: V5141a+b against AS141a+b): -0.039 +-
   0.051, the gap +0.038 (+0.008 to +0.062) further: it still trails the deployed model, so the bunker counts weren't
   why.
   How far gt1dev is from gt1 now (gt0.14dev, AS141a+b, against gt1's ZS100a+b, both against gz0.3, 96 paired games):
