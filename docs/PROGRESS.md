@@ -1216,8 +1216,12 @@ plan and the full log).
   after 13:00 in games it was losing. A first reading blamed buildings on the natural's own site; the clearance
   added for it (the town hall's ground, its add-on's and 3 tiles around kept free, WS121a) left 44 of 48 games
   identical record for record. The real fault was the comparison: BL120a was played in a worktree against gz1 gz0.2,
-  WS120a on master against gz0.3 (ownsupply), and the games differ from the Zerg's first decision. A baseline on
-  master against gz0.3 (BL121a) judges it again; a baseline is played on the same code as its arm.
+  WS120a on master against gz0.3 (ownsupply), and the games differ from the Zerg's first decision. Against a
+  baseline on master (BL121a, gt1dev against gz0.3: lost 18 as well, "no free SCV" 7.3 a game, so both came with the
+  new Zerg): paired -0.010 [-0.042, +0.026], 35 of 48 games scored the same (it fires once the main is full), the
+  gap -0.005 (-0.021 to +0.008), 15-20 minutes +0.025 (+0.005 to +0.047); the pipe: "no spot" 17.3 a game to 3.4,
+  carried out 0.82 to 0.86, Starport 0.30 to 0.61, Science Facility 0.20 to 0.47, Barracks 0.50 to 0.60. A close
+  call: its second 48 (BL121b, WS121b). A baseline is replayed whenever its code or the opponent's manifest changed.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
