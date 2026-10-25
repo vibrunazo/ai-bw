@@ -1283,7 +1283,10 @@ plan and the full log).
   replays count morphing units. Checked (the army inputs' probe on gz1dev+armyseen): the Zerg's counts then overshoot
   the dataset's (zerglings 33 against 27 at 8:00, a Lair being morphed counted where the replay has none): its executor's
   in production holds the eggs' units and the morphing buildings, which the replays count as eggs and as what is
-  morphing. The fix: a race-keyed rule for which production shows in sight. The v5 commit model again with armyseen (#29: V5141a+b against AS141a+b): -0.039 +-
+  morphing. Fixed with a race-keyed flag (Race.production_in_sight, the Zerg's): armyseen then adds nothing for the
+  Zerg, whose counts match its dataset's. The same fault was in the Zerg's macro model all along: at 6:00 gz1dev read
+  22 zerglings where its replay had 6, the other 16 in eggs (the tracker adds the units in production, as the
+  Terran's need). Option eggs leaves them out for such a race; judged in EG141a+b against ZP141a+b. The v5 commit model again with armyseen (#29: V5141a+b against AS141a+b): -0.039 +-
   0.051, the gap +0.038 (+0.008 to +0.062) further: it still trails the deployed model, so the bunker counts weren't
   why.
   How far gt1dev is from gt1 now (gt0.14dev, AS141a+b, against gt1's ZS100a+b, both against gz0.3, 96 paired games):
