@@ -1240,6 +1240,11 @@ plan and the full log).
   tracker looks every second, units inside a bunker counted) is judged in gt1dev (SA125a+b against WS121a+b); the
   critic's own view does both regardless. Left: the decisions so far count Gary's decisions in play and the
   production commands in replays (one decision apart at most at 1-8 minutes).
+  The critic retrained (runs/value/TvZ_T_20261025-000917: 575k pro samples, 599k from 2,064 league games since
+  10-23, Gary won 33% of them and lost 20%): held-out win AUC on Gary's games 0.88 (0-5 minutes 0.64, 5-10 0.80,
+  10-20 0.96), on the pros' 0.64; the discounted head explains 36% of the score to the end (sd 966; the old critic
+  42% of sd 373 on 12-minute games against scripted Zergs); net60 11%, net180 0.1% (sd 2,012: the 30-minute
+  league's late fights; the old 24% of sd 944). The pairs use the discounted head and the win logit.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
