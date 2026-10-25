@@ -1297,6 +1297,16 @@ plan and the full log).
   (+0.074 to +0.161) further, fight -0.066 (-0.094 to -0.035) nearer. At gt0.10dev (DV90a+b against gt0.9) it was
   -0.346, the gap +0.128, macro +0.256, fight -0.060: dice, widespot and seenall halved the macro's part; what is left
   is mostly the macro without its stop-gaps.
+- **Three offline checks (2026-10-25, after an outside review).** The eggs loss (#48): no rule leans on the
+  double count. With the right counts the Zerg leaves zerglings (17% of its decisions at 8-10 minutes, 12% with
+  eggs) for Hydralisks, waits for money more (47 times a game at 12-30 minutes against 37, nearly all under 1,000
+  minerals) and slows: drones 32.7 at 20:00 (35.1), bases 4.4 (5.2). Its own counts act as a momentum cue (pros with
+  many zerglings make more). The critic's 180 s head (issue #49): its 0.1% explained hides a correlation
+  of +0.37 to +0.49 with the outcome from 6:00 on, its predictions twice as spread as that supports (overconfident,
+  likely overfit); rescaled it would explain 14-24%. The Protoss macro model (#31): the order-free score (its top-1
+  among the next 3 decisions) leaves the gap where it was (PvT 0.59, the Terran's in PvT 0.66), so it isn't order;
+  its misses are the two Gateway units (Zealot precision 0.27-0.34) and reactive buildings (cannons 0.06-0.17,
+  observers, shuttles), and its odds are most spread in PvT and PvZ (about 7 choices a moment, 5-6 elsewhere).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

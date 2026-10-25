@@ -13,7 +13,10 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
   (the signal weak: scored by the critic too, nothing beats the deployed model's preference in 941 pairs; next, pairs
   again on gt0.14dev's fixed inputs, several dice per arm, or a decision with longer consequences)
 - [#48](https://github.com/vibrunazo/gary/issues/48) The Zerg's macro model counts the units in its eggs twice; the fix
-  (option eggs) lost 96 paired games: what leaned on the double count
+  (option eggs) lost 96 paired games: no rule leans on it; the right counts move the model off zerglings to
+  Hydralisks and it slows (its counts a momentum cue): eggs with the macro trained on Gary-Z's own states next
+- [#49](https://github.com/vibrunazo/gary/issues/49) The critic's net-value heads rank moments well but are
+  overconfident (180 s: correlation +0.37-0.49 from 6:00, R² near 0): early stopping, per-window report
 - [#29](https://github.com/vibrunazo/gary/issues/29) Why army dataset v5's commit models trail the deployed one in games
   (not the bunker counts: with armyseen v5 still trails, -0.039 over 96)
 - [#3](https://github.com/vibrunazo/gary/issues/3) Close out won games (the hunt imitated: its labels on the deployed
@@ -46,7 +49,7 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 ## Evaluation and tools
 
 - [#31](https://github.com/vibrunazo/gary/issues/31) Mirror health rounds and the Protoss macro models (rounds played, no errors;
-  left: the death records' slot in mirrors, and why the Protoss PvT and PvZ decisions are the hardest to predict)
+  left: the death records' slot in mirrors; the Protoss PvT/PvZ misses are Zealot/Dragoon and reactive buildings)
 - [#32](https://github.com/vibrunazo/gary/issues/32) The gap score disagrees with results
 - [#44](https://github.com/vibrunazo/gary/issues/44) Engine error at the map's edge
 - [#15](https://github.com/vibrunazo/gary/issues/15) Fit human-interface profiles from replays
