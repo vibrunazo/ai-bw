@@ -254,8 +254,8 @@ class RoleRules:
                 and not is_worker(by_tag[t]["type"]) and not is_building(by_tag[t]["type"]) and by_tag[t]["completed"]]
         for u in mine:
             self.first_seen.setdefault(u["tag"], now)
-        if not mine:
-            return extra
+        if not mine or not getattr(self, "own_extra", True):
+            return extra                         # (option dataextras: 0, as in the pros' data the models learned from)
         pack = self._pack(mine, [], by_tag)
         size = sum(1 for u in mine if u["tag"] in pack["tags"])
         index = {t: i for i, t in enumerate(tags)}

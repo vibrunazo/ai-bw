@@ -600,6 +600,10 @@ OPTIONS = {
     # the training games' scenarios): the held-out state-selected suite +195 against its start's +87 (paired +105,
     # +44 to +169), against RoleAhead's +141 +50 (-51 to +151)
     "rl1": lambda m: m["fight"].update(roles_model="runs/roles_rl/20261022_185355/model.pt"),
+    # gary/agent/roles.py own_extra: the role model's extras 3-5 (a unit's age, its distance to Gary's biggest bunch,
+    # that bunch's size) left 0, as in the response datasets the models learned from (always 0 there: their weights
+    # stayed at their initialization's scale, and play fed them 1-4)
+    "dataextras": lambda m: m["fight"].update(data_extras=True),
     # the third roles RL run, from rl1 with each decision credited over 20 s (--horizon 20; rl2's 10 s won the suite
     # and lost in games): the held-out suite +268 against rl1's +195 (paired +71, +12 to +135), against RoleAhead +122
     "rl3": lambda m: m["fight"].update(roles_model="runs/roles_rl/20261023_043828/model.pt"),
@@ -1159,6 +1163,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                              [rule(r) for r in f.get("in_fight", [])], f.get("guard_rail", False),
                              f.get("workers", True), seed, f.get("ctrl_click", False),
                              f.get("watch_tiles", 0) * 32, f.get("roles", {}), f.get("attend", False))
+    if m["fight"] is not None and m["fight"].get("data_extras") and getattr(g.fight, "roles", None) is not None:
+        g.fight.roles.own_extra = False
     if m["arbiter"] == "drill/v1":
         g.arbiter = DrillArbiter(g, seed, interruptions)
     else:
