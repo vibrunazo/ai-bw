@@ -1269,6 +1269,8 @@ plan and the full log).
   infantry, Zerg and Protoss ground units only (TvT's mech read 0-4); now every race's fighters. The Protoss macro
   models offline: non-routine top-1 0.48 in PvP, 0.32 and 0.31 in PvT and PvZ against baselines 0.17 and 0.12 (the
   smallest lift of any race), the vocabulary sound.
+  The self-play pairing after seenall (ZP141a, gt1dev gt0.13dev against gz1dev gz0.4dev, 48 games): the Terran won 7
+  and led at 30:00 in 10 (35%), the Zerg won 8 and led in 12 (42%), 11 even: still balanced (ZO110a 35% and 46%).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

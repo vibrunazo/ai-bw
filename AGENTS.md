@@ -32,7 +32,8 @@ and its line removed; a new one gets an issue and a line).
   job in gt1dev is the learned layer's or nobody's. `gz1dev` is the same for the Zerg (gz1 with `unscripted`: join,
   sweep, press, the hunt, the caps, the bank escape and overlords ahead off; its overlord posts and mutalisk raid
   kept, as no model moves those units; decoders such as the tech floor are not stop-gaps and stay). gt1dev against
-  gz1dev is the TvZ self-play pairing (balanced: each side wins or leads in 38% of 96 games, docs/PROGRESS.md). A learned layer's work (data, training, the
+  gz1dev is the TvZ self-play pairing (balanced: each side wins or leads in 38% of 96 games; gt0.13dev against gz0.4dev
+  35% and 42% of 48, docs/PROGRESS.md). A learned layer's work (data, training, the
   pipe check, RL) is done and judged in gt1dev; gt1dev replaces gt1 when it beats it in 96 paired games, with a
   version bump. The suite's numbers for both, and how far apart they are, are in docs/PROGRESS.md.
 - A change is an option on them (`gt1+<option>`), judged in paired 48-game rounds on the ladder maps
