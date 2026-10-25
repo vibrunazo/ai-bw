@@ -75,6 +75,9 @@ class FixedPriority:
         who = self._act()
         self._trace(before, who)
         self.sightings.look()            # every half second: what Gary sees, in the records
+        tracker = getattr(self.g.macro, "tracker", None)
+        if tracker is not None and tracker.look_every and self.g.hi.frame - tracker.last_look >= tracker.look_every:
+            tracker.look(self.g.hi.observe())    # (option seenall: the macro model's view between its queries)
 
     def _act(self) -> str | None:
         """One turn; who got the hands (or acted without a task), or None. (LOG.owner: who is acting, stamped

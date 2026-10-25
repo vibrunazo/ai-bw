@@ -17,18 +17,23 @@ the enemy army, the trends of the last 30 s). Heads and their data:
   disc    the net value ahead, discounted (half-life DISC_HALF_S), by bootstrapping: the next
           GARY_EVERY_S seconds' net value plus the head's own value after (refreshed every REFRESH batches)
 
-Gary's games: v0.19 with each build style forced in turn (and the macro unsteered), half of them
-with the macro drawing its decisions (temperature 0.5) for variety, against the opponent pool (the
-9-pool, Zerg v2, the replayed pros on three maps); its view every GARY_EVERY_S seconds.
+Gary's games: the league's (runs/league/<round>, the Garys of every version against each other), each replay
+re-simulated as the pros' are (ingest/macro_dataset.py), so both read the same features; its view every
+GARY_EVERY_S seconds, the net value from the units' deaths (a unit's value, Terran +, as eval/pairs.py
+scores its arms). The win head learns from the decided games; games at the time limit teach the net heads.
+Held out: the pros' games by hash, Gary's by seed (every fifth).
 
-    python -m train.value --gary-seeds 16                 # -> runs/value/TvZ_T_<stamp>/model.pt
+The critic reads the moment, not what the player meant or knows of the pros: the build style, the map, the year
+and the matchup are left at "unknown" and the decisions so far are the player's own (in play: ValueView, not the
+pros' history the macro model may see).
+
+    python -m train.value --rounds "BL121?" "WS121?" --race T     # -> runs/value/TvZ_T_<stamp>/model.pt
+    python -m train.value --since 2026-10-23                      # every round of the league since then
 """
 
 from __future__ import annotations
 
 import argparse
-import contextlib
-import io
 import json
 import random
 import sys
@@ -48,12 +53,8 @@ sys.path.insert(0, str(REPO_ROOT / "ingest"))
 STRIDE_S = 10
 GARY_EVERY_S = 5
 REFRESH = 50                                   # batches between refreshes of the bootstrapped head's targets
-MAPS = {m: REPO_ROOT / "tests" / "fixtures" / "replays" / f"stardata_tvz_{m}.rep"
-        for m in ("python_gg13676", "standard_ozp3w", "heartbreak_9rg84")}
-OPPONENTS = ("gz1",)                   # (the Zerg Gary; the scripted Zergs were deleted in docs/REFACTOR.md Phase 3)
-STYLES = (None, 1, 2, 3, 4)
-VERSIONS = ("v019", "v019+sample_t05")         # by seed: even, odd
-MINUTES = 12
+MORPH_FRAMES, MORPH_PX = 48, 64                # a unit gone with the player's new one this near: a morph, not a death
+SKIP_ROUNDS = ("CP", "BC_")                    # rounds with paired branches (their replays aren't one game)
 
 
 # --- pro games ---------------------------------------------------------------------------------
@@ -82,30 +83,38 @@ _belief: dict = {}
 
 def _belief_model(race: str = "T"):
     if race not in _belief:
-        from gary.agent.manifests import _newest
+        from gary.agent.manifests import model_for
         from gary.policy.belief import BeliefModel
         torch.set_num_threads(1)
-        _belief[race] = BeliefModel.load(_newest("belief", "TvZ", race))
+        _belief[race] = BeliefModel.load(model_for("belief", "TvZ", race))
     return _belief[race]
 
 
 def pro_samples(args: tuple) -> tuple[np.ndarray, np.ndarray, str]:
     """The player's view (race T or Z) every STRIDE_S seconds of one pro game, and whether it won."""
     (path, i, won, sha1), spec_d, race = args
-    enemy = {"T": "Z", "Z": "T"}[race]
-    from gary.policy.belief import WORKERS, features_series
-    from gary.policy.macro import FeatureSpec, encode
-    from gary.policy.value import EXTRAS, army_supply, belief_outputs, extras, no_style
+    from gary.policy.macro import FeatureSpec
+    from gary.policy.value import EXTRAS
     spec = FeatureSpec(**spec_d)
     empty = np.zeros((0, spec.size + len(EXTRAS)), np.float16), np.zeros(0, np.float32), sha1
     try:
         d = np.load(path)
     except Exception:
         return empty
-    frames, cmds = d["frames"], d["cmds"]
-    ts = np.arange(0, len(frames), STRIDE_S)
+    ts = np.arange(0, len(d["frames"]), STRIDE_S)
     if len(ts) < 6:
         return empty
+    return view_rows(d, i, spec, race, ts).astype(np.float16), np.full(len(ts), float(won), np.float32), sha1
+
+
+def view_rows(d, i: int, spec, race: str, ts: np.ndarray) -> np.ndarray:
+    """The critic's view (gary/policy/value.py) of player i of a game's arrays (ingest/macro_dataset.py: a row a
+    second) at the rows ts."""
+    enemy = {"T": "Z", "Z": "T"}[race]
+    from gary.policy.belief import WORKERS, features_series
+    from gary.policy.macro import encode
+    from gary.policy.value import army_supply, belief_outputs, extras, no_style
+    frames, cmds = d["frames"], d["cmds"]
     c = cmds[cmds[:, 1] == i]
     cls = np.array([spec.decision_index(a, u) for a, u in c[:, 2:4].tolist()], dtype=np.int64) if len(c) else np.zeros(0, np.int64)
     cum = np.zeros((len(c) + 1, len(spec.decisions)), dtype=np.float32)
@@ -128,42 +137,80 @@ def pro_samples(args: tuple) -> tuple[np.ndarray, np.ndarray, str]:
     seen_army_max = np.array([seen_army[a:t + 1].max() for a, t in zip(ago, ts)])
     ex = extras(belief_outputs(_belief_model(race), b), own[ts], own[ago], workers[ts] - workers[ago], seen_army[ts],
                 seen_army_max)
-    return np.concatenate([x, ex], 1).astype(np.float16), np.full(len(ts), float(won), np.float32), sha1
+    return np.concatenate([x, ex], 1)
 
 
 # --- Gary's games ------------------------------------------------------------------------------
 
-def gary_game(args: tuple) -> dict:
-    """Gary's view every GARY_EVERY_S seconds of one game, the score's events, and the result."""
-    opponent, mp, seed, version, style = args
-    from eval.block_branch import Watch, _step
-    from eval.match import Match
-    from gary.policy.value import ValueView
-    with contextlib.redirect_stdout(io.StringIO()):
-        m = Match(seed, version, MAPS[mp], opponent, style=style)
-    w = Watch(m)
-    w.look()
-    view = ValueView(m.gary, _belief_model())
-    xs, frames = [], []
-    end = MINUTES * 60 * 24
-    while m.game.frame < end and _step(m, w):
-        if m.game.frame % 24 < 2 and m.gary.macro is not None:
-            try:
-                obs = m.gary.hi.observe()
-            except StopIteration:                              # Gary was eliminated
-                break
-            view.look(obs)
-            if m.game.frame % (GARY_EVERY_S * 24) < 2:
-                xs.append(view.features(obs)[0].astype(np.float16))
-                frames.append(m.game.frame)
-    players = {p["slot"] for p in m.game.observe()["players"]}
-    result = "won" if m.slot["T"] in players and m.slot["Z"] not in players else \
-        "lost" if m.slot["T"] not in players else "time"
-    out = {"game": f"{opponent}/{mp}/{seed}/{version}/{style}", "x": np.array(xs), "frames": frames,
-           "events": w.score.events, "result": result}
-    m.game.close()
+def league_jobs(rounds: list[str], since: str | None, max_games: int) -> list[tuple]:
+    """(replay, result, round/map/seed) of the league's games: the rounds named (globs), or every round saved
+    since a date, newest first, up to max_games."""
+    import glob
+    import os
+    root = REPO_ROOT / "runs" / "league"
+    paths = sorted({p for r in rounds for p in glob.glob(str(root / r / "round.json"))}) if rounds else \
+        [str(p) for p in root.glob("*/round.json")]
+    if since:
+        t0 = time.mktime(time.strptime(since, "%Y-%m-%d"))
+        paths = [p for p in paths if os.path.getmtime(p) >= t0]
+    jobs = []
+    for p in sorted(paths, key=os.path.getmtime, reverse=True):
+        d = json.loads(Path(p).read_text(encoding="utf-8"))
+        if str(d.get("round", "")).startswith(SKIP_ROUNDS):
+            continue
+        for g in d.get("games", []):
+            if Path(g["replay"]).exists():
+                jobs.append((g["replay"], g["result"], f"{d['round']}/{g['map']}/{g['seed']}"))
+    return jobs[:max_games]
+
+
+def deaths(lines: list[dict], slot_t: int) -> list[tuple[int, float]]:
+    """(frame, value) of each unit's death, + for the Terran (a Zerg unit died), - against; a unit gone with a new
+    one of its player's at its spot (a drone into an Extractor) morphed and isn't counted."""
+    import math
+    from gary import terran as T
+    from gary import zerg as Z
+    ev = [r for r in lines if r["type"] == "event"]
+    born = [r for r in ev if r["ev"] in ("start", "done")]
+    out = []
+    for g in (r for r in ev if r["ev"] == "gone"):
+        if any(b["slot"] == g["slot"] and b["tag"] != g["tag"] and abs(b["frame"] - g["frame"]) <= MORPH_FRAMES
+               and math.dist((b["x"], b["y"]), (g["x"], g["y"])) <= MORPH_PX for b in born):
+            continue
+        m, gas = T.COST.get(g["unit"]) or Z.COST.get(g["unit"]) or (0, 0)
+        v = (m + gas) / (2 if g["unit"] in Z.PAIRS else 1)
+        out.append((g["frame"], -v if g["slot"] == slot_t else v))
     return out
 
+
+def league_game(args: tuple) -> dict:
+    """One league game re-simulated: the race's view every GARY_EVERY_S seconds, the deaths' values (+ for that
+    race), the result for that race (won, lost, time)."""
+    (replay, result, game), spec_d, race = args
+    from macro_dataset import game_arrays, run_resim
+    from gary.policy.macro import FeatureSpec
+    out = {"game": game, "x": np.zeros((0, 0)), "frames": [], "events": [], "result": "time", "zerg": "?"}
+    try:
+        lines = run_resim(str(Path(replay).resolve()))
+    except Exception:  # noqa: BLE001 - one bad replay must not stop the batch
+        return out
+    header = next(r for r in lines if r["type"] == "header")
+    d = game_arrays(lines)
+    races = {p["slot"]: p["race"] for p in header["players"]}            # (the game's race ids: 0 Zerg, 1 Terran)
+    if d is None or sorted(races.get(s) for s in d["slots"]) != [0, 1]:
+        return out
+    slot_t = next(s for s in d["slots"] if races[s] == 1)
+    i = d["slots"].index(slot_t if race == "T" else next(s for s in d["slots"] if s != slot_t))
+    ts = np.arange(0, len(d["frames"]), GARY_EVERY_S)
+    if len(ts) < 6:
+        return out
+    flip = 1 if race == "T" else -1
+    if race != "T":
+        result = {"won": "lost", "lost": "won"}.get(result, result)
+    return {"game": game, "x": view_rows(d, i, FeatureSpec(**spec_d), race, ts).astype(np.float16),
+            "frames": d["frames"][ts].tolist(), "events": [(f, flip * v) for f, v in deaths(lines, slot_t)],
+            "result": result if result in ("won", "lost") else "time",
+            "zerg": next((p["name"].split()[-1] for p in header["players"] if p["race"] == 0), "?")}
 
 def gary_targets(g: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Per sample: win (1/0, nan if undecided); the net value over the next 60 and 180 s, and over the
@@ -196,14 +243,16 @@ def auc(y, p):
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--gary-seeds", type=int, default=16)
+    ap.add_argument("--rounds", nargs="*", default=[], help="league rounds (globs) whose games teach the net heads")
+    ap.add_argument("--since", help="every league round saved since this date (YYYY-MM-DD)")
+    ap.add_argument("--max-games", type=int, default=2000)
     ap.add_argument("--pro-games", type=int, default=6000)
     ap.add_argument("--epochs", type=int, default=12)
     ap.add_argument("--parallel", type=int, default=14)
     ap.add_argument("--reuse", help="a run folder whose collected data to train on again")
     ap.add_argument("--no-extras", action="store_true", help="ablation: the extras zeroed (the macro model's view alone)")
-    ap.add_argument("--race", default="T", choices=["T", "Z"], help="whose value: the Zerg's from the pro games alone (its "
-                    "win head: who is ahead; Gary-Z's own games, for the net heads, are not played here yet)")
+    ap.add_argument("--race", default="T", choices=["T", "Z"], help="whose value (the league's games read from that "
+                    "race's side)")
     ap.add_argument("--matchup", default="TvZ")
     from train.select import GameFilter
     GameFilter.add_args(ap)
@@ -211,9 +260,9 @@ def main() -> None:
     args = ap.parse_args()
     priority.apply(args.priority)
     keep = GameFilter.from_args(args)
-    from gary.agent.manifests import _newest
+    from gary.agent.manifests import model_for
     from gary.policy.macro import MacroModel
-    spec = MacroModel.load(str(_newest("macro", args.matchup, args.race))).spec
+    spec = MacroModel.load(str(model_for("macro", args.matchup, args.race))).spec      # (the one Gary plays with)
     run = REPO_ROOT / "runs" / "value" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
     run.mkdir(parents=True, exist_ok=True)
     src = Path(args.reuse) if args.reuse else run
@@ -222,19 +271,20 @@ def main() -> None:
         print(f"{len(jobs)} pro player-games ({keep.describe()})", flush=True)
         random.Random(0).shuffle(jobs)
         jobs = jobs[:args.pro_games]
-        gjobs = [(o, mp, s, VERSIONS[s % 2], st) for o in OPPONENTS for mp in MAPS for s in range(1, args.gary_seeds + 1)
-                 for st in STYLES] if args.race == "T" else []
+        gjobs = league_jobs(args.rounds, args.since, args.max_games)
+        print(f"{len(gjobs)} league games", flush=True)
         with ProcessPoolExecutor(args.parallel) as pool:
             pro = list(monitor.track(pool.map(pro_samples, [(j, spec.to_dict(), args.race) for j in jobs], chunksize=16), len(jobs),
                                      "pro games"))
             np.savez_compressed(src / "pro.npz", x=np.concatenate([p[0] for p in pro]), win=np.concatenate([p[1] for p in pro]),
                                 game=np.concatenate([[p[2]] * len(p[1]) for p in pro]))
-            gary = list(monitor.track(pool.map(gary_game, gjobs), len(gjobs), "Gary's games"))
+            gary = list(monitor.track(pool.map(league_game, [(j, spec.to_dict(), args.race) for j in gjobs]),
+                                      len(gjobs), "league games"))
         with open(src / "gary.jsonl", "w", encoding="utf-8") as f:
             for g in gary:
                 f.write(json.dumps({**g, "x": g["x"].astype(np.float32).round(3).tolist()}) + "\n")
     pro = np.load(src / "pro.npz")
-    gary = [g for g in (json.loads(l) for l in open(src / "gary.jsonl", encoding="utf-8")) if g["x"]]
+    gary = [g for g in (json.loads(l) for l in open(src / "gary.jsonl", encoding="utf-8")) if len(g["x"])]
     # held out: a tenth of the pro games (as the other models), Gary's games of every fifth seed
     # (all the styles of a seed together: they share the game's start)
     n0 = len(pro["win"])
@@ -246,13 +296,13 @@ def main() -> None:
         gx.append(np.array(g["x"], np.float32))
         gwin.append(w)
         gnet.append(n)
-        gtest.append(np.full(len(w), int(g["game"].split("/")[2]) % 5 == 0))
+        gtest.append(np.full(len(w), int(g["game"].split("/")[-1]) % 5 == 0))
         nxt = np.arange(k + 1, k + len(w) + 1)             # the next sample of the same game, -1 after its last
         nxt[-1] = -1
         gnext.append(nxt)
         gend.append(np.full(len(w), g["result"] != "time"))
         gmin.append(fr / 1440)
-        gopp.append(np.array([g["game"].split("/")[0]] * len(w), object))
+        gopp.append(np.array([g.get("zerg", "?")] * len(w), object))
         k += len(w)
     gnet = np.concatenate(gnet) if gnet else np.zeros((0, 3), np.float32)
     X = np.concatenate([pro["x"].astype(np.float32)] + gx)
@@ -312,10 +362,10 @@ def main() -> None:
     pw, pn = torch.sigmoid(lw).numpy(), ln.numpy()
     Wte, Nte, gte, tte, ote = W[test], N[test], is_gary[test], t_min[test], opp[test]
     print(f"held out: win AUC pro {auc(Wte[~gte], pw[~gte]):.3f}, Gary {auc(Wte[gte], pw[gte]):.3f}")
-    for o in OPPONENTS:
+    for o in sorted(set(ote[gte])):
         s = gte & (ote == o)
-        print(f"  {o:8s} " + ", ".join(f"{lo}-{hi} min {auc(Wte[s & (tte >= lo) & (tte < hi)], pw[s & (tte >= lo) & (tte < hi)]):.2f}"
-                                       for lo, hi in ((0, 4), (4, 7), (7, 99))))
+        print(f"  vs {o:8s} " + ", ".join(f"{lo}-{hi} min {auc(Wte[s & (tte >= lo) & (tte < hi)], pw[s & (tte >= lo) & (tte < hi)]):.2f}"
+                                          for lo, hi in ((0, 5), (5, 10), (10, 20), (20, 99))))
     for j, h in enumerate((60, 180)):
         y, p = Nte[gte, j], pn[gte, j]
         m = ~np.isnan(y)

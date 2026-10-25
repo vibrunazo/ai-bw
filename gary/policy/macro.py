@@ -241,6 +241,27 @@ class MacroTracker:
                                          # all game Gary-Z over-droned late (53 workers at 15-20 min, pros 35: the pros'
                                          # typical past kept telling the model to drone past what it had), with its
                                          # own early (the loop) it had no army at 6:00; round g16 against g13
+        # option seenall: what is in sight looked at every look_every frames (look()), not only when the model is
+        # queried: the replays' seen_max counts every second, and with the queue and dice (16 queries in 200 s) the
+        # model in play saw an empty enemy history (15 enemies in sight, seen_max all 0, 2026-10-25)
+        self.look_every = 0
+        self.last_look = -1 << 30
+        self.tag_types: dict[int, int] = {}   # own units' types by tag (one inside a bunker is out of sight)
+
+    def look(self, obs: dict) -> None:
+        """What is in sight now, between the model's queries: the most of each enemy type seen at once, and the
+        player's own units' types by tag."""
+        self.last_look = obs["frame"]
+        seen = np.zeros(228, dtype=np.float32)
+        for u in obs["units"]:
+            t = u["type"]
+            if not 0 <= t < 228:
+                continue
+            if u["owner"] == self.slot:
+                self.tag_types[u["tag"]] = t
+            elif u["owner"] != 11:
+                seen[t] += 1
+        self.seen_max = np.maximum(self.seen_max, seen)
 
     def note_decision(self, act: int, uid: int, frame: int) -> None:
         self.decided[self.spec.decision_index(act, uid)] += 1
@@ -251,7 +272,9 @@ class MacroTracker:
         i = self.spec.decision_index(act, uid)
         self.decided[i] = max(0, self.decided[i] - 1)
 
-    def features(self, obs: dict, in_production: dict[int, int]) -> np.ndarray:
+    def features(self, obs: dict, in_production: dict[int, int], hidden=()) -> np.ndarray:
+        """hidden: tags of the player's own units out of sight (inside a bunker), counted as the replays count
+        them, by the type look() last saw."""
         units = np.zeros((1, 228, 2), dtype=np.float32)
         seen = np.zeros(228, dtype=np.float32)
         for u in obs["units"]:
@@ -265,6 +288,9 @@ class MacroTracker:
                 seen[t] += 1
         for t, n in in_production.items():
             units[0, t, 0] += n
+        for tag in hidden:
+            if (t := self.tag_types.get(tag)) is not None:
+                units[0, t] += 1
         self.seen_max = np.maximum(self.seen_max, seen)
         me = obs["me"]
         eco = np.array([[me["minerals"], me["gas"], me["supply_used"] * 2, me["supply_max"] * 2]], dtype=np.float32)

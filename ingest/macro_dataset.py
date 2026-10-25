@@ -182,16 +182,9 @@ def production_decisions(lines: list[dict], pidx: dict[int, int]) -> list[tuple]
     return out
 
 
-def build_game(rec: dict, styles: dict[str, int]) -> dict:
-    """Re-simulate one game and write its arrays. Returns its index row."""
-    row = {"sha1": rec["sha1"], "rel_path": rec["rel_path"], "matchup": rec["matchup"]}
-    t0 = time.time()
-    try:
-        lines = run_resim(rec["rel_path"])
-    except Exception as e:  # noqa: BLE001 - one bad replay must not stop the batch
-        row.update(ok=False, error=str(e)[:300], interrupted=type(e).__name__ == "ResimInterrupted")
-        return row
-    header = next(r for r in lines if r["type"] == "header")
+def game_arrays(lines: list[dict]) -> dict | None:
+    """A re-simulated game's arrays (the dataset's .npz: frames, eco, units, seen, cmds) and its two players' slots
+    (index 0 and 1 in the arrays), or None without two players."""
     snaps = [r for r in lines if r["type"] == "snapshot"]
     # the two real players: observers send commands too, but the engine accepts almost none
     accepted: dict[int, int] = {}
@@ -200,11 +193,8 @@ def build_game(rec: dict, styles: dict[str, int]) -> dict:
             accepted[p["slot"]] = accepted.get(p["slot"], 0) + p["accepted"]
     slots = sorted(sorted(accepted, key=lambda s: -accepted[s])[:2])
     if len(slots) != 2 or not snaps:
-        row.update(ok=False, error="not two players")
-        return row
+        return None
     pidx = {s: i for i, s in enumerate(slots)}
-    names = {p["slot"]: p for p in header["players"]}
-
     T = len(snaps)
     frames = np.array([s["frame"] for s in snaps], dtype=np.int32)
     eco = np.zeros((T, 2, 4), dtype=np.int32)
@@ -220,14 +210,33 @@ def build_game(rec: dict, styles: dict[str, int]) -> dict:
                 units[t, i, int(k)] = (n_all, n_done)
             for k, n in p.get("seen", {}).items():
                 seen[t, i, int(k)] = n
+    cmds = np.array(production_decisions(lines, pidx), dtype=np.int32).reshape(-1, 6)
+    return {"slots": slots, "frames": frames, "eco": eco, "units": units, "seen": seen, "cmds": cmds}
 
-    cmds = production_decisions(lines, pidx)
-    cmds_arr = np.array(cmds, dtype=np.int32).reshape(-1, 6)
+
+def build_game(rec: dict, styles: dict[str, int]) -> dict:
+    """Re-simulate one game and write its arrays. Returns its index row."""
+    row = {"sha1": rec["sha1"], "rel_path": rec["rel_path"], "matchup": rec["matchup"]}
+    t0 = time.time()
+    try:
+        lines = run_resim(rec["rel_path"])
+    except Exception as e:  # noqa: BLE001 - one bad replay must not stop the batch
+        row.update(ok=False, error=str(e)[:300], interrupted=type(e).__name__ == "ResimInterrupted")
+        return row
+    header = next(r for r in lines if r["type"] == "header")
+    arrays = game_arrays(lines)
+    if arrays is None:
+        row.update(ok=False, error="not two players")
+        return row
+    slots = arrays.pop("slots")
+    names = {p["slot"]: p for p in header["players"]}
+    T = len(arrays["frames"])
+    cmds = arrays["cmds"]
 
     path = out_dir() / rec["sha1"][:2] / f"{rec['sha1']}.npz"
     path.parent.mkdir(parents=True, exist_ok=True)
     buf = io.BytesIO()
-    np.savez_compressed(buf, frames=frames, eco=eco, units=units, seen=seen, cmds=cmds_arr)
+    np.savez_compressed(buf, **arrays)
     path.write_bytes(buf.getvalue())
 
     players = []

@@ -296,7 +296,7 @@ class LearnedMacro:
             self.next_query = hi.frame + QUERY_EVERY
             # the most likely decision Gary can carry out now; if none can, wait for the most
             # likely one that only needs a busy building to free up
-            x = self.tracker.features(obs, self.in_production(mine))
+            x = self.tracker.features(obs, self.in_production(mine), self.inside(mine) if self.tracker.look_every else ())
             probs, secs = self.model.probs(x)
             if self.pace:
                 self.next_query = hi.frame + int(min(PACE_MAX, max(QUERY_EVERY, float(secs[0]) * 24)))
@@ -631,6 +631,11 @@ class LearnedMacro:
     def in_production(self, mine: list[dict]) -> Counter:
         """Units being made right now (the game counts them, observations don't list them): the executor's."""
         return self.g.executor.in_production(mine)
+
+    def inside(self, mine: list[dict]) -> list[int]:
+        """Own units out of sight inside a bunker (the replays count them): the ones the fight layer loaded."""
+        seen = {u["tag"] for u in mine}
+        return [t for tags in self.g.loaded.values() for t in tags if t not in seen]
 
     def count(self, mine: list[dict], unit_type: int) -> int:
         """Own units of a type, as the pros' caps count them: the executor's."""

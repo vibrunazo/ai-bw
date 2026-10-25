@@ -797,6 +797,10 @@ OPTIONS = {
     # gary/policy/macro.py own_keys: with the pros' history, the supply provider's entry its own (the pros' early
     # overlord in it told Gary-Z's model one was coming: at 9/9 it gave Overlord under 1%, blocked 67% of 2:00)
     "ownsupply": lambda m: m["macro"].update(own_supply=True),
+    # gary/policy/macro.py look: the macro model's inputs as the replays it learned from count them, what is in sight
+    # looked at every second (not only when the model is queried: its "most enemies seen" stayed 0 in play) and the
+    # units inside a bunker counted (5 marines seen where the replay had 13 at 6:00)
+    "seenall": lambda m: m["macro"].update(look_seen=True),
     # three registered rules off (AGENTS.md): the pros' caps per minute; SCVs capped at the bases' saturation (MAX_SCVS
     # stays); depots ahead of production
     "nocaps": lambda m: m["macro"].update(caps=False),
@@ -1061,6 +1065,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro.odds_mass = m["macro"].get("odds_mass")
         g.macro.supply_ahead = m["macro"].get("supply_ahead", False)
         g.macro.hold = m["macro"].get("hold", False)
+        if hasattr(g.macro, "tracker"):
+            g.macro.tracker.look_every = 24 if m["macro"].get("look_seen") else 0
         if m["macro"].get("history") == "pro":
             # (Gary-Z's: the pros' decision history in the model's inputs, fading to its own over HISTORY_FADE
             # minutes, so its own drone-heavy past doesn't feed back on itself)

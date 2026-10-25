@@ -65,11 +65,13 @@ def extras(belief5: np.ndarray, own_army: np.ndarray, own_army_ago: np.ndarray, 
 
 
 def no_style(spec, x: np.ndarray) -> np.ndarray:
-    """The macro features with the style one-hot set to "none" (its last columns)."""
+    """The macro features with the style one-hot set to "none" (gary/policy/macro.py encode: after the decisions;
+    the map, year and matchup columns, when the spec has them, come after it)."""
     x = x.copy()
+    start = 7 + 2 * len(spec.own_types) + 2 * len(spec.seen_types) + len(spec.decisions)
     n = len(spec.styles) + 1
-    x[:, -n:] = 0
-    x[:, -1] = 1
+    x[:, start:start + n] = 0
+    x[:, start + n - 1] = 1
     return x
 
 
@@ -111,11 +113,17 @@ class ValueModel:
 
 class ValueView:
     """The critic's view during play: looks once a second (the belief model's memory, the trends),
-    and gives the features of the moment. Reads Gary's macro tracker; changes nothing in the game."""
+    and gives the features of the moment. Reads Gary's macro tracker; changes nothing in the game.
+    As the training rows (train/value.py): the player's own decisions so far, not the pros' history the
+    macro model may see; no map, year or matchup."""
 
     def __init__(self, g, belief):
         self.g, self.belief = g, belief
+        self.race = g.race.letter
+        self.enemy = belief.enemy
         self.mem = belief.memory()
+        self.seen_max = np.zeros(228, np.float32)                # the most of each enemy type in sight at once
+        self.tag_types: dict[int, int] = {}                      # own units' types by tag (for those in a bunker)
         self.hist: dict[int, tuple[float, float, float]] = {}    # second -> own army, workers, enemy army in sight
 
     def look(self, obs: dict) -> None:
@@ -129,10 +137,18 @@ class ValueView:
                 continue
             if u["owner"] == self.g.slot:
                 own[u["type"]] += 1 if u["completed"] else 0
+                self.tag_types[u["tag"]] = u["type"]
             elif u["owner"] != 11:
                 seen[u["type"]] += 1
+        visible = {u["tag"] for u in obs["units"]}
+        for tags in getattr(self.g, "loaded", {}).values():     # (inside a bunker: out of sight, counted in replays)
+            for tag in tags:
+                if tag not in visible and (t := self.tag_types.get(tag)) is not None:
+                    own[t] += 1
+        self.seen_max = np.maximum(self.seen_max, seen)
         self.mem.look(obs["frame"], seen)
-        self.hist[sec] = (float(army_supply(own, "T")), float(own[WORKERS["T"]]), float(army_supply(seen, "Z")))
+        self.hist[sec] = (float(army_supply(own, self.race)), float(own[WORKERS[self.race]]),
+                          float(army_supply(seen, self.enemy)))
         for old in [k for k in self.hist if k < sec - LOOKBACK_S]:
             del self.hist[old]
 
@@ -142,8 +158,12 @@ class ValueView:
         sec = obs["frame"] // 24
         mine = [u for u in obs["units"] if u["owner"] == g.slot]
         tracker = copy.copy(g.macro.tracker)
-        tracker.seen_max = g.macro.tracker.seen_max.copy()      # (its seen_max is kept by the macro)
-        x = no_style(tracker.spec, tracker.features(obs, g.macro.in_production(mine)))
+        tracker.seen_max = self.seen_max.copy()                # (its own looks: the macro's tracker may look only
+        tracker.tag_types = self.tag_types                      # when its model is queried)
+        tracker.history, tracker.map_hash, tracker.matchup = None, None, None
+        seen = {u["tag"] for u in mine}
+        inside = [t for tags in getattr(g, "loaded", {}).values() for t in tags if t not in seen]
+        x = no_style(tracker.spec, tracker.features(obs, g.macro.in_production(mine), inside))
         now = self.hist[max(self.hist)]
         ago = self.hist[min(self.hist)]
         b = self.mem.vector(obs["frame"], obs["me"]["supply_used"] * 2, now[1])
