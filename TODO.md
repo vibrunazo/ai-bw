@@ -15,6 +15,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#28](https://github.com/vibrunazo/gary/issues/28) Commit decision: a learning signal from locked paired branches
   (the signal weak: scored by the critic too, nothing beats the deployed model's preference in 941 pairs; next, pairs
   again on gt0.14dev's fixed inputs, several dice per arm, or a decision with longer consequences)
+- [#51](https://github.com/vibrunazo/gary/issues/51) Gary-Z's buildings mostly don't get built (Hatchery 21%, ~9 expansions
+  dropped a game; the likely cause of its bank), and ~230 burrows refused a game
 - [#48](https://github.com/vibrunazo/gary/issues/48) The Zerg's macro model counts the units in its eggs twice; the fix
   (option eggs) lost 96 paired games: no rule leans on it; the right counts move the model off zerglings to
   Hydralisks and it slows (its counts a momentum cue): eggs with the macro trained on Gary-Z's own states next

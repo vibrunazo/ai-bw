@@ -11,6 +11,7 @@ re-simulated; a building appears when placed, a unit when trained), within WINDO
   lost to       the orders' fates the records give for the rest: dropped (and why), refused by the game, retried
 
     python -m eval.macro_pipe DC100a --workers 4
+    python -m eval.macro_pipe ZP141a --side Z           # the Zerg's (a unit counts once it hatches from its egg)
 """
 from __future__ import annotations
 
@@ -31,20 +32,24 @@ WINDOW_S = 120                  # a decision not carried out within this is lost
 STEP = 24                       # frames between looks
 
 
-def game(path: str) -> dict | None:
+RACE_ID = {"Z": 0, "T": 1, "P": 2}             # the game's race ids
+
+
+def game(job: tuple) -> dict | None:
+    path, side = job
     from gary.env import Game
     from gary.race import Race
     rec = Path(path.replace(".rep", ".records.jsonl"))
     if not rec.exists():
         return None
-    names = {v: k for k, v in Race.of("T").names.items()}   # name -> type id
+    names = {v: k for k, v in Race.of(side).names.items()}   # name -> type id
     decisions, losses = [], Counter()
     with open(rec, encoding="utf-8") as f:
         for line in f:
             if '"macro"' not in line and '"order"' not in line:
                 continue
             r = json.loads(line)
-            if r.get("side") != "T":
+            if r.get("side") != side:
                 continue
             if r.get("kind") == "decision" and r.get("layer") == "macro" and r.get("choice") in names:
                 decisions.append((r["f"], names[r["choice"]], str(r.get("by", ""))))
@@ -56,7 +61,7 @@ def game(path: str) -> dict | None:
         return None
     slot = None
     born: dict[int, list[int]] = defaultdict(list)   # type -> frames a new one appeared
-    seen = set()
+    seen = set()                                     # (tag, type): a Zerg unit keeps its larva's tag, a building its drone's
     end = (max((d[0] for d in decisions), default=0) + WINDOW_S * 24) if decisions else 0
     while g.frame < end:
         try:
@@ -65,10 +70,10 @@ def game(path: str) -> dict | None:
             break
         o = g.observe()
         if slot is None:
-            slot = next((p["slot"] for p in o["players"] if p["race"] == 1), None)
+            slot = next((p["slot"] for p in o["players"] if p["race"] == RACE_ID[side]), None)
         for u in o["units"]:
-            if u["owner"] == slot and u["tag"] not in seen:
-                seen.add(u["tag"])
+            if u["owner"] == slot and (u["tag"], u["type"]) not in seen:
+                seen.add((u["tag"], u["type"]))
                 if g.frame > STEP:                     # (the start's units aren't anyone's decision)
                     born[u["type"]].append(g.frame)
     g.close()
@@ -92,15 +97,16 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("rounds", nargs="+")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--side", default="T", choices=["T", "Z"], help="whose macro (the league plays T against Z)")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
     from gary.race import Race
-    name = Race.of("T").names
+    name = Race.of(args.side).names
     for r in args.rounds:
         reps = sorted(glob.glob(str(REPO / "runs" / "league" / r / "*" / "*.rep")))
         with ProcessPoolExecutor(args.workers) as pool:
-            res = [x for x in monitor.track(pool.map(game, reps), len(reps), f"{r} replays") if x]
+            res = [x for x in monitor.track(pool.map(game, [(p, args.side) for p in reps]), len(reps), f"{r} replays") if x]
         rows = [row for x in res for row in x["rows"]]
         losses = Counter()
         for x in res:

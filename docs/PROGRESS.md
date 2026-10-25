@@ -1315,6 +1315,13 @@ plan and the full log).
   in-building queue's second unit counted as in production since gt0.9 (2 SCVs where the game trains 1). It fails
   on gt0.12dev (the empty enemy history, 77% of moments) and on gt1 (the bunkered marines, 88% of the army's ticks):
   the faults found by hand would have failed it the day they came.
+- **Why Gary banks (2026-10-25).** At 5-15 minutes gt1dev gt0.14dev banks 1,000+ minerals in 3% of its minutes (modern
+  pros 4%): the Terran's banking is gone with the queue, dice and placement. gz1dev banks in 15% (pros 5%). Not its
+  decoder: while banking its model is asked about 21 times a minute and 90% of its decisions are sent. Nor much the
+  data: on the pros' banked states the model's odds for a producer are 0.05, and the pros' next decision is one 5% of
+  the time. Its buildings fail (eval/macro_pipe.py --side Z, ZP141a): Hatcheries carried out 0.21, Extractors 0.46,
+  Creep Colonies 0.45, about 9 expansions a game dropped (no free drone, the drone not arriving), 20 "no free SCV"
+  drops a game; its units 0.98-0.99. And about 230 burrow commands a game are refused by the game (issue #51).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
