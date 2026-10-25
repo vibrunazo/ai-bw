@@ -54,6 +54,10 @@ KNOWN = {
     ("T", "macro", "own all"): "#50: the SCV in each Refinery, and the in-building queue's units counted as in production",
     ("T", "critic", "own all"): "#50: the same",
     ("T", "army", "own units"): "#50: the same",
+    ("T", "roles", "extra 3"): "#52: a unit's age, filled in play, 0 in the role datasets (option dataextras)",
+    ("T", "roles", "extra 4"): "#52: its distance to Gary's biggest bunch, the same",
+    ("T", "roles", "extra 5"): "#52: that bunch's size, the same",
+    ("Z", "roles", "enemy HP 0"): "#52: Gary-Z's role model sees every enemy at 0 HP (the data: full)",
 }
 
 
@@ -113,6 +117,77 @@ def _labels(g, model: str, name: str) -> list[str] | None:
     return None
 
 
+ROLE_READS: dict[str, list] = {}           # side -> [(rows, extra)] the role model was fed
+
+
+def _capture(model, out: list) -> None:
+    orig = model.predict_move
+
+    def fed(rows, extra, *a, **k):
+        out.append((np.array(rows, np.float32), np.array(extra, np.float32)))
+        return orig(rows, extra, *a, **k)
+    model.predict_move = fed
+
+
+def _role_data(model, n: int = 4000):
+    """A sample of the role model's training rows (its config's dataset): (rows, extra) of the units in them."""
+    path = REPO / str(model.config.get("data", ""))
+    if not path.is_file():
+        return None
+    cnt, rows, extra = (_npz_head(path, name, n) for name in ("count", "rows", "extra"))
+    k = min(len(cnt), len(rows), len(extra))
+    rows = np.concatenate([rows[i, :cnt[i]] for i in range(k)]).astype(np.float32)
+    extra = np.concatenate([extra[i, :cnt[i]] for i in range(k)]).astype(np.float32)
+    return rows, extra
+
+
+def _npz_head(path: Path, name: str, k: int) -> np.ndarray:
+    """The first k entries of one array in an .npz, read from its member without loading the rest (a role dataset's
+    arrays are 0.5-1.4 GB)."""
+    import zipfile
+    with zipfile.ZipFile(path) as z, z.open(name + ".npy") as f:
+        version = np.lib.format.read_magic(f)
+        shape, _, dtype = (np.lib.format.read_array_header_1_0 if version == (1, 0) else np.lib.format.read_array_header_2_0)(f)
+        k = min(k, shape[0])
+        per = int(np.prod(shape[1:])) if len(shape) > 1 else 1
+        return np.frombuffer(f.read(k * per * dtype.itemsize), dtype).reshape((k,) + tuple(shape[1:]))
+
+
+def compare_roles(sides) -> tuple[list[str], list[str], set]:
+    """The role models: per input column, how often it is nonzero in play against in the model's training data (a
+    column the data never fills that play does is an input the model never learned), and the enemy units' HP."""
+    from gary.policy.fight import SIDE
+    report, fails, seen_known = [], [], set()
+    for r, g in sides.items():
+        fed = ROLE_READS.get(r) or []
+        if not fed:
+            continue
+        data = _role_data(g.fight.roles.model)
+        if data is None:
+            report.append(f"  {r} roles  no training data to compare with")
+            continue
+        prow = np.concatenate([x for x, _ in fed]); pext = np.concatenate([e for _, e in fed])
+        drow, dext = data
+        n_extra = getattr(g.fight.roles.model.net, "n_extra", pext.shape[1])
+        checks = [(f"extra {j}", pext[:, j], dext[:, j]) for j in range(min(n_extra, pext.shape[1], dext.shape[1]))]
+        en_p, en_d = prow[prow[:, SIDE] == 0], drow[drow[:, SIDE] == 0]
+        checks.append(("enemy HP 0", (en_p[:, 4] == 0).astype(np.float32), (en_d[:, 4] == 0).astype(np.float32)))
+        for name, a, b in checks:
+            pa, pb = float((a != 0).mean()) if len(a) else 0.0, float((b != 0).mean()) if len(b) else 0.0
+            off = (pb < 0.01 and pa > 0.05) or (pb > 0.99 and pa < 0.95) or (name == "enemy HP 0" and pa - pb > 0.2)
+            state = "ok"
+            key = (r, "roles", name)
+            if off:
+                if key in KNOWN:
+                    state = "known"
+                    seen_known.add(key)
+                else:
+                    state = "FAIL"
+                    fails.append(f"{r} roles {name}: nonzero in {pa:.0%} of play's rows, {pb:.0%} of its training data's")
+            report.append(f"  {r} roles  {name:44} play {pa:4.0%}, data {pb:4.0%}  {state}")
+    return report, fails, seen_known
+
+
 def _play(seconds: int):
     from eval.match import Match
     from gary.agent.manifests import model_for
@@ -124,6 +199,11 @@ def _play(seconds: int):
     sides = {"T": m.gary, "Z": m.zerg}
     views = {r: ValueView(g, BeliefModel.load(model_for("belief", "TvZ", r))) for r, g in sides.items()}
     reads = {r: {} for r in sides}
+    for r, g in sides.items():                  # (the role models' inputs: what they are fed, as fed)
+        layer = getattr(getattr(g, "fight", None), "roles", None)
+        model = getattr(layer, "model", None)
+        if model is not None and hasattr(model, "predict_move"):
+            _capture(model, ROLE_READS.setdefault(r, []))
     while m.game.frame < seconds * 24 and not m.done:
         with contextlib.redirect_stdout(io.StringIO()):
             m.step()
@@ -256,6 +336,9 @@ def test_inputs_match_training_data():
     with tempfile.TemporaryDirectory() as tmp:
         rows = _replay_rows(m, sides, reads, Path(tmp))
     report, fails, gone = compare(sides, reads, rows)
+    r2, f2, seen2 = compare_roles(sides)
+    report, fails = report + r2, fails + f2
+    gone = [x for x in gone if not any(x.startswith(f"{k}:") for k in seen2)]
     print("\n".join(report))
     few = {r: len(v) for r, v in rows.items() if len(v) < MIN_MOMENTS}
     assert not few, f"too few moments compared (a side's looks missed the ticks?): {few}"
