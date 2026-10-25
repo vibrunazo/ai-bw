@@ -28,7 +28,9 @@ and its line removed; a new one gets an issue and a line).
   default) and `gt1dev` is what learning is trained and judged in: gt1 with the role model deciding in contact and
   the army on control groups, the configuration expected to win later, and without the stop-gaps over the layers
   being learned (option `unscripted`: the static guard, the hunt, the overlord hunt, the pros' caps, the SCV cap, the
-  bank escape), so the models own those decisions there; a stop-gap stays in gt1 while it measurably helps, and its
+  bank escape), and with the models' inputs in play counted as their training data counts them (`seenall`,
+  `armyseen`; gt1 doesn't have them yet), so the models own those decisions there; a stop-gap stays in gt1 while it
+  measurably helps, and its
   job in gt1dev is the learned layer's or nobody's. `gz1dev` is the same for the Zerg (gz1 with `unscripted`: join,
   sweep, press, the hunt, the caps, the bank escape and overlords ahead off; its overlord posts and mutalisk raid
   kept, as no model moves those units; decoders such as the tech floor are not stop-gaps and stay). gt1dev against
@@ -41,7 +43,9 @@ and its line removed; a new one gets an issue and a line).
   noisy for close calls, and a single round's gap score needs its spread (`eval/gap_windows.py`, 96 paired games
   for a close call). An adopted option is folded into the manifest with a version bump, so the name
   never grows into a chain of options. A close 48-game round gets its second 48 (`--first 4010`) at the first
-  round's priority, without asking. A stop-gap that makes no measurable difference in 96 paired games goes. A
+  round's priority, without asking. A baseline is replayed whenever its code or the opponent's manifest changed (a
+  baseline from a worktree against an older gz1 once misjudged an option). A stop-gap that makes no measurable
+  difference in 96 paired games goes. A
   learned change that fails its 96 games is reviewed before the next try: a bug (the records, `eval.why`), inputs
   the model lacks for the decision, or the limit of what the data teaches; the finding goes in docs/PROGRESS.md.
 - Before any learning run beyond imitation, the rules in docs/SELF_PLAY.md ("Learning beyond imitation"): the
@@ -60,7 +64,9 @@ and its line removed; a new one gets an issue and a line).
   `--match <text>`), which kills its whole process tree. Killed re-simulator calls aren't indexed as failures, so
   a rerun builds them. Kill leftover `gary_resim.exe` before rebuilding the simulator (the link fails otherwise).
 - After executor or macro edits run `tests/test_smoke_game.py`, and `tests/test_pairs.py` before any run with
-  paired branches (the bots' deep copy and a branch's replay, in under a minute); a change of behaviour records the parity
+  paired branches (the bots' deep copy and a branch's replay, in under a minute); `tests/test_value.py` fails when
+  the critic can't read the current Gary (a change of the macro features: retrain it, `python -m train.value
+  --since <date>`, from the league's replays); a change of behaviour records the parity
   hashes again (`tests/test_parity.py --record`) in its commit, with the reason; `tests/test_matchups.py`
   plays every matchup that can play.
 - "Why did Gary do that?" is answered from the game's records (`python -m eval.why`) before writing a
@@ -163,7 +169,9 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
 - **Answers to the enemy's plan** (`answers.py`, in gt1). Lurkers or mutalisks read from what Gary saw force Siege
   Mode, tanks, vessels, Irradiate and turrets (443 forced decisions in 48 games) and veto turrets beyond one a base
   (387). Scripted because the macro model didn't answer what it had seen (human games 1-2). Replace with the seen
-  enemy units as macro-model inputs (they are: the `seen` counts) and measure whether the model answers alone.
+  enemy units as macro-model inputs (they are: the `seen` counts) and measure whether the model answers alone. In
+  play its "most seen" inputs stayed 0 until option `seenall` (2026-10-25: the tracker looked only when the model was
+  queried); gt1 doesn't have it yet, so the answers' measure is to be taken with it.
   Measure: an option off, against lurker and mutalisk plans: results and the time to the answer.
 - **The early-pool posture's builds** (in gt1; rush defense from scouting: bunker at the ramp, marines first, no
   expansion). Forces 454 decisions and blocks expansion 145 times in 48 games. Scripted for 9-pool and 12-pool

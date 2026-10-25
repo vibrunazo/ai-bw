@@ -17,11 +17,11 @@ As of 2026-10-24 (the table as written on 2026-10-15 is in git history):
 | The Zerg Gary | Gary on the shared agent playing Zerg (`gz1`, gz0.3; docs/REFACTOR.md): the Zerg executor, the learned macro, army (commitments, control groups by type) and fight roles, Gary-Z's rules as options; `gz1dev` (gz0.4dev) without the stop-gaps over its learned layers |
 | The Terran Gary | `gt1` (gt0.10) plays; `gt1dev` (gt0.14dev) is where learning is judged (AGENTS.md) |
 | The league | `eval/league.py`: Terran against Zerg, paired 96-game rounds on the ladder maps, the gap to modern pros per window with a spread (`eval/gap_windows.py`) |
-| The self-play pairing | gt1dev against gz1dev: balanced, each side winning or leading in 38% of 96 games (docs/PROGRESS.md) |
+| The self-play pairing | gt1dev against gz1dev: balanced, each side winning or leading in 38% of 96 games; gt0.13dev against gz0.4dev 35% and 42% of 48 (docs/PROGRESS.md) |
 | Paired branches | `eval/pairs.py`: both bots live, the game restored per arm, every few pairs one replayed to check it ends the same; the commit decision's arms locked at the pros' hazard |
-| Learning from branches | `train/commit_pairs.py`: offline, advantage-weighted, KL-anchored on the pros' ticks (at chance so far) |
+| Learning from branches | `train/commit_pairs.py`: offline, advantage-weighted, KL-anchored on the pros' ticks (at chance so far; with the arms scored by the critic too, nothing on the state beats the deployed model's own preference, 941 pairs: issue #28) |
 | Opponent model | the belief model (gary/policy/belief.py) over what the enemy has, each side; not yet over its plan (z) |
-| Critic | the value network: reads who is ahead, not yet who will get ahead |
+| Critic | the value network, a Terran and a Zerg one learned from the league's re-simulated games and the pros' (`train/value.py`, `tests/test_value.py`): who wins 0.88 AUC on Gary's held-out games, mostly the lead already taken (0.56-0.72 before 5:00) |
 | Anchors | the humanlikeness classifier and the gap to modern pros (`eval/humanlike.py`); human games through the bridge, 1:1 with OpenBW |
 
 ## Gary-Z v0

@@ -1,19 +1,21 @@
 # TODO: open work
 
 Open work is tracked in the [GitHub issues](https://github.com/vibrunazo/gary/issues); this file is their index,
-grouped by area, newest thinking first (reconciled with the code on 2026-10-24). When an item is done its issue is
+grouped by area, newest thinking first (reconciled with the code on 2026-10-25). When an item is done its issue is
 closed and its line leaves this file; docs/PROGRESS.md keeps what was done and how it measured.
 
 ## Learning (the self-play program, docs/SELF_PLAY.md)
 
-- [#47](https://github.com/vibrunazo/gary/issues/47) Pipe checks: do the learned layers' decisions reach the game? (the army's
-  are, at a pro-like rate; the macro loses buildings to placement), before judging what they learn
+- [#47](https://github.com/vibrunazo/gary/issues/47) Pipe checks: do the learned layers' decisions reach the game, and do
+  their inputs in play match their training data? (placement fixed, widespot; the macro's enemy history and the
+  bunkered units, seenall and armyseen; left: the decisions so far count decisions in play, commands in replays)
 - [#28](https://github.com/vibrunazo/gary/issues/28) Commit decision: a learning signal from locked paired branches
-  (1,004 pairs, the learner at chance; engagebias didn't carry to games; next, the arms scored by the critic's read at
-  their end, CP130a)
+  (the signal weak: scored by the critic too, nothing beats the deployed model's preference in 941 pairs; next, pairs
+  again on gt0.14dev's fixed inputs, several dice per arm, or a decision with longer consequences)
 - [#48](https://github.com/vibrunazo/gary/issues/48) The Zerg's macro model counts the units in its eggs twice; the fix
   (option eggs) lost 96 paired games: what leaned on the double count
 - [#29](https://github.com/vibrunazo/gary/issues/29) Why army dataset v5's commit models trail the deployed one in games
+  (not the bunker counts: with armyseen v5 still trails, -0.039 over 96)
 - [#3](https://github.com/vibrunazo/gary/issues/3) Close out won games (the hunt imitated: its labels on the deployed
   commit model next)
 - [#11](https://github.com/vibrunazo/gary/issues/11) Learn from game outcomes
@@ -43,7 +45,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 
 ## Evaluation and tools
 
-- [#31](https://github.com/vibrunazo/gary/issues/31) Mirror health rounds (TvT, ZvZ) and the Protoss macro models' offline check
+- [#31](https://github.com/vibrunazo/gary/issues/31) Mirror health rounds and the Protoss macro models (rounds played, no errors;
+  left: the death records' slot in mirrors, and why the Protoss PvT and PvZ decisions are the hardest to predict)
 - [#32](https://github.com/vibrunazo/gary/issues/32) The gap score disagrees with results
 - [#44](https://github.com/vibrunazo/gary/issues/44) Engine error at the map's edge
 - [#15](https://github.com/vibrunazo/gary/issues/15) Fit human-interface profiles from replays

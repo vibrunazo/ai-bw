@@ -284,6 +284,14 @@ earlier speedups).
    Since (2026-10-24): the army's commit decision on paired branches with the forced arm locked at the
    pros' hazard (eval/pairs.py, commit_t), learned offline (train/commit_pairs.py); on 1,004 pairs it is at
    chance so far (docs/SELF_PLAY.md, "Learning beyond imitation").
+   Value network v3 (2026-10-25): the critic had stayed on 217 features while the macro gave 421, unread. It now
+   learns Gary's side from the league's own games, each replay re-simulated as the pros' are (one feature path; the
+   net value from the units' deaths), a Terran and a Zerg critic (2,064 and 2,448 games since 2026-10-23): who wins on
+   Gary's held-out games 0.88 AUC (0.56-0.72 before 5:00), the discounted head 33-36% of the score to the end, the
+   net 180 s head nothing (the 30-minute league's late fights). Its view in play reads the moment as the training
+   rows do (ValueView: its own look every second, the units inside a bunker, the player's own decisions, no style,
+   map, year or matchup); tests/test_value.py guards it. Scoring the commit pairs' arms by it at their end (941 pairs)
+   found no state where engaging pays that the deployed commit model doesn't already prefer.
 
 Steps 1–3 are refactoring with parity checks, and they carry the risk of the plan: they touch
 everything. They're worth it only if they stay small, so: no layer gets a provider it doesn't need
