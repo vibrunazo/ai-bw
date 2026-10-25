@@ -1322,6 +1322,16 @@ plan and the full log).
   the time. Its buildings fail (eval/macro_pipe.py --side Z, ZP141a): Hatcheries carried out 0.21, Extractors 0.46,
   Creep Colonies 0.45, about 9 expansions a game dropped (no free drone, the drone not arriving), 20 "no free SCV"
   drops a game; its units 0.98-0.99. And about 230 burrow commands a game are refused by the game (issue #51).
+  Corrected the same day: at 5-15 minutes Gary-Z's production is the pros' (re-simulated, 30 games against 149: 3.4
+  Hatcheries against 3.2, drones 27.2 and 27.3, eggs 3.6 and 3.9, idle larvae 4.7 and 3.3, mean minerals 445 and 372),
+  its builds there mostly work (one of 4.8 expansions a game dropped); the failing builds and the big banks come after
+  15 minutes in games it is losing (drones gone, its pool destroyed, the pool rule asking every few seconds). The
+  burrows: the lurkers did burrow (the re-simulator's unit trace), but once down a burrowed lurker guards (orders 2
+  and 3) and the fight layer read only 116/117, so it pressed burrow every 2 frames and never unburrowed them. A
+  first fix moved the lurkers' hotkey off the scout's (0 to 8; a real collision, but 93 of 96 games the same, LK141a+b);
+  the fix is a memory of what went down (zerg_fight.py down: up again once seen unburrowing or moved). Over 96 paired
+  games (LB141a+b against ZP141a+b): the Zerg's score +0.003 +- 0.026, its gap -0.028 (-0.048 to -0.001) nearer, fight
+  -0.063 (-0.105 to -0.015); unburrows 10-13 a game (0), refused burrows 99-233 (249-461). Kept (a plain fix).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
