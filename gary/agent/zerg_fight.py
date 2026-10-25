@@ -26,7 +26,11 @@ LURKER_KEY = 8                      # the lurkers' hotkey (0 was the scout's too
                                     # overwrote the other, the recall took the scouts and every burrow was refused, about
                                     # 230 a game, so the lurkers never burrowed; the Zerg's keys: army 1-3, halls 4-5,
                                     # the raid 9)
-BURROWED = {116, 117}               # orders: burrowing, burrowed
+BURROWED = {116, 117}               # orders: burrowing, burrowed (then a burrowed lurker guards, orders 2 and 3: the
+                                    # order alone lost it, so self.down remembers; round ZP141a's lurkers were pressed
+                                    # to burrow every 2 frames once down, about 250 refused a game, and never came up)
+UNBURROWING = 118
+MOVED_PX = 4                        # a lurker this far from where it burrowed is up (a burrowed unit can't move)
 LURKER_NEAR = 7 * 32                # enemy units this near: the lurkers burrow
 LURKER_CALM = 4 * 24                # ...and none near this long: up again (to move on)
 LURK_STREAK = 8                     # turns in a row at most...
@@ -70,6 +74,7 @@ class ZergFight:
         self.lurkers = lurkers
         self.lurk: set[int] = set()
         self.lurk_since = self.lurk_calm = 0
+        self.down: dict[int, tuple[int, int]] = {}      # lurkers burrowed (as last seen): tag -> where
         self.lurk_streak, self.lurk_backoff = 0, 0
 
     @property
@@ -113,6 +118,12 @@ class ZergFight:
         g, hi = self.g, self.g.hi
         lurks = {u["tag"]: u for u in mine if u["type"] == Z.LURKER and u["completed"]}
         self.lurk &= set(lurks)
+        for t, u in lurks.items():                      # (what is burrowed: seen going down, and not up or moved since)
+            if u["order"] in BURROWED:
+                self.down.setdefault(t, (u["x"], u["y"]))
+            elif t in self.down and (u["order"] == UNBURROWING or math.dist(self.down[t], (u["x"], u["y"])) > MOVED_PX):
+                del self.down[t]
+        self.down = {t: xy for t, xy in self.down.items() if t in lurks}
         loose = [u for t, u in lurks.items() if t not in self.lurk]
         if loose:
             sel = set(obs["selection"])
@@ -133,7 +144,7 @@ class ZergFight:
         if not group:
             return False
         mid = (sum(u["x"] for u in group) / len(group), sum(u["y"] for u in group) / len(group))
-        burrowed = sum(1 for u in group if u["order"] in BURROWED) * 2 >= len(group)
+        burrowed = sum(1 for u in group if u["tag"] in self.down) * 2 >= len(group)
         enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and u["type"] not in WORKERS
                  and math.dist((u["x"], u["y"]), mid) < LURKER_NEAR]
         if enemy:
