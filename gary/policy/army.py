@@ -231,6 +231,11 @@ class ArmyTracker:
         self.statics: dict[int, tuple[int, int, int]] = {}     # spec.static: enemy static defense tag -> (x, y, type)
         self.buildings: dict[int, tuple[int, int]] = {}        # spec.known: enemy building tag -> (x, y), still standing
         self.visited = np.zeros(CELLS, np.int64)               # spec.unseen: the frame own units were last in each cell
+        # option armyseen: own units the observation doesn't show and the replays count (in production, inside a
+        # bunker), a callable obs -> {type: n}: in play the commit model read 5-6 marines where the dataset's rows for
+        # the same game had 13-15, its own army 12 supply against 32 (2026-10-25, issue #29)
+        self.extra_units = None
+        self.tag_types: dict[int, int] = {}                    # own units' types by tag (for those out of sight)
 
     def cell(self, x: float, y: float) -> int:
         gx = min(GRID - 1, max(0, int(x * GRID // self.mw)))
@@ -288,6 +293,10 @@ class ArmyTracker:
             for u in obs["units"]:
                 if u["owner"] == self.slot:
                     self.visited[self.cell(u["x"], u["y"])] = f0
+        if self.extra_units is not None:
+            for u in obs["units"]:
+                if u["owner"] == self.slot:
+                    self.tag_types[u["tag"]] = u["type"]
         self.seen_buildings = np.maximum(self.seen_buildings, g[5])
         self.recent = [(f, a) for f, a in self.recent if f0 - f <= RECENT_S * 24] + [(f0, g[3])]
         self.seen_hist = [(f, a) for f, a in self.seen_hist if f0 - f <= MEMORY_S * 24] + [(f0, seen)]
@@ -332,6 +341,9 @@ class ArmyTracker:
         (0 none, 1 engage, 2 move) and its age in seconds, for a model with spec.commit."""
         self.remember(obs)
         g, units, seen = self._now(obs)
+        if self.extra_units is not None:
+            for t, n in self.extra_units(obs).items():
+                units[t] += n
         g[6] = self.seen_buildings
         g[7] = np.max([a for _, a in self.recent], axis=0)
         if self.spec.losses:                   # (where its units died in the last LOSS_S, as the pros' data)

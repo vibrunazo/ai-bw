@@ -28,8 +28,11 @@ from gary.interface import PROFILES, HumanInterface  # noqa: E402
 from gary.mapinfo import MapInfo  # noqa: E402
 from gary.race import Race  # noqa: E402
 
-FIGHTERS = {0, 32, 34, 37, 38, 43, 65, 66, 67, 68}   # the status line's army: marines, firebats, medics, zerglings,
-                                                     # hydralisks, mutalisks, zealots, dragoons, templar, archons
+def _fighter(unit_type: int) -> bool:
+    """The status line's army: every race's units with supply that aren't workers (it counted infantry, Zerg and
+    Protoss ground units only, and a TvT's mech army read 0-4 all game, round MT140a)."""
+    from gary.policy.army import is_building, is_worker, supply_x2
+    return supply_x2(unit_type) > 0 and not is_worker(unit_type) and not is_building(unit_type)
 
 
 def _slots(game, races: list[str]) -> list[int]:
@@ -142,7 +145,7 @@ def play(map_path: str, minutes: float, seed: int, save: str, a: str, b: str, st
                     race = Race.of(races[k])
                     p = next((q for q in o["players"] if q["slot"] == slots[k]), {"minerals": 0, "gas": 0})
                     parts[label] = (sum(1 for u in mine if 106 <= u["type"] <= 175),
-                                    sum(1 for u in mine if u["type"] in FIGHTERS),
+                                    sum(1 for u in mine if _fighter(u["type"])),
                                     sum(1 for u in mine if u["type"] == race.worker),
                                     sum(1 for u in mine if u["type"] in race.town_halls), p["minerals"], p["gas"])
                 (la, pa), (lb, pb) = parts.items()

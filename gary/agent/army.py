@@ -245,6 +245,18 @@ class LearnedArmy:
         self.scout_resends = 0
         self.next_scout_try = 0
 
+    def unseen_own(self, obs: dict) -> dict[int, int]:
+        """Own units the observation doesn't show and the replays count: in production, inside a bunker (option
+        armyseen: gary/policy/army.py ArmyTracker.extra_units)."""
+        mine = [u for u in obs["units"] if u["owner"] == self.g.slot]
+        out = dict(self.g.executor.in_production(mine))
+        seen = {u["tag"] for u in mine}
+        for tags in self.g.loaded.values():
+            for tag in tags:
+                if tag not in seen and (t := self.tracker.tag_types.get(tag)) is not None:
+                    out[t] = out.get(t, 0) + 1
+        return out
+
     def remember(self, obs: dict) -> None:
         self.tracker.hidden = set().union(set(), *self.g.loaded.values())   # (marines in a bunker aren't lost)
         self.tracker.remember(obs)

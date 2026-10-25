@@ -801,6 +801,9 @@ OPTIONS = {
     # looked at every second (not only when the model is queried: its "most enemies seen" stayed 0 in play) and the
     # units inside a bunker counted (5 marines seen where the replay had 13 at 6:00)
     "seenall": lambda m: m["macro"].update(look_seen=True),
+    # gary/policy/army.py extra_units: the army model's own unit counts with the units in production and inside a
+    # bunker, as its dataset counts them (in play: 5-6 marines where the dataset had 13-15, issue #29)
+    "armyseen": lambda m: m["army"].update(army_seen=True),
     # three registered rules off (AGENTS.md): the pros' caps per minute; SCVs capped at the bases' saturation (MAX_SCVS
     # stays); depots ahead of production
     "nocaps": lambda m: m["macro"].update(caps=False),
@@ -952,15 +955,21 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # gt0.12dev: buildings placed in a wider box at the main, then the natural, when its bases are full (widespot; 96 paired
 # games against gt0.11dev, WS121a+b against BL121a+b: -0.013 +- 0.029, the gap -0.021, 25-30 minutes -0.062, -0.098 to
 # -0.030; builds dropped for "no spot" 17.3 a game to 3.4, decisions carried out 0.82 to 0.86, eval/macro_pipe.py)
+# gt0.13dev: the macro model's inputs as the replays it learned from count them (seenall: what is in sight looked at
+# every second, the units inside a bunker counted; in play its most-enemies-seen inputs had stayed 0). A fix: 96 paired
+# games against gt0.12dev, SA125a+b against WS121a+b: +0.031 +- 0.069, lost 22 (32), the gap -0.023, -0.076 to +0.028
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
-                                     "+dice+widespot"), "version": "gt0.12dev"}
+                                     "+dice+widespot+seenall"), "version": "gt0.13dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
 # so the model thought one was coming; 48 paired games against gt1dev, ZO110a against ZD110a: the Terran's score
 # -0.286 +- 0.117, the Zerg winning or ahead at 30:00 in 22 of 48 (4), blocked at 3:00 1% (42%), drones at 10:00 30
 # (20, pros 28))
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted"), "version": "gz0.3dev"}     # (ownsupply in gz1 since gz0.3)
+# gz0.4dev: the macro model's inputs as its replays count them (seenall, as gt0.13dev): 96 paired games against
+# gz0.3dev, both against gt1dev+seenall (ZS140a+b against ZB140a+b): the Zerg's score +0.042 +- 0.051, its gap +0.057
+# (-0.003 to +0.114), macro +0.086 (+0.006 to +0.170) further over whole games, no window measurable
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall"), "version": "gz0.4dev"}     # (ownsupply in gz1 since gz0.3)
 
 
 def _against(m: dict, vs: dict) -> dict:
@@ -1112,6 +1121,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
             g.army.hold_target = m["army"].get("hold_target", False)
             g.army.unit_commits_on = m["army"].get("unit_commits", False)
             g.army.gather_on = m["army"].get("gather", False)
+            if m["army"].get("army_seen"):
+                g.army.tracker.extra_units = g.army.unseen_own
     if m["fight"] is not None and m["fight"]["provider"] == "zerg":
         from gary.agent.zerg_fight import ZergFight
         g.fight = ZergFight(g, m["fight"].get("roles", True), m["fight"].get("lurkers", True), seed,
