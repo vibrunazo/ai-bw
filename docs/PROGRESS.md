@@ -1280,7 +1280,10 @@ plan and the full log).
   armyseen on the Zerg (ZA141a+b against ZP141a+b, both against gt1dev gt0.13dev): the Zerg's score -0.044 +- 0.053
   (the first half -0.083, -0.151 to -0.016; the second -0.005), the gap -0.011: no measurable difference but leaning
   worse, so in gt1dev only (gt0.14dev); to review: what the Zerg executor reports in production (eggs) against how the
-  replays count morphing units. The v5 commit model again with armyseen (#29: V5141a+b against AS141a+b): -0.039 +-
+  replays count morphing units. Checked (the army inputs' probe on gz1dev+armyseen): the Zerg's counts then overshoot
+  the dataset's (zerglings 33 against 27 at 8:00, a Lair being morphed counted where the replay has none): its executor's
+  in production holds the eggs' units and the morphing buildings, which the replays count as eggs and as what is
+  morphing. The fix: a race-keyed rule for which production shows in sight. The v5 commit model again with armyseen (#29: V5141a+b against AS141a+b): -0.039 +-
   0.051, the gap +0.038 (+0.008 to +0.062) further: it still trails the deployed model, so the bunker counts weren't
   why.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
