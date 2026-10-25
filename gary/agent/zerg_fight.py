@@ -22,7 +22,10 @@ from gary.agent.gary import Gary
 from gary.agent.zerg_roles import ZergRoles, latest_zerg_model
 from gary.interface import screen_of
 
-LURKER_KEY = 0                      # the lurkers' hotkey
+LURKER_KEY = 8                      # the lurkers' hotkey (0 was the scout's too, gary/agent/motor.py SCOUT_KEY: each set
+                                    # overwrote the other, the recall took the scouts and every burrow was refused, about
+                                    # 230 a game, so the lurkers never burrowed; the Zerg's keys: army 1-3, halls 4-5,
+                                    # the raid 9)
 BURROWED = {116, 117}               # orders: burrowing, burrowed
 LURKER_NEAR = 7 * 32                # enemy units this near: the lurkers burrow
 LURKER_CALM = 4 * 24                # ...and none near this long: up again (to move on)
