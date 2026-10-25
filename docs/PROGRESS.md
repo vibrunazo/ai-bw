@@ -1286,6 +1286,11 @@ plan and the full log).
   morphing. The fix: a race-keyed rule for which production shows in sight. The v5 commit model again with armyseen (#29: V5141a+b against AS141a+b): -0.039 +-
   0.051, the gap +0.038 (+0.008 to +0.062) further: it still trails the deployed model, so the bunker counts weren't
   why.
+  How far gt1dev is from gt1 now (gt0.14dev, AS141a+b, against gt1's ZS100a+b, both against gz0.3, 96 paired games):
+  -0.273 +- 0.076 (won 10 lost 18, gt1 won 50 lost 11), the gap +0.044 (+0.013 to +0.074) further, macro +0.118
+  (+0.074 to +0.161) further, fight -0.066 (-0.094 to -0.035) nearer. At gt0.10dev (DV90a+b against gt0.9) it was
+  -0.346, the gap +0.128, macro +0.256, fight -0.060: dice, widespot and seenall halved the macro's part; what is left
+  is mostly the macro without its stop-gaps.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
