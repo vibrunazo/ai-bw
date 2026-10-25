@@ -1245,6 +1245,12 @@ plan and the full log).
   10-20 0.96), on the pros' 0.64; the discounted head explains 36% of the score to the end (sd 966; the old critic
   42% of sd 373 on 12-minute games against scripted Zergs); net60 11%, net180 0.1% (sd 2,012: the 30-minute
   league's late fights; the old 24% of sd 944). The pairs use the discounted head and the win logit.
+  seenall in gt1dev over 96 paired games (SA125a+b against WS121a+b): +0.031 +- 0.069 (better 36, worse 26), lost 22
+  (32), won 8 (9); the gap -0.023 (-0.076 to +0.028), macro -0.051 (-0.134 to +0.036) but 5-10 minutes +0.033
+  (+0.008 to +0.054) further; the answer units about the same (turrets 15.1 a game against 17.6, vessels 7.4 against
+  7.4). No measurable difference, and the model's inputs in play are now the ones it learned from: to be folded into
+  gt1dev once the running rounds end. On the Zerg next (ZB140a+b, ZS140a+b: gt1dev+seenall against gz1dev and
+  gz1dev+seenall).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
