@@ -363,7 +363,7 @@ def build_game(rec: dict) -> dict:
         out[f"p{i}_sup"] = sup
         counts[i] = n
 
-    path = out_dir() / rec["sha1"][:2] / f"{rec['sha1']}.npz"
+    path = Path(rec["out"]) if rec.get("out") else out_dir() / rec["sha1"][:2] / f"{rec['sha1']}.npz"
     path.parent.mkdir(parents=True, exist_ok=True)
     buf = io.BytesIO()
     np.savez_compressed(buf, **out)

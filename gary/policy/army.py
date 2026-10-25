@@ -16,6 +16,7 @@ model also says "stay": its best cell is then the one the group is already in.
 
 from __future__ import annotations
 
+import copy
 import json
 import math
 from dataclasses import asdict, dataclass
@@ -236,6 +237,16 @@ class ArmyTracker:
         # the same game had 13-15, its own army 12 supply against 32 (2026-10-25, issue #29)
         self.extra_units = None
         self.tag_types: dict[int, int] = {}                    # own units' types by tag (for those out of sight)
+
+    def copy(self) -> "ArmyTracker":
+        """A copy to read the model's inputs with (inputs() remembers what it sees): its memory copied, its callables
+        shared."""
+        c = copy.copy(self)
+        for name in ("own_last", "missing", "statics", "buildings", "tag_types"):
+            setattr(c, name, dict(getattr(self, name)))
+        c.visited, c.seen_buildings = self.visited.copy(), self.seen_buildings.copy()
+        c.recent, c.seen_hist, c.lost, c.hidden = list(self.recent), list(self.seen_hist), list(self.lost), set(self.hidden)
+        return c
 
     def cell(self, x: float, y: float) -> int:
         gx = min(GRID - 1, max(0, int(x * GRID // self.mw)))

@@ -136,6 +136,34 @@ def count_caps(jobs: list, workers: int, q: float = 90) -> dict[int, list[int]]:
     return {t: [int(round(c)) for c in caps[:, t]] for t in range(228) if caps[:, t].max() > 0}
 
 
+def decisions_of(d, i: int, spec: FeatureSpec) -> tuple[np.ndarray, np.ndarray]:
+    """Player i's production decisions in a game's arrays (frame, slot, act, unit, ...) and their classes."""
+    c = d["cmds"][d["cmds"][:, 1] == i]
+    cls = np.array([spec.decision_index(a, u) for a, u in c[:, 2:4].tolist()], dtype=np.int64) if len(c) else \
+        np.zeros(0, np.int64)
+    return c, cls
+
+
+def encode_rows(d, i: int, spec: FeatureSpec, ts: np.ndarray, style: int | None = None, map_hash: str | None = None,
+                year: float | None = None, matchup: str | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """The macro model's inputs for player i of a game's arrays (ingest/macro_dataset.py: a row a second) at the rows
+    ts, the decisions so far being those up to each row's frame; and the index of each row's next decision. What the
+    model trains on, what the critic reads (train/value.py) and what tests/test_inputs.py holds play against."""
+    frames = d["frames"]
+    c, cls = decisions_of(d, i, spec)
+    cum = np.zeros((len(c) + 1, len(spec.decisions)), dtype=np.float32)
+    if len(c):
+        cum[np.arange(1, len(c) + 1), cls] = 1
+    cum = np.cumsum(cum, axis=0)                     # cum[k] = counts of the first k decisions
+    f = frames[ts]
+    nxt = np.searchsorted(c[:, 0], f, side="right") if len(c) else np.zeros(len(ts), np.int64)   # the next one's
+    last = np.where(nxt > 0, c[np.maximum(nxt - 1, 0), 0] if len(c) else 0, 0)
+    seen_max = np.maximum.accumulate(d["seen"][:, i].astype(np.float32), axis=0)[ts]
+    x = encode(spec, f, d["eco"][ts, i].astype(np.float32), d["units"][ts, i].astype(np.float32),
+               d["seen"][ts, i].astype(np.float32), seen_max, cum[nxt], (f - last) / 24.0, style, map_hash, year, matchup)
+    return x, nxt
+
+
 def samples(args: tuple) -> tuple[np.ndarray, ...]:
     """Features and targets for one player-game."""
     (path, i, style, _, *rest), spec_d = args
@@ -144,26 +172,19 @@ def samples(args: tuple) -> tuple[np.ndarray, ...]:
     matchup = rest[3] if len(rest) > 3 else None
     spec = FeatureSpec(**spec_d)
     d = np.load(path)
-    frames, cmds = d["frames"], d["cmds"]
-    c = cmds[cmds[:, 1] == i]
+    frames = d["frames"]
+    c, cls = decisions_of(d, i, spec)
     empty = (np.zeros((0, spec.size), np.float16), np.zeros(0, np.int16), np.zeros(0, np.float32),
              np.zeros(0, np.int8), np.zeros(0, np.float32), np.zeros(0, bool))
     if len(c) == 0:
         return empty
-    cls = np.array([spec.decision_index(a, u) for a, u in c[:, 2:4].tolist()], dtype=np.int64)
-    cum = np.zeros((len(c) + 1, len(spec.decisions)), dtype=np.float32)
-    cum[np.arange(1, len(c) + 1), cls] = 1
-    cum = np.cumsum(cum, axis=0)                     # cum[k] = counts of the first k decisions
     ts = np.arange(0, len(frames), STRIDE // 24)
     nxt = np.searchsorted(c[:, 0], frames[ts], side="right")   # first decision after the moment
-    ts, nxt = ts[nxt < len(c)], nxt[nxt < len(c)]
+    ts = ts[nxt < len(c)]
     if len(ts) == 0:
         return empty
+    x, nxt = encode_rows(d, i, spec, ts, style, map_hash, year, matchup)
     f = frames[ts]
-    last = np.where(nxt > 0, c[np.maximum(nxt - 1, 0), 0], 0)
-    seen_max = np.maximum.accumulate(d["seen"][:, i].astype(np.float32), axis=0)[ts]
-    x = encode(spec, f, d["eco"][ts, i].astype(np.float32), d["units"][ts, i].astype(np.float32),
-               d["seen"][ts, i].astype(np.float32), seen_max, cum[nxt], (f - last) / 24.0, style, map_hash, year, matchup)
     delay = np.minimum((c[nxt, 0] - f) / 24.0, MAX_DELAY_S).astype(np.float32)
     minute = np.minimum(f // (24 * 60), 30).astype(np.int8)
     return (x.astype(np.float16), cls[nxt].astype(np.int16), delay, minute, np.full(len(ts), weight, np.float32),

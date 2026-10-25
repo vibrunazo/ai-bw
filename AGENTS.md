@@ -66,7 +66,10 @@ and its line removed; a new one gets an issue and a line).
 - After executor or macro edits run `tests/test_smoke_game.py`, and `tests/test_pairs.py` before any run with
   paired branches (the bots' deep copy and a branch's replay, in under a minute); `tests/test_value.py` fails when
   the critic can't read the current Gary (a change of the macro features: retrain it, `python -m train.value
-  --since <date>`, from the league's replays); a change of behaviour records the parity
+  --since <date>`, from the league's replays); `tests/test_inputs.py` (about 5 minutes) holds the vectors the macro, army
+  and critic are fed in play against their datasets' for the same game, after any change to a model's inputs, a
+  tracker or a dataset builder (a new difference fails it; its INTENDED and KNOWN lists, with issues, say what may
+  differ); a change of behaviour records the parity
   hashes again (`tests/test_parity.py --record`) in its commit, with the reason; `tests/test_matchups.py`
   plays every matchup that can play.
 - "Why did Gary do that?" is answered from the game's records (`python -m eval.why`) before writing a

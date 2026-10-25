@@ -112,22 +112,11 @@ def view_rows(d, i: int, spec, race: str, ts: np.ndarray) -> np.ndarray:
     second) at the rows ts."""
     enemy = {"T": "Z", "Z": "T"}[race]
     from gary.policy.belief import WORKERS, features_series
-    from gary.policy.macro import encode
     from gary.policy.value import army_supply, belief_outputs, extras, no_style
-    frames, cmds = d["frames"], d["cmds"]
-    c = cmds[cmds[:, 1] == i]
-    cls = np.array([spec.decision_index(a, u) for a, u in c[:, 2:4].tolist()], dtype=np.int64) if len(c) else np.zeros(0, np.int64)
-    cum = np.zeros((len(c) + 1, len(spec.decisions)), dtype=np.float32)
-    if len(c):
-        cum[np.arange(1, len(c) + 1), cls] = 1
-    cum = np.cumsum(cum, axis=0)
-    f = frames[ts]
-    done = np.searchsorted(c[:, 0], f, side="right") if len(c) else np.zeros(len(ts), np.int64)
-    last = np.where(done > 0, c[np.maximum(done - 1, 0), 0] if len(c) else 0, 0)
+    from train.macro import encode_rows
+    frames = d["frames"]
     seen = d["seen"][:, i].astype(np.float32)
-    seen_max = np.maximum.accumulate(seen, axis=0)[ts]
-    x = no_style(spec, encode(spec, f, d["eco"][ts, i].astype(np.float32), d["units"][ts, i].astype(np.float32),
-                              seen[ts], seen_max, cum[done], (f - last) / 24.0, None))
+    x = no_style(spec, encode_rows(d, i, spec, ts)[0])
     # the extras (each row of the arrays is a second)
     b = features_series(d["seen"][:, i], d["units"][:, i, :, 0], d["eco"][:, i], frames, enemy, race)[ts]
     own = army_supply(d["units"][:, i, :, 1].astype(np.float32), race)

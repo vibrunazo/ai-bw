@@ -19,6 +19,7 @@ encodes states the same way in training and in play.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 from dataclasses import asdict, dataclass, field
@@ -262,6 +263,13 @@ class MacroTracker:
             elif u["owner"] != 11:
                 seen[t] += 1
         self.seen_max = np.maximum(self.seen_max, seen)
+
+    def copy(self) -> "MacroTracker":
+        """A copy to read the model's inputs with (features() updates what was seen): reading the live tracker would
+        change it, and a tracker that updates only when read was the fault seenall fixed."""
+        c = copy.copy(self)
+        c.seen_max, c.decided, c.tag_types = self.seen_max.copy(), self.decided.copy(), dict(self.tag_types)
+        return c
 
     def note_decision(self, act: int, uid: int, frame: int) -> None:
         self.decided[self.spec.decision_index(act, uid)] += 1

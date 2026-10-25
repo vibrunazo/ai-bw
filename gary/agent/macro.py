@@ -300,8 +300,7 @@ class LearnedMacro:
             self.next_query = hi.frame + QUERY_EVERY
             # the most likely decision Gary can carry out now; if none can, wait for the most
             # likely one that only needs a busy building to free up
-            x = self.tracker.features(obs, {} if self.eggs_seen else self.in_production(mine),
-                                      self.inside(mine) if self.tracker.look_every else ())
+            x = self.model_inputs(obs, mine)
             probs, secs = self.model.probs(x)
             if self.pace:
                 self.next_query = hi.frame + int(min(PACE_MAX, max(QUERY_EVERY, float(secs[0]) * 24)))
@@ -636,6 +635,13 @@ class LearnedMacro:
     def in_production(self, mine: list[dict]) -> Counter:
         """Units being made right now (the game counts them, observations don't list them): the executor's."""
         return self.g.executor.in_production(mine)
+
+    def model_inputs(self, obs: dict, mine: list[dict], tracker=None) -> np.ndarray:
+        """The macro model's inputs now, as step feeds them (tests/test_inputs.py reads them with a copy of the
+        tracker, tracker.copy())."""
+        tracker = tracker or self.tracker
+        return tracker.features(obs, {} if self.eggs_seen else self.in_production(mine),
+                                self.inside(mine) if tracker.look_every else ())
 
     def inside(self, mine: list[dict]) -> list[int]:
         """Own units out of sight inside a bunker (the replays count them): the ones the fight layer loaded."""
