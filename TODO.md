@@ -9,9 +9,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#47](https://github.com/vibrunazo/gary/issues/47) Pipe checks: do the learned layers' decisions reach the game? (the army's
   are, at a pro-like rate; the macro loses buildings to placement), before judging what they learn
 - [#28](https://github.com/vibrunazo/gary/issues/28) Commit decision: a learning signal from locked paired branches
-  (1,004 pairs, the learner at chance; the outcome's horizon and the advantage's size next)
-- [#46](https://github.com/vibrunazo/gary/issues/46) The value network is stale (trained on 217 macro features, the macro now
-  gives 421): retrain it on games against gz1, with a check that it reads the current Gary
+  (1,004 pairs, the learner at chance; engagebias didn't carry to games; next, the arms scored by the critic's read at
+  their end, CP130a)
 - [#29](https://github.com/vibrunazo/gary/issues/29) Why army dataset v5's commit models trail the deployed one in games
 - [#3](https://github.com/vibrunazo/gary/issues/3) Close out won games (the hunt imitated: its labels on the deployed
   commit model next)
