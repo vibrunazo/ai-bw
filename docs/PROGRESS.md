@@ -1226,6 +1226,20 @@ plan and the full log).
   +0.013), 25-30 minutes -0.062 (-0.098 to -0.030), macro -0.038, the 15-20 minutes' flag gone: no measurable
   difference in games, the placement leak closed, so adopted (a placement mechanic, not a stop-gap): gt1dev
   gt0.12dev. Not tried in gt1, whose main fills less (4.6 "no spot" a game).
+- **The critic on the league's games, and the macro model's blind enemy history (2026-10-25).** The value network
+  (#46) read 217 features where Gary gives 421. train/value.py now takes Gary's games from the league's replays,
+  re-simulated as the pros' are (2 s a game; the net value from the units' deaths, a drone into an Extractor left
+  out), so pros and Gary go through one feature path, and tests/test_value.py fails while the critic can't read the
+  current Gary. Comparing the critic's view in play with the re-simulated replay at the same seconds found three
+  input faults. The critic's no_style set the wrong columns (the style is no longer last). More important, the
+  macro model's: in play its tracker updated the most enemies seen at once only when the model was queried, 16
+  times in 200 s with the queue and dice, so the model saw an empty enemy history (15 enemies in sight, all 0),
+  where the replays it learned from count every second; and marines inside a bunker were missing from its own
+  units (5 against the replay's 13 at 6:00). The "answers to the enemy's plan" stop-gap exists because the macro
+  model didn't answer what it had seen (human games 1-2); its "most seen" inputs were empty. Option seenall (the
+  tracker looks every second, units inside a bunker counted) is judged in gt1dev (SA125a+b against WS121a+b); the
+  critic's own view does both regardless. Left: the decisions so far count Gary's decisions in play and the
+  production commands in replays (one decision apart at most at 1-8 minutes).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
