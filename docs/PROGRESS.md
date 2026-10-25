@@ -18,8 +18,8 @@ Since 2026-10-15 every piece of the self-play loop is being built crude before a
 learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the league isn't trained
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-24): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
-(gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.12dev) and `gz1dev`
-(gz0.3dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
+(gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.13dev) and `gz1dev`
+(gz0.4dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
 on paired branches with the forced arm locked at the pros' hazard, learned offline: at chance on 1,004
@@ -41,7 +41,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.12dev, gz1 gz0.3, gz1dev gz0.3dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.13dev, gz1 gz0.3, gz1dev gz0.4dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -77,9 +77,10 @@ definition in gary/agent/manifests.py and in the entries of "Next" below:
   **gt0.9**: the model's units trained into a busy building's queue. **gt0.10**: the static guard a nudge.
 - **gt1dev**: gt1 with the role model in contact, control groups and rl1 (gt0.6dev), gt1's versions as they came,
   without the stop-gaps over its learned layers and the hunt in advice mode (gt0.10dev), drawing its macro from
-  the model's odds (gt0.11dev), its buildings placed beyond a full main (widespot, gt0.12dev).
+  the model's odds (gt0.11dev), its buildings placed beyond a full main (widespot, gt0.12dev), the macro model's inputs as its replays count
+  them (seenall, gt0.13dev).
 - **gz0.1-gz0.2** (2026-10-20/22): the Zerg on the shared agent, then its army on control groups by type.
-  **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev).
+  **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev), seenall (gz0.4dev).
 
 ## Versions
 
@@ -1249,8 +1250,25 @@ plan and the full log).
   (32), won 8 (9); the gap -0.023 (-0.076 to +0.028), macro -0.051 (-0.134 to +0.036) but 5-10 minutes +0.033
   (+0.008 to +0.054) further; the answer units about the same (turrets 15.1 a game against 17.6, vessels 7.4 against
   7.4). No measurable difference, and the model's inputs in play are now the ones it learned from: to be folded into
-  gt1dev once the running rounds end. On the Zerg next (ZB140a+b, ZS140a+b: gt1dev+seenall against gz1dev and
-  gz1dev+seenall).
+  gt1dev once the running rounds end. On the Zerg (ZS140a+b against ZB140a+b: gt1dev+seenall against gz1dev+seenall
+  and gz1dev, 96 paired games): the Zerg's score +0.042 +- 0.051, its gap +0.057 (-0.003 to +0.114), macro +0.086
+  (+0.006 to +0.170) further over whole games, no window measurable. Folded into both: gt1dev gt0.13dev, gz1dev
+  gz0.4dev (the Zerg's macro gap to review).
+  The commit pairs scored by the critic (CP130a, 941 pairs from 95 games, #28): policy values a pair for always
+  engage, the deployed model's choice and boosting on the state, held out: 90 s net +0.66 / +0.61 / +0.49; with the
+  critic's discounted value at the end +0.78 / +0.79 / +0.69; the critic's win logit +0.19 (-0.10 to +0.46) / +0.30
+  (+0.10 to +0.52) / +0.26. The deployed model's preference is what tracks the better arm (correlation +0.07 to +0.11)
+  and nothing on the state beats it: the counterfactual signal for engage against move is weak at this size.
+  The army model's inputs in play against its dataset's rows for one game (#29): the grid matches; its own counts
+  missed the units in production and inside bunkers (5-6 marines where the dataset had 13-15, its army 12 supply
+  against 32 at 8:30). Option armyseen counts them (marines then match; an SCV or two in refineries still apart),
+  judged in AS141a+b against SA125a+b.
+  Mirror health rounds (#31, 24 games each, 20 minutes): TvT (gt1dev against itself) won 1 lost 3, time 20, both
+  sides on 4 Command Centers and mech by 20:00; ZvZ (gz1dev) 3 and 3, 18 at time, drones 12-13 at 6-10 minutes (the
+  pros' ZvZ median 11 and 15). No errors. The one race assumption found: the status line's army (eval/match.py) counted
+  infantry, Zerg and Protoss ground units only (TvT's mech read 0-4); now every race's fighters. The Protoss macro
+  models offline: non-routine top-1 0.48 in PvP, 0.32 and 0.31 in PvT and PvZ against baselines 0.17 and 0.12 (the
+  smallest lift of any race), the vocabulary sound.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
