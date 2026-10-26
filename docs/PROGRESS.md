@@ -1332,6 +1332,19 @@ plan and the full log).
   the fix is a memory of what went down (zerg_fight.py down: up again once seen unburrowing or moved). Over 96 paired
   games (LB141a+b against ZP141a+b): the Zerg's score +0.003 +- 0.026, its gap -0.028 (-0.048 to -0.001) nearer, fight
   -0.063 (-0.105 to -0.015); unburrows 10-13 a game (0), refused burrows 99-233 (249-461). Kept (a plain fix).
+- **The role models' inputs, and which fight reward ranks checkpoints like games (2026-10-25).** tests/test_inputs.py
+  now holds each role model's fed rows against its dataset's columns. Two faults (#52): Gary-Z's role model saw every
+  enemy at 0 HP (100% of enemy rows: zerg_roles.py passed the interface's hidden HP, None, to the snapshot, which
+  made it 0; the datasets and the Terran's fight layer give hidden enemies full HP), and the Terran's extras 3-5 (a
+  unit's age, its distance to its biggest bunch, the bunch's size) are filled in play and 0 in every row of the
+  response datasets, read by the models with weights at their initialization's scale (option dataextras: 0 in play).
+  The calibration after rl2 and rl3 failed their 96 games (#53): rl1's start, rl1, rl2, rl3 on the 79 held-out
+  fight scenarios, 120 s, 4 draws, paired. Every reward read from those plays (net at 45, 90, 120 s, the armies
+  alive at the end, both) ranks rl3 > rl2 > rl1 measurably (rl2 - rl1 +91 to +234, rl3 - rl1 +107 to +327), where the
+  games tied them; longer windows widen it. The fights they win are real; what the games lose is outside them (their
+  rounds moved the macro gap further and fought more). No fight-scenario reward can select a roles checkpoint: 96
+  games or a reward that counts what fighting costs the rest of the game. The gap table's scan for features stuck at
+  0 or never 0 where the pros aren't: only the Terran's bunkers (3.2-3.9 at 5-20 minutes, half the pros none).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

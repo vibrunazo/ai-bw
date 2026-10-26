@@ -22,6 +22,10 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
   Hydralisks and it slows (its counts a momentum cue): eggs with the macro trained on Gary-Z's own states next
 - [#49](https://github.com/vibrunazo/gary/issues/49) The critic's net-value heads rank moments well but are
   overconfident (180 s: correlation +0.37-0.49 from 6:00, R² near 0): early stopping, per-window report
+- [#52](https://github.com/vibrunazo/gary/issues/52) The role models' inputs in play: Gary-Z saw every enemy at 0 HP; the
+  Terran's extras 3-5 never trained (option dataextras)
+- [#53](https://github.com/vibrunazo/gary/issues/53) No fight-scenario reward ranks the roles checkpoints as games do: a reward
+  that counts what fighting costs the rest of the game, or 96 games
 - [#29](https://github.com/vibrunazo/gary/issues/29) Why army dataset v5's commit models trail the deployed one in games
   (not the bunker counts: with armyseen v5 still trails, -0.039 over 96)
 - [#3](https://github.com/vibrunazo/gary/issues/3) Close out won games (the hunt imitated: its labels on the deployed
