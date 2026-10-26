@@ -41,6 +41,7 @@ class Race:
     upgrade_names: dict
     supply: dict                # unit -> supply it uses
     supply_provided: dict       # unit or building -> supply it gives
+    worker_speed: float = 4.92           # its worker's top speed, px a frame (SCV 4.92; Drone and Probe 5.49)
     production_in_sight: bool = False    # what it makes shows while made (Zerg: an egg, the morphing building still the
                                          # old one), as the replays count it; Terran and Protoss units in training don't
     minerals: dict = field(init=False)   # unit -> its mineral cost
@@ -71,9 +72,10 @@ class Race:
         if letter == "Z":
             return Race("Z", Z, Z.DRONE, frozenset(Z.TOWN_HALLS), Z.HATCHERY, Z.OVERLORD, Z.EXTRACTOR, frozenset(Z.PRODUCTION),
                         Z.PRODUCER, Z.COST, Z.SIZE, Z.REQUIRES, Z.RESEARCH, Z.UPGRADE, frozenset(Z.ARMY), Z.NAMES,
-                        Z.TECH_NAMES, Z.UPGRADE_NAMES, Z.SUPPLY, Z.SUPPLY_PROVIDED, production_in_sight=True)
+                        Z.TECH_NAMES, Z.UPGRADE_NAMES, Z.SUPPLY, Z.SUPPLY_PROVIDED, worker_speed=5.49,
+                        production_in_sight=True)
         if letter == "P":
             return Race("P", P, P.PROBE, frozenset(P.TOWN_HALLS), P.NEXUS, P.PYLON, P.ASSIMILATOR, frozenset(P.PRODUCTION),
                         P.PRODUCER, P.COST, P.SIZE, P.REQUIRES, P.RESEARCH, P.UPGRADE, frozenset(P.ARMY), P.NAMES,
-                        P.TECH_NAMES, P.UPGRADE_NAMES, P.SUPPLY, P.SUPPLY_PROVIDED)
+                        P.TECH_NAMES, P.UPGRADE_NAMES, P.SUPPLY, P.SUPPLY_PROVIDED, worker_speed=5.49)
         raise ValueError(f"no race {letter!r} (T, Z or P)")

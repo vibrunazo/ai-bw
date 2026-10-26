@@ -54,6 +54,8 @@ FIRST_OPENING = 6 * 60 * 24            # until then the first producer's rule sa
 FIRST_PRODUCER = {"T": T.RAX, "Z": 142}  # the building that makes the army first: by rax_by (option), else one is built
 PACE_MAX = 10 * 24              # option pace: the longest wait for the next decision
 QUERY_EVERY = 12                # frames between the macro's looks at the model
+WALK_PATH = 1.4                 # a walk to another base, against the straight line from the main
+WALK_SEND = 2.0                 # seconds to pick and send its worker (the camera, a click)
 PARK_AHEAD = 100                # option park: a building's worker sets out this many minerals short of its cost
 NAT_BUNKER_ALONG = 0.45         # the natural's bunker: this far from its Command Center toward its way out
 NAT_BUNKER_TILES = 5            # ...or this far toward the enemy where the natural has no choke
@@ -504,7 +506,7 @@ class LearnedMacro:
         budget = me["minerals"] - g.committed() - kept_m
         # a building's worker sets out WALK_AHEAD seconds of income early: it walks while the money comes
         workers = sum(1 for u in mine if u["type"] == g.race.worker)
-        walk_ahead = int(WALK_AHEAD * MINING * workers) if plan["kind"] == "build" else 0
+        walk_ahead = int(max(WALK_AHEAD, self._walk_s(plan)) * MINING * workers) if plan["kind"] == "build" else 0
         if self.park and plan["kind"] == "build":
             # (Gary-Z's: its drone sets out at the cost less PARK_AHEAD, the larvae going on meanwhile; held until
             # 6 s of income short, nothing else decided, the second hatchery came by 4:00 in 13 of 32 games, 21)
@@ -541,6 +543,17 @@ class LearnedMacro:
         if self.hatch_mass is not None and (act == EXPAND or uid == self.g.race.town_hall):
             return self.hatch_mass
         return self.odds_mass
+
+    def _walk_s(self, plan: dict) -> float:
+        """Seconds its worker takes to get to a build at another base (0 in the main): it sets out that much income
+        early, so it gets there as the money does. A fixed 6 s had the natural's builder set out at 322 minerals and
+        walk 11 s more: placed at 182 s, the pros' begun at 175 (#55)."""
+        where = plan.get("where")
+        if where in (None, "main"):
+            return 0.0
+        g = self.g
+        d = math.dist(g.main.center, g.base(where).center) * WALK_PATH
+        return d / (g.race.worker_speed * 24) + WALK_SEND
 
     def _saved_cost(self) -> tuple[int, int]:
         """The parked decision's money, kept for it (option park)."""
