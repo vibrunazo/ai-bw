@@ -1468,7 +1468,12 @@ plan and the full log).
   went down at 64 s (pros 55 s) and the Command Center stood supply-blocked 15 s by 3:00 (idle 29-32 s, pros 13 s).
   Now the starting workers are clicked one at a time, each sent to its own field, and a worker sent to mine goes to
   the field with fewest on it (its order's target or where it stands), then the closest; every race. In 6 ladder
-  games, mined (with what was spent) by 55 s 280 (206), by 90 s 566 (534).
+  games, mined (with what was spent) by 55 s 280 (206), by 90 s 566 (534). In games (BL148a+b, gt0.19dev against gz1,
+  both with it: gt0.19dev's baseline): the Command Center idle by 3:00 26 s (32; pros 13), style 1's workers at 12:00
+  42 (37) but at 2-4 minutes as before (12/16/19, pros 14/18/22); per style against SV147a+b: style 1's natural by 8:00
+  89% (89%), a Factory 73% (66%; pros 88%); style 2's natural 50% (47%; 98%), a Starport 62% (50%; 69%); style 3's natural
+  50% (25%; 67%). Results against SV147a+b +0.042 +- 0.112, +0.052 +- 0.122 (lost 36, 39; the Zerg has it too). Left:
+  the opening still a worker or two behind by 2:00, and style 2's natural.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
