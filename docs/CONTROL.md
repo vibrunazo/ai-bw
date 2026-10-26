@@ -291,7 +291,8 @@ earlier speedups).
    net 180 s head nothing (the 30-minute league's late fights). Its view in play reads the moment as the training
    rows do (ValueView: its own look every second, the units inside a bunker, the player's own decisions, no style,
    map, year or matchup); tests/test_value.py guards it. Scoring the commit pairs' arms by it at their end (941 pairs)
-   found no state where engaging pays that the deployed commit model doesn't already prefer.
+   found no state where engaging pays that the deployed commit model doesn't already prefer. With early stopping (2026-10-26)
+   its heads fit: net180 35% explained (28-37% in every window from 6:00), net60 33%, the discounted 42%.
 
 Steps 1–3 are refactoring with parity checks, and they carry the risk of the plan: they touch
 everything. They're worth it only if they stay small, so: no layer gets a provider it doesn't need

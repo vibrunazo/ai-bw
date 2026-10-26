@@ -1368,6 +1368,14 @@ plan and the full log).
   96 paired games (BC142a+b against BX141a+b) -0.005 +- 0.068, macro -0.036 (-0.092 to +0.006), 0-5 minutes -0.005
   (-0.009 to -0.001) nearer; bunkers 2.68 and 3.31 (3.15, 3.87): a fix, into gt1dev (gt0.15dev). Gary decides as often
   as the pros (12.0 a minute at 2-8 against 13.9), so the bunkers left are the model's odds in Gary's states.
+- **The critics with early stopping (2026-10-26, #49).** train/value.py now keeps the epoch a validation split (the
+  pros' games by hash, Gary's by seed, neither trained nor tested) scores best, and reports each head by game time.
+  Retrained from the saved data, both critics' validation loss was lowest after the first epoch and rose every epoch
+  after: the 12 epochs overfit. Held out, the Terran's (runs/value/TvZ_T_20261026-104437): net180 explained 35.4% (it
+  was 0.1%; 28-37% in every window from 6:00, correlations +0.54 to +0.61), net60 33% (11%), the discounted head 42%
+  (36%), win AUC on Gary's games 0.90 (0.88), the pros' 0.68 (0.64). The Zerg's (TvZ_Z_20261026-105125): net180 27.7%
+  (-1.8%), net60 24.9% (7.7%), discounted 38% (33%), win AUC 0.90 (0.88). A critic that can score whole-game
+  outcomes (#28, #53).
   dataextras over 96 paired games against a fresh baseline (DX141a+b against BX141a+b; the lurker fix had changed gz1,
   so AS141a+b no longer served): -0.008 +- 0.066, the gap +0.015, fight +0.034 (-0.003 to +0.057): not adopted (rl1's
   RL played with them filled; the clean fix is filling them in the datasets at the next imitation retrain).

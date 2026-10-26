@@ -20,8 +20,6 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#48](https://github.com/vibrunazo/gary/issues/48) The Zerg's macro model counts the units in its eggs twice; the fix
   (option eggs) lost 96 paired games: no rule leans on it; the right counts move the model off zerglings to
   Hydralisks and it slows (its counts a momentum cue): eggs with the macro trained on Gary-Z's own states next
-- [#49](https://github.com/vibrunazo/gary/issues/49) The critic's net-value heads rank moments well but are
-  overconfident (180 s: correlation +0.37-0.49 from 6:00, R² near 0): early stopping, per-window report
 - [#52](https://github.com/vibrunazo/gary/issues/52) The role models' inputs: Gary-Z's enemy HP fixed (gz0.5dev), the Terran's
   extras 3-5 in a rebuilt dataset and model (runs/roles/20261026-090057, not deployed: the next roles run's start)
 - [#53](https://github.com/vibrunazo/gary/issues/53) No fight-scenario reward ranks the roles checkpoints as games do: a reward
