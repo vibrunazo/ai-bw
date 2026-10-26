@@ -1437,6 +1437,21 @@ plan and the full log).
   retreat rule 3% of them both ways, weighing supply, not HP), zerglings lost 97 a game against 107: nothing leans on
   the wrong HP, the -0.029 is within noise. A plain fix whose interval spans zero, into gz1dev: gz0.5dev (gz1 as it is,
   for the baselines).
+- **Every game's style, and styles by name (2026-10-26, #54).** The style input had learned from labelled old games
+  only: the taxonomy clustered 9,211 old TvZ Terran games, and 6,172 old and 2,673 of 2,683 modern ones read "unknown"
+  (the modern games weigh ten to one). taxonomy/label_all.py labels every TvZ game of both eras into a style catalogue
+  (data/interim/taxonomy/v2: the Terran by the nearest-neighbour classifier, the Zerg by its plan rules), with names and
+  the modern pros' shares (Terran 64/22/13/1; like for like, games of 8+ minutes, the old era 73/15/11/1: the earlier
+  81/13/4/2 counted only the clustered games). gary/styles.py reads it; eval.match `--style` and `--style-b` and
+  gary/play.py `--style` take a style by name or id for either side, `--list-styles` prints them, and a told style is
+  recorded (`by: chosen`). The shared Terran macro model retrained with them (train/macro.py --styles v2: 16,482 of
+  16,547 TvZ Terran players styled, against 8,454; runs/macro_exp/T_all_v2, option stylev2): held-out top-1 0.493
+  (0.492). Offline, on held-out modern pros of each style at 2-8 minutes, its odds for the opening's items (gas,
+  Factory, vultures, Machine Shop, Starport, Command Center, Barracks, marines, bunker) are nearer what they decided
+  next: mean error per item 0.18 (0.42) for style 1, 0.29 (0.80) style 2, 0.51 (0.84) style 3; at 8-15 minutes about
+  even (0.47 / 0.38, 0.35 / 0.36, 0.52 / 0.77). The deployed model's style input already moved the opening (told style 2
+  on style-2 states its Factory 6.0%, told style 1 2.7%; the pros 4.8%): the old finding that the style "hardly matters"
+  was at 10-20 minutes, where the pros' styles differ little too.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
