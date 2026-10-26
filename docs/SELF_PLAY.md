@@ -15,7 +15,7 @@ As of 2026-10-24 (the table as written on 2026-10-15 is in git history):
 | Piece | State |
 |---|---|
 | The Zerg Gary | Gary on the shared agent playing Zerg (`gz1`, gz0.3; docs/REFACTOR.md): the Zerg executor, the learned macro, army (commitments, control groups by type) and fight roles, Gary-Z's rules as options; `gz1dev` (gz0.5dev) without the stop-gaps over its learned layers |
-| The Terran Gary | `gt1` (gt0.10) plays; `gt1dev` (gt0.15dev) is where learning is judged (AGENTS.md) |
+| The Terran Gary | `gt1` (gt0.10) plays; `gt1dev` (gt0.16dev) is where learning is judged (AGENTS.md) |
 | The league | `eval/league.py`: Terran against Zerg, paired 96-game rounds on the ladder maps, the gap to modern pros per window with a spread (`eval/gap_windows.py`) |
 | The self-play pairing | gt1dev against gz1dev: balanced, each side winning or leading in 38% of 96 games; gt0.13dev against gz0.4dev 35% and 42% of 48 (docs/PROGRESS.md) |
 | Paired branches | `eval/pairs.py`: both bots live, the game restored per arm, every few pairs one replayed to check it ends the same; the commit decision's arms locked at the pros' hazard |

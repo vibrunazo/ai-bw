@@ -18,7 +18,7 @@ Since 2026-10-15 every piece of the self-play loop is being built crude before a
 learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the league isn't trained
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-24): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
-(gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.15dev) and `gz1dev`
+(gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.16dev) and `gz1dev`
 (gz0.5dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
@@ -41,7 +41,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.15dev, gz1 gz0.3, gz1dev gz0.5dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.16dev, gz1 gz0.3, gz1dev gz0.5dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -79,7 +79,7 @@ definition in gary/agent/manifests.py and in the entries of "Next" below:
   without the stop-gaps over its learned layers and the hunt in advice mode (gt0.10dev), drawing its macro from
   the model's odds (gt0.11dev), its buildings placed beyond a full main (widespot, gt0.12dev), the macro model's inputs as its replays count
   them (seenall, gt0.13dev), the army model's counts as its dataset's (armyseen, gt0.14dev), its
-  building history as the replays count it (builtcount, gt0.15dev).
+  building history as the replays count it (builtcount, gt0.15dev), its unit counts too (unitcount, gt0.16dev).
 - **gz0.1-gz0.2** (2026-10-20/22): the Zerg on the shared agent, then its army on control groups by type.
   **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev), seenall (gz0.4dev), enemy HP as its data (zfullhp, gz0.5dev).
 
@@ -1376,6 +1376,17 @@ plan and the full log).
   (36%), win AUC on Gary's games 0.90 (0.88), the pros' 0.68 (0.64). The Zerg's (TvZ_Z_20261026-105125): net180 27.7%
   (-1.8%), net60 24.9% (7.7%), discounted 38% (33%), win AUC 0.90 (0.88). A critic that can score whole-game
   outcomes (#28, #53).
+- **unitcount and the style-1 check (2026-10-26).** unitcount (the models' own counts as the replays count them: a
+  building's queue past its unit in training left out, the SCVs in a Refinery in; #50) over 96 paired games (UC143a+b
+  against BC142a+b): -0.031 +- 0.073, macro +0.039 (-0.011 to +0.099): a fix, into gt1dev (gt0.16dev). The style:
+  gt1 and gt1dev play style 4 (two-Barracks gasless marines, 1.5% of pro Terran games) on every ladder map, from the
+  selector's table counted on 2026-10-13 in anti-rush games on the 1.16 maps; styleroll was last judged on gt0.6dev,
+  before dice, the queues, widespot, seenall and builtcount. Offline (the macro model's odds, 3-8 minutes): on 250
+  held-out pro style-1 states Refinery 2.1%, Factory 1.4%, Barracks 4.6%, Marine 26.5% (what they decided next: 2.3,
+  1.3, 4.6, 26.3); on Gary's style-4 states read as style 4: 1.8, 0.5, 2.1, 41.0; read as style 1: 4.3, 0.3, 2.0,
+  31.7; with the pros' history: 5.1, 0.2, 2.5, 31.4 (it fades out by 12 minutes). The style moves the opening's gas
+  and marines, not the Factory, on states played as style 4: games played as style 1 decide it (SR144a+b). Modern
+  replays carry no style label (2,437 against 20 labelled), so the style input mostly reads the old era.
   dataextras over 96 paired games against a fresh baseline (DX141a+b against BX141a+b; the lurker fix had changed gz1,
   so AS141a+b no longer served): -0.008 +- 0.066, the gap +0.015, fight +0.034 (-0.003 to +0.057): not adopted (rl1's
   RL played with them filled; the clean fix is filling them in the datasets at the next imitation retrain).
