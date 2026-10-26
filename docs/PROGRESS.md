@@ -1474,6 +1474,22 @@ plan and the full log).
   89% (89%), a Factory 73% (66%; pros 88%); style 2's natural 50% (47%; 98%), a Starport 62% (50%; 69%); style 3's natural
   50% (25%; 67%). Results against SV147a+b +0.042 +- 0.112, +0.052 +- 0.122 (lost 36, 39; the Zerg has it too). Left:
   the opening still a worker or two behind by 2:00, and style 2's natural.
+- **Production first, and the builder's walk (2026-10-26, #55).** Re-simulated, Gary's SCVs matched the pros' to 75 s
+  (10) and stood there to 105 s (pros 12): its first depot begun 62 s and done 87 s (pros 55 and 80), and its queued
+  units (decided, waiting for a busy producer or a depot on its way) held no money, so a decision taken after them spent
+  first (a Refinery decided half a second after an SCV waiting for supply: the SCV waited 14 s more once the depot was
+  up), and a parked build's walking builder held its whole cost against SCVs decided before it (12.7 s of the main
+  Command Center's idle at 2:30-4:00). Now a new goal leaves the queued units' money alone and a queued unit decided
+  before the parked build goes first: SCVs in 6 ladder games 9/10/11/12/13/15/17/20 at 60-240 s (before
+  9/10/10/11/12/15/16.5/20, pros 9/10/11/12/14/16/18/22). Over 96 games (PF149a+b against BL148a+b): results -0.016
+  +- 0.108 and +0.089 +- 0.112, lost 29 (36); the Command Center idle by 3:00 21-24 s (26-30); per style, style 1 a
+  Factory by 8:00 81% (73%), a Starport 29% (16%); style 2 its natural 72% (50%; pros 98%), at 4.7 minutes (5.1). And a
+  builder for another base sets out by its walk there (the straight line x 1.4 at the worker's speed, a race table), not a
+  fixed 6 s of income: the natural's builder had set out 78 minerals short and walked 11 s more (placed at 182 s in
+  style-1 games, the pros' begun at 175); over 6 ladder games the median natural begun 184 s (185.5), the decision or
+  the money being later elsewhere. Not the gaps: supply blocks (re-simulated at 1-2/2-4/4-6 minutes Gary 18.5/0/12 s,
+  the pros 15/11/3) but at 4-6 minutes; the dice's rare picks (10 decisions a minute at 2-6 minutes, 1.2 under 10%
+  odds; the pros 12.8 decisions): the income is. Left: workers 1-2 behind at 2-4 minutes, 4 at 5:00.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
