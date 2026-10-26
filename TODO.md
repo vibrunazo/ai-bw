@@ -24,6 +24,10 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
   extras 3-5 in a rebuilt dataset and model (runs/roles/20261026-090057, not deployed: the next roles run's start)
 - [#53](https://github.com/vibrunazo/gary/issues/53) No fight-scenario reward ranks the roles checkpoints as games do: a reward
   that counts what fighting costs the rest of the game, or 96 games
+- [#54](https://github.com/vibrunazo/gary/issues/54) Build styles by name for each side, every game labelled (done: TvZ);
+  the Terran macro model trained with every game's style (option stylev2) judged per style; the Zerg's; other matchups
+- [#55](https://github.com/vibrunazo/gary/issues/55) The Terran opening: the first depot placed 10 s after the pros', the
+  Command Center idle 30 s by 3:00 (pros 13 s): the builder sets out by its walk, not a fixed 6 s of income
 - [#29](https://github.com/vibrunazo/gary/issues/29) Why army dataset v5's commit models trail the deployed one in games
   (not the bunker counts: with armyseen v5 still trails, -0.039 over 96)
 - [#3](https://github.com/vibrunazo/gary/issues/3) Close out won games (the hunt imitated: its labels on the deployed
