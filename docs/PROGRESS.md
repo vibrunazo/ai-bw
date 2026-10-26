@@ -1398,6 +1398,15 @@ plan and the full log).
   0.087 (won 15 lost 28, against 7 and 30). Adopted: gt1dev gt0.17dev (styles 1 and 2 by the pros' shares). Left: the
   opening's gas and Factory late (a Factory by 5:00 in 3%, pros 43%), gas and minerals banked at 20-30 minutes (2,462 and
   4,533 against 1,709 and 3,247). eggs into gz1dev on the fidelity rule (gz0.6dev; its loss is #48's to fix).
+  Why the opening's gas and Factory come late on style 1 (SR144a+b's records): Gary's first Refinery decision comes at a
+  median 4.2 minutes (by 3:00 20%, by 4:00 40%; style-1 pros 3.5, 9% and 87%), and nothing is lost between decision and
+  building. At 2:30-3:00 the model gives a Refinery and an expansion 0.0% and the pros' natural (18% of their decisions
+  at 2:00-3:00) comes in 4% of Gary's. The cause is the early-pool posture (a registered stop-gap, still in gt1dev): it
+  goes to rush defense in 100% of games, at 1.8-2.5 minutes (half of them blind: nothing scouted, the alarm from
+  nothing seen), and holds off gas, tech and the natural until 3.6-4.6 minutes, a bunker at the ramp, marines first.
+  gz1 does open with a pool before 2:00 in 62% of these games (a 12-pool, often with a hatchery at 1.7-2.0), which pros
+  answer while still taking their natural. With seenall the macro model sees the pool and the zerglings itself:
+  gt1dev+noalarm (the normal posture, no forced builds) is judged in NA145a+b against SR144a+b, on the opening first.
   dataextras over 96 paired games against a fresh baseline (DX141a+b against BX141a+b; the lurker fix had changed gz1,
   so AS141a+b no longer served): -0.008 +- 0.066, the gap +0.015, fight +0.034 (-0.003 to +0.057): not adopted (rl1's
   RL played with them filled; the clean fix is filling them in the datasets at the next imitation retrain).
