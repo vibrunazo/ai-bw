@@ -604,6 +604,8 @@ OPTIONS = {
     # that bunch's size) left 0, as in the response datasets the models learned from (always 0 there: their weights
     # stayed at their initialization's scale, and play fed them 1-4)
     "dataextras": lambda m: m["fight"].update(data_extras=True),
+    # gary/agent/zerg_roles.py full_hp: Gary-Z's role model given hidden enemies' HP as full, as its data (it reads 0)
+    "zfullhp": lambda m: m["fight"].update(full_hp=True),
     # the third roles RL run, from rl1 with each decision credited over 20 s (--horizon 20; rl2's 10 s won the suite
     # and lost in games): the held-out suite +268 against rl1's +195 (paired +71, +12 to +135), against RoleAhead +122
     "rl3": lambda m: m["fight"].update(roles_model="runs/roles_rl/20261023_043828/model.pt"),
@@ -1165,6 +1167,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
                              f.get("watch_tiles", 0) * 32, f.get("roles", {}), f.get("attend", False))
     if m["fight"] is not None and m["fight"].get("data_extras") and getattr(g.fight, "roles", None) is not None:
         g.fight.roles.own_extra = False
+    if m["fight"] is not None and m["fight"].get("full_hp") and getattr(g.fight, "roles", None) is not None:
+        g.fight.roles.full_hp = True
     if m["arbiter"] == "drill/v1":
         g.arbiter = DrillArbiter(g, seed, interruptions)
     else:

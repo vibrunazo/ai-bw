@@ -57,7 +57,7 @@ KNOWN = {
     ("T", "roles", "extra 3"): "#52: a unit's age, filled in play, 0 in the role datasets (option dataextras)",
     ("T", "roles", "extra 4"): "#52: its distance to Gary's biggest bunch, the same",
     ("T", "roles", "extra 5"): "#52: that bunch's size, the same",
-    ("Z", "roles", "enemy HP 0"): "#52: Gary-Z's role model sees every enemy at 0 HP (the data: full)",
+    ("Z", "roles", "enemy HP 0"): "#52: Gary-Z's role model sees every enemy at 0 HP (the data: full; option zfullhp lost)",
 }
 
 

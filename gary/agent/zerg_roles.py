@@ -63,6 +63,7 @@ class ZergRoles:
         from gary.policy.roles import RoleModel
         self.bot = bot
         self.model = RoleModel.load(model_path)
+        self.full_hp = False                     # option zfullhp
         self.names = [n.upper() for n in self.model.config["roles"]]
         self.flip = None
         self.ground = None
@@ -111,6 +112,13 @@ class ZergRoles:
         # (Gary-Z's observation is already its own view; a raw one carries visible_to)
         seen = [u for u in obs["units"] if u["owner"] in (slot, 11) or "visible_to" not in u
                 or (u["visible_to"] >> slot) & 1]
+        if self.full_hp:
+            # option zfullhp: hidden enemy HP full, as the role datasets have it (ingest/role_dataset.py) and the
+            # Terran's fight layer; without it the interface's None becomes 0 in every enemy row and Gary-Z's role
+            # model sees each enemy at 0 HP (#52; 96 paired games with it: -0.029 +- 0.052, not adopted)
+            from gary.agent.fight import MAX_HP
+            seen = [{**u, "hp": MAX_HP.get(u["type"], 100), "shields": 0}
+                    if u["owner"] not in (slot, 11) and u.get("hp") is None else u for u in seen]
         snap = snapshot({**obs, "units": seen}, slot, self.flip, supply_x2, is_worker, is_building,
                         FIGHT_AROUND, MAX_UNITS, near=WATCH)
         positions = {u["tag"]: (u["x"], u["y"]) for u in seen}
