@@ -127,7 +127,7 @@ def _attention(cmds: list[tuple[int, list[int]]]):
 
 
 def _job(job: tuple) -> dict:
-    path, end, sha1, race = job
+    path, end, sha1, race, own = job
     out = {"sha1": sha1, "error": None, "rows": [], "extra": [], "labels": [], "near": [], "move": [], "time": [],
            "tags": [], "attended": [], "budget": []}
     try:
@@ -138,7 +138,7 @@ def _job(job: tuple) -> dict:
             g.step(24)
             slot = next(u["owner"] for u in g.observe()["units"] if u["type"] in HALLS[race])
             seen = Seen(g, slot)
-            probe = Probe(near=SIGHT, race=race)
+            probe = Probe(near=SIGHT, race=race, own=own)
             quiet = QUIET
             while g.frame + 24 <= last:
                 o = seen.observe()
@@ -207,11 +207,12 @@ def main() -> None:
                     help="old: the 1.16 games on the three fixture maps (all until 2026-10-20); modern: ladder games")
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--out", help="default: data/interim/roles/response_<race>.npz")
+    ap.add_argument("--own-extras", action="store_true", help="fill extras 3-5 (a unit's age, its bunch: as play does)")
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
     from ingest.inventory import data_root
-    jobs = select(args.games, args.race, args.era)
+    jobs = [(*j, args.own_extras) for j in select(args.games, args.race, args.era)]
     with ProcessPoolExecutor(args.parallel) as pool:
         results = list(monitor.track(pool.map(_job, jobs, chunksize=1), len(jobs), "games"))
     n = sum(len(r["rows"]) for r in results)

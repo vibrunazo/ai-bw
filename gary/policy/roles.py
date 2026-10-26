@@ -50,6 +50,56 @@ EXTRA = 6 + TERRAIN                  # motion x, y over the last half second (ti
 AGE_SCALE = 60.0                     # seconds
 PACK_DIST_SCALE = 320.0              # pixels
 PACK_SIZE_SCALE = 12.0
+PACK_LINK = 4 * 32                   # units this close to each other are one bunch
+SHELTERS = {125}                     # bunkers: in the bunch, weighing 8 (supply x2)
+
+
+def biggest_bunch(units: list[dict]) -> list[dict]:
+    """The biggest bunch (by supply x2; a bunker 8) of these units, linked within PACK_LINK."""
+    import math
+    from gary.policy.army import supply_x2
+    weight = lambda u: 8 if u["type"] in SHELTERS else supply_x2(u["type"])
+    left, best = set(range(len(units))), None
+    while left:
+        todo, bunch = [left.pop()], []
+        while todo:
+            i = todo.pop()
+            bunch.append(units[i])
+            near = [j for j in left if math.dist((units[i]["x"], units[i]["y"]), (units[j]["x"], units[j]["y"])) < PACK_LINK]
+            left -= set(near)
+            todo += near
+        if best is None or sum(map(weight, bunch)) > sum(map(weight, best)):
+            best = bunch
+    return best or []
+
+
+def own_extras(extra: np.ndarray, tags: list[int], by_tag: dict, slot: int, first_seen: dict, now: int,
+               fill: bool = True) -> np.ndarray:
+    """Extras 3-5 for the player's fighters in a snapshot (the same in play, gary/agent/roles.py, and in the role
+    datasets, ingest/role_dataset.py): its age since it was first in a fight snapshot (first_seen: tag -> frame, kept
+    here), its distance to the player's biggest bunch of fighters (with its bunkers), that bunch's size."""
+    import math
+    from gary.policy.army import is_building, is_worker, supply_x2
+    mine = [by_tag[t] for t in tags if t in by_tag and by_tag[t]["owner"] == slot and supply_x2(by_tag[t]["type"]) > 0
+            and not is_worker(by_tag[t]["type"]) and not is_building(by_tag[t]["type"]) and by_tag[t]["completed"]]
+    for u in mine:
+        first_seen.setdefault(u["tag"], now)
+    if not mine or not fill:
+        return extra
+    bunkers = [u for u in by_tag.values() if u["owner"] == slot and u["type"] in SHELTERS and u["completed"]]
+    best = biggest_bunch(mine + bunkers)
+    fighters = [u for u in best if u in mine] or best
+    mid = (sum(u["x"] for u in fighters) / len(fighters), sum(u["y"] for u in fighters) / len(fighters))
+    in_best = {u["tag"] for u in best}
+    size = sum(1 for u in mine if u["tag"] in in_best)
+    index = {t: i for i, t in enumerate(tags)}
+    for u in mine:
+        i = index[u["tag"]]
+        if i < len(extra):
+            extra[i, 3] = (now - first_seen[u["tag"]]) / 24 / AGE_SCALE
+            extra[i, 4] = math.dist((u["x"], u["y"]), mid) / PACK_DIST_SCALE
+            extra[i, 5] = size / PACK_SIZE_SCALE
+    return extra
 MOTION_SCALE = 32.0
 
 

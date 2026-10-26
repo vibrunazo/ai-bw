@@ -248,24 +248,9 @@ class RoleRules:
     def _own_extra(self, extra, tags: list[int], by_tag: dict, now: int):
         """The role model's per-unit extras 3-5 for Gary's fighters: age, distance to its biggest
         bunch of fighters, that bunch's size (fresh units walking into a fight alone died alone)."""
-        from gary.policy.roles import AGE_SCALE, PACK_DIST_SCALE, PACK_SIZE_SCALE
-        g = self.g
-        mine = [by_tag[t] for t in tags if t in by_tag and by_tag[t]["owner"] == g.slot and supply_x2(by_tag[t]["type"]) > 0
-                and not is_worker(by_tag[t]["type"]) and not is_building(by_tag[t]["type"]) and by_tag[t]["completed"]]
-        for u in mine:
-            self.first_seen.setdefault(u["tag"], now)
-        if not mine or not getattr(self, "own_extra", True):
-            return extra                         # (option dataextras: 0, as in the pros' data the models learned from)
-        pack = self._pack(mine, [], by_tag)
-        size = sum(1 for u in mine if u["tag"] in pack["tags"])
-        index = {t: i for i, t in enumerate(tags)}
-        for u in mine:
-            i = index[u["tag"]]
-            if i < len(extra):
-                extra[i, 3] = (now - self.first_seen[u["tag"]]) / 24 / AGE_SCALE
-                extra[i, 4] = math.dist((u["x"], u["y"]), pack["mid"]) / PACK_DIST_SCALE
-                extra[i, 5] = size / PACK_SIZE_SCALE
-        return extra
+        from gary.policy.roles import own_extras
+        # (option dataextras: 0, as in the role datasets before they had them)
+        return own_extras(extra, tags, by_tag, self.g.slot, self.first_seen, now, getattr(self, "own_extra", True))
 
     def _units(self, snap):
         """Gary's units the roles may command (in the snapshot, not held by a rule), and the enemy's."""

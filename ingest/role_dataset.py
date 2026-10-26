@@ -26,7 +26,7 @@ import numpy as np
 from eval import monitor, priority
 from eval.micro_roles import ATTACK, CONTACT, GROUP, MOVE, NEAR, RETREAT_PX, SIDEWAYS, STAND, TARGETED_FOR
 from gary.agent.fight import MAX_HP
-from gary.policy.roles import EXTRA, MAX_UNITS, ROLES, Ground, extra_features, terrain_features
+from gary.policy.roles import EXTRA, MAX_UNITS, ROLES, Ground, extra_features, own_extras, terrain_features
 
 SLICE = 12
 
@@ -36,9 +36,10 @@ SHELTERS = {"T": {125}, "Z": {146}}                  # where its units shelter: 
 
 
 class Probe:
-    def __init__(self, near: float = NEAR, race: str = "T"):
+    def __init__(self, near: float = NEAR, race: str = "T", own: bool = False):
         self.near = near                   # units with an enemy fighter this close are labeled
         self.halls, self.shelters = HALLS[race], SHELTERS[race]
+        self.own_extras = own                  # fill extras 3-5 (response datasets built with --own-extras)
         self.start = None
         self.flip = None
         self.snaps = []                    # (frame, rows, extra, tags)
@@ -46,6 +47,7 @@ class Probe:
         self.targeted: dict[int, int] = {}
         self.prev: dict[int, tuple] = {}
         self.ground = None
+        self.first_seen: dict[int, int] = {}   # extras 3-5 (gary/policy/roles.py own_extras): when each was first in one
 
     def __call__(self, game, slot: int) -> None:
         from gary.policy.army import is_building, is_worker, supply_x2
@@ -102,6 +104,8 @@ class Probe:
             extra[:, 6:] = terrain_features(tags, positions, self.ground, [(u["x"], u["y"]) for u in own if u["type"] in self.halls],
                                             [(u["x"], u["y"]) for u in own if u["type"] in self.shelters and u["completed"]],
                                             self.flip)
+            if self.own_extras:                 # (the age and the bunch, as play fills them)
+                own_extras(extra, tags, {u["tag"]: u for u in seen}, slot, self.first_seen, f)
             self.snaps.append((f, rows, extra, tags))
         self.prev = positions
 
