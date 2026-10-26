@@ -1351,6 +1351,11 @@ plan and the full log).
   18-19 a minute against 21, 2026-10-23; option attend, the share held at the pros', was not adopted). The scenarios
   start at chosen fight moments, so they can't see how often fights start or how far units chase; in games rl2's and
   rl3's fighters died more. A roles reward needs the game around the fight (the critic in league games, or 96 games).
+  The Terran's extras 3-5 for the pros too: computed once (gary/policy/roles.py own_extras) for play and the datasets
+  (ingest/response_dataset.py --own-extras), the response dataset rebuilt from the same 800 games
+  (response_T_att_own_again.npz) and the again model retrained by its recipe (runs/roles/20261026-090057): held out
+  (the same 119,616 units) accuracy 0.478 against 0.476, before contact 0.456 against 0.450. The base for the next
+  roles work, not deployed (the again option still picks the old one by its data).
   dataextras over 96 paired games against a fresh baseline (DX141a+b against BX141a+b; the lurker fix had changed gz1,
   so AS141a+b no longer served): -0.008 +- 0.066, the gap +0.015, fight +0.034 (-0.003 to +0.057): not adopted (rl1's
   RL played with them filled; the clean fix is filling them in the datasets at the next imitation retrain).
