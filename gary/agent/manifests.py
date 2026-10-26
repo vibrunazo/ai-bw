@@ -982,8 +982,13 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # gt0.16dev: the models' own counts as the replays count them (unitcount: the queue past the unit in training left out,
 # the SCVs in a Refinery in). A fix: 96 paired games against gt0.15dev (UC143a+b against BC142a+b): -0.031 +- 0.073,
 # the gap +0.024, macro +0.039 (-0.011 to +0.099), not measurably different
+# gt0.17dev: the pros' build styles by their shares (styleroll: standard bio 82%) in place of the selector's style 4
+# (two-Barracks gasless marines, 1.5% of pro Terran games, from a table counted on 1.16 anti-rush games). Judged on the
+# build first (AGENTS.md, fidelity before wins): 96 paired games against gt0.16dev (SR144a+b against UC143a+b), every
+# 5-minute window of the gap nearer the pros (-0.050 to -0.112; macro -0.073 to -0.159), a Refinery by 5:00 in 36% (6%;
+# pros 95%), Factories at 20-30 minutes 2.1 (1.2; 3.4), tanks 5.3 (3.3; 7.0), vultures 0.9 (0; 2.3); results +0.076 +- 0.087
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
-                                     "+dice+widespot+seenall+armyseen+builtcount+unitcount"), "version": "gt0.16dev"}
+                                     "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll"), "version": "gt0.17dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
@@ -996,7 +1001,10 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # gz0.5dev: Gary-Z's role model given hidden enemies' HP as full, as its data (zfullhp; it read 0): a fix, its 96 paired
 # games against gz0.4dev (ZH142a+b against LB141a+b) -0.029 +- 0.052, not measurably different; its decisions barely move
 # (retreat 6.6% of them against 6.2%, close in 4.8% against 4.1%; the retreat rule weighs supply, not HP)
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp"), "version": "gz0.5dev"}     # (ownsupply in gz1 since gz0.3)
+# gz0.6dev: the units in eggs not counted twice in the macro model's own counts (eggs), as its replays count them. On by
+# AGENTS.md's fidelity rule though its 96 paired games lost (EG141a+b against ZP141a+b, the Zerg -0.117 +- 0.063): the
+# right counts move the model off zerglings to Hydralisks and it slows (#48), which is the thing to fix, not the input
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs"), "version": "gz0.6dev"}     # (ownsupply in gz1 since gz0.3)
 
 
 def _against(m: dict, vs: dict) -> dict:
