@@ -54,9 +54,18 @@ def is_test(sha1: str) -> bool:
     return int(sha1[:8], 16) % 10 == 0
 
 
+STYLE_VERSION: str | None = None   # --styles: each player's style from that style catalogue (gary/styles.py), where it has one
+
+
 def player_games(matchup: str, race: str, keep=None) -> list[tuple[str, int, int | None, bool]]:
     """(npz path, player index, style, held out) for every player of this race; keep: a GameFilter."""
     out = []
+    labels = None
+    if STYLE_VERSION:
+        from gary import styles
+        styles.VERSION = STYLE_VERSION
+        c = styles.catalog(matchup, race)
+        labels = c["assignments"] if c else None
     with open(macro_dir() / "index.jsonl", encoding="utf-8") as f:
         rows = {r["sha1"]: r for r in map(json.loads, f)}
     for r in rows.values():
@@ -65,7 +74,8 @@ def player_games(matchup: str, race: str, keep=None) -> list[tuple[str, int, int
         path = str(macro_dir() / r["sha1"][:2] / f"{r['sha1']}.npz")
         for i, p in enumerate(r["players"]):
             if p["race"] == race:
-                out.append((path, i, p["style"], is_test(r["sha1"])))
+                style = labels.get(f"{r['rel_path']}|{p['name']}", p["style"]) if labels is not None else p["style"]
+                out.append((path, i, style, is_test(r["sha1"])))
     return out
 
 
@@ -254,6 +264,8 @@ def main() -> None:
     ap.add_argument("--games", type=int, help="train on a random subset of this many player-games (learning curves)")
     ap.add_argument("--out", help="save the run here instead of runs/macro/<matchup>_<race>_<time> (experiments that must not become the newest model)")
     ap.add_argument("--no-era-inputs", action="store_true", help="without the year and map inputs (the models before them)")
+    ap.add_argument("--styles", help="the style catalogue's version for every player's style (v2: every game labelled, "
+                    "taxonomy/label_all.py; default the macro index's)")
     ap.add_argument("--compare-separate", action="store_true", help="a shared model (several matchups): also score each "
                     "matchup's own newest model (runs/macro/<matchup>_<race>_*) on that matchup's modern held-out games")
     ap.add_argument("--compare", metavar="RUN_DIR", help="also score this trained model on the same held-out games "
@@ -261,6 +273,8 @@ def main() -> None:
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
+    global STYLE_VERSION
+    STYLE_VERSION = args.styles
     keep = GameFilter.from_args(args)
     if args.caps_only:
         caps = count_caps(player_games(args.matchup, args.race, keep), args.workers)

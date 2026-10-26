@@ -167,7 +167,9 @@ def main() -> None:
     ap.add_argument("--save", help="replay path (default gary_<version>.rep)")
     ap.add_argument("--command-delay", type=int, default=LIVE_COMMAND_DELAY,
                     help=f"headless: frames before a command runs (default {LIVE_COMMAND_DELAY}, as measured live)")
-    ap.add_argument("--style", type=int, help="build-style cluster to steer the macro toward (default: the strategy selector's choice for the map)")
+    ap.add_argument("--style", help="Gary's build style, by id or name (gary/styles.py), over its manifest's choice; "
+                    "--list-styles prints them")
+    ap.add_argument("--list-styles", action="store_true", help="print the build styles Gary's race has, per matchup, and exit")
     ap.add_argument("--fight-model", help="replace the version's fight model with this checkpoint")
     ap.add_argument("--quiet", action="store_true", help="don't print each decision")
     ap.add_argument("--live", action="store_true", help="play in a live SC:R client via the bridge")
@@ -177,6 +179,12 @@ def main() -> None:
     ap.add_argument("--snapshots", help="live: save what the bridge showed Gary each second (for tools/parity.py)")
     args = ap.parse_args()
     manifests = {"T": args.terran, "Z": args.zerg}
+    if args.list_styles:
+        from gary.styles import describe
+        for mu in ("TvZ", "TvT", "ZvZ", "PvT", "PvZ", "PvP"):
+            if args.race in mu:
+                print(describe(mu, args.race))
+        return
 
     def make(hi, mapinfo, race):
         return build_gary(hi, mapinfo, manifests[race], args.style, verbose=not args.quiet, fight_path=args.fight_model)

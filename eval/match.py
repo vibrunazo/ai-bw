@@ -84,7 +84,8 @@ class Match:
             hi.step(2, advance_game=(i == 0))
 
 
-def play(map_path: str, minutes: float, seed: int, save: str, a: str, b: str, style: int | None = None) -> str:
+def play(map_path: str, minutes: float, seed: int, save: str, a: str, b: str, style: int | str | None = None,
+         style_b: int | str | None = None) -> str:
     """One game, A against B; its result ("A won", "B won", "time")."""
     races = [manifest_of(a).get("race", "T"), manifest_of(b).get("race", "T")]
     mirror = races[0] == races[1]
@@ -110,7 +111,7 @@ def play(map_path: str, minutes: float, seed: int, save: str, a: str, b: str, st
         garys = {0: build_gary(his[0], mapinfo, a, style, seed=seed)}
         if mirror:
             LOG.slot = slots[1]
-        garys[1] = build_gary(his[1], mapinfo, b, seed=seed)
+        garys[1] = build_gary(his[1], mapinfo, b, style_b, seed=seed)
         LOG.slot = None
         end = int(minutes * 60 * 24)
         result = "time"
@@ -174,10 +175,20 @@ def main() -> None:
     ap.add_argument("--map", required=True)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--minutes", type=float, default=30)
-    ap.add_argument("--style", type=int, help="A's build style (taxonomy cluster) to steer its macro toward")
+    ap.add_argument("--style", help="A's build style, by id or name (gary/styles.py; --list-styles), over its manifest's")
+    ap.add_argument("--style-b", help="B's build style, the same")
+    ap.add_argument("--list-styles", action="store_true", help="print the build styles of A's and B's races and exit")
     ap.add_argument("--save", default="match.rep")
     args = ap.parse_args()
-    play(args.map, args.minutes, args.seed, args.save, args.a, args.b, args.style)
+    if args.list_styles:
+        from gary.styles import describe
+        races = [manifest_of(args.a).get("race", "T"), manifest_of(args.b).get("race", "T")]
+        mu = "".join(sorted(races, key="TZP".index)) if races[0] != races[1] else races[0] * 2
+        mu = f"{mu[0]}v{mu[1]}"
+        for r in dict.fromkeys(races):
+            print(describe(mu, r))
+        return
+    play(args.map, args.minutes, args.seed, args.save, args.a, args.b, args.style, args.style_b)
 
 
 if __name__ == "__main__":

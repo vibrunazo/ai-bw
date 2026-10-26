@@ -23,7 +23,9 @@ and its line removed; a new one gets an issue and a line).
 
 - One Gary for every race: manifest `gt1` plays Terran, `gz1` Zerg (`gary/agent/manifests.py`). Every game
   runs through `python -m eval.match --a <manifest> --b <manifest>`; `python -m eval.league` plays Terran
-  (`--vs`, default gt1) against Zerg (`--zerg`, default gz1); `gary/play.py --live` plays a human.
+  (`--vs`, default gt1) against Zerg (`--zerg`, default gz1); `gary/play.py --live` plays a human. A side's build
+  style is told by name or id (`--style`, and `--style-b` for B in eval.match; `--list-styles` prints each race's per
+  matchup from the catalogue `gary/styles.py`, every game labelled by `taxonomy/label_all.py`).
 - Two Terran manifests: `gt1` is what plays (the strongest measured: human games, the tests' parity, the league's
   default) and `gt1dev` is what learning is trained and judged in: gt1 with the role model deciding in contact and
   the army on control groups, the configuration expected to win later, and without the stop-gaps over the layers

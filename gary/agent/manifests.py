@@ -1036,7 +1036,7 @@ def manifest_name(name: str) -> str:
     return name
 
 
-def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verbose: bool = True,
+def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None, verbose: bool = True,
                fight_path: str | Path | None = None, load=load_model, seed: int = 0,
                flip: tuple[bool, bool] | None = None, interruptions: bool = True, fight_model=None) -> Gary:
     """A Gary from a manifest (a name in MANIFESTS, or a dict like them). fight_path (or an already
@@ -1047,6 +1047,10 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
     torch.set_num_threads(1)       # its models are small: games run side by side (14 at once: 2.7x faster)
     m = manifest_of(manifest)
     g = Gary(hi, mapinfo, m["version"], verbose, m.get("race", "T"))
+    if style is not None:                         # (by id or by name, for this race in this matchup: gary/styles.py)
+        from gary.styles import resolve
+        style = resolve(g.matchup, g.race.letter, style)
+    chosen = style is not None                    # (chosen by the caller: the records say so)
     if g.enemy is not None and g.enemy.race in m.get("vs", {}):
         m = _against(m, m["vs"][g.enemy.race])
     g.army_types = set(g.race.army)
@@ -1103,7 +1107,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if style is not None:                     # (the style it was told, in the game's records: eval/style_adherence.py)
             from gary.decision_log import LOG
             LOG.decision(getattr(hi, "side", None) or g.race.letter, "style", 0, int(style),
-                         by="selector" if m["macro"].get("selector") else "roll" if m["macro"].get("style") == "roll" else "manifest")
+                         by="chosen" if chosen else "selector" if m["macro"].get("selector")
+                         else "roll" if m["macro"].get("style") == "roll" else "manifest")
         g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
                                m["macro"].get("rax_by", 90 * 24),
                                m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0),
