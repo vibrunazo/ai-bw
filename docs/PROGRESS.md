@@ -1348,6 +1348,10 @@ plan and the full log).
   dataextras over 96 paired games against a fresh baseline (DX141a+b against BX141a+b; the lurker fix had changed gz1,
   so AS141a+b no longer served): -0.008 +- 0.066, the gap +0.015, fight +0.034 (-0.003 to +0.057): not adopted (rl1's
   RL played with them filled; the clean fix is filling them in the datasets at the next imitation retrain).
+  zfullhp (Gary-Z's role model given hidden enemies' HP as full, as its data) over 96 paired games (ZH142a+b against
+  LB141a+b): the Zerg's score -0.029 +- 0.052, fight +0.039 (-0.036 to +0.153): leaning worse, an option, off. The second
+  Zerg input made right that cost games (eggs, #48): its models may need their right inputs in training (a retrain or a
+  fine-tune on Gary-Z's own states with eggs and zfullhp on), not one at a time in play.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
