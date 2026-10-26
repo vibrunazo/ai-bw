@@ -163,7 +163,8 @@ class ValueView:
         tracker.history, tracker.map_hash, tracker.matchup = None, None, None
         seen = {u["tag"] for u in mine}
         inside = [t for tags in getattr(g, "loaded", {}).values() for t in tags if t not in seen]
-        made = {} if g.race.production_in_sight else g.macro.in_production(mine)   # (Zerg: in eggs, in sight already)
+        made = {} if g.race.production_in_sight else g.macro.in_production(mine, True)   # (Zerg: in eggs, in sight
+        # already; the Terran's: the unit in training, as the replays count, not the ones queued behind it)
         x = no_style(tracker.spec, tracker.features(obs, made, inside))
         now = self.hist[max(self.hist)]
         ago = self.hist[min(self.hist)]

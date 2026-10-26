@@ -249,9 +249,14 @@ class LearnedArmy:
         """Own units the observation doesn't show and the replays count: in production, inside a bunker (option
         armyseen: gary/policy/army.py ArmyTracker.extra_units)."""
         mine = [u for u in obs["units"] if u["owner"] == self.g.slot]
+        macro = getattr(self.g, "macro", None)
+        first = getattr(macro, "count_first", False)
         # (the Zerg's eggs and morphing buildings are in sight already: adding what they become counted zerglings and a
         # Lair twice, and armyseen leaned worse on the Zerg, ZA141a+b)
-        out = {} if self.g.race.production_in_sight else dict(self.g.executor.in_production(mine))
+        out = {} if self.g.race.production_in_sight else dict(self.g.executor.in_production(mine, first=first))
+        if first and getattr(macro, "tracker", None) is not None and macro.tracker.look_every:   # (unitcount: gas)
+            w = self.g.race.worker
+            out[w] = out.get(w, 0) + len(macro.tracker.in_gas(obs, {self.g.race.gas_building}))
         seen = {u["tag"] for u in mine}
         for tags in self.g.loaded.values():
             for tag in tags:

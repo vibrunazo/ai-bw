@@ -523,14 +523,15 @@ class Executor:
 
     # --- what Gary has to carry out decisions with ------------------------------------------------
 
-    def in_production(self, mine: list[dict]) -> Counter:
+    def in_production(self, mine: list[dict], first: bool = False) -> Counter:
         """Units being made right now (the game counts them, observations don't list them): by its
-        buildings' queues and what Gary last started in each."""
+        buildings' queues and what Gary last started in each. first: only each building's unit in training, as
+        the game (and so the replays) count it, not the ones queued behind it (option unitcount)."""
         out: Counter = Counter()
         for b in mine:
             q = b.get("queue", 0)
             if b["completed"] and q > 0 and b["tag"] in self.g.producing:
-                for uid in self.g.producing[b["tag"]][-q:]:     # (the queue holds the last q started)
+                for uid in self.g.producing[b["tag"]][-q:][:1 if first else q]:     # (the queue holds the last q started)
                     out[uid] += 1
         return out
 

@@ -32,6 +32,9 @@ from torch import nn
 ACT_NAMES = ["train", "morph", "bmorph", "build", "research", "upgrade", "expand"]
 OTHER = (-1, -1)                 # decisions too rare to have their own class
 BUILD_ACT, EXPAND_ACT = 3, 6     # (ingest/macro_dataset.py ACTS["build"], ACT_EXPAND)
+WORKER_TYPES = {7, 41, 64}       # SCV, Drone, Probe
+GAS_INSIDE = 3 * 24              # unitcount: a worker out of sight this long at most beside a gas building is inside it
+GAS_BESIDE = 4 * 32              # ...within this of its center
 PENDING_FOR = 60 * 24            # builtcount: a decided building not started this long after didn't happen
 HALL_APART = 10 * 32             # builtcount: a town hall this far from all of the player's others is an expansion
 
@@ -251,6 +254,7 @@ class MacroTracker:
         self.look_every = 0
         self.last_look = -1 << 30
         self.tag_types: dict[int, int] = {}   # own units' types by tag (one inside a bunker is out of sight)
+        self.workers_at: dict[int, tuple] = {}   # own workers last seen: tag -> (frame, x, y) (one in a gas building)
         # option builtcount: the buildings among the decisions so far counted as the replays count them, each building
         # that started (a decision of the model's or a rule's), at its decision's time if it had one: decided Barracks
         # never built stayed counted (3 at 2:06 where the replay had 1), rules' bunkers never were (0 where it had 1)
@@ -272,6 +276,8 @@ class MacroTracker:
                 continue
             if u["owner"] == self.slot:
                 self.tag_types[u["tag"]] = t
+                if t in WORKER_TYPES:
+                    self.workers_at[u["tag"]] = (obs["frame"], u["x"], u["y"])
             elif u["owner"] != 11:
                 seen[t] += 1
         self.seen_max = np.maximum(self.seen_max, seen)
@@ -314,6 +320,15 @@ class MacroTracker:
             self.pending.remove(p)
             i = self.spec.decision_index(p[1], p[2])
             self.decided[i] = max(0, self.decided[i] - 1)
+
+    def in_gas(self, obs: dict, gas_types) -> list[int]:
+        """The player's workers out of sight inside a gas building now: last seen GAS_INSIDE ago at most, beside one
+        of its gas buildings (the replays count them; option unitcount)."""
+        import math
+        visible = {u["tag"] for u in obs["units"] if u["owner"] == self.slot}
+        gas = [(u["x"], u["y"]) for u in obs["units"] if u["owner"] == self.slot and u["type"] in gas_types]
+        return [t for t, (f, x, y) in self.workers_at.items() if t not in visible and obs["frame"] - f <= GAS_INSIDE
+                and any(math.dist((x, y), g) <= GAS_BESIDE for g in gas)]
 
     def copy(self) -> "MacroTracker":
         """A copy to read the model's inputs with (features() updates what was seen): reading the live tracker would

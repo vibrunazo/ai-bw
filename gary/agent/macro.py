@@ -113,6 +113,9 @@ class LearnedMacro:
         # production not added to the model's own counts, as the replays count them (gz1dev read 22 zerglings at 6:00
         # where its replay had 6 and 16 in eggs)
         self.eggs_seen = False
+        # option unitcount: the model's own counts as the replays count them, a building's units queued behind the one
+        # in training left out, the workers inside a gas building in (2 SCVs counted where the game trained 1, #50)
+        self.count_first = False
         self.held: tuple[int, int] | None = None            # (the decision rolled and waited for, since)
         # units the model decided whose producer is busy, since when: up to one per producer of their kind (several
         # Marines wait for several Barracks), the macro deciding on meanwhile; trained as producers free up, and nothing
@@ -632,16 +635,21 @@ class LearnedMacro:
 
     # --- what Gary has -------------------------------------------------------------------------
 
-    def in_production(self, mine: list[dict]) -> Counter:
+    def in_production(self, mine: list[dict], first: bool = False) -> Counter:
         """Units being made right now (the game counts them, observations don't list them): the executor's."""
+        if first and not self.g.race.production_in_sight:          # (the Zerg executor's own takes a slack)
+            return self.g.executor.in_production(mine, first=True)
         return self.g.executor.in_production(mine)
 
     def model_inputs(self, obs: dict, mine: list[dict], tracker=None) -> np.ndarray:
         """The macro model's inputs now, as step feeds them (tests/test_inputs.py reads them with a copy of the
         tracker, tracker.copy())."""
         tracker = tracker or self.tracker
-        return tracker.features(obs, {} if self.eggs_seen else self.in_production(mine),
-                                self.inside(mine) if tracker.look_every else ())
+        made = {} if self.eggs_seen else self.in_production(mine, first=self.count_first)
+        hidden = list(self.inside(mine) if tracker.look_every else ())
+        if self.count_first and tracker.look_every:        # (option unitcount: the workers inside a gas building too)
+            hidden += tracker.in_gas(obs, {self.g.race.gas_building})
+        return tracker.features(obs, made, hidden)
 
     def inside(self, mine: list[dict]) -> list[int]:
         """Own units out of sight inside a bunker (the replays count them): the ones the fight layer loaded."""
