@@ -1345,6 +1345,9 @@ plan and the full log).
   rounds moved the macro gap further and fought more). No fight-scenario reward can select a roles checkpoint: 96
   games or a reward that counts what fighting costs the rest of the game. The gap table's scan for features stuck at
   0 or never 0 where the pros aren't: only the Terran's bunkers (3.2-3.9 at 5-20 minutes, half the pros none).
+  dataextras over 96 paired games against a fresh baseline (DX141a+b against BX141a+b; the lurker fix had changed gz1,
+  so AS141a+b no longer served): -0.008 +- 0.066, the gap +0.015, fight +0.034 (-0.003 to +0.057): not adopted (rl1's
+  RL played with them filled; the clean fix is filling them in the datasets at the next imitation retrain).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
