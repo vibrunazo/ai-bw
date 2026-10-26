@@ -442,6 +442,12 @@ def rolled_style(model, matchup: str, race: str, seed: int) -> int | None:
             shares = [vals.count(k) / max(1, len(vals)) for k in range(max(vals) + 1)]
         except Exception:
             pass
+    try:                                      # (the modern pros' shares on the ladder maps, eval/style_adherence.py
+        from ingest.inventory import data_root   # --write-shares: Terran TvZ 64/22/13/1 against the all-era 81/13/4/2)
+        modern = json.loads((data_root() / "interim" / "taxonomy" / f"{matchup}_{race}_modern_shares.json").read_text(encoding="utf-8"))
+        shares = [modern["shares"].get(str(k), 0.0) for k in range(max(int(k) for k in modern["shares"]) + 1)]
+    except Exception:
+        pass
     weights = [shares[s] if shares and s < len(shares) else 1.0 for s in styles]
     return random.Random(seed).choices(styles, weights=weights)[0]
 
@@ -987,8 +993,14 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # build first (AGENTS.md, fidelity before wins): 96 paired games against gt0.16dev (SR144a+b against UC143a+b), every
 # 5-minute window of the gap nearer the pros (-0.050 to -0.112; macro -0.073 to -0.159), a Refinery by 5:00 in 36% (6%;
 # pros 95%), Factories at 20-30 minutes 2.1 (1.2; 3.4), tanks 5.3 (3.3; 7.0), vultures 0.9 (0; 2.3); results +0.076 +- 0.087
+# gt0.18dev: without the early-pool posture (noalarm: it went to rush defense in every game, half of them blind, and held
+# off gas and the natural to 3.6-4.6 minutes); the macro model sees the pool and the zerglings itself (seenall). Judged per
+# style (eval/style_adherence.py) against the modern pros of that style on the ladder maps, 96 paired games (NA145a+b
+# against SR144a+b): style 1 played in 100% (96%), its natural at 3.2 minutes (4.5; pros 2.7), gas 3.6 (4.5; 3.1), a
+# bunker at 6.1 in 60% (2.5 in 100%; 5.5 in 56%), a Factory by 8:00 in 59% (45%; 88%); style 2 in 100% (75%), its Factory
+# at 3.1 (4.2; 2.5); results +0.018 +- 0.072, lost 21 (28). And the styles rolled by the modern pros' shares
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
-                                     "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll"), "version": "gt0.17dev"}
+                                     "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm"), "version": "gt0.18dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
@@ -1088,6 +1100,10 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         if style is None and m["macro"].get("style") == "roll":
             style = rolled_style(macro, g.matchup, g.race.letter, seed)
             g.selected_style = style
+        if style is not None:                     # (the style it was told, in the game's records: eval/style_adherence.py)
+            from gary.decision_log import LOG
+            LOG.decision(getattr(hi, "side", None) or g.race.letter, "style", 0, int(style),
+                         by="selector" if m["macro"].get("selector") else "roll" if m["macro"].get("style") == "roll" else "manifest")
         g.macro = LearnedMacro(g, macro, style, builds, m["macro"].get("natural_bunker", False),
                                m["macro"].get("rax_by", 90 * 24),
                                m["macro"].get("decoder", "favorite"), seed, m["macro"].get("temperature", 1.0),

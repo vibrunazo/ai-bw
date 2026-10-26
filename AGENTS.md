@@ -188,7 +188,8 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   play its "most seen" inputs stayed 0 until option `seenall` (2026-10-25: the tracker looked only when the model was
   queried); gt1 doesn't have it yet, so the answers' measure is to be taken with it.
   Measure: an option off, against lurker and mutalisk plans: results and the time to the answer.
-- **The early-pool posture's builds** (in gt1; rush defense from scouting: bunker at the ramp, marines first, no
+- **The early-pool posture's builds** (in gt1; off in gt1dev since gt0.18dev, option noalarm: it went to rush defense in
+  every game, half of them blind, and held the opening's gas and natural back; rush defense from scouting: bunker at the ramp, marines first, no
   expansion). Forces 454 decisions and blocks expansion 145 times in 48 games. Scripted for 9-pool and 12-pool
   rushes (v0.11-v0.18, losses 27 of 48 to the pro-timed 9-pool before it). Replace with the posture as a learned
   read of the scouting (the posture's alarm a model input). Measure: losses to early pools (eval/vs_rush.py) and
