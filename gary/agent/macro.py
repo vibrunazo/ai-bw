@@ -500,7 +500,8 @@ class LearnedMacro:
                 self.goal = None
             return
         minerals, gas = plan["cost"]
-        budget = me["minerals"] - g.committed() - self._saved_cost()[0]
+        kept_m, kept_g = self._kept_cost()
+        budget = me["minerals"] - g.committed() - kept_m
         # a building's worker sets out WALK_AHEAD seconds of income early: it walks while the money comes
         workers = sum(1 for u in mine if u["type"] == g.race.worker)
         walk_ahead = int(WALK_AHEAD * MINING * workers) if plan["kind"] == "build" else 0
@@ -508,7 +509,7 @@ class LearnedMacro:
             # (Gary-Z's: its drone sets out at the cost less PARK_AHEAD, the larvae going on meanwhile; held until
             # 6 s of income short, nothing else decided, the second hatchery came by 4:00 in 13 of 32 games, 21)
             walk_ahead = max(walk_ahead, PARK_AHEAD)
-        if budget < minerals - walk_ahead or me["gas"] - self._saved_cost()[1] < gas:
+        if budget < minerals - walk_ahead or me["gas"] - kept_g < gas:
             if self.nosave:
                 self.goal = None
             return
@@ -547,6 +548,17 @@ class LearnedMacro:
             return 0, 0
         return self.g.executor.cost_of(self.saved["act"], self.saved["id"])
 
+    def _kept_cost(self, own: bool = False) -> tuple[int, int]:
+        """The money a new goal leaves alone: the parked decision's (unless it is that one) and the queued units', each
+        decided before it and waiting for its busy producer or a depot on its way. Pros keep production going first: a
+        Refinery decided while the SCV before it waited for supply took its money, and the SCV waited 14 s more once
+        the depot was up (#55)."""
+        sm, sg = (0, 0) if own else self._saved_cost()
+        for (act, uid), _ in self.queued:
+            m, gas = self.g.executor.cost_of(act, uid)
+            sm, sg = sm + m, sg + gas
+        return sm, sg
+
     def _affordable(self, goal: dict, obs: dict, mine: list[dict], done: list[dict], me: dict, own: bool = False,
                     plan: dict | None = None) -> bool:
         """Its money is there, less what is spoken for and the parked decision's (unless it is that one). A
@@ -558,7 +570,7 @@ class LearnedMacro:
         if not isinstance(plan, dict) or plan is WAIT:
             return False
         minerals, gas = plan["cost"]
-        sm, sg = (0, 0) if own else self._saved_cost()
+        sm, sg = self._kept_cost(own)
         return me["minerals"] - g.committed() - sm >= minerals and me["gas"] - sg >= gas
 
     def _train_queued(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> bool:
@@ -574,7 +586,11 @@ class LearnedMacro:
             if plan is WAIT or g.task is not None:
                 continue
             minerals, gas = plan["cost"]
-            if me["minerals"] - g.committed() < minerals or me["gas"] < gas:
+            # (a parked build decided after this unit waits its turn: its builder walking held the money of the SCVs
+            # decided before it, 12.7 s of the main Command Center's idle at 2:30-4:00, #55)
+            parked = g.parked
+            ahead = g.race.costs[parked.unit_type][0] if parked is not None and parked.started > since else 0
+            if me["minerals"] - g.committed() + ahead < minerals or me["gas"] < gas:
                 continue
             g.task = Task("command", data=plan, started=g.hi.frame)
             g.spend(minerals)
