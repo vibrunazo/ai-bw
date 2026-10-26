@@ -11,7 +11,7 @@ and its line removed; a new one gets an issue and a line).
   race data (`gary/terran.py`, `zerg.py`, `protoss.py`, `race.py`), the learned models (`gary/policy`), the
   interface (human-like hands) and the game environment.
 - `eval/`: the launcher (`match.py`), league rounds (`league.py`, which keeps each round's feature rows), measures
-  against the pros (`humanlike.py`, `attacks.py`), two versions compared game against game per time window with a
+  against the pros (`humanlike.py`, `attacks.py`, `style_adherence.py`: the build per style), two versions compared game against game per time window with a
   bootstrap spread (`gap_windows.py`), the records' queries (`why.py`), the run monitor (`monitor.py`,
   `priority.py`).
 - `train/`, `ingest/`, `resim/`: models, datasets from replays, the replay re-simulator.
@@ -50,7 +50,8 @@ and its line removed; a new one gets an issue and a line).
   the model lacks for the decision, or the limit of what the data teaches; the finding goes in docs/PROGRESS.md.
 - **Fidelity before wins.** Gary is a sparring partner meant to play like the pros, so a change that moves it toward
   the pros' play (the build the pros play, the inputs the models learned from, a decoder that samples the pros'
-  timings) is judged first on whether Gary now does it (build timings and counts against the pros', the gap score,
+  timings) is judged first on whether Gary now does it (build timings and counts per style against the pros of that
+  style on the same maps, eval/style_adherence.py, never overall against overall; the gap score,
   the pipe and input checks) and on wins second. Simple cheesy plans (style 4, two-Barracks gasless marines, 1.5% of
   pro Terran games) are expected to win more against weak opponents like gz1 and Gary itself, so a drop in wins
   when leaving one is not a verdict. If such a change loses games, it is not abandoned: look for what stops it
