@@ -278,7 +278,8 @@ def main() -> None:
     # (all the styles of a seed together: they share the game's start)
     n0 = len(pro["win"])
     pro_test = np.array([int(s[:8], 16) % 10 == 0 for s in pro["game"]])
-    gx, gwin, gnet, gtest, gnext, gend, gmin, gopp = [], [], [], [], [], [], [], []
+    pro_val = np.array([int(s[:8], 16) % 10 == 1 for s in pro["game"]])     # (early stopping: neither trained nor tested)
+    gx, gwin, gnet, gtest, gnext, gend, gmin, gopp, gval = [], [], [], [], [], [], [], [], []
     k = n0
     for g in gary:
         w, n, fr = gary_targets(g)
@@ -286,6 +287,7 @@ def main() -> None:
         gwin.append(w)
         gnet.append(n)
         gtest.append(np.full(len(w), int(g["game"].split("/")[-1]) % 5 == 0))
+        gval.append(np.full(len(w), int(g["game"].split("/")[-1]) % 5 == 1))
         nxt = np.arange(k + 1, k + len(w) + 1)             # the next sample of the same game, -1 after its last
         nxt[-1] = -1
         gnext.append(nxt)
@@ -301,6 +303,7 @@ def main() -> None:
     NXT = np.concatenate([np.full(n0, -1)] + gnext)
     ENDED = np.concatenate([np.zeros(n0, bool)] + gend)
     test = np.concatenate([pro_test] + gtest)
+    val = np.concatenate([pro_val] + gval)
     is_gary = np.concatenate([np.zeros(n0, bool), np.ones(len(X) - n0, bool)])
     t_min = np.concatenate([np.full(n0, np.nan)] + gmin)
     opp = np.concatenate([np.full(n0, "", object)] + gopp)
@@ -312,7 +315,8 @@ def main() -> None:
     Wt, Nt = torch.tensor(W), torch.tensor(N)
     net = ValueNet(X.shape[1])
     opt = torch.optim.Adam(net.parameters(), lr=1e-3, weight_decay=1e-5)
-    tr = np.where(~test)[0]
+    tr = np.where(~test & ~val)[0]
+    va = torch.tensor(np.where(val)[0])
     step = GAMMA_S ** GARY_EVERY_S
     print(f"samples: pro {n0} ({int(pro_test.sum())} held out), Gary {len(X) - n0} from {len(gary)} games "
           f"({int(test[n0:].sum())} held out); Gary's games won {np.mean([g['result'] == 'won' for g in gary]):.0%}, "
@@ -331,6 +335,16 @@ def main() -> None:
         boot = np.where(NXT >= 0, disc[np.maximum(NXT, 0)], np.where(ENDED, 0.0, np.nan))
         return torch.tensor((R + step * boot).astype(np.float32))
 
+    def val_loss() -> float:
+        """The win and net heads' loss on the validation games (the bootstrapped head's targets move with the net)."""
+        net.eval()
+        with torch.no_grad():
+            lw, ln = net(Xn[va])
+        net.train()
+        wm, nm = ~torch.isnan(Wt[va]), ~torch.isnan(Nt[va])
+        return float(F.binary_cross_entropy_with_logits(lw[wm], Wt[va][wm]) + F.smooth_l1_loss(ln[:, :2][nm], Nt[va][nm]))
+
+    best, best_state, history = float("inf"), None, []
     for ep in monitor.track(range(args.epochs), args.epochs, "training"):
         np.random.default_rng(ep).shuffle(tr)
         for n, b in enumerate(range(0, len(tr), 1024)):
@@ -345,6 +359,13 @@ def main() -> None:
             opt.zero_grad()
             loss.backward()
             opt.step()
+        v = val_loss()
+        history.append(round(v, 4))
+        if v < best:                               # (early stopping: the epoch the validation games liked best, #49)
+            best, best_state = v, {k: t.detach().clone() for k, t in net.state_dict().items()}
+    if best_state is not None:
+        net.load_state_dict(best_state)
+    print(f"validation loss by epoch {history}: kept epoch {history.index(min(history)) + 1}", flush=True)
     net.eval()
     with torch.no_grad():
         lw, ln = net(Xn[torch.tensor(np.where(test)[0])])
@@ -360,6 +381,14 @@ def main() -> None:
         m = ~np.isnan(y)
         r2 = 1 - np.mean((y[m] - p[m]) ** 2) / np.var(y[m]) if m.any() else float("nan")
         print(f"  net{h}: sd {np.std(y[m]) * 1000:.0f}, explained {r2:.1%} (the noise left: sd {np.sqrt(np.mean((y[m] - p[m]) ** 2)) * 1000:.0f})")
+        parts = []
+        for lo, hi in ((0, 6), (6, 12), (12, 18), (18, 99)):          # (by game time: a head can rank well and be off in scale)
+            w_ = m & (tte[gte] >= lo) & (tte[gte] < hi)
+            if w_.sum() > 50:
+                r2w = 1 - np.mean((y[w_] - p[w_]) ** 2) / np.var(y[w_])
+                parts.append(f"{lo}-{hi} min R2 {r2w:+.0%} corr {np.corrcoef(y[w_], p[w_])[0, 1]:+.2f} "
+                             f"(sd {np.std(y[w_]) * 1000:.0f}, predicted {np.std(p[w_]) * 1000:.0f})")
+        print("    " + "; ".join(parts))
     if n0 == len(X):                                      # (the pro win head alone, --race Z: nothing of Gary's to judge)
         torch.save({"state": net.state_dict(), "n_in": X.shape[1], "mean": mean.tolist(), "std": std.tolist(),
                     "spec": spec.to_dict(), "heads": ["win", "net60", "net180", "disc"], "gamma_s": GAMMA_S}, run / "model.pt")
