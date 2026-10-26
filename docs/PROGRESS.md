@@ -1345,6 +1345,12 @@ plan and the full log).
   rounds moved the macro gap further and fought more). No fight-scenario reward can select a roles checkpoint: 96
   games or a reward that counts what fighting costs the rest of the game. The gap table's scan for features stuck at
   0 or never 0 where the pros aren't: only the Terran's bunkers (3.2-3.9 at 5-20 minutes, half the pros none).
+  The command-cost diagnosis (the same plays, commands and losses kept): every checkpoint 54-57 commands a minute and
+  106-111 fight orders; rl2 and rl3 lose fewer (963, 958 against rl1's 1,022) and kill more (1,456, 1,491 against
+  1,392); a cost of 2-20 a command leaves the ranking as it was. Not attention (gt1dev's macro in fights is the pros',
+  18-19 a minute against 21, 2026-10-23; option attend, the share held at the pros', was not adopted). The scenarios
+  start at chosen fight moments, so they can't see how often fights start or how far units chase; in games rl2's and
+  rl3's fighters died more. A roles reward needs the game around the fight (the critic in league games, or 96 games).
   dataextras over 96 paired games against a fresh baseline (DX141a+b against BX141a+b; the lurker fix had changed gz1,
   so AS141a+b no longer served): -0.008 +- 0.066, the gap +0.015, fight +0.034 (-0.003 to +0.057): not adopted (rl1's
   RL played with them filled; the clean fix is filling them in the datasets at the next imitation retrain).
