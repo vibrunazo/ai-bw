@@ -1421,6 +1421,11 @@ plan and the full log).
   eval/style_adherence.py --write-shares; it rolled the all-era 81/13/4/2). Each game now records the style it was told.
   Left on style 1: the Factory by 8:00 (59% against 88%), the Starport (10% against 55%), Machine Shop (2% against 23%);
   on style 2 the natural.
+  gt0.18dev's baselines: against gz1 (BL146a+b, 96 games) won 12 lost 28; told style 1 (56 games) it plays it in 100%,
+  told style 2 (32) in 91%, style 3 (8, now rolled by the modern shares) in 75%. Style 3 against its pros: Starport at
+  4.3 minutes (3.4), its natural in 12% by 8:00 (67%). The self-play pairing (ZP146a, against gz1dev gz0.6dev, 48 games):
+  the Terran won 6 and led in 11 (35%), the Zerg won 6 and led in 14 (42%), 11 even: balanced as before. Next: why
+  styles 2 and 3 skip the natural (19% and 12% by 8:00, pros 98% and 67%), and style 1's late Factory and Starport.
   dataextras over 96 paired games against a fresh baseline (DX141a+b against BX141a+b; the lurker fix had changed gz1,
   so AS141a+b no longer served): -0.008 +- 0.066, the gap +0.015, fight +0.034 (-0.003 to +0.057): not adopted (rl1's
   RL played with them filled; the clean fix is filling them in the datasets at the next imitation retrain).
