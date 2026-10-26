@@ -973,8 +973,11 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # gt0.14dev: the army model's own unit counts as its dataset's (armyseen: the units in production and inside a bunker;
 # in play it read 5-6 marines where the dataset had 13-15). A fix: 96 paired games against gt0.13dev, AS141a+b against
 # SA125a+b: +0.016 +- 0.050, lost 18 (22), the gap -0.010. (On the Zerg it leaned worse, -0.044 +- 0.053: not in gz1dev.)
+# gt0.15dev: the buildings among the model's decisions so far counted as the replays count them (builtcount; 3 Barracks
+# where the replay had 1, the rules' bunkers never counted). A fix: 96 paired games against gt0.14dev (BC142a+b against
+# BX141a+b): -0.005 +- 0.068, macro -0.036 (-0.092 to +0.006), bunkers at 10-20 minutes 3.31 (3.87; pros 0.5-0.75)
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
-                                     "+dice+widespot+seenall+armyseen"), "version": "gt0.14dev"}
+                                     "+dice+widespot+seenall+armyseen+builtcount"), "version": "gt0.15dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,

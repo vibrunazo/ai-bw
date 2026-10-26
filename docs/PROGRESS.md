@@ -18,7 +18,7 @@ Since 2026-10-15 every piece of the self-play loop is being built crude before a
 learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the league isn't trained
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-24): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
-(gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.14dev) and `gz1dev`
+(gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.15dev) and `gz1dev`
 (gz0.5dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
@@ -41,7 +41,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.14dev, gz1 gz0.3, gz1dev gz0.5dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.15dev, gz1 gz0.3, gz1dev gz0.5dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -78,7 +78,8 @@ definition in gary/agent/manifests.py and in the entries of "Next" below:
 - **gt1dev**: gt1 with the role model in contact, control groups and rl1 (gt0.6dev), gt1's versions as they came,
   without the stop-gaps over its learned layers and the hunt in advice mode (gt0.10dev), drawing its macro from
   the model's odds (gt0.11dev), its buildings placed beyond a full main (widespot, gt0.12dev), the macro model's inputs as its replays count
-  them (seenall, gt0.13dev), the army model's counts as its dataset's (armyseen, gt0.14dev).
+  them (seenall, gt0.13dev), the army model's counts as its dataset's (armyseen, gt0.14dev), its
+  building history as the replays count it (builtcount, gt0.15dev).
 - **gz0.1-gz0.2** (2026-10-20/22): the Zerg on the shared agent, then its army on control groups by type.
   **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev), seenall (gz0.4dev), enemy HP as its data (zfullhp, gz0.5dev).
 
@@ -1356,6 +1357,17 @@ plan and the full log).
   (response_T_att_own_again.npz) and the again model retrained by its recipe (runs/roles/20261026-090057): held out
   (the same 119,616 units) accuracy 0.478 against 0.476, before contact 0.456 against 0.450. The base for the next
   roles work, not deployed (the again option still picks the old one by its data).
+- **gt1dev's bunkers and its decision history (2026-10-26).** The gap table's one stuck feature: gt1dev stands 3.2
+  bunkers at 5-10 minutes and 3.9 at 10-20 (pros 0.5-0.75, half of them none). All 7.2 bunker decisions a game are the
+  model's under dice, most at 3-4 minutes, at a median 4.1%; on the pros' states at 2-8 minutes the model gives a bunker
+  1.1% (median 0.5%), on Gary's 5.8% before any, 2-3.5% after; 'its decisions so far' leads 79% of their attributions.
+  That input was wrong: play counted 3 Barracks at 2:06 where the replay had 1 (decided, never built, never taken
+  back: a build task overwritten or interrupted drops silently) and 0 bunkers where it had 1 (the natural's and the
+  posture's bunkers are rules' tasks, never decisions). Option builtcount counts the buildings as the replays do (a
+  building started consumes a pending decision or counts as one, a decision not started in 60 s is taken back): over
+  96 paired games (BC142a+b against BX141a+b) -0.005 +- 0.068, macro -0.036 (-0.092 to +0.006), 0-5 minutes -0.005
+  (-0.009 to -0.001) nearer; bunkers 2.68 and 3.31 (3.15, 3.87): a fix, into gt1dev (gt0.15dev). Gary decides as often
+  as the pros (12.0 a minute at 2-8 against 13.9), so the bunkers left are the model's odds in Gary's states.
   dataextras over 96 paired games against a fresh baseline (DX141a+b against BX141a+b; the lurker fix had changed gz1,
   so AS141a+b no longer served): -0.008 +- 0.066, the gap +0.015, fight +0.034 (-0.003 to +0.057): not adopted (rl1's
   RL played with them filled; the clean fix is filling them in the datasets at the next imitation retrain).
