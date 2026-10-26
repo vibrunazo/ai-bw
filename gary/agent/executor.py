@@ -61,6 +61,10 @@ RESUME_AFTER = 24                     # an unfinished building nobody has built 
 RESUME_RETRY = 24 * 4                 # ...and if that one doesn't arrive either, another after 4 s
 IDLE = 3                              # order "PlayerGuard": standing around
 MINING_STILL = 87                     # order "MiningMinerals": at its mineral field (lets a build order go)
+SPLIT_UNTIL = 10 * 24                 # the game's start: idle workers sent one at a time, each to its own field
+SPLIT_CLICKS = 3                      # clicks on one worker before the split gives way to a box (all to one field)
+FIELD_NEAR = 40                       # px: a worker's order target this close to a field is on it (its near edge: a field is 64 x 32)
+FIELD_BESIDE = 64                     # px: ...or the worker itself this close to it, mining (30-51 seen)
 STANDING = {MINING_STILL, 86, IDLE}   # ...and waiting at the field, idle: where a box finds them
 MOVE = 6
 STANDING_DETOUR = 4 * 32              # a standing builder no farther than this beyond the nearest one
@@ -1109,6 +1113,8 @@ class Executor:
             hi.ctrl_click(*hi.aim(obs, workers[0]))   # (out in the field: every worker on the screen, at once)
             t.stage = "send"
             return
+        if t.stage in ("start", "split") and hi.frame < SPLIT_UNTIL and not t.data.get("nosplit") and                 (len(workers) > 1 or t.stage == "split"):
+            return self._mine_split(obs, mine, t, workers)
         if t.stage == "start":
             pts = [hi.aim(obs, u) for u in workers]
             # a drag box only picks up own units: a plain click on a worker standing on a
@@ -1149,6 +1155,68 @@ class Executor:
         w = workers[0]
         t.data["base"] = self.mine_base(mine, (w["x"], w["y"]), obs).center
         return self._mine_gather(obs, mine, t, tags)
+
+    def _mine_split(self, obs: dict, mine: list[dict], t: Task, workers: list[dict]) -> None:
+        """The game's start: the idle workers selected one at a time, each sent to the field with fewest workers (the
+        pros' split; four SCVs sent to one field together had mined half the pros' minerals by 10 s, #55)."""
+        g, hi = self.g, self.g.hi
+        t.stage = "split"
+        sent = t.data.setdefault("split", [])
+        left = [u for u in workers if u["tag"] not in sent]
+        if not left:
+            g.task = None
+            return
+        w = left[0]
+        if obs["selection"] != [w["tag"]]:
+            t.data["clicks"] = t.data.get("clicks", 0) + 1
+            if t.data["clicks"] > SPLIT_CLICKS:       # (it won't be selected alone: the rest go together, as before)
+                t.data.update(nosplit=True, tags=[u["tag"] for u in left])
+                t.stage = "start"
+                return
+            hi.click(*hi.aim(obs, w))
+            return
+        base = self.mine_base(mine, (w["x"], w["y"]), obs)
+        m = self._pick_field(obs, mine, base, t)
+        if m is None:
+            t.data.update(nosplit=True, tags=[u["tag"] for u in left])
+            t.data["base"] = base.center
+            t.stage = "gather"
+            return
+        hi.right_click(*field_click(obs, m, base.center))
+        sent.append(w["tag"])
+        t.data["clicks"] = 0
+        g.ignore_idle_until[w["tag"]] = hi.frame + 24 * 20
+
+    def field_loads(self, mine: list[dict], fields: list) -> list[int]:
+        """Workers heading to, waiting at or mining each field (by their order's target)."""
+        loads = [0] * len(fields)
+        for u in mine:
+            if u["type"] != self.g.race.worker or u["order"] not in O.MINERAL_ORDERS or not fields:
+                continue
+            # (its order's target, else where it stands: one mining has no target at its field 2 times in 4)
+            for at, near in (((u.get("tx"), u.get("ty")), FIELD_NEAR), ((u["x"], u["y"]), FIELD_BESIDE)):
+                if at[0] is None:
+                    continue
+                k = min(range(len(fields)), key=lambda i: math.dist(fields[i], at))
+                if math.dist(fields[k], at) < near:
+                    loads[k] += 1
+                    break
+        return loads
+
+    def _pick_field(self, obs: dict, mine: list[dict], base, t: Task):
+        """The base's field on screen for workers sent to mine: the one with fewest workers on it, then the closest to
+        its Command Center (every worker sent to the closest stood waiting behind the one mining it, #55); this task's
+        own clicks counted too (an order shows a moment later). None: none of its fields on screen."""
+        bases = self.my_bases(mine) or [self.g.main]
+        fields = self._clear_fields(mine, [m for m in base.minerals if screen_of(obs, *m)] or
+                                    [m for b in bases for m in b.minerals if screen_of(obs, *m)])
+        if not fields:
+            return None
+        loads = self.field_loads(mine, fields)
+        clicked = [tuple(f) for f in t.data.setdefault("fields", [])]
+        k = min(range(len(fields)), key=lambda i: (loads[i] + clicked.count(tuple(fields[i])), math.dist(fields[i], base.center)))
+        t.data["fields"].append(list(fields[k]))
+        return fields[k]
 
     def _mine_selection_ok(self, obs: dict, mine: list[dict], tags: set) -> bool:
         """The selection is workers to send mining: SCVs, each one of the task's or one gathering already (none
@@ -1191,11 +1259,8 @@ class Executor:
         if self.trim_selection(obs, mine):
             return
         base = next((b for b in g.map.bases if b.center == tuple(t.data["base"])), None) or g.main
-        bases = self.my_bases(mine) or [g.main]
-        fields = self._clear_fields(mine, [m for m in base.minerals if screen_of(obs, *m)] or
-                                    [m for b in bases for m in b.minerals if screen_of(obs, *m)])
-        if fields:
-            m = min(fields, key=lambda m: math.dist(m, base.center))
+        m = self._pick_field(obs, mine, base, t)
+        if m is not None:
             hi.right_click(*field_click(obs, m, base.center))
         elif t.stage != "gather":
             hi.camera_minimap(*base.center)

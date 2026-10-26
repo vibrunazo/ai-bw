@@ -1002,8 +1002,15 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # against SR144a+b): style 1 played in 100% (96%), its natural at 3.2 minutes (4.5; pros 2.7), gas 3.6 (4.5; 3.1), a
 # bunker at 6.1 in 60% (2.5 in 100%; 5.5 in 56%), a Factory by 8:00 in 59% (45%; 88%); style 2 in 100% (75%), its Factory
 # at 3.1 (4.2; 2.5); results +0.018 +- 0.072, lost 21 (28). And the styles rolled by the modern pros' shares
+# gt0.19dev: the macro model trained with every game's style (stylev2, #54). Judged per style against the modern pros of
+# that style, 96 paired games (SV147a+b against BL146a+b): style 1 a Factory by 8:00 in 66% of games (50%; pros 88%), a
+# Starport 16% (13%; 55%); style 2 its natural by 8:00 in 47% (19%; 98%), a Starport 50% (16%; 69%); style 1's natural
+# 89% (100%). The gap 0-5 minutes -0.025 [-0.046, +0.002], all -0.058, 10-30 minutes further; results -0.14 (lost 39, 28):
+# kept on here by "Fidelity before wins" (AGENTS.md), the losses reviewed: the same SCV odds a decision on an economy
+# behind the pros' from 2:00 (#55: workers 22 at 5:00, 23 before, pros 29)
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
-                                     "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm"), "version": "gt0.18dev"}
+                                     "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm+stylev2"),
+                       "version": "gt0.19dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
