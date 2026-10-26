@@ -48,6 +48,18 @@ and its line removed; a new one gets an issue and a line).
   difference in 96 paired games goes. A
   learned change that fails its 96 games is reviewed before the next try: a bug (the records, `eval.why`), inputs
   the model lacks for the decision, or the limit of what the data teaches; the finding goes in docs/PROGRESS.md.
+- **Fidelity before wins.** Gary is a sparring partner meant to play like the pros, so a change that moves it toward
+  the pros' play (the build the pros play, the inputs the models learned from, a decoder that samples the pros'
+  timings) is judged first on whether Gary now does it (build timings and counts against the pros', the gap score,
+  the pipe and input checks) and on wins second. Simple cheesy plans (style 4, two-Barracks gasless marines, 1.5% of
+  pro Terran games) are expected to win more against weak opponents like gz1 and Gary itself, so a drop in wins
+  when leaving one is not a verdict. If such a change loses games, it is not abandoned: look for what stops it
+  working (bugs, execution leaks, inputs, the decoder) and fix those, keeping the change on in the dev manifest
+  meanwhile. The mistake this rule exists for: on 2026-10-23 styleroll (the pros' styles by share in place of the
+  selector's style 4) was dropped for winning 26 of 48 against 31, though its own review found the cause was
+  execution (gas mined and not spent, Barracks busy, production never added), and gt1dev went on playing style 4
+  through every macro fix built for that failure. Options that only bet on results (a stop-gap, a tuned threshold)
+  are still judged on results.
 - Before any learning run beyond imitation, the rules in docs/SELF_PLAY.md ("Learning beyond imitation"): the
   pipe check shows pushed logits move what Gary executes; the model owns the decision in play and in the judging
   games; branched decisions are locked for the window (the pros' hold lengths); the minimum detectable effect

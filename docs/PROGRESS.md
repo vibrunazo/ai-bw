@@ -945,7 +945,8 @@ plan and the full log).
   against the pros' 520 at 10-15 minutes, 1,681 against 978 at 15-20), its supply and army fall behind (76 and 30
   against 119 and 60 at 15-20): its marines and medics wait for busy Barracks (0.43 and 0.33 a macro decision) while
   the model almost never adds production (Barracks 0.8% of its odds, no Factory in its top). The rush style hid that
-  by taking no gas. Next for macro: production added when money floats, as the pros do (the model's odds on its own
+  by taking no gas. (Corrected 2026-10-26: not adopting styleroll on these wins was a mistake; its own findings were
+  execution faults to fix, AGENTS.md "Fidelity before wins".) Next for macro: production added when money floats, as the pros do (the model's odds on its own
   banked states), before the style is let go. Also: the first producer's rule after the opening needs a buildable
   one for a Terran too (3c661c8; it set the goal up to 2,955 times a game in lost games).
 - **Production idle, and the fill decoder (2026-10-23).** Production buildings at 10-20 minutes (sampled every 10 s,
@@ -1385,7 +1386,8 @@ plan and the full log).
   held-out pro style-1 states Refinery 2.1%, Factory 1.4%, Barracks 4.6%, Marine 26.5% (what they decided next: 2.3,
   1.3, 4.6, 26.3); on Gary's style-4 states read as style 4: 1.8, 0.5, 2.1, 41.0; read as style 1: 4.3, 0.3, 2.0,
   31.7; with the pros' history: 5.1, 0.2, 2.5, 31.4 (it fades out by 12 minutes). The style moves the opening's gas
-  and marines, not the Factory, on states played as style 4: games played as style 1 decide it (SR144a+b). Modern
+  and marines, not the Factory, on states played as style 4: games played as style 1 decide it (SR144a+b), judged on
+  the build first (AGENTS.md, "Fidelity before wins": the 2026-10-23 verdict on styleroll was a mistake). Modern
   replays carry no style label (2,437 against 20 labelled), so the style input mostly reads the old era.
   dataextras over 96 paired games against a fresh baseline (DX141a+b against BX141a+b; the lurker fix had changed gz1,
   so AS141a+b no longer served): -0.008 +- 0.066, the gap +0.015, fight +0.034 (-0.003 to +0.057): not adopted (rl1's
