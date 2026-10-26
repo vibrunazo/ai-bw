@@ -807,6 +807,9 @@ OPTIONS = {
     # looked at every second (not only when the model is queried: its "most enemies seen" stayed 0 in play) and the
     # units inside a bunker counted (5 marines seen where the replay had 13 at 6:00)
     "seenall": lambda m: m["macro"].update(look_seen=True),
+    # gary/policy/macro.py reconcile: the buildings among the model's decisions so far as the replays count them (every
+    # building started, a rule's too; a decided one never started taken back): its looks need seenall
+    "builtcount": lambda m: m["macro"].update(built_count=True, look_seen=True),
     # gary/policy/army.py extra_units: the army model's own unit counts with the units in production and inside a
     # bunker, as its dataset counts them (in play: 5-6 marines where the dataset had 13-15, issue #29)
     "armyseen": lambda m: m["army"].update(army_seen=True),
@@ -1091,6 +1094,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | None = None, verb
         g.macro.hold = m["macro"].get("hold", False)
         if hasattr(g.macro, "tracker"):
             g.macro.tracker.look_every = 24 if m["macro"].get("look_seen") else 0
+            g.macro.tracker.reconcile = bool(m["macro"].get("built_count"))
             g.macro.eggs_seen = bool(m["macro"].get("eggs_seen")) and g.race.production_in_sight
         if m["macro"].get("history") == "pro":
             # (Gary-Z's: the pros' decision history in the model's inputs, fading to its own over HISTORY_FADE

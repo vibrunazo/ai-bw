@@ -31,6 +31,9 @@ from torch import nn
 
 ACT_NAMES = ["train", "morph", "bmorph", "build", "research", "upgrade", "expand"]
 OTHER = (-1, -1)                 # decisions too rare to have their own class
+BUILD_ACT, EXPAND_ACT = 3, 6     # (ingest/macro_dataset.py ACTS["build"], ACT_EXPAND)
+PENDING_FOR = 60 * 24            # builtcount: a decided building not started this long after didn't happen
+HALL_APART = 10 * 32             # builtcount: a town hall this far from all of the player's others is an expansion
 
 
 @dataclass
@@ -248,6 +251,15 @@ class MacroTracker:
         self.look_every = 0
         self.last_look = -1 << 30
         self.tag_types: dict[int, int] = {}   # own units' types by tag (one inside a bunker is out of sight)
+        # option builtcount: the buildings among the decisions so far counted as the replays count them, each building
+        # that started (a decision of the model's or a rule's), at its decision's time if it had one: decided Barracks
+        # never built stayed counted (3 at 2:06 where the replay had 1), rules' bunkers never were (0 where it had 1)
+        self.reconcile = False
+        self.pending: list[list] = []         # building decisions noted and not seen started yet: [frame, act, uid]
+        self.buildings_seen: set = set()      # (tag, type) of the player's buildings seen
+        self.building_tags: set = set()       # tags seen as a building (a building's morph keeps its tag)
+        self.halls_at: list = []              # the player's town halls' positions (an expansion: away from them)
+        self.reconciled = False
 
     def look(self, obs: dict) -> None:
         """What is in sight now, between the model's queries: the most of each enemy type seen at once, and the
@@ -263,6 +275,45 @@ class MacroTracker:
             elif u["owner"] != 11:
                 seen[t] += 1
         self.seen_max = np.maximum(self.seen_max, seen)
+        if self.reconcile:
+            self._reconcile(obs)
+
+    def _reconcile(self, obs: dict) -> None:
+        """builtcount: a building of the player's seen for the first time consumes a pending decision for its type (or,
+        none pending, a rule's building, counts as one: the replays count every building that started); a pending
+        decision not started within PENDING_FOR is taken back; a building morphing from another is left alone (the
+        replays count the morph's command)."""
+        import math
+        from gary.policy.army import is_building
+        from gary.race import Race
+        halls = Race.of(self.spec.race).town_halls
+        own = [u for u in obs["units"] if u["owner"] == self.slot and is_building(u["type"])]
+        new = [u for u in own if (u["tag"], u["type"]) not in self.buildings_seen]
+        for u in new:
+            self.buildings_seen.add((u["tag"], u["type"]))
+        first = not self.reconciled
+        self.reconciled = True
+        for u in new:
+            morph = u["tag"] in self.building_tags
+            self.building_tags.add(u["tag"])
+            if first or morph:                   # (the start's buildings; a Lair, a Sunken: not a build)
+                if u["type"] in halls and first:
+                    self.halls_at.append((u["x"], u["y"]))
+                continue
+            t = u["type"]
+            match = next((p for p in self.pending if p[2] == t), None)
+            if match is not None:
+                self.pending.remove(match)
+            else:
+                away = t in halls and all(math.dist((u["x"], u["y"]), h) > HALL_APART for h in self.halls_at)
+                self.decided[self.spec.decision_index(EXPAND_ACT if away else BUILD_ACT, t)] += 1
+            if t in halls:
+                self.halls_at.append((u["x"], u["y"]))
+        f = obs["frame"]
+        for p in [p for p in self.pending if f - p[0] > PENDING_FOR]:
+            self.pending.remove(p)
+            i = self.spec.decision_index(p[1], p[2])
+            self.decided[i] = max(0, self.decided[i] - 1)
 
     def copy(self) -> "MacroTracker":
         """A copy to read the model's inputs with (features() updates what was seen): reading the live tracker would
@@ -274,11 +325,16 @@ class MacroTracker:
     def note_decision(self, act: int, uid: int, frame: int) -> None:
         self.decided[self.spec.decision_index(act, uid)] += 1
         self.last_decision_frame = frame
+        if self.reconcile and act in (BUILD_ACT, EXPAND_ACT):
+            self.pending.append([frame, act, uid])
 
     def unnote_decision(self, act: int, uid: int) -> None:
         """A decision that didn't happen after all (e.g. no room to place the building)."""
         i = self.spec.decision_index(act, uid)
         self.decided[i] = max(0, self.decided[i] - 1)
+        p = next((p for p in reversed(self.pending) if p[1] == act and p[2] == uid), None)
+        if p is not None:
+            self.pending.remove(p)
 
     def features(self, obs: dict, in_production: dict[int, int], hidden=()) -> np.ndarray:
         """hidden: tags of the player's own units out of sight (inside a bunker), counted as the replays count
