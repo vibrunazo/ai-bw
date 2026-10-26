@@ -7,7 +7,7 @@ data/interim/taxonomy/v2/<matchup>_<race>.json (gary/styles.py reads it):
   TvZ Zerg    its plans (plans.py's rules: every game has one), with the ids and names of the plan taxonomy the macro
               models were trained with (a combination it didn't have is "other")
 
-The macro dataset's index can then be restyled from it (ingest/macro_dataset.py --restyle-version v2) and the
+The macro dataset's index can then be restyled from it (train/macro.py --styles v2) and the
 macro models trained on every game's style. The v1 files (data/interim/taxonomy/*.json) are left as they are:
 gz1's roll and per-style history read them.
 

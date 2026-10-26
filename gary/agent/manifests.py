@@ -791,6 +791,9 @@ OPTIONS = {
     "sample_t05": lambda m: m["macro"].update(decoder="sample", temperature=0.5),
     # the macro model trained from branches (train/macro_rl.py, the newest run)
     "macro_rl": lambda m: m["macro"].update(model="macro_rl/latest"),
+    # the shared Terran macro model trained with every game's style (#54: the v2 catalogue, train/macro.py --styles v2;
+    # the deployed one read the modern games' style as unknown)
+    "stylev2": lambda m: m["macro"].update(model="runs/macro_exp/T_all_v2/model.pt"),
     # the strategy selector (gary/agent/selector.py; its table: eval/selector_table.py): the build style
     # per map with the best expected score (selector_explore: a draw from each, Thompson sampling).
     # On v0.18 (fresh seeds 101+, 333 games): lost 30 (57), won 64 (57); Zerg v2 on Fighting Spirit
