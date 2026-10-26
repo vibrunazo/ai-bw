@@ -981,7 +981,10 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # gz0.4dev: the macro model's inputs as its replays count them (seenall, as gt0.13dev): 96 paired games against
 # gz0.3dev, both against gt1dev+seenall (ZS140a+b against ZB140a+b): the Zerg's score +0.042 +- 0.051, its gap +0.057
 # (-0.003 to +0.114), macro +0.086 (+0.006 to +0.170) further over whole games, no window measurable
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall"), "version": "gz0.4dev"}     # (ownsupply in gz1 since gz0.3)
+# gz0.5dev: Gary-Z's role model given hidden enemies' HP as full, as its data (zfullhp; it read 0): a fix, its 96 paired
+# games against gz0.4dev (ZH142a+b against LB141a+b) -0.029 +- 0.052, not measurably different; its decisions barely move
+# (retreat 6.6% of them against 6.2%, close in 4.8% against 4.1%; the retreat rule weighs supply, not HP)
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp"), "version": "gz0.5dev"}     # (ownsupply in gz1 since gz0.3)
 
 
 def _against(m: dict, vs: dict) -> dict:
