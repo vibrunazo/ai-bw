@@ -54,6 +54,7 @@ FIRST_OPENING = 6 * 60 * 24            # until then the first producer's rule sa
 FIRST_PRODUCER = {"T": T.RAX, "Z": 142}  # the building that makes the army first: by rax_by (option), else one is built
 PACE_MAX = 10 * 24              # option pace: the longest wait for the next decision
 QUERY_EVERY = 12                # frames between the macro's looks at the model
+GAS_EVERY = 3 * 24              # frames between its looks at the model's workers on gas (a model with a gas head)
 WALK_PATH = 1.4                 # a walk to another base, against the straight line from the main
 WALK_SEND = 2.0                 # seconds to pick and send its worker (the camera, a click)
 PARK_AHEAD = 100                # option park: a building's worker sets out this many minerals short of its cost
@@ -146,6 +147,8 @@ class LearnedMacro:
         self.tracker = MacroTracker(model.spec, g.slot, style, getattr(g.map, "hash", None), g.matchup)
         self.goal: dict | None = None
         self.next_query = 0
+        self.gas_target: int | None = None                  # the model's workers on gas (None: three a gas building)
+        self.next_gas = 0
         self.decisions: list[tuple[int, str, float]] = []   # (frame, decision, model probability)
         self.failed_until: dict[tuple[int, int], int] = {}  # decision -> frame it may be tried again
         self.builds = builds or {}                         # posture's build name -> scripted build
@@ -176,6 +179,9 @@ class LearnedMacro:
 
     def step(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> None:
         g = self.g
+        if g.hi.frame >= self.next_gas and self.model.net.gas is not None:   # (asked on its own clock: a goal waiting
+            self.next_gas = g.hi.frame + GAS_EVERY                           # for its money is when pros pull off gas)
+            self.gas_target = self.model.gas_target(self.model_inputs(obs, mine))
         build = self.builds.get(g.posture.build) if g.posture.build else None
         if build is not None:
             if build.first(obs, mine, done, me):

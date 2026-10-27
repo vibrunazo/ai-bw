@@ -78,7 +78,9 @@ NEIGHBOR = 2 * 32                     # px: an SCV this close to the parked one 
 RESELECT_TRIES = 6                    # a parked builder not selected again after this many: the build fails
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
 CONSTRUCTING = 33                     # the order of an SCV putting a building up (its target: the building)
-GAS_TRIMS = 2                         # extra workers a gas task's box caught, shift-clicked out before it sends
+GAS_WALK = 81                         # the order of a worker on its way to a gas building, empty-handed
+GAS_PULL_EVERY = 2 * 24               # one worker taken off gas at most this often (the model's target under them)
+GAS_TRIMS = 3                         # extra workers a gas task's box caught, out by their portraits before it sends
 TRAVEL_FOR = 24 * 40                  # ...and one walking to another base, after this at most
 RESEND_TRIES = 3                      # a build's SCV stopped on its way to another base: sent again this often
 PARK_FOR = 24 * 20                    # a build's SCV walks to the spot ahead of the money: back to it after this at most
@@ -124,6 +126,7 @@ class Executor:
         self.g = g
         self.next_sweep = 0                           # next look for idle workers off screen
         self.born = {}                                # worker tag -> the frame it was first seen done (NEW_WORKER)
+        self.next_gas_pull = 0
         self._terrain_cache = None                    # see terrain()
         self._ramp = None                             # rerally: (spot inside the main's ramp, its bottom), or False
         self.danger: dict[tuple, int] = {}            # balance: base center -> frame zerg fighters were last seen near it
@@ -309,16 +312,31 @@ class Executor:
         g.task = None
 
     def refill_gas(self, obs: dict, done: list[dict]) -> bool:
-        """A finished refinery with fewer than three workers gets more. (One being built is counted too: its SCV
-        goes in by itself the moment it's done, out of sight, and three more were sent to it.)"""
+        """Workers on gas as many as the macro model's target (g.macro.gas_target), up to three a finished gas building,
+        filled in turn; over it, one walking to a gas building goes back to mining. Without a target (a model with no
+        gas head), three a gas building, none taken off. (One being built is counted too: its SCV goes in by itself the moment it's
+        done, out of sight, and three more were sent to it.)"""
         g = self.g
         for r in obs["units"]:
             if r["owner"] == g.slot and r["type"] == g.race.gas_building and not r["completed"]:
                 self.on_gas(obs, r["tag"])
-        for r in done:
-            if r["type"] == g.race.gas_building and self.on_gas(obs, r["tag"]) < 3 and \
-                    g.ignore_idle_until.get(r["tag"], 0) <= g.hi.frame:
-                g.task = Task("gas", data={"tag": r["tag"], "x": r["x"], "y": r["y"]}, started=g.hi.frame)
+        refs = sorted((r for r in done if r["type"] == g.race.gas_building), key=lambda r: r["tag"])
+        on = {r["tag"]: self.on_gas(obs, r["tag"]) for r in refs}
+        target = getattr(g.macro, "gas_target", None)
+        want = 3 * len(refs) if target is None else min(target, 3 * len(refs))
+        if target is not None and sum(on.values()) > want:
+            walking = [u for u in obs["units"] if u["owner"] == g.slot and u["type"] == g.race.worker
+                       and u["order"] == GAS_WALK and u.get("order_target") in on and screen_of(obs, u["x"], u["y"])]
+            if walking and g.hi.frame >= self.next_gas_pull:    # (one not carrying gas: it mines minerals at once)
+                self.next_gas_pull = g.hi.frame + GAS_PULL_EVERY
+                g.task = Task("mine", data={"tags": [walking[0]["tag"]], "nosplit": True}, started=g.hi.frame)
+                return True
+            return False
+        short = want - sum(on.values())
+        for r in refs:
+            if short > 0 and on[r["tag"]] < 3 and g.ignore_idle_until.get(r["tag"], 0) <= g.hi.frame:
+                g.task = Task("gas", data={"tag": r["tag"], "x": r["x"], "y": r["y"],
+                                           "want": min(3, on[r["tag"]] + short)}, started=g.hi.frame)
                 return True
         return False
 
@@ -1353,7 +1371,7 @@ class Executor:
         """Send workers to a finished refinery, a few at a time, until three are on it."""
         g, hi, d = self.g, self.g.hi, t.data
         ref = next((u for u in mine if u["tag"] == d["tag"]), None)
-        if ref is None or self.on_gas(obs, d["tag"]) >= 3:
+        if ref is None or self.on_gas(obs, d["tag"]) >= d.get("want", 3):
             g.task = None
             return
         rp = screen_of(obs, ref["x"], ref["y"])
@@ -1367,13 +1385,10 @@ class Executor:
             # then select again
             if any(not self.free_worker(obs, u) for u in mine if u["tag"] in obs["selection"]):
                 picked = []
-            extra = len(picked) - (3 - self.on_gas(obs, d["tag"]))
-            if extra > 0 and d.get("trims", 0) < GAS_TRIMS:     # (stacked miners: a box takes two)
-                w = next(u for u in mine if u["tag"] == picked[-1])
-                p = hi.aim(obs, w)
-                if p is not None:
-                    d["trims"] = d.get("trims", 0) + 1
-                    hi.click(*p, shift=True)
+            extra = len(picked) - (d.get("want", 3) - self.on_gas(obs, d["tag"]))
+            if extra > 0 and d.get("trims", 0) < GAS_TRIMS:     # (stacked miners: a box takes two; a shift-click
+                d["trims"] = d.get("trims", 0) + 1                # on one of them hit its neighbour: its portrait)
+                if hi.shift_click_portrait(picked[-1]).accepted:
                     return
             if picked:
                 hi.right_click(*rp)

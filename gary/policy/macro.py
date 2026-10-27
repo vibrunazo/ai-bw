@@ -112,7 +112,8 @@ PLAY_YEAR = 2026.0               # the year in play (the meta Gary plays)
 
 
 class MacroNet(nn.Module):
-    def __init__(self, n_in: int, n_classes: int, hidden: int = 512, layers: int = 3, dropout: float = 0.1):
+    def __init__(self, n_in: int, n_classes: int, hidden: int = 512, layers: int = 3, dropout: float = 0.1,
+                 gas: int = 0):
         super().__init__()
         blocks, d = [], n_in
         for _ in range(layers):
@@ -121,10 +122,16 @@ class MacroNet(nn.Module):
         self.body = nn.Sequential(*blocks)
         self.what = nn.Linear(hidden, n_classes)     # which decision comes next
         self.when = nn.Linear(hidden, 1)             # log(1 + seconds until it)
+        self.gas = nn.Linear(hidden, gas + 1) if gas else None   # workers on gas now: 0 to gas (models since 2026-10-27)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         h = self.body(x)
         return self.what(h), self.when(h).squeeze(-1)
+
+    def heads(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
+        """forward's two heads and the gas target's logits (None for a model without one)."""
+        h = self.body(x)
+        return self.what(h), self.when(h).squeeze(-1), self.gas(h) if self.gas is not None else None
 
 
 class MacroModel:
@@ -161,6 +168,14 @@ class MacroModel:
         dev = next(self.net.parameters()).device
         logits, when = self.net(torch.as_tensor(x, dtype=torch.float32, device=dev))
         return torch.softmax(logits, -1).cpu().numpy(), torch.expm1(when).clamp(min=0).cpu().numpy()
+
+    @torch.no_grad()
+    def gas_target(self, x: np.ndarray) -> int | None:
+        """How many workers the model would have on gas now (its likeliest; one row), or None without a gas head."""
+        if self.net.gas is None:
+            return None
+        dev = next(self.net.parameters()).device
+        return int(self.net.heads(torch.as_tensor(x, dtype=torch.float32, device=dev))[2][0].argmax())
 
     @torch.no_grad()
     def predict(self, x: np.ndarray, top: int = 3) -> list[dict]:

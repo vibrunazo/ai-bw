@@ -46,6 +46,8 @@ INTENDED = {
 # (side, model, block) -> the issue of a known fault, not fixed yet
 KNOWN = {
     ("Z", "critic", "own all"): "#50: drones inside the Extractors (the critic's view leaves the eggs out)",
+    ("Z", "macro", "own all"): "#50: drones inside the Extractors, counted by the replays (gz1dev has no unitcount; one in each,"
+                               " most of the time, since its gas fills to three: 2026-10-27)",
     ("Z", "macro", "own completed"): "#50: drones inside the Extractors, counted by the replays",
     ("Z", "critic", "own completed"): "#50: the same",
     ("Z", "army", "own units"): "#50: the same",

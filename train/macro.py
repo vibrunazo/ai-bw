@@ -39,11 +39,15 @@ from eval import monitor, priority  # noqa: E402
 from train.select import GameFilter  # noqa: E402
 
 from gary.policy.macro import OTHER, FeatureSpec, MacroModel, MacroNet, encode  # noqa: E402
+from gary.race import Race  # noqa: E402
 
 STRIDE = 3 * 24             # a sample every 3 s of game time
 MIN_CLASS_COUNT = 100       # rarer decisions share the OTHER class
 MAX_DELAY_S = 120           # "when" target is clipped here (long idle stretches at game end)
 ROUTINE = {(0, 7), (1, 41), (0, 64), (1, 42), (3, 109), (3, 156)}  # workers, overlords, supply
+GAS_WINDOW_S = 15           # workers on gas: the gas mined over the next this many seconds ...
+GAS_RATE = 152 / 30 / 3     # ... over one worker's (gas a second: the pros' saturated refinery, 152 in 30 s by three)
+GAS_MAX = 12                # the gas target's classes, 0 to this many workers
 
 
 def macro_dir() -> Path:
@@ -146,6 +150,44 @@ def count_caps(jobs: list, workers: int, q: float = 90) -> dict[int, list[int]]:
     return {t: [int(round(c)) for c in caps[:, t]] for t in range(228) if caps[:, t].max() > 0}
 
 
+def gas_mined(d, i: int, race) -> np.ndarray:
+    """Player i's gas mined in each row (a second) of a game's arrays, read from them: the gas in hand's change plus what
+    was paid then (a building or add-on when its count rises, a unit, research or upgrade when decided; an upgrade's
+    later levels at its first level's price)."""
+    gas = d["eco"][:, i, 1].astype(np.float32)
+    units = d["units"][:, i, :, 0].astype(np.int32)
+    cost = np.zeros(units.shape[1], np.float32)
+    for u, (_m, g) in race.costs.items():
+        if u < len(cost):
+            cost[u] = g
+    building = np.zeros(units.shape[1], bool)
+    building[[u for u in race.sizes if u < len(building)]] = True
+    paid = np.zeros(len(gas), np.float32)
+    paid[1:] = (np.maximum(np.diff(units, axis=0), 0)[:, building] * cost[building]).sum(1)
+    for f, _p, act, uid, *_ in d["cmds"][d["cmds"][:, 1] == i].tolist():
+        k = min(int(np.searchsorted(d["frames"], f)), len(gas) - 1)
+        if act in (0, 1) and not building[uid]:
+            paid[k] += cost[uid]
+        elif act == 4:
+            paid[k] += race.research.get(uid, (None, (0, 0)))[1][1]
+        elif act == 5:
+            paid[k] += race.upgrade.get(uid, (None, (0, 0), 0))[1][1]
+    out = np.zeros(len(gas), np.float32)
+    out[1:] = np.diff(gas) + paid[1:]
+    return out
+
+
+def gas_workers(d, i: int, race, ts: np.ndarray) -> np.ndarray:
+    """Workers on gas at the rows ts: the gas mined over the next GAS_WINDOW_S over one worker's rate, at most three a
+    finished gas building (and GAS_MAX). The macro model's gas target."""
+    cum = np.concatenate([[0.0], np.cumsum(gas_mined(d, i, race))])      # cum[k]: mined in the rows before k
+    end = np.minimum(ts + GAS_WINDOW_S, len(cum) - 2)
+    span = np.maximum(end - ts, 1)
+    w = np.rint((cum[end + 1] - cum[ts + 1]) / (GAS_RATE * span))
+    done = d["units"][ts, i, race.gas_building, 1].astype(np.float32)
+    return np.clip(w, 0, np.minimum(3 * done, GAS_MAX)).astype(np.int8)
+
+
 def decisions_of(d, i: int, spec: FeatureSpec) -> tuple[np.ndarray, np.ndarray]:
     """Player i's production decisions in a game's arrays (frame, slot, act, unit, ...) and their classes."""
     c = d["cmds"][d["cmds"][:, 1] == i]
@@ -185,7 +227,7 @@ def samples(args: tuple) -> tuple[np.ndarray, ...]:
     frames = d["frames"]
     c, cls = decisions_of(d, i, spec)
     empty = (np.zeros((0, spec.size), np.float16), np.zeros(0, np.int16), np.zeros(0, np.float32),
-             np.zeros(0, np.int8), np.zeros(0, np.float32), np.zeros(0, bool))
+             np.zeros(0, np.int8), np.zeros(0, np.float32), np.zeros(0, bool), np.zeros(0, np.int8))
     if len(c) == 0:
         return empty
     ts = np.arange(0, len(frames), STRIDE // 24)
@@ -197,8 +239,9 @@ def samples(args: tuple) -> tuple[np.ndarray, ...]:
     f = frames[ts]
     delay = np.minimum((c[nxt, 0] - f) / 24.0, MAX_DELAY_S).astype(np.float32)
     minute = np.minimum(f // (24 * 60), 30).astype(np.int8)
+    gas = gas_workers(d, i, Race.of(spec.race), ts)
     return (x.astype(np.float16), cls[nxt].astype(np.int16), delay, minute, np.full(len(ts), weight, np.float32),
-            np.full(len(ts), year >= 2020))
+            np.full(len(ts), year >= 2020), gas)
 
 
 def load_split(jobs: list, spec: FeatureSpec, workers: int) -> dict:
@@ -209,18 +252,21 @@ def load_split(jobs: list, spec: FeatureSpec, workers: int) -> dict:
     out = {}
     for held, rs in parts.items():
         if rs:                                      # (an evaluation may pass held-out jobs alone)
-            out["test" if held else "train"] = tuple(np.concatenate([r[k] for r in rs]) for k in range(6))
+            out["test" if held else "train"] = tuple(np.concatenate([r[k] for r in rs]) for k in range(7))
     return out
 
 
 def evaluate(net: MacroNet, data: tuple, spec: FeatureSpec, prior: np.ndarray, device: str) -> dict:
     x, y, delay, minute = data[:4]
+    gas = data[6] if len(data) > 6 else None
     net.eval()
-    hits1, hits3, pred_s = [], [], []
+    hits1, hits3, pred_s, gas_pred = [], [], [], []
     with torch.no_grad():
         for s in range(0, len(x), 16384):
             xb = torch.from_numpy(x[s:s + 16384].astype(np.float32)).to(device)
-            logits, when = net(xb)
+            logits, when, gl = net.heads(xb)
+            if gl is not None:
+                gas_pred.append(gl.argmax(-1).cpu().numpy())
             t3 = logits.topk(3, -1).indices.cpu().numpy()
             yb = y[s:s + 16384]
             hits1.append(t3[:, 0] == yb)
@@ -240,6 +286,9 @@ def evaluate(net: MacroNet, data: tuple, spec: FeatureSpec, prior: np.ndarray, d
         "timing_median_err_s": round(float(np.median(err)), 2),
         "timing_mean_err_s": round(float(err.mean()), 2),
         "baseline_timing_median_err_s": round(float(np.median(np.abs(np.median(delay) - delay))), 2),
+        **({"gas_exact": round(float((np.concatenate(gas_pred) == gas).mean()), 4),
+            "gas_within_one": round(float((abs(np.concatenate(gas_pred) - gas.astype(np.int64)) <= 1).mean()), 4)}
+           if gas_pred and gas is not None else {}),
     }
 
 
@@ -312,7 +361,7 @@ def main() -> None:
     print(f"features {spec.size}, decision classes {len(spec.decisions)}, styles {len(spec.styles)}, maps {len(spec.maps)}, "
           f"year {spec.year}, matchups {spec.matchups}", flush=True)
     data = load_split(jobs, spec, args.workers)
-    xtr, ytr, dtr, mtr, wtr, _ = data["train"]
+    xtr, ytr, dtr, mtr, wtr, _, gtr = data["train"]
     print(f"samples: train {len(ytr):,}, test {len(data['test'][1]):,}  ({time.time() - t0:.0f} s)", flush=True)
 
     # baseline: the most common next decision at each game minute (training games)
@@ -321,7 +370,7 @@ def main() -> None:
         sel = ytr[mtr == m]
         prior[m] = np.bincount(sel.astype(np.int64)).argmax() if len(sel) else prior[max(m - 1, 0)]
 
-    config = {"net": {"hidden": args.hidden, "layers": args.layers, "dropout": 0.1},
+    config = {"net": {"hidden": args.hidden, "layers": args.layers, "dropout": 0.1, "gas": GAS_MAX},
               "matchup": args.matchup, "stride_s": STRIDE // 24, "max_delay_s": MAX_DELAY_S}
     net = MacroNet(spec.size, len(spec.decisions), **config["net"]).to(device)
     opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=1e-4)
@@ -332,15 +381,17 @@ def main() -> None:
     yt = torch.from_numpy(ytr.astype(np.int64)).to(device)
     dt = torch.from_numpy(dtr).to(device)
     wt = torch.from_numpy(wtr).to(device)
+    gt = torch.from_numpy(gtr.astype(np.int64)).to(device)
     for epoch in monitor.track(range(args.epochs), args.epochs, "epochs"):
         net.train()
         perm = torch.randperm(len(yt), device=device)
         total = 0.0
         for s in range(0, len(perm), args.batch):
             idx = perm[s:s + args.batch]
-            logits, when = net(xt[idx].float())
+            logits, when, gas = net.heads(xt[idx].float())
             w = wt[idx]
-            loss = ((F.cross_entropy(logits, yt[idx], reduction="none") + 0.5 * (when - torch.log1p(dt[idx])).abs()) * w).sum() / w.sum()
+            loss = ((F.cross_entropy(logits, yt[idx], reduction="none") + 0.5 * (when - torch.log1p(dt[idx])).abs()
+                     + 0.5 * F.cross_entropy(gas, gt[idx], reduction="none")) * w).sum() / w.sum()
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
@@ -349,7 +400,7 @@ def main() -> None:
         res = evaluate(net, data["test"], spec, prior, device)
         print(f"epoch {epoch + 1}: loss {total / len(yt):.3f}  test top1 {res['top1']}  "
               f"top3 {res['top3']}  non-routine top1 {res['top1_nonroutine']}  "
-              f"timing median err {res['timing_median_err_s']} s", flush=True)
+              f"timing median err {res['timing_median_err_s']} s  gas exact {res.get('gas_exact')}", flush=True)
 
     test_modern = data["test"][5]
     res_modern = evaluate(net, tuple(a[test_modern] for a in data["test"]), spec, prior, device) if test_modern.any() else None
