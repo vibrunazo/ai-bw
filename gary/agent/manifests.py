@@ -1010,9 +1010,13 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # 89% (100%). The gap 0-5 minutes -0.025 [-0.046, +0.002], all -0.058, 10-30 minutes further; results -0.14 (lost 39, 28):
 # kept on here by "Fidelity before wins" (AGENTS.md), the losses reviewed: the same SCV odds a decision on an economy
 # behind the pros' from 2:00 (#55: workers 22 at 5:00, 23 before, pros 29)
+# gt0.20dev: the workers on gas the macro model's decision (gastarget: the stylev2 model with a gas head, #55). Judged
+# per style, 96 paired games (GT152a+b against GW151a+b): style 2's gas mined by 150/180/210 s 36/124/184 (48/200/356;
+# pros 104/108/188), its natural at 3.6 minutes in 100% (4.6 in 72%; 3.2 in 98%), a Starport 81% (59%; 69%); style 1 a
+# Factory by 8:00 in 95% (73%; 88%); results +0.036 +- 0.123 and -0.010 +- 0.131, lost 28 (32)
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
-                                     "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm+stylev2"),
-                       "version": "gt0.19dev"}
+                                     "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm+gastarget"),
+                       "version": "gt0.20dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,

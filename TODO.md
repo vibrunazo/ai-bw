@@ -27,8 +27,9 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#54](https://github.com/vibrunazo/gary/issues/54) Build styles by name for each side, every game labelled (done: TvZ);
   the Terran macro model trained with every game's style (option stylev2) judged per style; the Zerg's; other matchups
 - [#55](https://github.com/vibrunazo/gary/issues/55) The opening economy: new workers sent at once, the first worker first,
-  three on gas (done); left: about 100 minerals mined behind the pros by 2:00 (the split, doubled fields, idle
-  builders), and style 2's natural at 4.6 minutes (pros 3.2)
+  workers on gas the macro model's decision (gastarget, gt0.20dev: style 2's natural 3.6 minutes, pros 3.2); left: about
+  100 minerals mined behind the pros by 2:00 (the split, doubled fields, idle builders); the gas head for gt1's and the
+  Zerg's models
 - [#29](https://github.com/vibrunazo/gary/issues/29) Why army dataset v5's commit models trail the deployed one in games
   (not the bunker counts: with armyseen v5 still trails, -0.039 over 96)
 - [#3](https://github.com/vibrunazo/gary/issues/3) Close out won games (the hunt imitated: its labels on the deployed

@@ -18,7 +18,7 @@ Since 2026-10-15 every piece of the self-play loop is being built crude before a
 learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the league isn't trained
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-24): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
-(gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.19dev) and `gz1dev`
+(gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.20dev) and `gz1dev`
 (gz0.6dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
@@ -41,7 +41,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.19dev, gz1 gz0.3, gz1dev gz0.6dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.20dev, gz1 gz0.3, gz1dev gz0.6dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -80,7 +80,7 @@ definition in gary/agent/manifests.py and in the entries of "Next" below:
   the model's odds (gt0.11dev), its buildings placed beyond a full main (widespot, gt0.12dev), the macro model's inputs as its replays count
   them (seenall, gt0.13dev), the army model's counts as its dataset's (armyseen, gt0.14dev), its
   building history as the replays count it (builtcount, gt0.15dev), its unit counts too (unitcount, gt0.16dev), the pros' build styles by
-  their shares (styleroll, gt0.17dev), without the early-pool posture (noalarm, gt0.18dev), the macro model trained with every game's style (stylev2, gt0.19dev).
+  their shares (styleroll, gt0.17dev), without the early-pool posture (noalarm, gt0.18dev), the macro model trained with every game's style (stylev2, gt0.19dev), the workers on gas its decision (gastarget, gt0.20dev).
 - **gz0.1-gz0.2** (2026-10-20/22): the Zerg on the shared agent, then its army on control groups by type.
   **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev), seenall (gz0.4dev), enemy HP as its data (zfullhp, gz0.5dev), its eggs counted as its data
   (eggs, gz0.6dev).
@@ -1512,6 +1512,24 @@ plan and the full log).
   at 0.84 s at once, then re-split: 10 commands in 20 s), so the second SCV waits for its money to 17-18 s (pros 15.75);
   fields doubled while others are free (26-53 worker-s by 2:00, the engine's own re-routing); the parked builder idle at
   its spot; the scout a little longer away.
+- **Workers on gas, a macro decision (2026-10-27, #55, gt0.20dev).** Style 2's natural came at 4.2-4.6 minutes (pros 3.2):
+  on the pros' style-2 states the macro model's odds of expanding were right (2.8% a decision, the pros 3.1%), on
+  Gary's at 150-270 s 1.76% (the pros' 6.72%), and with only the gas input set to the pros' 6.53%: Gary held 250-377 gas
+  at 3:30-4:30 (pros 94-141). The pros mine the Factory's 100 gas and pull off it (gas mined by 150/180/210 s 104/108/
+  188; half of them under 30 at 150-180 s); Gary's executor kept three on every refinery (48/200/356). Now the macro
+  model decides the workers on gas: one more output (0-12), its label from the dataset's arrays with no re-simulation
+  (the gas mined over the next 15 s: the gas in hand's change plus what was paid, buildings and add-ons when their
+  count rises, units, research and upgrades when decided; over one worker's rate, at most three a finished gas
+  building), equal to the engine's count in 98% of 873 windows of 29 modern games. runs/macro_exp/T_all_v2gas (the
+  stylev2 recipe): modern held-out top-1 0.491 (0.493), gas exact 0.73, within one 0.88; on held-out modern pros per
+  style its target follows theirs (style 2 at 120-240 s per 30 s 1.04/0.53/1.55/2.57, the pros 0.96/0.53/1.47/2.49: the
+  pull-off by itself; styles 1 and 3 within 0.1 to 6 minutes). In play the macro asks it every 3 s and the executor
+  matches it (up to three a building, over it one walking to gas sent back to mining); a model without the head keeps
+  three a building. Over 96 paired games (GT152a+b against GW151a+b): style 2's gas 36/124/184, its natural at 3.6
+  minutes in 100% (4.6 in 72%), a Starport 81% (59%; pros 69%); style 1 a Factory by 8:00 95% (73%; 88%); results
+  +0.036 +- 0.123 and -0.010 +- 0.131, lost 28 (32). Adopted: gt1dev gt0.20dev (gastarget in place of stylev2). With it,
+  the gas task's extra workers leave the selection by their portraits (a shift-click on a stacked one hit its
+  neighbour and added it: five on gas).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
