@@ -77,6 +77,8 @@ MINE_ADD = 5                          # builder_back: idle workers added to a mi
 NEIGHBOR = 2 * 32                     # px: an SCV this close to the parked one may be selected instead
 RESELECT_TRIES = 6                    # a parked builder not selected again after this many: the build fails
 RESET_HARVEST = 151                   # the order of a worker stepping out of a refinery (or off a mineral)
+CONSTRUCTING = 33                     # the order of an SCV putting a building up (its target: the building)
+GAS_TRIMS = 2                         # extra workers a gas task's box caught, shift-clicked out before it sends
 TRAVEL_FOR = 24 * 40                  # ...and one walking to another base, after this at most
 RESEND_TRIES = 3                      # a build's SCV stopped on its way to another base: sent again this often
 PARK_FOR = 24 * 20                    # a build's SCV walks to the spot ahead of the money: back to it after this at most
@@ -307,8 +309,12 @@ class Executor:
         g.task = None
 
     def refill_gas(self, obs: dict, done: list[dict]) -> bool:
-        """A finished refinery with fewer than three workers gets more."""
+        """A finished refinery with fewer than three workers gets more. (One being built is counted too: its SCV
+        goes in by itself the moment it's done, out of sight, and three more were sent to it.)"""
         g = self.g
+        for r in obs["units"]:
+            if r["owner"] == g.slot and r["type"] == g.race.gas_building and not r["completed"]:
+                self.on_gas(obs, r["tag"])
         for r in done:
             if r["type"] == g.race.gas_building and self.on_gas(obs, r["tag"]) < 3 and \
                     g.ignore_idle_until.get(r["tag"], 0) <= g.hi.frame:
@@ -525,12 +531,15 @@ class Executor:
     def on_gas(self, obs: dict, refinery: int) -> int:
         """Workers on this refinery: the ones Gary sent that are still on gas (on a gas order, just
         out of the refinery, or out of sight: a worker inside a refinery isn't visible), and any
-        worker seen heading into it (the SCV that built it starts on gas by itself)."""
+        worker seen heading into it or building it (the SCV that built it starts on gas by itself)."""
         g = self.g
         seen = {u["tag"]: u for u in obs["units"] if u["owner"] == g.slot}
+
+        def on_it(u):
+            return u["order"] in O.GAS_ORDERS or u["order"] == CONSTRUCTING and u.get("order_target") == refinery
         alive = {w for w in g.gas_workers.get(refinery, set())
-                 if w not in seen or seen[w]["order"] in O.GAS_ORDERS or seen[w]["order"] == RESET_HARVEST}
-        alive |= {t for t, u in seen.items() if u["type"] == g.race.worker and u["order"] in O.GAS_ORDERS
+                 if w not in seen or on_it(seen[w]) or seen[w]["order"] == RESET_HARVEST}
+        alive |= {t for t, u in seen.items() if u["type"] == g.race.worker and on_it(u)
                   and u.get("order_target") == refinery}
         g.gas_workers[refinery] = alive
         return len(alive)
@@ -1358,6 +1367,14 @@ class Executor:
             # then select again
             if any(not self.free_worker(obs, u) for u in mine if u["tag"] in obs["selection"]):
                 picked = []
+            extra = len(picked) - (3 - self.on_gas(obs, d["tag"]))
+            if extra > 0 and d.get("trims", 0) < GAS_TRIMS:     # (stacked miners: a box takes two)
+                w = next(u for u in mine if u["tag"] == picked[-1])
+                p = hi.aim(obs, w)
+                if p is not None:
+                    d["trims"] = d.get("trims", 0) + 1
+                    hi.click(*p, shift=True)
+                    return
             if picked:
                 hi.right_click(*rp)
                 g.gas_workers.setdefault(d["tag"], set()).update(picked)
