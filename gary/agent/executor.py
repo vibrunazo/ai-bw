@@ -61,6 +61,8 @@ RESUME_AFTER = 24                     # an unfinished building nobody has built 
 RESUME_RETRY = 24 * 4                 # ...and if that one doesn't arrive either, another after 4 s
 IDLE = 3                              # order "PlayerGuard": standing around
 MINING_STILL = 87                     # order "MiningMinerals": at its mineral field (lets a build order go)
+NEW_WORKER = 8 * 24                   # a worker this new still on its rally's move is sent to mine (a rally on a field only
+                                      # walks it there: Gary's first command came 5.0 s after one was done, the pros' 0.8 s)
 SPLIT_UNTIL = 10 * 24                 # the game's start: idle workers sent one at a time, each to its own field
 SPLIT_CLICKS = 3                      # clicks on one worker before the split gives way to a box (all to one field)
 FIELD_NEAR = 40                       # px: a worker's order target this close to a field is on it (its near edge: a field is 64 x 32)
@@ -119,6 +121,7 @@ class Executor:
     def __init__(self, g: Gary):
         self.g = g
         self.next_sweep = 0                           # next look for idle workers off screen
+        self.born = {}                                # worker tag -> the frame it was first seen done (NEW_WORKER)
         self._terrain_cache = None                    # see terrain()
         self._ramp = None                             # rerally: (spot inside the main's ramp, its bottom), or False
         self.danger: dict[tuple, int] = {}            # balance: base center -> frame zerg fighters were last seen near it
@@ -196,12 +199,16 @@ class Executor:
         g.reserved = keep
 
     def _idle(self, u: dict, mine: list[dict]) -> bool:
-        """A worker the mining routine should send back: standing idle, or (home_scvs, an option) away
-        from every Command Center (STRAY) idle or still attack-moving, nobody holding it (a pull that
-        ended left them where they stood: 9-21 at once in the middle of the map, against Zerg v2/v3)."""
+        """A worker the mining routine should send back: standing idle, just made and still walking to its rally
+        (NEW_WORKER), or (home_scvs, an option) away from every Command Center (STRAY) idle or still attack-moving,
+        nobody holding it (a pull that ended left them where they stood: 9-21 at once in the middle of the map,
+        against Zerg v2/v3)."""
         if u["order"] == IDLE:
             return True
         g = self.g
+        if u["order"] == MOVE and g.hi.frame - self.born.setdefault(u["tag"], g.hi.frame) < NEW_WORKER:
+            builders = {g.builder_of.get(r) for r in g.reserved} | ({g.parked.data.get("worker")} if g.parked else set())
+            return u["tag"] not in builders | g.pulled and not g.leases.holder(u["tag"])
         if not g.home_scvs or u["order"] not in (ATTACK_MOVE_ORDER, PATROL_ORDER) or g.leases.holder(u["tag"]) \
                 or g.hi.frame - g.calm_since < FIGHT_CALM:
             return False                              # (a fight at home lately: they may be its defenders)
@@ -211,6 +218,9 @@ class Executor:
     def idle_mining(self, obs: dict, done: list[dict]) -> bool:
         """Idle workers on screen go back to mining (game start, after building something)."""
         g = self.g
+        for u in done:
+            if u["type"] == g.race.worker:
+                self.born.setdefault(u["tag"], g.hi.frame)
         idle = [u for u in done if u["type"] == g.race.worker and self._idle(u, done) and screen_of(obs, u["x"], u["y"])
                 and g.ignore_idle_until.get(u["tag"], 0) <= g.hi.frame and u["tag"] != g.scout
                 and u["tag"] not in g.block_units]

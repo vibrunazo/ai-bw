@@ -508,6 +508,8 @@ void print_snapshot(const state& st, const replay_state& rst, counting_replay_fu
 		out += "{\"slot\":" + std::to_string(p) +
 		       ",\"minerals\":" + std::to_string(st.current_minerals[p]) +
 		       ",\"gas\":" + std::to_string(st.current_gas[p]) +
+		       ",\"mined\":" + std::to_string(st.total_minerals_gathered[p]) +
+		       ",\"mined_gas\":" + std::to_string(st.total_gas_gathered[p]) +
 		       // supply is stored in half units (a zergling is 1)
 		       ",\"supply_used\":" + std::to_string(st.supply_used[p][ri].raw_value / 2.0) +
 		       ",\"supply_max\":" + std::to_string(st.supply_available[p][ri].raw_value / 2.0) +
