@@ -47,6 +47,7 @@ from gary.agent.sightings import Sightings
 
 
 WAIT_MIN = 24                        # waits shorter than a second aren't traced
+FIRST_WORKER_BY = 3 * 24             # the macro's first decision goes before the chores until then (the first worker)
 
 
 BUILD_WAITS = {"wait_arrival", "place"}   # v2: build stages a fight may interrupt (and resume)
@@ -136,6 +137,10 @@ class FixedPriority:
         done = [u for u in mine if u["completed"]]
         ex = g.executor
         ex.release_reservations(mine)
+        if not g.macro.decisions and hi.frame < FIRST_WORKER_BY and g.task is None:
+            LOG.owner[g.hi.side] = "macro"               # the game's first worker before the split: the pros'
+            g.macro.step(obs, mine, done, me)            # first SCV ordered at 0.2 s (median), Gary's at 2.7 s
+            return "macro"
         if g.task is None and self.suspended is not None:     # v2: the build a fight put aside
             g.task, self.suspended = self.suspended, None
             LOG.owner[g.hi.side] = getattr(g.task, "by", "macro")
