@@ -796,6 +796,8 @@ OPTIONS = {
     "stylev2": lambda m: m["macro"].update(model="runs/macro_exp/T_all_v2/model.pt"),
     # the stylev2 model with a gas head: its workers on gas (#55), the executor matching them
     "gastarget": lambda m: m["macro"].update(model="runs/macro_exp/T_all_v2gas/model.pt"),
+    # the Zerg's: its TvZ macro model trained with every game's style (v2) and the gas head, its drones on gas
+    "zgastarget": lambda m: m["macro"].update(model="runs/macro_exp/Z_TvZ_v2gas/model.pt"),
     # the strategy selector (gary/agent/selector.py; its table: eval/selector_table.py): the build style
     # per map with the best expected score (selector_explore: a draw from each, Thompson sampling).
     # On v0.18 (fresh seeds 101+, 333 games): lost 30 (57), won 64 (57); Zerg v2 on Fighting Spirit
@@ -1032,7 +1034,12 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # gz0.6dev: the units in eggs not counted twice in the macro model's own counts (eggs), as its replays count them. On by
 # AGENTS.md's fidelity rule though its 96 paired games lost (EG141a+b against ZP141a+b, the Zerg -0.117 +- 0.063): the
 # right counts move the model off zerglings to Hydralisks and it slows (#48), which is the thing to fix, not the input
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs"), "version": "gz0.6dev"}     # (ownsupply in gz1 since gz0.3)
+# gz0.7dev: the drones on gas the macro model's decision (zgastarget: its TvZ model with every game's style and the gas
+# head, the floating-gas rule off with it, #55). 96 paired games against gz1dev, both against gt0.20dev (ZG153a+b against
+# ZB153a+b): gas mined by 5:00 / 8:00 in style 0 496 / 1,840 (448 / 1,440; pros 840 / 2,624), the first Extractor 2.2
+# minutes (2.9; pros 2.0); the hatchery-first styles opened pool first more (style 1 in 62% of games, 38%), its gas banked
+# (632 at 8:00, 340); the Terran's score +0.047 +- 0.082, the Zerg's gap +0.004 [-0.062, +0.086]: no measurable difference
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+zgastarget"), "version": "gz0.7dev"}     # (ownsupply in gz1 since gz0.3)
 
 
 def _against(m: dict, vs: dict) -> dict:

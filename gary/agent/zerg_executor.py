@@ -389,8 +389,11 @@ class ZergExecutor(Executor):
 
     def refill_gas(self, obs: dict, done: list[dict]) -> bool:
         """The shared refill, but none while the gas floats (its drones mine minerals meanwhile: the idle chore
-        sends a drone off gas to minerals)."""
+        sends a drone off gas to minerals). A macro model with a gas head decides the drones on gas itself (#55)."""
         g = self.g
+        if getattr(g.macro, "gas_target", None) is not None:
+            self.gas_floating = False
+            return super().refill_gas(obs, done)
         me = obs["me"]
         floating = self.gas_floating
         if me["gas"] > GAS_FLOAT and me["gas"] > me["minerals"]:

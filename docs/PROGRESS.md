@@ -19,7 +19,7 @@ learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the lea
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-24): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
 (gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.20dev) and `gz1dev`
-(gz0.6dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
+(gz0.7dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
 on paired branches with the forced arm locked at the pros' hazard, learned offline: at chance on 1,004
@@ -41,7 +41,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.20dev, gz1 gz0.3, gz1dev gz0.6dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.20dev, gz1 gz0.3, gz1dev gz0.7dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -83,7 +83,7 @@ definition in gary/agent/manifests.py and in the entries of "Next" below:
   their shares (styleroll, gt0.17dev), without the early-pool posture (noalarm, gt0.18dev), the macro model trained with every game's style (stylev2, gt0.19dev), the workers on gas its decision (gastarget, gt0.20dev).
 - **gz0.1-gz0.2** (2026-10-20/22): the Zerg on the shared agent, then its army on control groups by type.
   **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev), seenall (gz0.4dev), enemy HP as its data (zfullhp, gz0.5dev), its eggs counted as its data
-  (eggs, gz0.6dev).
+  (eggs, gz0.6dev), the drones on gas its macro model's decision (zgastarget, gz0.7dev).
 
 ## Versions
 
@@ -1530,6 +1530,26 @@ plan and the full log).
   +0.036 +- 0.123 and -0.010 +- 0.131, lost 28 (32). Adopted: gt1dev gt0.20dev (gastarget in place of stylev2). With it,
   the gas task's extra workers leave the selection by their portraits (a shift-click on a stacked one hit its
   neighbour and added it: five on gas).
+- **The Zerg's drones on gas, a macro decision (2026-10-27, #55, #54, gz0.7dev).** The Zerg's TvZ macro model retrained
+  with every game's style (v2) and the gas head (runs/macro_exp/Z_TvZ_v2gas, 1.8 minutes): modern held-out top-1 0.557
+  (the deployed 0.554), gas exact 0.66, within one 0.76; on held-out modern pros of styles 0-3 its expected drones on gas
+  within 0.1-0.3 of theirs per 30 s to 8:00 (style 0 at 180-210 s 2.85, the pros 2.88). Option zgastarget, and with a
+  gas head the Zerg executor's floating-gas rule (drones off gas while gas is over 400 and over the minerals) is off: the
+  model's job. eval/style_adherence.py --race Z judges the Zerg per style (its plans' rules label Gary-Z's games as they
+  label the pros'): on gz1 (GT152a) its tech a minute late in style 0 (Lair 3.7 minutes, Spire 5.2, the first Mutalisk
+  6.6; pros 2.9, 4.0, 5.3). 96 paired games, both against gt0.20dev (ZG153a+b against ZB153a+b): style 0 played as itself
+  in 50% (38%), its first Extractor at 2.2 minutes (2.9; pros 2.0), its third Hatchery 4.5 (2.6; pros 4.4), a Spire by
+  8:00 in 75% (56%; pros 100%); gas mined by 5:00 / 8:00 in style 0 496 / 1,840 (448 / 1,440; pros 840 / 2,624), style 2
+  464 / 1,820 (424 / 1,440; pros 704 / 2,408), its second Extractor still at 5.1 minutes (pros 4.2). Worse: the
+  hatchery-first styles opened pool first more (style 1 in 62% of games, 38%; style 4 played as itself 17%, 54%), and
+  the gas it mines isn't spent (banked at 8 / 10 / 15 minutes 632 / 870 / 1,498, gz1dev 340 / 397 / 980; both bank
+  2,000+ minerals by 15:00). The Terran's score +0.047 +- 0.082 (Gary-Z won 9, 18), the Zerg's gap +0.004 [-0.062,
+  +0.086] (5-15 minutes -0.03, 15-20 +0.055): no measurable difference. In gz1dev on the fidelity rule (gz0.7dev). Why the
+  openings flip, from a style-1 game's records and both models on its inputs (they agree on the pros' states: style 1's
+  natural at 1-2 minutes 20% and 22%, the pros 18%): Gary-Z's 9 Overlord at 54.6 s leaves it at 9/9 to 81 s, and at 82 s
+  it has 2 idle larvae, no eggs and 268 minerals (the pros 2 drones in eggs, 217), and the pros' history blended into its
+  decided counts (option history) reads the natural a third done; on that state both models give the pool 11-19%. Gary-Z's
+  style roll draws a seed's style by the all-era plan shares (style 4 7.0%, modern 1.4%), so 96 games told style 4 in 24.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

@@ -16,7 +16,7 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
   (the signal weak: scored by the critic too, nothing beats the deployed model's preference in 941 pairs; next, pairs
   again on gt0.14dev's fixed inputs, several dice per arm, or a decision with longer consequences)
 - [#51](https://github.com/vibrunazo/gary/issues/51) Gary-Z's builds and burrows: the lurkers fixed (they never came up again);
-  left: 99-233 burrows still refused a game, the late game of a losing Zerg (builds without drones), idle larvae
+  left: 99-233 burrows still refused a game, the late game of a losing Zerg (builds without drones), idle larvae; its gas and minerals banked (632 gas at 8:00 with its drones on gas the model's)
 - [#48](https://github.com/vibrunazo/gary/issues/48) The Zerg's macro model counts the units in its eggs twice; the fix
   (option eggs) lost 96 paired games: no rule leans on it; the right counts move the model off zerglings to
   Hydralisks and it slows (its counts a momentum cue): eggs with the macro trained on Gary-Z's own states next
@@ -25,11 +25,14 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#53](https://github.com/vibrunazo/gary/issues/53) No fight-scenario reward ranks the roles checkpoints as games do: a reward
   that counts what fighting costs the rest of the game, or 96 games
 - [#54](https://github.com/vibrunazo/gary/issues/54) Build styles by name for each side, every game labelled (done: TvZ);
-  the Terran macro model trained with every game's style (option stylev2) judged per style; the Zerg's; other matchups
+  the Terran and Zerg macro models trained with every game's style, judged per style (gt0.19dev, gz0.7dev); the Zerg's
+  roll by the modern shares; other matchups
 - [#55](https://github.com/vibrunazo/gary/issues/55) The opening economy: new workers sent at once, the first worker first,
-  workers on gas the macro model's decision (gastarget, gt0.20dev: style 2's natural 3.6 minutes, pros 3.2); left: about
-  100 minerals mined behind the pros by 2:00 (the split, doubled fields, idle builders); the gas head for gt1's and the
-  Zerg's models
+  workers on gas the macro model's decision (gastarget, gt0.20dev: style 2's natural 3.6 minutes, pros 3.2; the Zerg's,
+  gz0.7dev); left: about 100 minerals mined behind the pros by 2:00 (the split, doubled fields, idle builders); the gas
+  head for gt1's model
+- [#56](https://github.com/vibrunazo/gary/issues/56) Gary-Z's opening: idle larvae after its Overlord and the pros' history
+  in its decided counts flip the hatchery-first styles to pool first
 - [#29](https://github.com/vibrunazo/gary/issues/29) Why army dataset v5's commit models trail the deployed one in games
   (not the bunker counts: with armyseen v5 still trails, -0.039 over 96)
 - [#3](https://github.com/vibrunazo/gary/issues/3) Close out won games (the hunt imitated: its labels on the deployed

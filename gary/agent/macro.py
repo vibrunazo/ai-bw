@@ -181,7 +181,11 @@ class LearnedMacro:
         g = self.g
         if g.hi.frame >= self.next_gas and self.model.net.gas is not None:   # (asked on its own clock: a goal waiting
             self.next_gas = g.hi.frame + GAS_EVERY                           # for its money is when pros pull off gas)
-            self.gas_target = self.model.gas_target(self.model_inputs(obs, mine))
+            target = self.model.gas_target(self.model_inputs(obs, mine))
+            if target != self.gas_target:
+                LOG.decision(g.hi.side, "gas", g.hi.frame, f"{target} workers on gas", inputs={"m": me["minerals"], "gas": me["gas"]},
+                             by="model: the macro model's gas head")
+            self.gas_target = target
         build = self.builds.get(g.posture.build) if g.posture.build else None
         if build is not None:
             if build.first(obs, mine, done, me):
