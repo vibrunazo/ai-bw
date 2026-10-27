@@ -1490,6 +1490,21 @@ plan and the full log).
   the money being later elsewhere. Not the gaps: supply blocks (re-simulated at 1-2/2-4/4-6 minutes Gary 18.5/0/12 s,
   the pros 15/11/3) but at 4-6 minutes; the dice's rare picks (10 decisions a minute at 2-6 minutes, 1.2 under 10%
   odds; the pros 12.8 decisions): the income is. Left: workers 1-2 behind at 2-4 minutes, 4 at 5:00.
+- **Mining measured, new workers sent at once (2026-10-26, #55).** The re-simulator's snapshots now carry the engine's
+  minerals and gas gathered (`mined`, `mined_gas`); the measure used before (in hand plus units begun) missed the SCVs
+  in training and the paid queue, 40-140 minerals. With the same SCVs (6/8/12/16 at 0:30/1:00/2:00/3:00) Gary-T style 1
+  had mined 158/342/798/1474, the modern pros of style 1 178/394/954/1666. Found: in Brood War a rally on a mineral field
+  only walks the new worker there (openbw `rally_unit`: a Move); Gary's first command to a new SCV came 5.0 s after it
+  was done (median of 143), the pros' 0.8 s (461; 60% within 1 s, a right-click on it alone). Now a worker within 8 s of
+  being done, still on its rally's move, is idle to the mining routine (every race). Over 96 games (NW150a+b against
+  PF149a+b, the Zerg with it too): style 1 mined 862/1546 by 2:00/3:00, its natural at 2.9 minutes (3.1; pros 2.7);
+  style 2 played as style 2 in 84% (75%), its natural at 4.2 minutes (4.7; pros 3.2) in 78% (72%), its Factory at 3.0
+  (3.1; 2.5); style 3's Starport 3.9 (4.1; 3.4). Results +0.057 +- 0.105 and -0.135 +- 0.141, lost 39 (29): kept,
+  being the pros' mechanics. Not the gap: the scout (the pros' goes at a median 53 s, half at 46-55 s with 7-8 SCVs,
+  and is back after 59 s; Gary's at 69 s, 72 s), the trips (first returns at 8.3-9.2 s and the second 6.7 s later for
+  both). Then the game's first worker ordered before the split (the pros' at 0.21 s, Gary's 2.7 s; now 0.83 s) and three
+  workers on a refinery, not five (its builder goes in unseen the moment it is done, and the gas task's box took two
+  stacked miners: style 2 at 150-180 s waited at the refinery 59 SCV-s in 3 games, 110 before), in round GW151a+b.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
