@@ -19,7 +19,7 @@ learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the lea
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-24): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
 (gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.20dev) and `gz1dev`
-(gz0.7dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
+(gz0.8dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
 on paired branches with the forced arm locked at the pros' hazard, learned offline: at chance on 1,004
@@ -41,7 +41,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.20dev, gz1 gz0.3, gz1dev gz0.7dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.20dev, gz1 gz0.3, gz1dev gz0.8dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -83,7 +83,7 @@ definition in gary/agent/manifests.py and in the entries of "Next" below:
   their shares (styleroll, gt0.17dev), without the early-pool posture (noalarm, gt0.18dev), the macro model trained with every game's style (stylev2, gt0.19dev), the workers on gas its decision (gastarget, gt0.20dev).
 - **gz0.1-gz0.2** (2026-10-20/22): the Zerg on the shared agent, then its army on control groups by type.
   **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev), seenall (gz0.4dev), enemy HP as its data (zfullhp, gz0.5dev), its eggs counted as its data
-  (eggs, gz0.6dev), the drones on gas its macro model's decision (zgastarget, gz0.7dev).
+  (eggs, gz0.6dev), the drones on gas its macro model's decision (zgastarget, gz0.7dev), its buildings' history its own (ownbuilds, gz0.8dev).
 
 ## Versions
 
@@ -1550,6 +1550,17 @@ plan and the full log).
   it has 2 idle larvae, no eggs and 268 minerals (the pros 2 drones in eggs, 217), and the pros' history blended into its
   decided counts (option history) reads the natural a third done; on that state both models give the pool 11-19%. Gary-Z's
   style roll draws a seed's style by the all-era plan shares (style 4 7.0%, modern 1.4%), so 96 games told style 4 in 24.
+- **Gary-Z's openings as its style (2026-10-27, #56, gz0.8dev).** With option history the macro model's "decided so far"
+  inputs are the pros' mean (fading to its own over 12 minutes), so a decision not yet taken read as partly taken: at 1:22
+  the natural a third decided, the pool next. Option ownbuilds makes the buildings, tech and expansions among them its
+  own (the units' stay the pros', the drone feedback loop the history is for; ownsupply did the same for the overlords).
+  On the style-1 game's inputs the pool went from 11-19% at 82 s to 0, the natural to 34-45% at 83-84 s, the pool after
+  it. 96 paired games against gz0.7dev (OB154a+b against ZG153a+b): told style 1 it played style 1 in 38% of games (0%),
+  style 4 75% (17%), style 6 50% (0%), style 0 50% (50%), pool-first style 2 62% (69%); the natural at 1.6-1.7 minutes in
+  every hatchery-first style (pros 1.6); style 1's third Hatchery at 5.0 minutes in all its games (pros 5.9 in 71%), so
+  38% played as style 0. The Terran's score +0.000 +- 0.082, the gap +0.008 [-0.051, +0.065] (20-25 minutes +0.056
+  [+0.003, +0.086]). In gz1dev: gz0.8dev. The rest of the 9/9 wait is mining: Gary-Z's first Overlord at 58 s (quartiles
+  57-60), the modern pros' 53 (53-54), #55.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

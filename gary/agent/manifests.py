@@ -816,6 +816,10 @@ OPTIONS = {
     # gary/policy/macro.py own_keys: with the pros' history, the supply provider's entry its own (the pros' early
     # overlord in it told Gary-Z's model one was coming: at 9/9 it gave Overlord under 1%, blocked 67% of 2:00)
     "ownsupply": lambda m: m["macro"].update(own_supply=True),
+    # with the pros' history, the buildings, tech and expansions among its decisions so far its own (the units' stay the
+    # pros', the feedback loop the history is for): the pros' mean told Gary-Z's model at 1:22 its natural was a third
+    # decided, and the hatchery-first styles opened pool first (#56); a pro's own count of a building is 0 or 1
+    "ownbuilds": lambda m: m["macro"].update(own_builds=True),
     # gary/policy/macro.py look: the macro model's inputs as the replays it learned from count them, what is in sight
     # looked at every second (not only when the model is queried: its "most enemies seen" stayed 0 in play) and the
     # units inside a bunker counted (5 marines seen where the replay had 13 at 6:00)
@@ -1039,7 +1043,11 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # ZB153a+b): gas mined by 5:00 / 8:00 in style 0 496 / 1,840 (448 / 1,440; pros 840 / 2,624), the first Extractor 2.2
 # minutes (2.9; pros 2.0); the hatchery-first styles opened pool first more (style 1 in 62% of games, 38%), its gas banked
 # (632 at 8:00, 340); the Terran's score +0.047 +- 0.082, the Zerg's gap +0.004 [-0.062, +0.086]: no measurable difference
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+zgastarget"), "version": "gz0.7dev"}     # (ownsupply in gz1 since gz0.3)
+# gz0.8dev: its buildings, tech and expansions in the history its own (ownbuilds, #56). 96 paired games against gz0.7dev
+# (OB154a+b against ZG153a+b): told a hatchery-first style it plays it (style 1 in 38% of games, 0%; style 4 75%, 17%;
+# style 6 50%, 0%), pool first in style 2 as before (62%, 69%); the Terran's score +0.000 +- 0.082, the gap +0.008
+# [-0.051, +0.065]
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+zgastarget+ownbuilds"), "version": "gz0.8dev"}     # (ownsupply in gz1 since gz0.3)
 
 
 def _against(m: dict, vs: dict) -> dict:
@@ -1165,9 +1173,12 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
             g.macro.tracker.history = pro_history(g.race.letter, style, g.matchup)
             g.macro.tracker.history_weight = 1.0
             g.macro.tracker.history_until = HISTORY_FADE
+            spec = g.macro.model.spec
             if m["macro"].get("own_supply"):
-                spec = g.macro.model.spec
                 g.macro.tracker.own_keys = [k for k, (act, uid) in enumerate(spec.decisions) if uid == g.race.supply_provider]
+            if m["macro"].get("own_builds"):     # (ACT_NAMES: bmorph, build, research, upgrade, expand)
+                g.macro.tracker.own_keys += [k for k, (act, uid) in enumerate(spec.decisions) if act in (2, 3, 4, 5, 6)
+                                             and k not in g.macro.tracker.own_keys]
         if m["macro"].get("answers"):
             from gary.agent.answers import Answers
             g.macro.answers = Answers(g, **m["macro"].get("answer_options", {}))

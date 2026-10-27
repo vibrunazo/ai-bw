@@ -31,8 +31,6 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
   workers on gas the macro model's decision (gastarget, gt0.20dev: style 2's natural 3.6 minutes, pros 3.2; the Zerg's,
   gz0.7dev); left: about 100 minerals mined behind the pros by 2:00 (the split, doubled fields, idle builders); the gas
   head for gt1's model
-- [#56](https://github.com/vibrunazo/gary/issues/56) Gary-Z's opening: idle larvae after its Overlord and the pros' history
-  in its decided counts flip the hatchery-first styles to pool first
 - [#29](https://github.com/vibrunazo/gary/issues/29) Why army dataset v5's commit models trail the deployed one in games
   (not the bunker counts: with armyseen v5 still trails, -0.039 over 96)
 - [#3](https://github.com/vibrunazo/gary/issues/3) Close out won games (the hunt imitated: its labels on the deployed
