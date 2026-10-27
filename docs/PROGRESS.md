@@ -1504,7 +1504,14 @@ plan and the full log).
   and is back after 59 s; Gary's at 69 s, 72 s), the trips (first returns at 8.3-9.2 s and the second 6.7 s later for
   both). Then the game's first worker ordered before the split (the pros' at 0.21 s, Gary's 2.7 s; now 0.83 s) and three
   workers on a refinery, not five (its builder goes in unseen the moment it is done, and the gas task's box took two
-  stacked miners: style 2 at 150-180 s waited at the refinery 59 SCV-s in 3 games, 110 before), in round GW151a+b.
+  stacked miners: style 2 at 150-180 s waited at the refinery 59 SCV-s in 3 games, 110 before): over 96 games (GW151a+b
+  against NW150a+b) -0.010 +- 0.129 and +0.068 +- 0.129, lost 32 (39), the gap at 2-4 minutes 0.22 and 0.23 (0.28,
+  0.24); style 1's natural by 8:00 98% (91%; pros 98%), style 3 played as style 3 in 8 of 8 (6), style 2 mined
+  842/1386 by 2:00/3:00 (838/1370; pros 986/1666), its natural 4.6 minutes in 72% (4.2, 78%: 32 games). Left of the
+  mining gap, about 100 minerals by 2:00, small leaks of 10-20 each: the starting SCVs sent one at a time (the pros' four
+  at 0.84 s at once, then re-split: 10 commands in 20 s), so the second SCV waits for its money to 17-18 s (pros 15.75);
+  fields doubled while others are free (26-53 worker-s by 2:00, the engine's own re-routing); the parked builder idle at
+  its spot; the scout a little longer away.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
