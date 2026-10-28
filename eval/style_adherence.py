@@ -2,13 +2,16 @@
 overall comparison mixes styles and map pools: told style 4, gt1dev played standard bio in 89% of its games). The Terran styles are the taxonomy's tech clusters (taxonomy/discover.py, 9,221 labelled player-games, none of
 them modern); a nearest-neighbour classifier on the same features (each key item's first time in 8 minutes) labels
 the modern pros' games and Gary's. The Zerg styles are its plans (taxonomy/plans.py: rules on the opening, the
-hatcheries and the first tech), which label Gary-Z's games as they label the pros'. Then per style: the label of
+hatcheries and the first tech), which label Gary-Z's games as they label the pros'; in the other matchups every race's
+plans are taxonomy/label_all.py's (the Terran's opening and tech, the Zerg's with ZvZ's 9 and 12 pools, the Protoss's).
+In a mirror, --side A or B (A the lower slot, as eval/league.py). Then per style: the label of
 Gary's games told that style (does it play it), and the key items' timings against the modern pros of that style on
 the same ladder maps.
 
     python -m eval.style_adherence SR144a,SR144b [UC143a,UC143b]    # rounds of a Terran manifest, comma-joined
     python -m eval.style_adherence --race Z ZG153a,ZG153b             # the rounds' Zerg
-    python -m eval.style_adherence --race P --matchup PvT PV160a        # the Protoss (its plans: taxonomy/label_all.py)"""
+    python -m eval.style_adherence --race P --matchup PvT PV160a        # the Protoss (its plans: taxonomy/label_all.py)
+    python -m eval.style_adherence --race Z --matchup ZvZ --side A ZZ168a  # a mirror's side A"""
 import glob, hashlib, json, sys, tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -17,13 +20,14 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO)); sys.path.insert(0, str(REPO / "ingest")); sys.path.insert(0, str(REPO / "taxonomy"))
 from inventory import data_root, find_screp
 from discover import KEY_ITEMS, first_times
-from plans import PRESSURE_BY, TECH_BY, lings_by, plan_of
 from build_orders import extract_player
 from cmdcache import P, load_game
 
 WINDOW, NEVER = 480, 600.0
 RACE = sys.argv[sys.argv.index("--race") + 1] if "--race" in sys.argv else "T"
 MATCHUP = sys.argv[sys.argv.index("--matchup") + 1] if "--matchup" in sys.argv else "TvZ"
+SIDE = sys.argv[sys.argv.index("--side") + 1] if "--side" in sys.argv else "A"
+MIRROR = MATCHUP[0] == MATCHUP[-1]
 FEATS = [f for f, _, _ in KEY_ITEMS[RACE]]
 SHOW = {"T": ["gas1", "cc2", "factory", "shop", "starport", "academy", "rax2", "bunker"],
         "Z": ["pool", "hatch2", "gas1", "hatch3", "lair", "spire", "muta", "den", "lurker_aspect", "gas2"],
@@ -35,14 +39,7 @@ def vec(items):
     return np.array([min(t.get(f, NEVER), NEVER) for f in FEATS], np.float32) / 60.0, t
 
 
-def zerg_plan(items, ids: dict[str, int]) -> int:
-    """A Zerg game's plan id in the style catalogue (taxonomy/plans.py's rules; "other" for the plans it merged)."""
-    t = first_times(items, "Z", TECH_BY)
-    name = ", ".join(plan_of(t, lings_by({"items": items}, PRESSURE_BY), max((i["t"] for i in items), default=0)))
-    return ids.get(name, ids["other"])
-
-
-def told_style(rep: str, seed: int) -> int | None:
+def told_style(rep: str, seed: int, slot: int) -> int | None:
     """The style the game's Gary was told: its records' "style" decision (since 2026-10-26), else rebuilt from its
     manifest, map and seed (right only while the manifest's definition is the one the game played)."""
     rec = Path(rep.replace(".rep", ".records.jsonl"))
@@ -50,7 +47,7 @@ def told_style(rep: str, seed: int) -> int | None:
         for line in open(rec, encoding="utf-8"):
             if '"layer": "style"' in line:
                 r = json.loads(line)
-                if r.get("side") == RACE:
+                if r.get("side") == RACE and r.get("slot", slot) == slot:
                     return int(r["choice"])
             elif '"f": ' in line and not line.startswith('{"f": 0'):
                 break
@@ -78,11 +75,14 @@ def _match(rep: str, seed: int):
 
 
 def gary_items(rep: str, cache: Path):
+    """The judged player's build items and slot (in a mirror the side's: A the lower slot), or None."""
     game = load_game(find_screp(None), Path(rep), hashlib.sha1(rep.encode()).hexdigest(), cache)
-    t = next((p for p in game["players"] if not p["observer"] and p["race"] == RACE), None)
-    if t is None:
+    ps = sorted((p for p in game["players"] if not p["observer"] and p["race"] == RACE), key=lambda p: p["id"])
+    nth = "AB".index(SIDE) if MIRROR else 0
+    if len(ps) <= nth:
         return None
-    return extract_player([c for c in game["cmds"] if c[P] == t["id"]], RACE)[0]
+    t = ps[nth]
+    return extract_player([c for c in game["cmds"] if c[P] == t["id"]], RACE)[0], t["id"]
 
 
 def main():
@@ -92,15 +92,16 @@ def main():
     NAMES = styles.catalog(MATCHUP, RACE)["names"]
     rows = [json.loads(l) for l in open(data_root() / "interim" / "build_orders.jsonl", encoding="utf-8")]
     rows = [r for r in rows if r.get("matchup") == MATCHUP and r.get("race") == RACE]
+    from label_all import P_TECH_BY, protoss_plan, terran_plan, zerg_plan
+    ids = {n: k for k, n in NAMES.items()}
+    other = ids.get("other", max(NAMES))           # (the plans the catalogue merged)
+    row = lambda items: {"items": items, "duration_s": max((i["t"] for i in items), default=0)}
     if RACE == "P":
-        sys.path.insert(0, str(REPO / "taxonomy"))
-        from label_all import P_TECH_BY, protoss_plan
-        ids = {n: k for k, n in NAMES.items()}
-        label = lambda items: ids.get(protoss_plan(first_times(items, "P", P_TECH_BY), max((i["t"] for i in items), default=0)),
-                                      max(NAMES))
+        label = lambda items: ids.get(protoss_plan(first_times(items, "P", P_TECH_BY), row(items)["duration_s"]), other)
     elif RACE == "Z":
-        ids = {n: k for k, n in NAMES.items()}
-        label = lambda items: zerg_plan(items, ids)
+        label = lambda items: ids.get(zerg_plan(row(items), MATCHUP), other)
+    elif MATCHUP != "TvZ":                         # (the Terran's plans in PvT and TvT; TvZ's styles are tech clusters)
+        label = lambda items: ids.get(terran_plan(row(items)), other)
     else:
         lab = json.loads((data_root() / "interim" / "taxonomy" / "TvZ_T_tech.json").read_text(encoding="utf-8"))["assignments"]
         X, y = [], []
@@ -123,7 +124,7 @@ def main():
     pros = defaultdict(list)
     for r in on_ladder:
         pros[label(r["items"])].append(vec(r["items"])[1])
-    print(f"modern pros on the ladder maps: {len(on_ladder)} games; by the {'plans' if RACE == 'Z' else 'classifier'}: "
+    print(f"modern pros on the ladder maps: {len(on_ladder)} games; by the {'classifier' if (MATCHUP, RACE) == ('TvZ', 'T') else 'plans'}: "
           + ", ".join(f"style {k} {len(v) / len(on_ladder):.0%}" for k, v in sorted(pros.items())))
     cache = Path(tempfile.mkdtemp())
 
@@ -135,19 +136,20 @@ def main():
         return ", ".join(out)
     if "--write-shares" in sys.argv:            # (the roll's weights: gary/agent/manifests.py rolled_style)
         n = sum(len(v) for v in pros.values())
-        out = data_root() / "interim" / "taxonomy" / f"TvZ_{RACE}_modern_shares.json"
+        out = data_root() / "interim" / "taxonomy" / f"{MATCHUP}_{RACE}_modern_shares.json"
         out.write_text(json.dumps({"source": "modern pros on the ladder maps, eval/style_adherence.py", "games": n,
                                    "shares": {str(k): round(len(v) / n, 4) for k, v in sorted(pros.items())}}), encoding="utf-8")
         print(f"wrote {out}")
-    for arg in [a for a in sys.argv[1:] if not a.startswith("--") and a not in (RACE, MATCHUP)]:
+    for arg in [a for a in sys.argv[1:] if not a.startswith("--") and a not in (RACE, MATCHUP, SIDE)]:
         reps = [p for r in arg.split(",") for p in sorted(glob.glob(str(REPO / "runs" / "league" / r / "*" / "*.rep")))]
         told = defaultdict(list)
         for rep in reps:
             seed = int(Path(rep).stem.split("seed")[-1])
-            style = told_style(rep, seed)
-            items = gary_items(rep, cache)
-            if items is None:
+            got = gary_items(rep, cache)
+            if got is None:
                 continue
+            items, slot = got
+            style = told_style(rep, seed, slot)
             told[style].append((label(items), vec(items)[1]))
         print(f"== {arg}")
         for s, g in sorted(told.items()):
