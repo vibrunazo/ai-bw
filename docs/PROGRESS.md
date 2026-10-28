@@ -1631,6 +1631,27 @@ plan and the full log).
   nearer (25-30 minutes -0.253 [-0.420, -0.083]); PvT, -0.016 +- 0.152, the Terran's fight gap +0.067 [-0.015, +0.143]
   further, no feature more than 0.2 sd: the pros' "other" role is carried out as nothing (#60). Both in the dev builds
   (learned in place of rules or another matchup's data, no game lost): gt1dev gt0.21dev, gz1dev gz0.10dev; TvZ unchanged.
+- **Every matchup's styles, the mirrors' fight models and their judging (2026-10-28, #54, #36).** One Zerg macro model
+  for TvZ, PvZ and ZvZ (option zall, Z_all_v2gas: modern held-out non-routine top-1 TvZ 0.489 against Z_TvZ_v2gas's
+  0.481, PvZ 0.556 against its own 0.530, ZvZ 0.637 against 0.635) in 96 paired TvZ games against gz0.10dev (ZA167a+b
+  against ZB167a+b): the Zerg's score -0.078 +- 0.076, its gap +0.051 [-0.020, +0.125] (15-20 minutes +0.094 [+0.036,
+  +0.123] further), macro features even; it plays the style told more (47% of games against 40%: style 0 81% (56%),
+  style 2 69% (19%)) and banks less gas at 10-20 minutes (1,189, gz0.10dev 1,357, pros 961), but makes more lurkers (7.3,
+  5.7, pros 2.7), scourge and spores. PvZ (48, PA167a against PZ167a): -0.057 +- 0.143, gap +0.013. Not adopted. The
+  missing styles (taxonomy/label_all.py, plans by the first buildings, as the Protoss's): the Terran in PvT (ids 20-30)
+  and TvT (40-48) by its opening and tech by 8:00 (factory first, three factories leads both), the Zerg in PvZ (20-29:
+  pool first, 3 hatcheries, spire first 45%) and ZvZ (40-49, 9 pool and 12 pool apart), the Protoss in PvP (40-47);
+  each race's model retrained with them (option allstyles: T_all_v2all, P_all_v2all, Z_all_v2all; per matchup within
+  0.006 of the v2gas models, ZvZ +0.014). Fixed on the way: the style roll crashed on a catalogue its model didn't
+  know (all weights 0) and could roll another matchup's ids or "other" and "undecided" (gz1's TvZ seed 4005 now rolls
+  style 6, was 8: parity recorded); the pros' history per style (train/macro_history.py) was indexed by position, not
+  style id, and built from the index's styles, not the catalogue the model learned (--styles v2, tables ..._v2, read
+  with the manifest's history_styles). The mirrors' fight models (ingest/response_dataset.py, the player picked by
+  name: in a mirror the town hall's owner was either): TvT accuracy 0.683 (siege and mines learned), ZvZ 0.672, PvP
+  0.743 ("other" 2.2%, 0.9%, 4.6%), option mirrorroles (the Terran's against a Terran, with modedice). Mirrors can be
+  judged now: eval.league plays them, the sides "A" and "B" by slot order in the rows, the gap and the attention
+  features (eval/humanlike.py nth, eval/attention.py), eval/gap_windows.py --side A/B, the pros' mirror rows both
+  players of a game (half the games).
 - **The Terran's siege and mines in PvT (2026-10-28, #60, gt0.22dev).** The PvT Terran pros' "other" role (28% of their
   labels) was mostly orders the labeller didn't know: a tank's or goliath's turret firing (StayInRange, WatchTarget on its
   body), a medic healing, a right-click on a friend, and the modes. Relabelled (eval/micro_roles.py): those are fire and

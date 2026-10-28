@@ -5,7 +5,9 @@ player's own (Gary-Z's own history fed back on itself: PROGRESS.md, round g12). 
 it reads, from the macro dataset and the newest macro model's decision index:
 
   data/interim/macro/v1/history_mean_<matchup>_<race>.npy        (31, decisions): the race's mean, minutes 0-30
-  data/interim/macro/v1/history_mean_<matchup>_<race>_styles.npy (styles, 31, decisions): per build style, at each
+                                                          (..._<catalogue>.npy with --styles: a manifest's
+                                                          macro history_styles reads them)
+  data/interim/macro/v1/history_mean_<matchup>_<race>_styles.npy (style ids, 31, decisions): per build style id, at each
                                                           minute the style's own mean while MIN_STYLE of its
                                                           games are still going, the race's mean after
 
@@ -15,6 +17,7 @@ are added. Takes the same --era/--source filter as the trainers.
 Usage:
   python -m train.macro_history --race Z
   python -m train.macro_history --matchup TvZ --race T --era modern
+  python -m train.macro_history --matchup PvZ --race Z --styles v2   # the styles from the catalogue the model learned
 """
 
 from __future__ import annotations
@@ -59,11 +62,15 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--matchup", default="TvZ")
     ap.add_argument("--race", required=True, choices=["T", "Z", "P"])
+    ap.add_argument("--styles", help="each player's style from this catalogue (gary/styles.py), as train/macro.py --styles")
+    ap.add_argument("--model", help="the macro model whose decision index the tables follow (default: the race's shared)")
     GameFilter.add_args(ap)
     args = ap.parse_args()
     keep = GameFilter.from_args(args)
+    import train.macro as tm
+    tm.STYLE_VERSION = args.styles
     from gary.policy.macro import macro_model_path, shared_macro
-    spec = MacroModel.load(str(macro_model_path(args.matchup, args.race))).spec      # (GARY_MACRO_SHARED: the shared model's)
+    spec = MacroModel.load(str(args.model or macro_model_path(args.matchup, args.race))).spec   # (GARY_MACRO_SHARED: the shared model's)
     jobs = player_games(args.matchup, args.race, keep)
     print(f"{len(jobs)} player-games ({keep.describe()}); {len(spec.decisions)} decisions", flush=True)
     tables, styles = [], []
@@ -75,12 +82,12 @@ def main() -> None:
     tables, styles = np.stack(tables), np.array(styles)
     mean = np.nanmean(tables, axis=0).astype(np.float32)
     out = macro_dir()
-    tag = f"{args.matchup}_{args.race}" + ("_shared" if shared_macro() else "")
+    tag = f"{args.matchup}_{args.race}" + ("_shared" if shared_macro() else "") + (f"_{args.styles}" if args.styles else "")
     np.save(out / f"history_mean_{tag}.npy", mean)
     print(f"wrote history_mean_{tag}.npy {mean.shape}; {mean[10].sum():.0f} decisions taken by 10:00 on average")
-    if len(spec.styles):
-        per = np.repeat(mean[None], len(spec.styles), axis=0)
-        for s in range(len(spec.styles)):
+    if len(spec.styles):                    # (by style id, as gary/policy/macro.py pro_history reads it: a model of every
+        per = np.repeat(mean[None], max(spec.styles) + 1, axis=0)       # matchup has ids 0-, 20- and 40-)
+        for s in spec.styles:
             rows = tables[styles == s]
             alive = (~np.isnan(rows[:, :, 0])).sum(axis=0) if len(rows) else np.zeros(MINUTES, int)
             enough = alive >= MIN_STYLE                     # minutes this style still has MIN_STYLE games in

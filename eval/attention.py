@@ -50,7 +50,8 @@ MACRO = {"Train", "Build", "Unit Morph", "Building Morph", "Tech", "Upgrade"}
 
 
 def one(job: tuple) -> dict | None:
-    """{race: Counter} for one replay, commands and snapshots up to `until` seconds."""
+    """{race: Counter} for one replay, commands and snapshots up to `until` seconds; in a mirror {"A": ..., "B": ...}, the
+    race's players by slot order (eval.match's sides)."""
     path, until = job
     import bisect
     import scr_format
@@ -84,7 +85,8 @@ def one(job: tuple) -> dict | None:
             army = {u[0] for u in r["u"] if u[2] == 1 and not is_worker(u[1]) and not is_building(u[1])}
             if army:
                 snaps[r["slot"]].append((r["frame"], army))
-    macro = collections.defaultdict(list)          # race -> the frames of its player's macro commands
+    macro = collections.defaultdict(list)          # player id -> the frames of its macro commands
+    race_of_pid = {}
     try:
         import hashlib
         from cmdcache import F, P, T, load_game
@@ -94,11 +96,13 @@ def one(job: tuple) -> dict | None:
         race_of_pid = {pl["id"]: pl["race"] for pl in cg["players"] if not pl["observer"]}
         for cmd in cg["cmds"]:
             if cmd[T] in MACRO and cmd[F] <= until * 24 and cmd[P] in race_of_pid:
-                macro[race_of_pid[cmd[P]]].append(cmd[F])
+                macro[cmd[P]].append(cmd[F])
     except Exception:
         pass
     last = max((r["frame"] for r in lines if "frame" in r), default=0)
     out = {}
+    nth = lambda key, of: sorted(k for k, r in of.items() if r == of[key]).index(key)     # (a mirror's players by slot)
+    mirror = len(set(race_of.values())) < len(race_of)
     for slot, race in race_of.items():
         sl = snaps[slot]
         if not sl:
@@ -113,7 +117,8 @@ def one(job: tuple) -> dict | None:
             k = bisect.bisect_left(frames, f - NEAR)
             if k < len(sl) and abs(sl[k][0] - f) <= NEAR:
                 c["into" if us & sl[k][1] else "elsewhere"] += 1
-        for f in macro.get(race, []):              # (macro actions, in fights or out of them)
+        pid = next((q for q in race_of_pid if race_of_pid[q] == race and nth(q, race_of_pid) == nth(slot, race_of)), None)
+        for f in macro.get(pid, []):               # (macro actions, in fights or out of them)
             c["macro in fights" if in_fight(f) else "macro out of fights"] += 1
         c["game minutes"] = min(until * 24, last) / 1440
         for f, army in sl:
@@ -128,7 +133,7 @@ def one(job: tuple) -> dict | None:
             pm = per_min[f // 1440 + 1]
             pm[0] += 1; pm[1] += bool(reached); pm[2] += len(army); pm[3] += len(reached)
         c["_per_min"] = dict(per_min)
-        out[race] = c
+        out["AB"[nth(slot, race_of)] if mirror else race] = c
     return out
 
 
@@ -171,7 +176,7 @@ def augment_round(folder: Path, workers: int) -> None:
     path = folder / "rows.json.gz"
     with gzip.open(path, "rt", encoding="utf-8") as f:
         saved = json.load(f)
-    rels = sorted(set().union(*(set(v) for v in saved.values())))      # (the sides by race: T, Z, P)
+    rels = sorted(set().union(*(set(v) for v in saved.values())))      # (the sides by race: T, Z, P; a mirror's A, B)
     with ProcessPoolExecutor(workers) as pool:
         for rel, res in zip(rels, monitor.track(pool.map(one, [(str(folder / rel), 1800) for rel in rels]), len(rels),
                                                 folder.name)):
@@ -190,10 +195,11 @@ def augment_pros(workers: int) -> None:
         race = cache.name.split("_")[1]
         lines = [json.loads(l) for l in open(cache, encoding="utf-8")]
         todo = [r for r in lines if not any("fight_attended" in row for row in r["rows"])]
-        jobs = [(str(data_root() / "raw" / r["rel_path"]), 1800) for r in todo]
-        with ProcessPoolExecutor(workers) as pool:
+        jobs = [(str(data_root() / "raw" / r["rel_path"].split("#")[0]), 1800) for r in todo]
+        with ProcessPoolExecutor(workers) as pool:            # ("<rel_path>#<0 or 1>": a mirror's player by slot order)
             for r, res in zip(todo, monitor.track(pool.map(one, jobs), len(jobs), cache.stem)):
-                put(r["rows"], (res or {}).get(race, {}).get("_per_min", {}))
+                side = "AB"[int(r["rel_path"].split("#")[1])] if "#" in r["rel_path"] else race
+                put(r["rows"], (res or {}).get(side, {}).get("_per_min", {}))
         with open(cache, "w", encoding="utf-8") as f:
             for r in lines:
                 f.write(json.dumps(r) + "\n")

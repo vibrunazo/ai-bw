@@ -2,7 +2,8 @@
 headless games (eval/match.py), each game's outcome, both sides' humanlikeness and the learned layers'
 decisions kept for the RL that trains on them.
 
-A round: the Terran version against the Zerg on the maps, seeds from --first. Per game, in
+A round: the Terran version against the Zerg on the maps, seeds from --first (any two manifests: a mirror's sides,
+the same race, are "A" and "B" by slot order in the rows and the gap). Per game, in
 runs/league/<round>/<map>/: the replay, the game's log, both sides' screens, traces and records, and the
 learned layers' drawn decisions (gary/decision_log.py: each with inputs and log-probability). Then the
 round's table, round.json:
@@ -78,11 +79,12 @@ def decisions(rep: str) -> dict:
     return {k.split("/")[0]: int(d[k].shape[0]) for k in d.files if k.endswith("/frame")}
 
 
-def side_rows(replays: list[str], race: str, workers: int) -> dict[str, list[dict]]:
-    """Each replay's per-minute feature rows for one side (eval/humanlike.py features), from the re-simulation."""
+def side_rows(replays: list[str], race: str, workers: int, nth: int | None = None) -> dict[str, list[dict]]:
+    """Each replay's per-minute feature rows for one side (eval/humanlike.py features), from the re-simulation; nth: in
+    a mirror, which of the race's players (0 side A, 1 side B)."""
     from eval.humanlike import _job, gary_end
     with ProcessPoolExecutor(workers) as pool:
-        got = dict(pool.map(_job, [(r, race, gary_end(r)) for r in replays]))
+        got = dict(pool.map(_job, [(r, race, gary_end(r)) + (() if nth is None else (nth,)) for r in replays]))
     return {p: rows for p, rows in got.items() if rows}
 
 
@@ -98,8 +100,8 @@ def gaps(rows: dict[str, list[dict]], race: str, workers: int, era: str = "old",
 
 
 def save_rows(out: Path, rows_t: dict, rows_z: dict, races: tuple[str, str] = ("T", "Z")) -> None:
-    """Both sides' per-minute feature rows, kept beside round.json (rows.json.gz, by race, then by replay path relative
-    to the round): eval/gap_windows.py reads them instead of re-simulating the replays."""
+    """Both sides' per-minute feature rows, kept beside round.json (rows.json.gz, by race, "A" and "B" in a mirror, then
+    by replay path relative to the round): eval/gap_windows.py reads them instead of re-simulating the replays."""
     import gzip
     rel = lambda p: str(Path(p).resolve().relative_to(out.resolve())).replace("\\", "/")
     with gzip.open(out / "rows.json.gz", "wt", encoding="utf-8") as f:
@@ -164,14 +166,14 @@ def main() -> None:
     out = REPO / "runs" / "league" / args.round
     from gary.agent.manifests import manifest_of        # (the sides by their manifests' races: TvZ, PvT, PvZ)
     ra, rb = manifest_of(args.vs).get("race", "T"), manifest_of(args.zerg).get("race", "T")
-    if ra == rb:
-        sys.exit(f"a mirror ({ra}v{rb}): eval/mirror.py plays those")
     matchup = "v".join(sorted((ra, rb)))
+    mirror = ra == rb                       # (a mirror's sides by slot order, "A" and "B", where the others' go by race)
+    labels, nths = (("A", "B"), (0, 1)) if mirror else ((ra, rb), (None, None))
     if args.regrade:
         table = json.loads((out / "round.json").read_text(encoding="utf-8"))
         games = table["games"]
         done = [g["replay"] for g in games if g["result"] != "error"]
-        rows_t, rows_z = side_rows(done, ra, args.parallel), side_rows(done, rb, args.parallel)
+        rows_t, rows_z = side_rows(done, ra, args.parallel, nths[0]), side_rows(done, rb, args.parallel, nths[1])
         grade(games, rows_t, rows_z)
         table["graded"] = dict(Counter(g["graded"] for g in games))
         table["graded_by_map"] = {m: dict(Counter(g["graded"] for g in games if g["map"] == m)) for m in maps}
@@ -189,16 +191,16 @@ def main() -> None:
         g["decisions"] = decisions(g["replay"])
         monitor.tally("results", g["result"])
     done = [g["replay"] for g in games if g["result"] != "error"]
-    rows_t, rows_z = side_rows(done, ra, args.parallel), side_rows(done, rb, args.parallel)
-    save_rows(out, rows_t, rows_z, (ra, rb))
+    rows_t, rows_z = side_rows(done, ra, args.parallel, nths[0]), side_rows(done, rb, args.parallel, nths[1])
+    save_rows(out, rows_t, rows_z, labels)
     grade(games, rows_t, rows_z)
-    table = {"round": args.round, "terran": args.vs, "minutes": args.minutes, "games": games,
+    table = {"round": args.round, "terran": args.vs, "b": args.zerg, "minutes": args.minutes, "games": games,
              "results": dict(Counter(g["result"] for g in games)),
              "graded": dict(Counter(g["graded"] for g in games)),
              "by_map": {m: dict(Counter(g["result"] for g in games if g["map"] == m)) for m in maps},
              "decisions": {k: sum(g["decisions"].get(k, 0) for g in games) for k in ("army_t", "roles_t", "army_z", "roles_z")},
              "matchup": matchup,
-             "gap": {ra: gaps(rows_t, ra, args.parallel, era, matchup), rb: gaps(rows_z, rb, args.parallel, era, matchup)},
+             "gap": {labels[0]: gaps(rows_t, ra, args.parallel, era, matchup), labels[1]: gaps(rows_z, rb, args.parallel, era, matchup)},
              "decided": sum(1 for g in games if g["result"] in ("won", "lost")) / max(1, len(games))}
     if args.candidate:                    # (the layer's side's gap, its candidate's games against the incumbent's)
         side = "Z" if args.layer == "roles_z" else "T"

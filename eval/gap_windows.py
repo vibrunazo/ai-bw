@@ -9,6 +9,7 @@ resampling the paired games (BOOT times).
 
     python -m eval.gap_windows --side T --a B30 B30b --b R30T R30Tb
     python -m eval.gap_windows --side T --a D50a --b R50a --group fight      # the fight features only
+    python -m eval.gap_windows --side A --a TT170a --b TT171a                # a mirror's side A (TvT)
 
 --group: all features, the macro ones (economy, unit counts, buildings) or the fight ones (where the army stands,
 its orders, threats met, fighting, what it does at a sighting, lone units).
@@ -73,8 +74,9 @@ def round_rows(name: str, side: str, workers: int) -> dict[tuple, list[dict]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--side", choices=("T", "Z", "P"), required=True)
-    ap.add_argument("--matchup", default="TvZ", help="the pros it is judged against (PvT, PvZ for the Protoss)")
+    ap.add_argument("--side", choices=("T", "Z", "P", "A", "B"), required=True,
+                    help="a race, or in a mirror (TvT, ZvZ, PvP) side A or B")
+    ap.add_argument("--matchup", help="the pros it is judged against (default: the rounds' matchup, else TvZ)")
     ap.add_argument("--a", nargs="+", required=True, help="arm A's rounds")
     ap.add_argument("--b", nargs="+", required=True, help="arm B's rounds")
     ap.add_argument("--minutes", type=int, default=30)
@@ -84,16 +86,19 @@ def main() -> None:
     args = ap.parse_args()
     priority.apply(args.priority)
     from eval.humanlike import _names, gap_score, matrix, pro_rows
+    table = json.loads((REPO / "runs" / "league" / args.a[0] / "round.json").read_text(encoding="utf-8"))
+    args.matchup = args.matchup or table.get("matchup", "TvZ")
+    race = args.matchup[0] if args.side in ("A", "B") else args.side          # (a mirror's sides are one race)
     arm = {}
     for key, rounds in (("a", args.a), ("b", args.b)):
         arm[key] = {}
         for r in rounds:
             arm[key].update(round_rows(r, args.side, args.workers))
     keys = sorted(set(arm["a"]) & set(arm["b"]))
-    names = group_names(_names(args.side), args.group)
+    names = group_names(_names(race), args.group)
     has = lambda key, n: any(r.get(n) == r.get(n) and r.get(n) is not None for k in keys for r in arm[key][k])
     names = [n for n in names if n == "minute" or (has("a", n) and has("b", n))]   # (a feature both arms have)
-    Xp, _, _ = matrix(pro_rows(args.side, 300, args.workers, "modern", args.matchup), names)
+    Xp, _, _ = matrix(pro_rows(race, 300, args.workers, "modern", args.matchup), names)
     windows = [(a, a + WINDOW - 1) for a in range(0, args.minutes, WINDOW)]
 
     def score(key: str, ks: list[tuple]) -> list:

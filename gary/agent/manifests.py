@@ -467,13 +467,19 @@ def rolled_style(model, matchup: str, race: str, seed: int) -> int | None:
         shares = [modern["shares"].get(str(k), 0.0) for k in range(max(int(k) for k in modern["shares"]) + 1)]
     except Exception:
         pass
+    from gary import styles as catalogue
+    c = catalogue.catalog(matchup, race)
     if shares is None:                        # (else the v2 catalogue's modern shares: the Protoss's, label_all.py)
-        from gary import styles as catalogue
-        c = catalogue.catalog(matchup, race)
-        if c is not None:
-            return random.Random(seed).choices(styles, weights=[c["shares"].get(s, 0.0) for s in styles])[0]
+        if c is None:
+            return None
+        weights = [c["shares"].get(s, 0.0) for s in styles]
+    else:
+        weights = [shares[s] if s < len(shares) else 1.0 for s in styles]
+    if c is not None:                         # (only this matchup's plans: a model trained on every matchup knows the
+        no_plan = lambda name: name is None or name == "other" or "undecided" in name    # others' ids; "other" and
+        weights = [0.0 if no_plan(c["names"].get(s)) else w for s, w in zip(styles, weights)]   # "undecided": no plan)
+    if sum(weights) <= 0:                     # (a model trained before the matchup's catalogue: none of its styles)
         return None
-    weights = [shares[s] if s < len(shares) else 1.0 for s in styles]
     return random.Random(seed).choices(styles, weights=weights)[0]
 
 
@@ -511,6 +517,21 @@ def _roles(**options):
 
 def _pull(**options):
     return lambda m: m["fight"].setdefault("rule_options", {}).setdefault("pull", {}).update(options)
+
+
+def _mirror_roles(m: dict) -> None:
+    """The fights in the mirror by the matchup's role model (the pros' players of the race in TvT, ZvZ or PvP:
+    ingest/response_dataset.py --matchups): the Terran's in its "vs" section against a Terran, where the roles' rules
+    played (as pvtroles against a Protoss, its modes drawn by their odds: the likeliest laid no mines, #60); the
+    Zerg's and the Protoss's role data by matchup."""
+    race = m.get("race", "T")
+    data = f"response_{race}_{race}v{race}_30min.npz"
+    if race == "T":
+        f = m["vs"]["T"]["fight"]
+        f.update(model="roles/latest", roles_model=None, roles_data=data, roles={**f.get("roles", {}), "mode_dice": True})
+        return
+    old = m["fight"].get("roles_data", "response_Z.npz" if race == "Z" else None)
+    m["fight"]["roles_data"] = {**(old if isinstance(old, dict) else {"*": old}), f"{race}v{race}": data}
 
 
 # options to try on top of a manifest, "v010+post+suspend" (docs/CONTROL.md: every layer swappable);
@@ -831,6 +852,17 @@ OPTIONS = {
     "gastarget": lambda m: m["macro"].update(model="runs/macro_exp/T_all_v2gas/model.pt"),
     # the Zerg's: its TvZ macro model trained with every game's style (v2) and the gas head, its drones on gas
     "zgastarget": lambda m: m["macro"].update(model={"TvZ": "runs/macro_exp/Z_TvZ_v2gas/model.pt", "*": "macro/latest"}),
+    # ...one model for every Zerg matchup (the matchup an input, as the Terran's and the Protoss's), with the styles and
+    # the gas head: modern held-out top-1 / non-routine TvZ 0.567 / 0.489 (Z_TvZ_v2gas 0.557 / 0.481), PvZ 0.584 / 0.556
+    # (its own 0.554 / 0.530, no gas head), ZvZ 0.644 / 0.637 (0.636 / 0.635)
+    "zall": lambda m: m["macro"].update(model="runs/macro_exp/Z_all_v2gas/model.pt"),
+    # each race's one macro model trained with every matchup's build styles (v2: taxonomy/label_all.py's plans for the
+    # Terran in PvT and TvT, the Zerg in PvZ and ZvZ, the Protoss in PvP; the gas head): modern held-out non-routine
+    # top-1 against the v2gas models', Terran TvZ 0.448 (0.452), TvT 0.377 (0.371), PvT 0.367 (0.368); Protoss PvT
+    # 0.318 (0.316), PvZ 0.321 (0.320); Zerg TvZ 0.487 (Z_all_v2gas 0.489), PvZ 0.556 (0.556), ZvZ 0.651 (0.637)
+    "allstyles": lambda m: m["macro"].update(model=f"runs/macro_exp/{m.get('race', 'T')}_all_v2all/model.pt",
+                                             history_styles="v2"),     # (the pros' history per style by its catalogue)
+    "mirrorroles": _mirror_roles,
     # the Zerg's fights against a Protoss by its role model from the pros' Zerg in PvZ (ingest/response_dataset.py --race Z
     # --matchups PvZ), not the TvZ one
     "pvzroles": lambda m: m["fight"].update(roles_data={"PvZ": "response_Z_PvZ_30min.npz",
@@ -1249,7 +1281,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
             # (Gary-Z's: the pros' decision history in the model's inputs, fading to its own over HISTORY_FADE
             # minutes, so its own drone-heavy past doesn't feed back on itself)
             from gary.policy.macro import pro_history
-            g.macro.tracker.history = pro_history(g.race.letter, style, g.matchup)
+            g.macro.tracker.history = pro_history(g.race.letter, style, g.matchup, m["macro"].get("history_styles"))
             g.macro.tracker.history_weight = 1.0
             g.macro.tracker.history_until = HISTORY_FADE
             spec = g.macro.model.spec

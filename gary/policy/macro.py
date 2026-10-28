@@ -217,17 +217,18 @@ def macro_model_path(matchup: str, race: str) -> Path:
     return found[-1]
 
 
-def pro_history(race: str, style: int | None = None, matchup: str = "TvZ") -> np.ndarray | None:
+def pro_history(race: str, style: int | None = None, matchup: str = "TvZ", styles: str | None = None) -> np.ndarray | None:
     """The pros' mean decision counts per minute for a race in a matchup (data/interim/macro/v1/
     history_mean_<matchup>_<race>.npy, train/macro_history.py), or for one of its build styles (..._styles.npy, the race's mean where a style has too few
-    players: an average over styles told a 3-hatch player it had made a 9-pool player's units). None if not
-    computed."""
+    players: an average over styles told a 3-hatch player it had made a 9-pool player's units). styles: the
+    catalogue the tables' styles come from (train/macro_history.py --styles: the one the model learned), else the
+    index's. None if not computed."""
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "ingest"))
     try:
         from inventory import data_root
         root = data_root() / "interim" / "macro" / "v1"
-        tag = f"{matchup}_{race}" + ("_shared" if shared_macro() else "")   # (the model's decision index)
+        tag = f"{matchup}_{race}" + ("_shared" if shared_macro() else "") + (f"_{styles}" if styles else "")
         if style is not None and (root / f"history_mean_{tag}_styles.npy").exists():
             t = np.load(root / f"history_mean_{tag}_styles.npy")
             if 0 <= style < len(t):

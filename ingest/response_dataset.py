@@ -127,7 +127,7 @@ def _attention(cmds: list[tuple[int, list[int]]]):
 
 
 def _job(job: tuple) -> dict:
-    path, end, sha1, race, own = job
+    path, end, sha1, race, player, own = job
     out = {"sha1": sha1, "error": None, "rows": [], "extra": [], "labels": [], "near": [], "move": [], "time": [],
            "tags": [], "attended": [], "budget": []}
     try:
@@ -136,7 +136,10 @@ def _job(job: tuple) -> dict:
         try:
             last = min(end or MAX_MIN * 1440, MAX_MIN * 1440)
             g.step(24)
-            slot = next(u["owner"] for u in g.observe()["units"] if u["type"] in HALLS[race])
+            obs = g.observe()             # (the record's player by name: in a mirror both own the race's halls)
+            slot = next((p["slot"] for p in obs["players"] if p.get("name") == player), None)
+            if slot is None:
+                slot = next(u["owner"] for u in obs["units"] if u["type"] in HALLS[race])
             seen = Seen(g, slot)
             probe = Probe(near=SIGHT, race=race, own=own)
             quiet = QUIET
@@ -195,7 +198,7 @@ def select(games: int, race: str = "T", era: str = "both", matchups: tuple = ("T
     random.Random(0).shuffle(old)
     random.Random(0).shuffle(modern)
     chosen = old[:games] if era == "old" else modern[:games] if era == "modern" else         old[:games // 2] + modern[:games - games // 2]
-    return [(str(data_root() / "raw" / r["rel_path"]), clean[r["rel_path"]] or None, sha[r["rel_path"]], race)
+    return [(str(data_root() / "raw" / r["rel_path"]), clean[r["rel_path"]] or None, sha[r["rel_path"]], race, r["player"])
             for r in chosen]
 
 

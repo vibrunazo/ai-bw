@@ -25,9 +25,10 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
   extras 3-5 in a rebuilt dataset and model (runs/roles/20261026-090057, not deployed: the next roles run's start)
 - [#53](https://github.com/vibrunazo/gary/issues/53) No fight-scenario reward ranks the roles checkpoints as games do: a reward
   that counts what fighting costs the rest of the game, or 96 games
-- [#54](https://github.com/vibrunazo/gary/issues/54) Build styles by name for each side, every game labelled (done: TvZ);
-  the Terran and Zerg macro models trained with every game's style, judged per style (gt0.19dev, gz0.7dev); the Zerg's
-  roll by the modern shares; other matchups
+- [#54](https://github.com/vibrunazo/gary/issues/54) Build styles by name for each side, every game labelled (done: every
+  matchup's catalogue, each race's model trained with them, option allstyles); left: judge allstyles per style in each
+  matchup (the Terran's and the Zerg's style checks in eval/style_adherence.py know TvZ only), and one Zerg model for
+  every matchup without zall's TvZ losses
 - [#57](https://github.com/vibrunazo/gary/issues/57) Gary-Z banks the gas it mines (920 at 10-15 minutes, pros 499)
 - [#58](https://github.com/vibrunazo/gary/issues/58) Gary-Z's builds per style: style 2 played as itself 31%, the third Hatchery
 - [#59](https://github.com/vibrunazo/gary/issues/59) Fold the dev manifests' execution fixes (parkmany, gaswaits, the gas head)

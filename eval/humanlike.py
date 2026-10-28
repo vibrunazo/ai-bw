@@ -158,8 +158,9 @@ def gary_end(path: str) -> int | None:
     return max((int(m) * 60 + int(s)) * 24 for m, s in times) if times else None
 
 
-def features(path: str, race: str, minutes: int = MINUTES, end: int | None = None) -> list[dict]:
-    """One row per full minute the player is in the game (from minute 1), up to the replay's end."""
+def features(path: str, race: str, minutes: int = MINUTES, end: int | None = None, nth: int | None = None) -> list[dict]:
+    """One row per full minute the player is in the game (from minute 1), up to the replay's end. nth: in a mirror,
+    which of the race's players (0 the lower slot: side A in eval.match), else the first found."""
     from gary.env import Game
     R = RACES[race]
     names = _names(race)
@@ -185,7 +186,8 @@ def features(path: str, race: str, minutes: int = MINUTES, end: int | None = Non
             o = g.observe()
             units = o["units"]
             if slot is None:
-                slot = next((u["owner"] for u in units if u["type"] in R["halls"]), None)
+                owners = sorted({u["owner"] for u in units if u["type"] in R["halls"]})
+                slot = owners[nth or 0] if len(owners) > (nth or 0) else None
                 if slot is None:
                     continue
             me = next((p for p in o["players"] if p["slot"] == slot), None)
@@ -474,9 +476,9 @@ def _row(minute: int, acc: dict, me: dict, mine: list, workers: list, fight: lis
 
 
 def _job(args: tuple) -> tuple[str, list[dict] | None]:
-    path, race, end = args
+    path, race, end, *nth = args                  # (nth: in a mirror, which of the race's players)
     try:
-        return path, features(path, race, end=end)
+        return path, features(path, race, end=end, nth=nth[0] if nth else None)
     except Exception:
         return path, None
 
@@ -528,14 +530,18 @@ def pro_rows(race: str, games: int, workers: int, era: str = "old", matchup: str
                 by_map[m].append(r["rel_path"])
     if era == "modern":                              # (the maps of the pool: enough games each)
         by_map = {m: ps for m, ps in by_map.items() if len(ps) >= MODERN_MAP_MIN}
-    chosen = []
+    mirror = matchup[0] == matchup[-1]            # (both players of a game, "<rel_path>#<0 or 1>" by slot order: half
+    chosen = []                                   # the games for as many players)
     for m in sorted(by_map):
-        random.Random(0).shuffle(by_map[m])
-        chosen += by_map[m][:games // len(by_map)]
+        ps = list(dict.fromkeys(by_map[m])) if mirror else by_map[m]       # (a mirror's game is listed twice)
+        random.Random(0).shuffle(ps)
+        ps = ps[:(games // 2 if mirror else games) // len(by_map)]
+        chosen += [f"{p}#{k}" for p in ps for k in (0, 1)] if mirror else ps
     todo = [p for p in chosen if p not in have]
     if todo:
         with ProcessPoolExecutor(workers) as pool, open(cache, "a", encoding="utf-8") as out:
-            jobs = [(str(data_root() / "raw" / p), race, clean[p] or None) for p in todo]
+            jobs = [(str(data_root() / "raw" / p.split("#")[0]), race, clean[p.split("#")[0]] or None)
+                    + ((int(p.split("#")[1]),) if mirror else ()) for p in todo]
             for (path, rows), rel in zip(monitor.track(pool.map(_job, jobs), len(jobs), f"pro {race} games"), todo):
                 rows = rows or []
                 have[rel] = rows

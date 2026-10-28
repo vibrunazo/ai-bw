@@ -6,10 +6,16 @@ data/interim/taxonomy/v2/<matchup>_<race>.json (gary/styles.py reads it):
               accuracy 1.00 on the clustered games)
   TvZ Zerg    its plans (plans.py's rules: every game has one), with the ids and names of the plan taxonomy the macro
               models were trained with (a combination it didn't have is "other")
-  PvT, PvZ    Protoss plans by the same kind of rules: the opening (which of the first Gateway, the second Nexus and
-              the Forge came first) and the first tech by P_TECH_BY (Robotics Facility, Citadel of Adun or Stargate);
-              a combination under MIN_SHARE of the modern games is "other". PvZ's ids start at PVZ_FROM, so the
-              shared Protoss macro model's style input means one build per id across its matchups
+  PvT, PvZ,   Protoss plans by the same kind of rules: the opening (which of the first Gateway, the second Nexus and
+  PvP         the Forge came first) and the first tech by P_TECH_BY (Robotics Facility, Citadel of Adun or Stargate);
+              a combination under MIN_SHARE of the modern games is "other"
+  PvT, TvT    Terran plans: the opening (which of the second Command Center, the first Factory and the second Barracks
+  Terran      came first) and the tech by T_PLAN_BY (a Starport before the second Factory, else the Factories, else bio)
+  PvZ, ZvZ    the TvZ Zerg's plan rules (plans.py), ZvZ's pool-first openings split by the pool's time (ZVZ_NINE_POOL:
+  Zerg        the 9-pool and the 12-pool or overpool, two humps in the modern games)
+
+A race's matchups take their own id ranges (MATCHUP_FROM), so the shared macro model's style input means one build per
+id across them.
 
 The macro dataset's index can then be restyled from it (train/macro.py --styles v2) and the
 macro models trained on every game's style. The v1 files (data/interim/taxonomy/*.json) are left as they are:
@@ -34,7 +40,16 @@ WINDOW, NEVER = 480, 600.0
 T_NAMES = {1: "standard bio", 2: "Factory and vultures", 3: "Factory and Starport", 4: "two-Barracks marines"}
 P_TECH_BY = 8 * 60
 MIN_SHARE = 0.01
-PVZ_FROM = 20
+# each race's matchups' first style id (the TvZ ids, from the taxonomies the models were trained with, start at 0)
+MATCHUP_FROM = {("PvT", "P"): 0, ("PvZ", "P"): 20, ("PvP", "P"): 40, ("PvT", "T"): 20, ("TvT", "T"): 40,
+                ("PvZ", "Z"): 20, ("ZvZ", "Z"): 40}
+PVZ_FROM = MATCHUP_FROM[("PvZ", "P")]
+T_PLAN_BY = 8 * 60
+T_PLAN_ITEMS = {("Barracks", 1): "rax1", ("Barracks", 2): "rax2", ("Barracks", 3): "rax3", ("Command Center", 1): "cc2",
+                ("Factory", 1): "fact1", ("Factory", 2): "fact2", ("Factory", 3): "fact3", ("Starport", 1): "port",
+                ("Academy", 1): "academy"}
+T_OPENINGS = (("cc2", "expansion first"), ("fact1", "factory first"), ("rax2", "two barracks"))
+ZVZ_NINE_POOL = 72                       # s: a pool-first ZvZ pool before this is a 9-pool
 P_OPENINGS = (("gate1", "gateway first"), ("nexus2", "nexus first"), ("forge", "forge first"))
 P_TECHS = (("robo", "robotics first"), ("citadel", "citadel first"), ("stargate", "stargate first"))
 
@@ -79,9 +94,39 @@ def protoss_plan(t: dict[str, float], duration: float) -> str:
     return f"{opening}, {tech}"
 
 
-def label_protoss(rows: list[dict], tax: Path, first: int = 0) -> tuple[dict, dict]:
-    plan = {f"{r['rel_path']}|{r['player']}": protoss_plan(first_times(r["items"], "P", P_TECH_BY), r["duration_s"])
-            for r in rows}
+def terran_plan(r: dict) -> str:
+    seen, t, never = Counter(), {}, 9e9
+    for i in r["items"]:
+        if i["conf"] in ("confirmed", "ordered") and i["t"] <= T_PLAN_BY:
+            seen[i["name"]] += 1
+            feat = T_PLAN_ITEMS.get((i["name"], seen[i["name"]]))
+            if feat and feat not in t:
+                t[feat] = i["t"]
+    opening = min(T_OPENINGS, key=lambda o: t.get(o[0], never))[1]
+    factories = sum(k in t for k in ("fact1", "fact2", "fact3"))
+    if t.get("port", never) < t.get("fact2", never):
+        tech = "starport first"
+    elif factories:
+        tech = ("one factory", "two factories", "three factories")[factories - 1]
+    elif "rax3" in t or "academy" in t:
+        tech = "bio"
+    else:
+        tech = "no tech" if r["duration_s"] >= T_PLAN_BY else "undecided"
+    return f"{opening}, {tech}"
+
+
+def zerg_plan(r: dict, matchup: str) -> str:
+    t = first_times(r["items"], "Z", TECH_BY)
+    plan = list(plan_of(t, lings_by(r, PRESSURE_BY), r["duration_s"]))
+    if matchup == "ZvZ" and plan[0] == "pool first":
+        plan[0] = "9 pool" if t["pool"] < ZVZ_NINE_POOL else "12 pool"
+    return ", ".join(plan)
+
+
+def label_plans(rows: list[dict], plan_of_row, first: int) -> tuple[dict, dict]:
+    """Each game's plan by the rules; the plans of at least MIN_SHARE of the modern games named from first on, the
+    rest "other"."""
+    plan = {f"{r['rel_path']}|{r['player']}": plan_of_row(r) for r in rows}
     modern = Counter(plan[f"{r['rel_path']}|{r['player']}"] for r in rows if is_modern(r))
     n = max(1, sum(modern.values()))
     kept = [p for p, c in modern.most_common() if c / n >= MIN_SHARE]
@@ -91,14 +136,35 @@ def label_protoss(rows: list[dict], tax: Path, first: int = 0) -> tuple[dict, di
     return {k: ids.get(p, first + len(kept)) for k, p in plan.items()}, names
 
 
+def label_protoss(rows: list[dict], tax: Path, first: int = 0) -> tuple[dict, dict]:
+    return label_plans(rows, lambda r: protoss_plan(first_times(r["items"], "P", P_TECH_BY), r["duration_s"]), first)
+
+
+LABELLERS = {
+    ("TvZ", "T"): label_terran, ("TvZ", "Z"): label_zerg,
+    ("PvT", "P"): lambda rs, tax: label_protoss(rs, tax, MATCHUP_FROM[("PvT", "P")]),
+    ("PvZ", "P"): lambda rs, tax: label_protoss(rs, tax, MATCHUP_FROM[("PvZ", "P")]),
+    ("PvP", "P"): lambda rs, tax: label_protoss(rs, tax, MATCHUP_FROM[("PvP", "P")]),
+    ("PvT", "T"): lambda rs, tax: label_plans(rs, terran_plan, MATCHUP_FROM[("PvT", "T")]),
+    ("TvT", "T"): lambda rs, tax: label_plans(rs, terran_plan, MATCHUP_FROM[("TvT", "T")]),
+    ("PvZ", "Z"): lambda rs, tax: label_plans(rs, lambda r: zerg_plan(r, "PvZ"), MATCHUP_FROM[("PvZ", "Z")]),
+    ("ZvZ", "Z"): lambda rs, tax: label_plans(rs, lambda r: zerg_plan(r, "ZvZ"), MATCHUP_FROM[("ZvZ", "Z")]),
+}
+
+
 def main() -> None:
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--only", nargs="+", metavar="MATCHUP_RACE", help="only these catalogues, e.g. TvT_T ZvZ_Z")
+    args = ap.parse_args()
     root = data_root() / "interim"
     tax = root / "taxonomy"
     out_dir = tax / "v2"
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = [json.loads(l) for l in open(root / "build_orders.jsonl", encoding="utf-8")]
-    for matchup, race, labeller in (("TvZ", "T", label_terran), ("TvZ", "Z", label_zerg), ("PvT", "P", label_protoss),
-                                    ("PvZ", "P", lambda rs, tax: label_protoss(rs, tax, PVZ_FROM))):
+    for (matchup, race), labeller in LABELLERS.items():
+        if args.only and f"{matchup}_{race}" not in args.only:
+            continue
         rs = [r for r in rows if r.get("matchup") == matchup and r.get("race") == race]
         assignments, names = labeller(rs, tax)
         share = lambda sel: {k: v / max(1, len(sel)) for k, v in Counter(assignments[f"{r['rel_path']}|{r['player']}"] for r in sel).items()}
