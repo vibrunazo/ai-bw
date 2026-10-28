@@ -593,7 +593,7 @@ class Executor:
     def count(self, mine: list[dict], unit_type: int) -> int:
         """Own units of a type, counting ones in production and buildings about to be placed."""
         g = self.g
-        n = sum(1 for u in mine if u["type"] == unit_type) + self.in_production(mine)[unit_type]
+        n = sum(1 for u in mine if g.race.in_mode.get(u["type"], u["type"]) == unit_type) + self.in_production(mine)[unit_type]
         n += sum(1 for ut, *_ in g.reserved if ut == unit_type)
         if g.building(unit_type):
             n += 1

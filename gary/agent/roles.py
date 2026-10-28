@@ -105,7 +105,7 @@ FLYERS = {Z.MUTALISK, Z.SCOURGE, Z.GUARDIAN, Z.DEVOURER, Z.QUEEN, Z.OVERLORD,
           P.CORSAIR, P.SCOUT, P.ARBITER, P.CARRIER, P.SHUTTLE, P.OBSERVER}
 FOLLOW = 6 * 32                      # medics this close to a group that fires or closes in go with it
 
-ATTACK = {10, 12, 14}
+ATTACK = {10, 12, 14, 21, 100, 176, 177}   # (turrets fire with StayInRange and WatchTarget, medics heal: eval/micro_roles.py)
 MOVE = {6}
 # weapon ranges (pixels): what a unit can hit from how far, roughly, edges included
 RANGE = {0: 160, 32: 48, 1: 224, 2: 192, 5: 224, 30: 224, 3: 192,             # marine, firebat, ghost, vulture, tanks, goliath
@@ -210,6 +210,7 @@ class RoleRules:
         self.first_seen: dict[int, int] = {}        # unit -> frame the roles first saw it (its age)
         self.prev: dict[int, tuple[float, float]] = {}
         self.prev_frame = None
+        self.uses: dict[int, int] = {}               # unit -> its modes used up (a Vulture's three mines)
 
     def _motion(self, obs: dict, snap):
         """The units' motion over the last half second (the role model's extra inputs), keeping
@@ -727,6 +728,9 @@ class RoleRules:
             point = self._step_away(_mid(group), _mid(near), PULL_TILES * 32)
             if point:
                 return self._intent("PULL_BACK", group, point, "move")
+        intent = self._modes(roles, fresh)
+        if intent is not None:
+            return intent
         group = [u for u in roles.get("FIRE", []) if u.get("order") not in ATTACK and fresh(u, "FIRE")]
         if group:
             group = sorted(group, key=lambda u: min(math.dist((u["x"], u["y"]), (e["x"], e["y"])) for e in enemy))[:MAX_GROUP]
@@ -746,6 +750,37 @@ class RoleRules:
             if group:
                 return self._intent("POST", group, (int(post[0]), int(post[1])), "attack_move")
         return None
+
+    def _modes(self, roles: dict, fresh) -> Intent | None:
+        """A mode's group (the race's modes, gary/terran.py MODES: siege, unsiege, a mine) as an intent: its units of the
+        mode's types, once its tech is researched, not already starting it, with uses left. A mine goes where the model
+        moves the Vulture (its where head), else where it stands."""
+        g, now = self.g, self.g.hi.frame
+        for name, (types, tech, frames, order, uses) in g.race.modes.items():
+            role = name.upper()
+            if role not in roles:
+                continue
+            group = [u for u in roles[role] if self._mode_ready(name, u) and fresh(u, role)][:MAX_GROUP]
+            if not group:
+                continue
+            if uses is not None:                 # (one unit, its own spot)
+                u = group[0]
+                group = [u]
+                self.uses[u["tag"]] = self.uses.get(u["tag"], 0) + 1
+                point = getattr(self, "where", {}).get(u["tag"], (u["x"], u["y"]))
+                return self._intent(role, group, point, name)
+            for u in group:
+                self.told[u["tag"]] = (role, now)
+            tags = [u["tag"] for u in group]
+            return Intent(role, tags, None, {"key": (name,), "tags": tags, "center": _mid(group)}, "roles")
+        return None
+
+    def _mode_ready(self, name: str, u: dict) -> bool:
+        """The unit can take this mode now: of its types, its tech researched, not already starting it, uses left."""
+        types, tech, frames, order, uses = self.g.race.modes[name]
+        at = self.g.researched_at.get(tech)
+        return (u["type"] in types and at is not None and self.g.hi.frame - at >= frames and u.get("order") != order
+                and (uses is None or self.uses.get(u["tag"], 0) < uses))
 
     def _stale(self, u: dict, role: str, point) -> bool:
         """refresh: the unit's last order was this role's, REFRESH_MIN ago or more, to a point REFRESH_PX or more from
@@ -862,8 +897,13 @@ class RoleLearned(RoleRules):
     nor "keep", for a model of decisions (train/roles.py --decisions)."""
 
     def __init__(self, g, model, where: bool = True, draw: bool = False, lone: bool = False, batch: int = 1,
-                 together: bool = False, by_key: bool = False, **options):
+                 together: bool = False, by_key: bool = False, mode_dice: bool = False, **options):
         super().__init__(g, **options)
+        # option mode_dice: a unit's modes it can take now (siege, unsiege, a mine: the race's MODES) are drawn by their
+        # odds, the rest its likeliest. A mine is never a Vulture's likeliest role: its odds averaged 1.7% over a game's
+        # 2,079 Vulture turns after Spider Mines (36 mines in their sum, the pros' about 29 a game), and the likeliest
+        # laid 0.4 a game (#60)
+        self.mode_dice = mode_dice
         # option by_key: a control-group key whose units (all of them, all in this fight) drew one decision gets one
         # order for the whole key, as a pro recalls a key and orders it (71% of the pros' fight selections are
         # recalls); the per-unit filters (already attacking, ordered a moment ago) don't split it. With together,
@@ -884,6 +924,19 @@ class RoleLearned(RoleRules):
         self.where: dict[int, tuple[float, float]] = {}   # unit -> where the model moves it (with a where head)
         self.draw = draw                        # option: each unit's decision drawn from the model's odds (the league)
         # (lone: RoleAhead's, a lone outnumbered unit the model's; here every unit is the model's already)
+
+    def _dice_modes(self, u: dict, p, names) -> int:
+        """mode_dice: one of the unit's modes it can take now, drawn by its odds; else its likeliest other role."""
+        p = p / p.sum()
+        modes = [i for i, n in enumerate(names) if n in self.g.race.modes and self._mode_ready(n, u)]
+        r = self.g.fight.rng.random()
+        for i in modes:
+            if r < p[i]:
+                return i
+            r -= p[i]
+        rest = np.array(p)
+        rest[[i for i, n in enumerate(names) if n in self.g.race.modes]] = -1
+        return int(rest.argmax())
 
     def decide(self, obs: dict, snap) -> Intent | None:
         names = self.model.config.get("roles")
@@ -920,6 +973,8 @@ class RoleLearned(RoleRules):
                 key = int(keys[index[u["tag"]]]) if self.together and keys is not None else -1
                 r = shared.setdefault(key, g.fight.rng.random()) if key >= 0 else g.fight.rng.random()
                 k = min(int(np.searchsorted(np.cumsum(p / p.sum()), r, side="right")), len(p) - 1)
+            elif self.mode_dice:
+                k = self._dice_modes(u, p, names)
             else:
                 k = int(p.argmax())
             decided[u["tag"]], drawn[u["tag"]] = names[k], k

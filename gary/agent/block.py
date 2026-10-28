@@ -47,7 +47,7 @@ COMING = 8 * 32               # enemy fighters this close to the block: blockers
 LOST = 2 * 32                 # enemy fighters this much nearer the inside than the block: it's lost
 HOLD_TTL = 24 * 2             # the units holding it are the skill's this long, renewed every turn
 REACH = {0: 160, 32: 48}      # an enemy this close (+32) to a unit reaches it (marine, firebat; else 32)
-HOLD_ORDERS, MOVE_ORDER = {107, 177}, 6     # (HoldPosition, MedicHoldPosition), Move
+HOLD_ORDERS, MOVE_ORDER = {107, 178}, 6     # (HoldPosition, MedicHoldPosition; 177 is HealMove), Move
 HARVEST_ORDERS = set(range(79, 91))
 WORKERS_FROM = 12 * 32        # workers this close to Choke.workers_from can go
 

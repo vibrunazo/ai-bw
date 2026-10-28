@@ -24,7 +24,7 @@ from pathlib import Path
 import numpy as np
 
 from eval import monitor, priority
-from eval.micro_roles import ATTACK, CONTACT, GROUP, MOVE, NEAR, RETREAT_PX, SIDEWAYS, STAND, TARGETED_FOR
+from eval.micro_roles import ATTACK, CONTACT, GROUP, MODE_ORDERS, MOVE, NEAR, RETREAT_PX, SIDEWAYS, STAND, TARGETED_FOR
 from gary.agent.fight import MAX_HP
 from gary.policy.roles import EXTRA, MAX_UNITS, RACE_SHELTERS, ROLES, Ground, extra_features, own_extras, terrain_features
 
@@ -130,7 +130,16 @@ class Probe:
                 kind = None
                 if near0 < self.near:
                     orders = [p[3] for p in part]
-                    if sum(o in ATTACK for o in orders) * 2 >= len(orders):
+                    before = s[k - 1][3] if k else None
+                    # a mode (siege, unsiege, a mine) where its order starts; while it goes on, the unit stands (its
+                    # order carries on: nothing to decide)
+                    started = next((o for i, o in enumerate(orders) if o in MODE_ORDERS
+                                    and (orders[i - 1] if i else before) != o), None)
+                    if started is not None:
+                        kind = MODE_ORDERS[started]
+                    elif sum(o in MODE_ORDERS for o in orders) * 2 >= len(orders):
+                        kind = "stand"
+                    elif sum(o in ATTACK for o in orders) * 2 >= len(orders):
                         kind = "fire"
                     elif sum(o in MOVE for o in orders) * 2 >= len(orders):
                         along = (x1 - x0) * axis[0] + (y1 - y0) * axis[1] if axis else 0.0

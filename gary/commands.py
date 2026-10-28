@@ -79,6 +79,16 @@ def unburrow() -> bytes:
     return struct.pack("<BB", 0x2D, 0)
 
 
+def siege() -> bytes:
+    """The selected Siege Tanks go into Siege Mode (once it is researched)."""
+    return struct.pack("<BB", 0x26, 0)
+
+
+def unsiege() -> bytes:
+    """The selected sieged tanks go back to Tank Mode."""
+    return struct.pack("<BB", 0x25, 0)
+
+
 def stim() -> bytes:
     """Marines and firebats in the selection use stim packs."""
     return struct.pack("<B", 0x36)
@@ -112,6 +122,7 @@ LARVA = 35
 
 
 ORDER_ATTACK_MOVE = 0x0E
+ORDER_PLACE_MINE = 0x84               # a Vulture lays a Spider Mine there (I, then a click)
 ORDER_SCANNER_SWEEP = 0x8B           # a Comsat Station's scan (50 energy)
 MARINE = 0
 REFINERY = 110

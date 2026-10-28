@@ -19,11 +19,12 @@ from torch import nn
 
 from gary.policy.fight import N_ORDERS, N_TYPES, ORDER, OTARGET, SIDE, TYPE, numeric
 
-ROLES = ["fire", "close_in", "pull_back", "retreat", "reposition", "stand", "other"]
+ROLES = ["fire", "close_in", "pull_back", "retreat", "reposition", "stand", "other", "siege", "unsiege", "mine"]
+# (siege, unsiege, mine: the modes, #60; a dataset built before them has none, and a model names its own roles)
 # the decision model: a new role when the unit's changes, else keep; and roles the hand rules use or
 # the pros' units have no label for: post (the hand rules' post by the Command Center), join (to
 # Gary's biggest bunch of fighters), hold (hold position)
-DECISIONS = ROLES + ["keep", "post", "join", "hold"]
+DECISIONS = ROLES[:7] + ["keep", "post", "join", "hold"] + ROLES[7:]    # (the modes after: older logs keep their indices)
 # again (train/roles.py --again): the unit's order given again, to where the offset head points (the pros' re-issues,
 # ingest/reissue_labels.py: a keep with a command of the player's in the next half second)
 AGAIN = "again"

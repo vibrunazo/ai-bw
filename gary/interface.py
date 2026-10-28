@@ -530,6 +530,13 @@ class HumanInterface:
     def stim(self) -> ActionResult:
         return self._schedule_key("stim")
 
+    def siege(self) -> ActionResult:
+        """Terran: the selection's tanks siege (O)."""
+        return self._schedule_key("siege")
+
+    def unsiege(self) -> ActionResult:
+        return self._schedule_key("unsiege")
+
     def unload_all(self) -> ActionResult:
         return self._schedule_key("unload_all")
 
@@ -774,14 +781,15 @@ class HumanInterface:
                    "x": x, "y": y, "target": tag or 0}
             self._send(C.targeted_order(a.args["order"], x, y, tag, kind if kind is not None else C.NO_UNIT))
             self._remember("order", a.args["order"], x, y, tag)
-        elif a.kind in ("stop", "hold", "stim", "return_cargo", "unload_all", "burrow", "unburrow"):
+        elif a.kind in ("stop", "hold", "stim", "return_cargo", "unload_all", "burrow", "unburrow", "siege", "unsiege"):
             act = {"stop": "S (stop)", "hold": "H (hold position)", "stim": "T (stim packs)",
                    "return_cargo": "C (return cargo)", "unload_all": "U (unload all)", "burrow": "U (burrow)",
-                   "unburrow": "U (unburrow)"}[a.kind]
+                   "unburrow": "U (unburrow)", "siege": "O (siege mode)", "unsiege": "O (tank mode)"}[a.kind]
             if a.kind in ("stop", "hold"):
                 cmd = {"kind": a.kind, "x": -1, "y": -1, "target": 0}
             self._send({"stop": C.stop, "hold": C.hold_position, "stim": C.stim, "return_cargo": C.return_cargo,
-                        "unload_all": C.unload_all, "burrow": C.burrow, "unburrow": C.unburrow}[a.kind]())
+                        "unload_all": C.unload_all, "burrow": C.burrow, "unburrow": C.unburrow, "siege": C.siege,
+                        "unsiege": C.unsiege}[a.kind]())
             self._remember({"return_cargo": "return"}.get(a.kind, a.kind), -1, 0, 0, 0)
         elif a.kind == "chat":
             act = f"chat: {a.args['text']}"
@@ -830,13 +838,14 @@ class HumanInterface:
 # the actions that are orders to units (the rest select, look or set hotkeys): their fates are recorded
 ORDER_KINDS = {"train", "morph", "morph_building", "research", "upgrade", "build", "right_click",
                "minimap_right_click", "minimap_order", "order_click", "stop", "hold", "burrow", "unburrow",
-               "stim", "unload_all", "return_cargo"}
+               "stim", "unload_all", "return_cargo", "siege", "unsiege"}
 RESOURCES = {176, 177, 178, 188, 110, 157, 149}      # mineral fields, geyser, refineries / extractor
 OTHER_NAMES = {176: "Mineral Field", 177: "Mineral Field", 178: "Mineral Field", 188: "Vespene Geyser",
                35: "Larva", 36: "Egg", 37: "Zergling", 41: "Drone", 42: "Overlord", 131: "Hatchery"}
 COMMAND_NAMES = {0x09: "select", 0x0A: "shift-select", 0x0C: "build", 0x14: "right-click", 0x15: "order",
                  0x1F: "train", 0x23: "morph", 0x35: "morph building", 0x30: "research", 0x32: "upgrade", 0x5C: "chat",
-                 0x13: "hotkey", 0x1A: "stop", 0x2B: "hold", 0x2C: "burrow", 0x2D: "unburrow", 0x36: "stim", 0x1E: "return cargo", 0x28: "unload all"}
+                 0x13: "hotkey", 0x1A: "stop", 0x2B: "hold", 0x2C: "burrow", 0x2D: "unburrow", 0x36: "stim", 0x1E: "return cargo", 0x28: "unload all",
+                 0x25: "unsiege", 0x26: "siege"}
 
 
 def unit_name(unit_type: int) -> str:

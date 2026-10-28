@@ -1631,6 +1631,24 @@ plan and the full log).
   nearer (25-30 minutes -0.253 [-0.420, -0.083]); PvT, -0.016 +- 0.152, the Terran's fight gap +0.067 [-0.015, +0.143]
   further, no feature more than 0.2 sd: the pros' "other" role is carried out as nothing (#60). Both in the dev builds
   (learned in place of rules or another matchup's data, no game lost): gt1dev gt0.21dev, gz1dev gz0.10dev; TvZ unchanged.
+- **The Terran's siege and mines in PvT (2026-10-28, #60, gt0.22dev).** The PvT Terran pros' "other" role (28% of their
+  labels) was mostly orders the labeller didn't know: a tank's or goliath's turret firing (StayInRange, WatchTarget on its
+  body), a medic healing, a right-click on a friend, and the modes. Relabelled (eval/micro_roles.py): those are fire and
+  move, and sieging, unsieging and laying a mine roles of their own (the slice where the order starts; ingest/role_dataset.py),
+  "other" 0.5%. The hands for them: the Terran's modes a race table (gary/terran.py MODES: types, tech, research time, order,
+  uses), the siege and tank-mode keys (gary/interface.py), a mine on the ground beside the Vulture, a sieged tank unsieged
+  before a move (gary/agent/motor.py; openbw drops a move given to a sieged tank), sieged tanks counted as tanks
+  (race in_mode). Gary had no siege at all before this (the issue thought it a rule). The relabelled model (accuracy 0.693)
+  with its likeliest roles, 96 paired games against gt0.21dev (PV165a+b against PV164a+b): the Protoss's score -0.049 +-
+  0.096, the fight gap -0.002 [-0.072, +0.057] (10-15 minutes -0.121 [-0.236, -0.004]), but 0.4 mines a game: in play a
+  Vulture's mine odds averaged 1.7% over 2,079 turns after Spider Mines, never its likeliest, their sum 36. So the modes
+  are drawn by their odds, the rest still the likeliest (modedice, a decoder): against the likeliest (PV166a+b against
+  PV165a+b) +0.039 +- 0.082, the fight gap -0.112 [-0.168, -0.040] nearer (10-15 minutes -0.112, 20-25 -0.105), the whole
+  gap -0.043 [-0.095, +0.003]. By 20:00 (16 games each, the replays' unit types; pros: 8 modern PvT games with tanks)
+  sieges 101 (likeliest 27, pros 52), unsieges 86 (20, 34), mines 17 (0.2, 114), its tanks sieged 21% of their time
+  (10%, 47%). Left: the modes held as long as the pros hold them (Gary's tanks toggle twice as often and sit sieged half
+  as long), most of the pros' mines are laid outside the fights the response datasets sample, and Spider Mines comes
+  at 8:36 (pros 4:36 in 92% of games; Siege Mode on time, 6:12 against 6:18) (#61).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

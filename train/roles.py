@@ -39,7 +39,9 @@ def decision_labels(d) -> np.ndarray:
     """A unit's role where it changed from half a second before (or the unit wasn't labeled then),
     else keep."""
     labels, tags, game, time_s = d["labels"], d["tags"], d["game"], d["time"]
-    keep = len(ROLES)
+    keep = DECISIONS.index("keep")
+    as_decision = np.array([DECISIONS.index(r) for r in ROLES] + [-1], np.int8)   # (a role's index among the decisions)
+    labels = as_decision[labels]                         # (-1, no label, stays -1: the array's last)
     out = labels.copy()
     prev: dict = {}
     for i in range(len(labels)):

@@ -9,6 +9,7 @@ from __future__ import annotations
 # units
 MARINE, GHOST, VULTURE, GOLIATH, TANK, SCV, WRAITH, VESSEL, DROPSHIP, BC = 0, 1, 2, 3, 5, 7, 8, 9, 11, 12
 FIREBAT, MEDIC, VALKYRIE = 32, 34, 58
+TANK_SIEGED = 30                       # a Siege Tank in Siege Mode (its own unit type in the game)
 # buildings and add-ons
 CC, COMSAT, NUKE_SILO, DEPOT, REFINERY, RAX, ACADEMY, FACTORY, STARPORT = 106, 107, 108, 109, 110, 111, 112, 113, 114
 CONTROL_TOWER, SCIENCE_FACILITY, COVERT_OPS, PHYSICS_LAB, MACHINE_SHOP = 115, 116, 117, 118, 120
@@ -74,9 +75,14 @@ UPGRADE = {0: (EBAY, (100, 100), 3),             # infantry armor
 UPGRADE_LEVEL_2_NEEDS = SCIENCE_FACILITY           # levels 2 and 3 of weapons/armor
 
 ARMY = {MARINE, FIREBAT, MEDIC, GHOST, VULTURE, TANK, GOLIATH, WRAITH, VESSEL, VALKYRIE, BC}
+IN_MODE = {TANK_SIEGED: TANK}           # a unit type that is another in a mode: counted and moved as that one
+# the fight's modes (gary/agent/roles.py, #60): a role -> the unit types it takes, the tech it needs and that tech's
+# research frames, the order it starts, and the uses a unit has (None: any)
+MODES = {"siege": ({TANK}, 5, 1200, 98, None), "unsiege": ({TANK_SIEGED}, 5, 1200, 99, None),
+         "mine": ({VULTURE}, 3, 1200, 132, 3)}
 PRODUCTION = {CC, RAX, FACTORY, STARPORT}
 NAMES = {MARINE: "Marine", GHOST: "Ghost", VULTURE: "Vulture", GOLIATH: "Goliath", TANK: "Siege Tank",
-         SCV: "SCV", WRAITH: "Wraith", VESSEL: "Science Vessel", DROPSHIP: "Dropship", BC: "Battlecruiser",
+         TANK_SIEGED: "Siege Tank (sieged)", SCV: "SCV", WRAITH: "Wraith", VESSEL: "Science Vessel", DROPSHIP: "Dropship", BC: "Battlecruiser",
          FIREBAT: "Firebat", MEDIC: "Medic", VALKYRIE: "Valkyrie", CC: "Command Center",
          COMSAT: "Comsat Station", NUKE_SILO: "Nuclear Silo", DEPOT: "Supply Depot", REFINERY: "Refinery",
          RAX: "Barracks", ACADEMY: "Academy", FACTORY: "Factory", STARPORT: "Starport",

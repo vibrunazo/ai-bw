@@ -43,9 +43,13 @@ from pathlib import Path
 import numpy as np
 
 MARINE = 0
-ATTACK = {10, 12, 14}
-MOVE = {6}
-STAND = {1, 2, 3, 107}
+# (#60: a tank's or goliath's turret fires with StayInRange 21 or WatchTarget 100 on its body, a medic heals with
+# MedicHeal 176 and HealMove 177, the medic's attack-move; Follow 49 is a right-click on a friend: a move. Before them 28%
+# of the PvT Terran pros' labels were "other")
+ATTACK = {10, 12, 14, 21, 100, 176, 177}
+MOVE = {6, 49}
+STAND = {1, 2, 3, 107, 175, 178}
+MODE_ORDERS = {98: "siege", 99: "unsiege", 132: "mine"}     # Sieging, Unsieging, PlaceMine: a mode's role
 NEAR = 7 * 32                        # a zerg fighter this close: the marine is fighting
 CONTACT = 48                         # a zerg fighter this close (1.5 tiles) is on the marine
 TARGETED_FOR = 24                    # frames: targeted this recently counts as threatened

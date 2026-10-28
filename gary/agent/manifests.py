@@ -839,6 +839,15 @@ OPTIONS = {
     # roles' rules played, and its pinned TvZ role model would come back with a model)
     "pvtroles": lambda m: m.update(vs={**m.get("vs", {}), "P": {**m["vs"]["P"], "fight": {
         **m["vs"]["P"]["fight"], "model": "roles/latest", "roles_model": None, "roles_data": "response_T_PvT_30min.npz"}}}),
+    # ...from the same pros relabelled (#60): their tanks' and goliaths' turret fire and their medics' heals are fire, a
+    # follow a move, and sieging, unsieging and laying a mine roles of their own, which the roles carry out (28% of the
+    # labels were "other" before, carried out as nothing)
+    "pvtmodes": lambda m: m["vs"]["P"]["fight"].update(roles_data="response_T_PvT_modes_30min.npz"),
+    # roles.py learned/v1: the modes (siege, unsiege, a mine) drawn by their odds, the rest the likeliest (a decoder: the
+    # likeliest laid 0.4 mines a game, the pros about 29, #60)
+    "modedice": lambda m: [f.update(roles={**f.get("roles", {}), "mode_dice": True})
+                           for f in [m["fight"]] + [v["fight"] for v in m.get("vs", {}).values() if "fight" in v]
+                           if f.get("provider") == "roles" and f.get("model")],
     # the strategy selector (gary/agent/selector.py; its table: eval/selector_table.py): the build style
     # per map with the best expected score (selector_explore: a draw from each, Thompson sampling).
     # On v0.18 (fresh seeds 101+, 333 games): lost 30 (57), won 64 (57); Zerg v2 on Fighting Spirit
@@ -1071,10 +1080,16 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # rules. 48 paired games against gt0.20dev (PV163a against PV162a): the Protoss's score -0.016 +- 0.152, its fight gap
 # +0.067 [-0.015, +0.143] (10-15 minutes +0.149): no measurable difference; the pros' "other" role (28% of the labels,
 # siege and mines) is carried out as nothing (#60). TvZ unchanged
+# gt0.22dev: against a Protoss, the PvT role model relabelled with siege, unsiege and mine roles the roles carry out
+# (pvtmodes) and those modes drawn by their odds (modedice, #60). The relabelled model alone, 96 paired games against
+# gt0.21dev (PV165a+b against PV164a+b): the Protoss's score -0.049 +- 0.096, the fight gap -0.002 [-0.072, +0.057], 0.4
+# mines a game (a mine is never a Vulture's likeliest role). Drawn, against it (PV166a+b against PV165a+b): +0.039 +-
+# 0.082, the fight gap -0.112 [-0.168, -0.040] nearer, by 20:00 sieges 101 (27; pros 52), mines 17 (0.2; 114), its tanks
+# sieged 21% of their time (10%; 47%)
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
                                      "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm+gastarget"
-                                     "+pvtroles"),
-                       "version": "gt0.21dev"}
+                                     "+pvtroles+pvtmodes+modedice"),
+                       "version": "gt0.22dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
@@ -1146,7 +1161,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
     chosen = style is not None                    # (chosen by the caller: the records say so)
     if g.enemy is not None and g.enemy.race in m.get("vs", {}):
         m = _against(m, m["vs"][g.enemy.race])
-    g.army_types = set(g.race.army)
+    g.army_types = set(g.race.army) | set(g.race.in_mode)
     g.production_types = g.race.production if mapinfo is not None else tuple(g.race.town_halls)
     if flip is not None:
         g.flip = flip

@@ -40,7 +40,12 @@ SCOUT_KEY = 0
 HK_ARMY = [1, 2]
 COMMANDS = {"MOVE", "ATTACK_MOVE", "ATTACK_UNIT", "GATHER", "OWN_UNIT", "STOP", "HOLD", "STIM", "RETURN_CARGO"}
 ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT", "BRACE", "REGROUP", "POST", "SKIRMISH",
-         "REPOSITION"}  # roles.py: carried out as commands
+         "REPOSITION", "SIEGE", "UNSIEGE", "MINE"}  # roles.py: carried out as commands
+# a move for units that include some in a mode that can't move (a sieged tank) takes them out of it first (O, then the
+# click once they are out: the game drops a move given while the tank is still sieged); a fight's fire, close in, post
+# and hold leave them sieged
+STAY_IN_MODE = {"FIRE", "CLOSE_IN", "POST", "HOLD", "SIEGE"}
+UNSIEGE_WAIT = 3 * 24                # at most this long for them to be out
 TASK_OF = {**{k: "fight_cmd" for k in COMMANDS | ROLES}, "PULL": "pull", "UNPULL": "unpull", "LOAD": "load", "UNLOAD": "unload",
            "REPAIR": "repair", "REINFORCE": "reinforce", "ARMY_MOVE": "army_order", "ARMY_ATTACK": "army_order",
            "SCOUT": "scout", "ATTACK_WAVE": "attack", "SCAN": "scan"}
@@ -342,6 +347,16 @@ class DirectMotor:
             else:
                 hi.minimap_right_click(key[1], key[2])
             g.say(f"fight: {len(want)} {_names(units)} -> placed")
+        elif a in ("move", "attack_move") and (t.intent is None or t.intent.kind not in STAY_IN_MODE)                 and self._out_of_mode([u for u in units if u["tag"] in want], d, "unsiege_at"):
+            return
+        elif a == "mine":                        # (I, then a click on the ground there: on a unit it targets the unit)
+            gx, gy = self._ground_near(obs, key[1], key[2])
+            p = screen_of(obs, gx, gy)
+            if p:
+                hi.order_click(C.ORDER_PLACE_MINE, *p)
+            else:
+                hi.minimap_command(C.ORDER_PLACE_MINE, key[1], key[2])
+            g.say(f"fight: {len(want)} {_names(units)} -> mine")
         elif a in ("move", "attack_move"):
             # on the ground next to the point: a click on a unit there would be an attack on that one
             # unit (A-click) or a follow or attack (right-click): Gary's fighters chased single zerglings
@@ -359,7 +374,8 @@ class DirectMotor:
                 else a.replace("_", " ")
             g.say(f"fight: {len(sel & want)} {_names(units)} -> {what}")
         else:
-            {"stop": hi.stop, "hold": hi.hold, "stim": hi.stim, "return_cargo": hi.return_cargo}[a]()
+            {"stop": hi.stop, "hold": hi.hold, "stim": hi.stim, "return_cargo": hi.return_cargo, "siege": hi.siege,
+             "unsiege": hi.unsiege}[a]()
             g.say(f"fight: {len(sel & want)} {_names(units)} -> {a.replace('_', ' ')}")
         if ordered:
             g.leases.take(want, t.intent)
@@ -373,6 +389,21 @@ class DirectMotor:
             t.stage = "start"
             return
         g.task = None
+
+    def _out_of_mode(self, selected: list[dict], d: dict, at: str) -> bool:
+        """Whether this turn goes to taking the selected units out of a mode they can't move in (a sieged tank, see
+        STAY_IN_MODE) before their move: the key the first turn (its frame kept in d[at]), then waiting until they are
+        out or UNSIEGE_WAIT has passed."""
+        g = self.g
+        stuck = [u for u in selected if u["type"] in g.race.in_mode]
+        if not stuck:
+            return False
+        if at not in d:
+            d[at] = g.hi.frame
+            g.hi.unsiege()
+            g.say(f"{len(stuck)} {_names(stuck)} -> unsiege to move")
+            return True
+        return g.hi.frame - d[at] < UNSIEGE_WAIT
 
     def _exact(self, obs: dict, units: list[dict], sel: set, want: set, t: Task) -> bool:
         """Exactly these units selected, the camera on them (and on a "place" order's spot): a click on
@@ -731,6 +762,8 @@ class DirectMotor:
                     d["narrowed"] = True
                     return
             d["narrowed"] = False
+            if sel and self._out_of_mode([u for u in mine if u["tag"] in set(sel)], d, f"unsiege_at{d['boxes']}"):
+                return
             if sel:
                 if d["attack"]:
                     hi.minimap_command(C.ORDER_ATTACK_MOVE, d["x"], d["y"])

@@ -42,6 +42,8 @@ class Race:
     supply: dict                # unit -> supply it uses
     supply_provided: dict       # unit or building -> supply it gives
     worker_speed: float = 4.92           # its worker's top speed, px a frame (SCV 4.92; Drone and Probe 5.49)
+    in_mode: dict = field(default_factory=dict)    # unit type in a mode -> the type it counts as (a sieged tank: a tank)
+    modes: dict = field(default_factory=dict)      # the fight's modes: role -> (types, tech, research frames, order, uses)
     production_in_sight: bool = False    # what it makes shows while made (Zerg: an egg, the morphing building still the
                                          # old one), as the replays count it; Terran and Protoss units in training don't
     minerals: dict = field(init=False)   # unit -> its mineral cost
@@ -68,7 +70,7 @@ class Race:
         if letter == "T":
             return Race("T", T, T.SCV, frozenset(T.TOWN_HALLS), T.CC, T.DEPOT, T.REFINERY, frozenset(T.PRODUCTION),
                         T.PRODUCER, T.COST, T.SIZE, T.REQUIRES, T.RESEARCH, T.UPGRADE, frozenset(T.ARMY), T.NAMES,
-                        T.TECH_NAMES, T.UPGRADE_NAMES, T.SUPPLY, T.SUPPLY_PROVIDED)
+                        T.TECH_NAMES, T.UPGRADE_NAMES, T.SUPPLY, T.SUPPLY_PROVIDED, in_mode=T.IN_MODE, modes=T.MODES)
         if letter == "Z":
             return Race("Z", Z, Z.DRONE, frozenset(Z.TOWN_HALLS), Z.HATCHERY, Z.OVERLORD, Z.EXTRACTOR, frozenset(Z.PRODUCTION),
                         Z.PRODUCER, Z.COST, Z.SIZE, Z.REQUIRES, Z.RESEARCH, Z.UPGRADE, frozenset(Z.ARMY), Z.NAMES,
