@@ -16,7 +16,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
   (the signal weak: scored by the critic too, nothing beats the deployed model's preference in 941 pairs; next, pairs
   again on gt0.14dev's fixed inputs, several dice per arm, or a decision with longer consequences)
 - [#51](https://github.com/vibrunazo/gary/issues/51) Gary-Z's builds and burrows: the lurkers fixed (they never came up again);
-  left: 99-233 burrows still refused a game, the late game of a losing Zerg (builds without drones), idle larvae; its gas and minerals banked (632 gas at 8:00 with its drones on gas the model's)
+  its builds held production (fixed, gz0.9dev); left: 99-233 burrows still refused a game, the late game of a
+  losing Zerg (builds without drones)
 - [#48](https://github.com/vibrunazo/gary/issues/48) The Zerg's macro model counts the units in its eggs twice; the fix
   (option eggs) lost 96 paired games: no rule leans on it; the right counts move the model off zerglings to
   Hydralisks and it slows (its counts a momentum cue): eggs with the macro trained on Gary-Z's own states next
@@ -27,10 +28,14 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#54](https://github.com/vibrunazo/gary/issues/54) Build styles by name for each side, every game labelled (done: TvZ);
   the Terran and Zerg macro models trained with every game's style, judged per style (gt0.19dev, gz0.7dev); the Zerg's
   roll by the modern shares; other matchups
+- [#57](https://github.com/vibrunazo/gary/issues/57) Gary-Z banks the gas it mines (920 at 10-15 minutes, pros 499)
+- [#58](https://github.com/vibrunazo/gary/issues/58) Gary-Z's builds per style: style 2 played as itself 31%, the third Hatchery
+- [#59](https://github.com/vibrunazo/gary/issues/59) Fold the dev manifests' execution fixes (parkmany, gaswaits, the gas head)
+  into gt1, gt1dev and gz1
 - [#55](https://github.com/vibrunazo/gary/issues/55) The opening economy: new workers sent at once, the first worker first,
   workers on gas the macro model's decision (gastarget, gt0.20dev: style 2's natural 3.6 minutes, pros 3.2; the Zerg's,
-  gz0.7dev); left: about 100 minerals mined behind the pros by 2:00 (the split, doubled fields, idle builders); the gas
-  head for gt1's model
+  gz0.7dev); left: about 100 minerals mined behind the pros by 2:00 (the split, doubled fields, idle builders; Gary-Z's
+  first Overlord at 58 s, pros 53)
 - [#29](https://github.com/vibrunazo/gary/issues/29) Why army dataset v5's commit models trail the deployed one in games
   (not the bunker counts: with armyseen v5 still trails, -0.039 over 96)
 - [#3](https://github.com/vibrunazo/gary/issues/3) Close out won games (the hunt imitated: its labels on the deployed

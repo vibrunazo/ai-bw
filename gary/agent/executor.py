@@ -212,7 +212,7 @@ class Executor:
             return True
         g = self.g
         if u["order"] == MOVE and g.hi.frame - self.born.setdefault(u["tag"], g.hi.frame) < NEW_WORKER:
-            builders = {g.builder_of.get(r) for r in g.reserved} | ({g.parked.data.get("worker")} if g.parked else set())
+            builders = {g.builder_of.get(r) for r in g.reserved} | g.parked_workers()
             return u["tag"] not in builders | g.pulled and not g.leases.holder(u["tag"])
         if not g.home_scvs or u["order"] not in (ATTACK_MOVE_ORDER, PATROL_ORDER) or g.leases.holder(u["tag"]) \
                 or g.hi.frame - g.calm_since < FIGHT_CALM:
@@ -471,17 +471,19 @@ class Executor:
         builders = {g.builder_of.get(r) for r in g.reserved}
         return u["type"] == g.race.worker and u["completed"] and u["order"] not in BUSY_ORDERS \
             and bool(screen_of(obs, u["x"], u["y"])) and u["tag"] != g.scout and u["tag"] not in g.pulled | g.block_units \
-            and (g.parked is None or g.parked.data["worker"] != u["tag"]) and u["tag"] not in builders
+            and u["tag"] not in g.parked_workers() and u["tag"] not in builders
 
     def resume_parked(self, obs: dict, mine: list[dict]) -> bool:
-        """The parked build (its SCV walking there) goes on once its money is there, or after
+        """A parked build (its SCV walking there) goes on once its money is there, or after
         PARK_FOR anyway (it then waits for the money at the spot). True if it took the hands."""
-        g = self.g
-        t = g.parked
-        if t is None or g.task is not None:
+        if self.g.task is not None:
             return False
+        return any(self._resume_one(t, obs, mine) for t in list(self.g.parked))
+
+    def _resume_one(self, t, obs: dict, mine: list[dict]) -> bool:
+        g = self.g
         if not any(u["tag"] == t.data["worker"] for u in mine):
-            g.parked = None
+            g.parked.remove(t)
             if self.lost_builder(t, "its worker is gone"):
                 g.task = t
                 return True
@@ -497,11 +499,12 @@ class Executor:
                 # not there after TRAVEL_FOR: the build fails and the macro layer decides again (the hands
                 # taken back for it waited 40 s more on an SCV pacing behind marines posted on the ramp,
                 # and the Refinery asked for meanwhile was given up twice)
-                g.parked = None
+                g.parked.remove(t)
                 self.fail_build(t, "its SCV didn't get to the base")
                 return False
         else:
-            budget = obs["me"]["minerals"] - sum(g.race.minerals[ut] for ut, *_ in g.reserved)
+            budget = obs["me"]["minerals"] - sum(g.race.minerals[ut] for ut, *_ in g.reserved) \
+                - sum(g.race.minerals[p.unit_type] for p in g.parked[:g.parked.index(t)])     # (the ones parked before it first)
             if budget < g.race.minerals[t.unit_type] and g.hi.frame - t.data["walking"] < PARK_FOR:
                 return False
             # just about there: until it stops (a box finds a standing SCV where Gary saw it; one
@@ -510,7 +513,8 @@ class Executor:
             if w["order"] == MOVE and (w.get("tx") or w.get("ty")) and \
                     math.dist((w["x"], w["y"]), (w["tx"], w["ty"])) < ARRIVING and g.hi.frame - t.data["walking"] < PARK_FOR:
                 return False
-        g.task, g.parked = t, None
+        g.parked.remove(t)
+        g.task = t
         t.started = g.hi.frame          # (the walk had its own limit: a third base's walk outlasted TASK_TIMEOUT)
         g.run_task(obs, mine)
         return True
@@ -1005,13 +1009,14 @@ class Executor:
         if t.stage == "travel":                      # walk the worker to the base
             hi.minimap_right_click(*g.base(t.where).center)
             t.stage = "wait_arrival"
-            if g.parked is None:
+            if len(g.parked) < g.parked_max:
                 # the hands go back to production while it walks (holding them for the walk to the
                 # natural, Gary's Barracks stood idle with 464 minerals at 3:15); back to it there
                 t.data["walking"] = hi.frame
                 g.ignore_idle_until[t.data["worker"]] = hi.frame + TRAVEL_FOR
                 t.data["resume"], t.stage = "wait_arrival", "reselect"
-                g.parked, g.task = t, None
+                g.parked.append(t)
+                g.task = None
             return
         if t.stage == "wait_arrival":
             w = next((u for u in mine if u["tag"] == t.data["worker"]), None)
@@ -1083,7 +1088,8 @@ class Executor:
                     # money is there (resume_parked)
                     g.ignore_idle_until[t.data["worker"]] = hi.frame + PARK_FOR
                     t.data["resume"], t.stage = "place", "reselect"
-                    g.parked, g.task = t, None
+                    g.parked.append(t)
+                    g.task = None
                 return
             builder = next((u for u in mine if u["tag"] == t.data["worker"]), None)
             if builder and builder["order"] == MINING_STILL and not t.data.get("unhooked"):
@@ -1260,7 +1266,7 @@ class Executor:
         walking to build, scouting, pulled or blocking)."""
         g = self.g
         by_tag = {u["tag"]: u for u in mine}
-        builders = {g.builder_of.get(r) for r in g.reserved} | ({g.parked.data.get("worker")} if g.parked else set())
+        builders = {g.builder_of.get(r) for r in g.reserved} | g.parked_workers()
         busy = builders | {g.scout} | g.pulled | g.block_units
         for tag in obs["selection"]:
             u = by_tag.get(tag)

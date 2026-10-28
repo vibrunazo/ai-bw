@@ -149,6 +149,7 @@ class LearnedMacro:
         self.next_query = 0
         self.gas_target: int | None = None                  # the model's workers on gas (None: three a gas building)
         self.next_gas = 0
+        self.gas_waits = False                               # option gaswaits
         self.decisions: list[tuple[int, str, float]] = []   # (frame, decision, model probability)
         self.failed_until: dict[tuple[int, int], int] = {}  # decision -> frame it may be tried again
         self.builds = builds or {}                         # posture's build name -> scripted build
@@ -181,7 +182,14 @@ class LearnedMacro:
         g = self.g
         if g.hi.frame >= self.next_gas and self.model.net.gas is not None:   # (asked on its own clock: a goal waiting
             self.next_gas = g.hi.frame + GAS_EVERY                           # for its money is when pros pull off gas)
-            target = self.model.gas_target(self.model_inputs(obs, mine))
+            tracker = None
+            if self.gas_waits and (waiting := [d for d in (self.goal, self.saved) if d is not None]):
+                # (option gaswaits: the decisions waiting for their money read as decided, as a pro's would be: a
+                # Lair parked for its gas read as no Lair, and pros without one at 3:00 pull off gas, #51)
+                tracker = self.tracker.copy()
+                for d in waiting:
+                    tracker.note_decision(d["act"], d["id"], obs["frame"])
+            target = self.model.gas_target(self.model_inputs(obs, mine, tracker))
             if target != self.gas_target:
                 LOG.decision(g.hi.side, "gas", g.hi.frame, f"{target} workers on gas", inputs={"m": me["minerals"], "gas": me["gas"]},
                              by="model: the macro model's gas head")
@@ -525,8 +533,8 @@ class LearnedMacro:
             if self.nosave:
                 self.goal = None
             return
-        if plan["kind"] == "build" and g.parked is not None:
-            return                          # one builder walking ahead at a time (the parked build)
+        if plan["kind"] == "build" and len(g.parked) >= g.parked_max:
+            return                          # (parked_max builders walking ahead at a time: the parked builds)
         if plan["kind"] == "build":
             data = {**plan.get("data", {}), "decision": (goal["act"], goal["id"])}
             if "near" in goal:                  # a goal that names its base and spot (answers.py turrets)
@@ -545,7 +553,7 @@ class LearnedMacro:
         return {"m": me["minerals"], "gas": me["gas"], "supply": f"{me['supply_used']}/{me['supply_max']}",
                 "workers": sum(1 for u in mine if u["type"] == g.race.worker), "bases": sum(1 for u in mine if u["type"] in g.race.town_halls),
                 "army": sum(1 for u in mine if u["type"] in g.army_types), "posture": getattr(g.posture, "build", None),
-                "parked": g.race.names.get(g.parked.unit_type) if g.parked is not None else None}
+                "parked": ", ".join(g.race.names.get(t.unit_type, "?") for t in g.parked) or None}
 
     def _mass_of(self, k: int) -> float:
         """The summed odds at which this one-off is due: a town hall's hatch_mass, if set."""
@@ -611,8 +619,7 @@ class LearnedMacro:
             minerals, gas = plan["cost"]
             # (a parked build decided after this unit waits its turn: its builder walking held the money of the SCVs
             # decided before it, 12.7 s of the main Command Center's idle at 2:30-4:00, #55)
-            parked = g.parked
-            ahead = g.race.costs[parked.unit_type][0] if parked is not None and parked.started > since else 0
+            ahead = sum(g.race.costs[p.unit_type][0] for p in g.parked if p.started > since)
             if me["minerals"] - g.committed() + ahead < minerals or me["gas"] < gas:
                 continue
             g.task = Task("command", data=plan, started=g.hi.frame)

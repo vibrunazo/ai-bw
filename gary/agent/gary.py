@@ -103,7 +103,8 @@ class Gary:
         self.natural: Base | None = None
         self.enemy_starts: list[tuple[int, int]] = []
         self.in_flight: list[tuple[int, int]] = []          # (frame, minerals) ordered, not yet taken
-        self.parked = None                               # a build whose SCV walks to its spot while the money comes
+        self.parked: list = []                           # builds whose workers walk to their spots while the money comes
+        self.parked_max = 1                              # how many at once (option parkmany)
         self.simcity = None                              # gary/agent/simcity.py (an option)
         self.flip = (False, False)                       # mirror so the main is top-left (fight models)
         if mapinfo is not None:
@@ -176,7 +177,7 @@ class Gary:
         costs = self.race.costs
         held = getattr(self.executor, "in_flight", IN_FLIGHT)
         self.in_flight = [(f, c) for f, c in self.in_flight if self.hi.frame - f < held]
-        return sum(costs[ut][0] for ut, *_ in self.reserved) + (costs[self.parked.unit_type][0] if self.parked else 0) \
+        return sum(costs[ut][0] for ut, *_ in self.reserved) + sum(costs[t.unit_type][0] for t in self.parked) \
             + sum(c for _, c in self.in_flight)
 
     def spend(self, minerals: int) -> None:
@@ -185,7 +186,11 @@ class Gary:
 
     def building(self, unit_type: int) -> bool:
         """A build of this type under way: on the hands, or parked (its SCV walking to the spot)."""
-        return any(t is not None and t.kind == "build" and t.unit_type == unit_type for t in (self.task, self.parked))
+        return any(t is not None and t.kind == "build" and t.unit_type == unit_type for t in (self.task, *self.parked))
+
+    def parked_workers(self) -> set:
+        """The workers walking to the parked builds."""
+        return {t.data.get("worker") for t in self.parked}
 
     def base(self, where: str | Base) -> Base:
         return self.main if where == "main" else self.natural if where == "natural" else where

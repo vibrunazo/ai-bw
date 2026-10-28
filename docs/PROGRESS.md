@@ -19,7 +19,7 @@ learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the lea
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-24): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
 (gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.20dev) and `gz1dev`
-(gz0.8dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
+(gz0.9dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
 on paired branches with the forced arm locked at the pros' hazard, learned offline: at chance on 1,004
@@ -41,7 +41,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.20dev, gz1 gz0.3, gz1dev gz0.8dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.20dev, gz1 gz0.3, gz1dev gz0.9dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -83,7 +83,7 @@ definition in gary/agent/manifests.py and in the entries of "Next" below:
   their shares (styleroll, gt0.17dev), without the early-pool posture (noalarm, gt0.18dev), the macro model trained with every game's style (stylev2, gt0.19dev), the workers on gas its decision (gastarget, gt0.20dev).
 - **gz0.1-gz0.2** (2026-10-20/22): the Zerg on the shared agent, then its army on control groups by type.
   **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev), seenall (gz0.4dev), enemy HP as its data (zfullhp, gz0.5dev), its eggs counted as its data
-  (eggs, gz0.6dev), the drones on gas its macro model's decision (zgastarget, gz0.7dev), its buildings' history its own (ownbuilds, gz0.8dev).
+  (eggs, gz0.6dev), the drones on gas its macro model's decision (zgastarget, gz0.7dev), its buildings' history its own (ownbuilds, gz0.8dev), three builds parked at once and the gas head reading waiting decisions (parkmany, gaswaits, gz0.9dev).
 
 ## Versions
 
@@ -1561,6 +1561,23 @@ plan and the full log).
   38% played as style 0. The Terran's score +0.000 +- 0.082, the gap +0.008 [-0.051, +0.065] (20-25 minutes +0.056
   [+0.003, +0.086]). In gz1dev: gz0.8dev. The rest of the 9/9 wait is mining: Gary-Z's first Overlord at 58 s (quartiles
   57-60), the modern pros' 53 (53-54), #55.
+- **Gary-Z's builds no longer hold its production (2026-10-27, #51, gz0.9dev).** It banked twice the pros' minerals
+  (1,676 at 15:00, the pros 819; 3,550 at 20:00, 1,493) with 4 bases and 28 drones at 20:00 (7 and 42). From the
+  records: 775 of its macro goals timed out in 96 games (30 s each, 4 minutes a game without production), 580 of them a
+  build waiting behind the one parked build (the executor had one slot: one builder walking at a time, and a build goal
+  held the macro while it waited). And the Lair: parked for its 100 gas, it wasn't among the decisions so far, so the gas
+  head saw no Lair at 3:00, where pros pull off gas, set 0 drones on gas for 52 s, and the Lair timed out (its Lair at
+  3.5-3.9 minutes, pros 2.9). Two options: parkmany, up to three builds parked at once (g.parked a list, parked_max;
+  one by default, so gt1, gz1 and the dev manifests play as before, the parity hashes held), and gaswaits, the gas head
+  reading the macro's waiting goal and parked decision as decided (from 181 s the head said 3 at 95-98% where it said
+  0). 96 paired games against gz0.8dev (PG155a+b against OB154a+b): goals timed out 142, banked at 15:00 930 minerals,
+  drones 36 (pros 37), the Lair at 3.0-3.3 minutes in every style (pros 2.9-3.1), style 0's second Extractor 4.7 (5.5;
+  pros 4.2) and a Spire by 8:00 in 81% (56%; pros 100%), played as itself 62% (50%); style 2 as itself 31% (62%), style
+  4's third Hatchery at 5.0 minutes (4.2; pros 3.7). The Terran's score -0.193 +- 0.078: Gary-Z won 22 games (11). The
+  gap +0.063 [+0.007, +0.126], further: its macro part +0.129 (gas banked, 920 at 10-15 minutes against the pros' 499,
+  a second Evolution Chamber, 138 supply at 20-30 minutes against 84), the fight part -0.040 [-0.107, +0.018]. In
+  gz1dev (gz0.9dev): an execution leak and an input fixed; the gas it banks is the next thing (#57). TvZ is frozen
+  here for the Protoss (#36): what's left is in the issues with the measure that closes each.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

@@ -510,7 +510,7 @@ class DirectMotor:
         miners = [u for u in mine if u["type"] == g.race.worker and u["tag"] not in g.pulled
                   and math.dist((u["x"], u["y"]), (cx, cy)) < 8 * 32 and screen_of(obs, u["x"], u["y"])
                   and u["order"] not in (30, 31, 33) and u["tag"] != g.scout
-                  and (g.parked is None or g.parked.data.get("worker") != u["tag"])
+                  and u["tag"] not in g.parked_workers()
                   and u["tag"] not in {g.builder_of.get(r) for r in g.reserved}]
         if not miners:
             g.task = None

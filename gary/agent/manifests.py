@@ -820,6 +820,12 @@ OPTIONS = {
     # pros', the feedback loop the history is for): the pros' mean told Gary-Z's model at 1:22 its natural was a third
     # decided, and the hatchery-first styles opened pool first (#56); a pro's own count of a building is 0 or 1
     "ownbuilds": lambda m: m["macro"].update(own_builds=True),
+    # the gas head reads the decisions waiting for their money (the goal, the parked decision) as decided: a Lair parked
+    # for its gas read as no Lair at 3:00, where pros pull off gas, and the Lair waited 30 s for gas that never came (#51)
+    "gaswaits": lambda m: m["macro"].update(gas_waits=True),
+    # up to three builds parked at once, each one's worker walking to its spot while production goes on (one at a time:
+    # a build goal waited behind the parked one and held the macro, 580 of Gary-Z's 775 goals timed out in 96 games, #51)
+    "parkmany": lambda m: m["macro"].update(parked_max=3),
     # gary/policy/macro.py look: the macro model's inputs as the replays it learned from count them, what is in sight
     # looked at every second (not only when the model is queried: its "most enemies seen" stayed 0 in play) and the
     # units inside a bunker counted (5 marines seen where the replay had 13 at 6:00)
@@ -1047,7 +1053,13 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # (OB154a+b against ZG153a+b): told a hatchery-first style it plays it (style 1 in 38% of games, 0%; style 4 75%, 17%;
 # style 6 50%, 0%), pool first in style 2 as before (62%, 69%); the Terran's score +0.000 +- 0.082, the gap +0.008
 # [-0.051, +0.065]
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+zgastarget+ownbuilds"), "version": "gz0.8dev"}     # (ownsupply in gz1 since gz0.3)
+# gz0.9dev: three builds parked at once (parkmany) and the gas head reading the decisions waiting for money as decided
+# (gaswaits, #51). 96 paired games against gz0.8dev (PG155a+b against OB154a+b): goals timed out 142 (775), banked at 15:00
+# 930 minerals (1,676; pros 819), drones 36 (32; pros 37), the Lair at 3.0-3.3 minutes (3.5-3.9; pros 2.9-3.1); the
+# Terran's score -0.193 +- 0.078 (Gary-Z won 22, 11); the gap +0.063 [+0.007, +0.126] further, its macro part: gas banked
+# (920 at 10-15 minutes, pros 499) and 138 supply at 20-30 (84), the fight part -0.040 [-0.107, +0.018]
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+zgastarget+ownbuilds+gaswaits+parkmany"),
+                       "version": "gz0.9dev"}     # (ownsupply in gz1 since gz0.3)
 
 
 def _against(m: dict, vs: dict) -> dict:
@@ -1161,6 +1173,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
         g.macro.odds_mass = m["macro"].get("odds_mass")
         g.macro.supply_ahead = m["macro"].get("supply_ahead", False)
         g.macro.hold = m["macro"].get("hold", False)
+        g.macro.gas_waits = m["macro"].get("gas_waits", False)
+        g.parked_max = m["macro"].get("parked_max", 1)
         if hasattr(g.macro, "tracker"):
             g.macro.tracker.look_every = 24 if m["macro"].get("look_seen") else 0
             g.macro.tracker.reconcile = bool(m["macro"].get("built_count"))
