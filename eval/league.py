@@ -211,7 +211,7 @@ def main() -> None:
         files = sorted(glob.glob(str(out / "*" / "*.pairs.npz")))
         table["pairs"] = summarize(files, args.incumbent, args.candidate)
     (out / "round.json").write_text(json.dumps(table, indent=1), encoding="utf-8")
-    print(f"round {args.round}: {len(games)} games, Gary-T {table['results']}; by map {table['by_map']}")
+    print(f"round {args.round}: {len(games)} games, {matchup}, side A ({args.vs}) {table['results']}; by map {table['by_map']}")
     print(f"graded (games at time by who is ahead at the end, supply used {AHEAD:g}x): {table['graded']}")
     print(f"decisions logged: {table['decisions']}")
     from eval.humanlike import BUCKETS

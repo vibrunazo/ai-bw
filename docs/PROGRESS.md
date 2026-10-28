@@ -1605,6 +1605,22 @@ plan and the full log).
   without an army early (ten probes lost to the first zerglings at 4:30 in PvZ, floating 1,000 gas after), two
   Gateways to 7:40 in PvT where the pros have three or four by 6:00, and its decisions at 5-12 minutes in PvZ 35%
   Probes and 5% Zealots against the pros' 25% and 18% at the same rate (13 a minute).
+- **The first Protoss rounds, against the dev builds (2026-10-28, #36).** The league seats its sides by their manifests'
+  races and judges each against its matchup's pros (eval/league.py, humanlike.py, gap_windows.py, attention.py,
+  style_adherence.py --race P --matchup). 48 games each, ladder maps, 30 minutes, gp1 (gp0.1) as side A: against gt1
+  (PV160a) it won 10 and lost 27; against gt1dev (PV161a) won 17, lost 10; against gz1dev (PZ161a) won 19, lost 2.
+  Gary-P plays its styles as the pros do: PvT gateway-then-robotics as itself in 92% of games (its Core 2.4 minutes,
+  pros 2.0; natural 3.5, second Gateway 5.0 and Robotics 4.1, the pros' 3.5, 4.9 and 4.2), PvZ forge-then-stargate in 97%
+  (each timing within 0.4 minutes); its probes, bases, supply and army within about 10% of the pros' to 15:00. The
+  dev builds were the weak side, and two shared faults were why: gz1dev's macro model was pinned to the TvZ checkpoint
+  (zgastarget) and played PvZ with no Protoss unit among its inputs (a manifest's model can now be given per matchup),
+  and a style was rolled where the race has no catalogue for the matchup (a TvZ style told in PvT, PvZ and ZvZ: no style
+  there now, as the models learned those games). With both (paired on the same seeds): gz1dev in PvZ (PZ162a) 29 drones
+  at 10:00 (18; pros 39), 87 supply at 15:00 (59; 102), its army 47 (32; 42), gas banked at 12:00 186 (907; 460), the
+  Protoss's score -0.151 +- 0.124 (the Zerg won or led 20 of 48, 10); gt1dev in PvT (PV162a) 50 SCVs at 15:00 (40; pros
+  51), its army 42 (29; 59), its gap 0.31 (0.36), the Protoss's score -0.062 +- 0.160. Left for the dev builds against a
+  Protoss: their fights (gz1dev's role model is the TvZ Zerg's, gt1dev's PvT fights the roles' rules: response
+  datasets for PvZ Zerg and PvT Terran), and gt1dev's army still half the pros' at 15:00.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-
