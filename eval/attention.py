@@ -171,11 +171,11 @@ def augment_round(folder: Path, workers: int) -> None:
     path = folder / "rows.json.gz"
     with gzip.open(path, "rt", encoding="utf-8") as f:
         saved = json.load(f)
-    rels = sorted(set(saved.get("T", {})) | set(saved.get("Z", {})))
+    rels = sorted(set().union(*(set(v) for v in saved.values())))      # (the sides by race: T, Z, P)
     with ProcessPoolExecutor(workers) as pool:
         for rel, res in zip(rels, monitor.track(pool.map(one, [(str(folder / rel), 1800) for rel in rels]), len(rels),
                                                 folder.name)):
-            for side in ("T", "Z"):
+            for side in saved:
                 if rel in saved.get(side, {}):
                     put(saved[side][rel], (res or {}).get(side, {}).get("_per_min", {}))
     with gzip.open(path, "wt", encoding="utf-8") as f:

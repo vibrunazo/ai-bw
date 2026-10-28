@@ -438,7 +438,8 @@ def rolled_style(model, matchup: str, race: str, seed: int) -> int | None:
     """A build style rolled among the model's, by the pros' shares of them where the taxonomy is here
     (data/interim/taxonomy/<matchup>_<race>_plan.json, Gary-Z's plan roll; else the tech clusters', <matchup>_<race>
     _tech.json: Terran TvZ 1 standard bio 81%, 2 Factory and vultures 13%, 3 Factory and Starport 4%, 4 two-Barracks
-    marines 2%), else evenly."""
+    marines 2%), else the v2 catalogue's modern shares; None (no style: the style input "unknown", as the model
+    learned the matchup's games) where the race has no styles in this matchup (a TvZ style was told in PvT)."""
     import json
     import random
     styles = model.spec.styles
@@ -471,12 +472,17 @@ def rolled_style(model, matchup: str, race: str, seed: int) -> int | None:
         c = catalogue.catalog(matchup, race)
         if c is not None:
             return random.Random(seed).choices(styles, weights=[c["shares"].get(s, 0.0) for s in styles])[0]
-    weights = [shares[s] if shares and s < len(shares) else 1.0 for s in styles]
+        return None
+    weights = [shares[s] if s < len(shares) else 1.0 for s in styles]
     return random.Random(seed).choices(styles, weights=weights)[0]
 
 
-def model_path(ref: str, matchup: str, race: str) -> Path:
-    """A manifest's model reference ("macro/latest", ...) for this matchup and race, or a checkpoint path."""
+def model_path(ref, matchup: str, race: str) -> Path:
+    """A manifest's model reference ("macro/latest", ...) for this matchup and race, or a checkpoint path; or a dict of
+    them by matchup, "*" for the others (a checkpoint trained for one matchup: gz1dev's TvZ macro model played PvZ blind
+    to the Protoss, none of its units among its inputs)."""
+    if isinstance(ref, dict):
+        ref = ref.get(matchup, ref["*"])
     if ref in REFS:
         return model_for(REFS[ref], matchup, race)
     if ref.endswith("/latest"):
@@ -820,7 +826,7 @@ OPTIONS = {
     # the stylev2 model with a gas head: its workers on gas (#55), the executor matching them
     "gastarget": lambda m: m["macro"].update(model="runs/macro_exp/T_all_v2gas/model.pt"),
     # the Zerg's: its TvZ macro model trained with every game's style (v2) and the gas head, its drones on gas
-    "zgastarget": lambda m: m["macro"].update(model="runs/macro_exp/Z_TvZ_v2gas/model.pt"),
+    "zgastarget": lambda m: m["macro"].update(model={"TvZ": "runs/macro_exp/Z_TvZ_v2gas/model.pt", "*": "macro/latest"}),
     # the strategy selector (gary/agent/selector.py; its table: eval/selector_table.py): the build style
     # per map with the best expected score (selector_explore: a draw from each, Thompson sampling).
     # On v0.18 (fresh seeds 101+, 333 games): lost 30 (57), won 64 (57); Zerg v2 on Fighting Spirit

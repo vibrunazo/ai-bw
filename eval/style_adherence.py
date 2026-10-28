@@ -7,7 +7,8 @@ Gary's games told that style (does it play it), and the key items' timings again
 the same ladder maps.
 
     python -m eval.style_adherence SR144a,SR144b [UC143a,UC143b]    # rounds of a Terran manifest, comma-joined
-    python -m eval.style_adherence --race Z ZG153a,ZG153b             # the rounds' Zerg"""
+    python -m eval.style_adherence --race Z ZG153a,ZG153b             # the rounds' Zerg
+    python -m eval.style_adherence --race P --matchup PvT PV160a        # the Protoss (its plans: taxonomy/label_all.py)"""
 import glob, hashlib, json, sys, tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -22,9 +23,11 @@ from cmdcache import P, load_game
 
 WINDOW, NEVER = 480, 600.0
 RACE = sys.argv[sys.argv.index("--race") + 1] if "--race" in sys.argv else "T"
+MATCHUP = sys.argv[sys.argv.index("--matchup") + 1] if "--matchup" in sys.argv else "TvZ"
 FEATS = [f for f, _, _ in KEY_ITEMS[RACE]]
 SHOW = {"T": ["gas1", "cc2", "factory", "shop", "starport", "academy", "rax2", "bunker"],
-        "Z": ["pool", "hatch2", "gas1", "hatch3", "lair", "spire", "muta", "den", "lurker_aspect", "gas2"]}[RACE]
+        "Z": ["pool", "hatch2", "gas1", "hatch3", "lair", "spire", "muta", "den", "lurker_aspect", "gas2"],
+        "P": ["gate1", "forge", "nexus2", "gas1", "core", "gate2", "robo", "citadel", "stargate", "reaver", "dt"]}[RACE]
 
 
 def vec(items):
@@ -86,10 +89,16 @@ def main():
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn.model_selection import cross_val_score
     from gary import styles
-    NAMES = styles.catalog("TvZ", RACE)["names"]
+    NAMES = styles.catalog(MATCHUP, RACE)["names"]
     rows = [json.loads(l) for l in open(data_root() / "interim" / "build_orders.jsonl", encoding="utf-8")]
-    rows = [r for r in rows if r.get("matchup") == "TvZ" and r.get("race") == RACE]
-    if RACE == "Z":
+    rows = [r for r in rows if r.get("matchup") == MATCHUP and r.get("race") == RACE]
+    if RACE == "P":
+        sys.path.insert(0, str(REPO / "taxonomy"))
+        from label_all import P_TECH_BY, protoss_plan
+        ids = {n: k for k, n in NAMES.items()}
+        label = lambda items: ids.get(protoss_plan(first_times(items, "P", P_TECH_BY), max((i["t"] for i in items), default=0)),
+                                      max(NAMES))
+    elif RACE == "Z":
         ids = {n: k for k, n in NAMES.items()}
         label = lambda items: zerg_plan(items, ids)
     else:
@@ -130,7 +139,7 @@ def main():
         out.write_text(json.dumps({"source": "modern pros on the ladder maps, eval/style_adherence.py", "games": n,
                                    "shares": {str(k): round(len(v) / n, 4) for k, v in sorted(pros.items())}}), encoding="utf-8")
         print(f"wrote {out}")
-    for arg in [a for a in sys.argv[1:] if not a.startswith("--") and a != RACE]:
+    for arg in [a for a in sys.argv[1:] if not a.startswith("--") and a not in (RACE, MATCHUP)]:
         reps = [p for r in arg.split(",") for p in sorted(glob.glob(str(REPO / "runs" / "league" / r / "*" / "*.rep")))]
         told = defaultdict(list)
         for rep in reps:

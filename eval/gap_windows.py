@@ -73,7 +73,8 @@ def round_rows(name: str, side: str, workers: int) -> dict[tuple, list[dict]]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--side", choices=("T", "Z"), required=True)
+    ap.add_argument("--side", choices=("T", "Z", "P"), required=True)
+    ap.add_argument("--matchup", default="TvZ", help="the pros it is judged against (PvT, PvZ for the Protoss)")
     ap.add_argument("--a", nargs="+", required=True, help="arm A's rounds")
     ap.add_argument("--b", nargs="+", required=True, help="arm B's rounds")
     ap.add_argument("--minutes", type=int, default=30)
@@ -92,7 +93,7 @@ def main() -> None:
     names = group_names(_names(args.side), args.group)
     has = lambda key, n: any(r.get(n) == r.get(n) and r.get(n) is not None for k in keys for r in arm[key][k])
     names = [n for n in names if n == "minute" or (has("a", n) and has("b", n))]   # (a feature both arms have)
-    Xp, _, _ = matrix(pro_rows(args.side, 300, args.workers, "modern"), names)
+    Xp, _, _ = matrix(pro_rows(args.side, 300, args.workers, "modern", args.matchup), names)
     windows = [(a, a + WINDOW - 1) for a in range(0, args.minutes, WINDOW)]
 
     def score(key: str, ks: list[tuple]) -> list:

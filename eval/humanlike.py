@@ -46,6 +46,7 @@ from pathlib import Path
 import numpy as np
 
 from eval import monitor, priority
+from gary import protoss as P
 from gary import terran as T
 from gary import zerg as Z
 
@@ -77,13 +78,14 @@ ENGAGE = 7 * 32                 # an enemy fighter this near: in a fight
 MOVE = 6
 ATTACKING = {10, 14}            # AttackUnit, AttackMove
 HARASS_QUIET = 10 * 24          # damage after this long without: a new harassment
-UNARMED = {T.MEDIC, T.VESSEL, Z.QUEEN, Z.DEFILER}     # (never fire: not idle when they don't)
+UNARMED = {T.MEDIC, T.VESSEL, Z.QUEEN, Z.DEFILER, P.HIGH_TEMPLAR, P.DARK_ARCHON, P.ARBITER}   # (never fire, or rarely)
 SIGHT = 12 * 32                 # enemy fighters seen this near its units or buildings: a sighting
 SIGHT_NEAR = 15 * 32            # its fighters this near the sighting are the ones that may answer
 SIGHT_FOR = 5 * 24              # what they do in this long after it, until the first damage
 LONE_FRIEND = 4 * 32            # alone: no fighter of its own this near
 LONE_ENEMY = 6 * 32             # outnumbered: 2+ seen enemy fighters this near
-AIR = {Z.MUTALISK, Z.SCOURGE, Z.GUARDIAN, Z.DEVOURER, T.WRAITH, T.VALKYRIE, T.BC, T.DROPSHIP, T.VESSEL}
+AIR = {Z.MUTALISK, Z.SCOURGE, Z.GUARDIAN, Z.DEVOURER, T.WRAITH, T.VALKYRIE, T.BC, T.DROPSHIP, T.VESSEL,
+       P.CORSAIR, P.SCOUT, P.CARRIER, P.ARBITER, P.SHUTTLE, P.OBSERVER}
 
 RACES = {
     "T": {"worker": T.SCV, "halls": {T.CC},
@@ -108,8 +110,22 @@ RACES = {
                         Z.ULTRA_CAVERN: "ultralisk_cavern", Z.GREATER_SPIRE: "greater_spire"},
           "ranged": {Z.HYDRALISK, Z.MUTALISK, Z.GUARDIAN, Z.DEVOURER},
           "supply": lambda t: Z.SUPPLY.get(t, 0) / (2 if t in Z.PAIRS else 1)},
+    "P": {"worker": P.PROBE, "halls": set(P.TOWN_HALLS),
+          "fighters": {P.ZEALOT: "zealot", P.DRAGOON: "dragoon", P.HIGH_TEMPLAR: "high_templar",
+                       P.DARK_TEMPLAR: "dark_templar", P.ARCHON: "archon", P.DARK_ARCHON: "dark_archon",
+                       P.REAVER: "reaver", P.CORSAIR: "corsair", P.SCOUT: "scout", P.CARRIER: "carrier",
+                       P.ARBITER: "arbiter"},
+          "others": {P.SHUTTLE: "shuttle", P.OBSERVER: "observer"},
+          "buildings": {P.GATEWAY: "gateway", P.FORGE: "forge", P.CANNON: "cannon", P.CYBER: "cyber",
+                        P.ASSIMILATOR: "assimilator", P.CITADEL: "citadel", P.ROBOTICS: "robotics",
+                        P.STARGATE: "stargate", P.TEMPLAR_ARCHIVES: "templar_archives", P.OBSERVATORY: "observatory",
+                        P.SUPPORT_BAY: "support_bay", P.FLEET_BEACON: "fleet_beacon",
+                        P.ARBITER_TRIBUNAL: "arbiter_tribunal", P.BATTERY: "battery"},
+          "ranged": {P.DRAGOON, P.ARCHON, P.REAVER, P.CORSAIR, P.SCOUT, P.CARRIER, P.ARBITER},
+          "supply": lambda t: P.SUPPLY.get(t, 0)},
 }
-FIGHTERS_ANY = set(RACES["T"]["fighters"]) | set(RACES["Z"]["fighters"])
+FIGHTERS_ANY = set().union(*(r["fighters"] for r in RACES.values()))
+HALLS_ANY = set().union(*(r["halls"] for r in RACES.values()))
 
 
 def _names(race: str) -> list[str]:
@@ -206,7 +222,7 @@ def features(path: str, race: str, minutes: int = MINUTES, end: int | None = Non
                 acc["fighter_samples"] += len(same)
                 xy = np.array([(u["x"], u["y"]) for u in fight], np.float32)
                 own = np.array([(u["x"], u["y"]) for u in mine if u["type"] in R["halls"]] or [(1e9, 1e9)], np.float32)
-                enemy = np.array([(u["x"], u["y"]) for u in foes if u["type"] in (RACES["T"]["halls"] | RACES["Z"]["halls"])]
+                enemy = np.array([(u["x"], u["y"]) for u in foes if u["type"] in HALLS_ANY]
                                  or [(1e9, 1e9)], np.float32)
                 d_own = np.sqrt(((xy[:, None] - own[None]) ** 2).sum(-1)).min(1)
                 d_enemy = np.sqrt(((xy[:, None] - enemy[None]) ** 2).sum(-1)).min(1)
@@ -479,13 +495,14 @@ def clean_replays() -> dict[str, int]:
     return out
 
 
-def pro_rows(race: str, games: int, workers: int, era: str = "old") -> dict[str, list[dict]]:
+def pro_rows(race: str, games: int, workers: int, era: str = "old", matchup: str = "TvZ") -> dict[str, list[dict]]:
     """{rel_path: rows} for pro games on Gary's maps (cached per game). era "old": the 1.16 fixture maps
     (Python, Fighting Spirit, Heartbreak Ridge); "modern": the current ladder maps, from the cwal games (what
     rounds on the ladder maps are judged against: the 2026 meta, not the 2010s')."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
     from inventory import data_root
-    cache = data_root() / "interim" / "humanlike" / f"pro_{race}{'_modern' if era == 'modern' else ''}_{MINUTES}min.jsonl"
+    tag = "" if matchup == "TvZ" else f"_{matchup}"            # (the TvZ caches' names as they were)
+    cache = data_root() / "interim" / "humanlike" / f"pro_{race}{tag}{'_modern' if era == 'modern' else ''}_{MINUTES}min.jsonl"
     cache.parent.mkdir(parents=True, exist_ok=True)
     have = {}
     if cache.exists():
@@ -499,7 +516,7 @@ def pro_rows(race: str, games: int, workers: int, era: str = "old") -> dict[str,
     if era == "modern":
         from ladder_maps import clean_name
     for r in recs:
-        if r["matchup"] != "TvZ" or r["race"] != race or r.get("duration_s", 0) < PRO_MIN_S:
+        if r["matchup"] != matchup or r["race"] != race or r.get("duration_s", 0) < PRO_MIN_S:
             continue
         if era == "modern":
             if r["rel_path"].startswith("cwal/"):
