@@ -23,11 +23,10 @@ SEED = 7001
 MINUTES = 3
 TERRAN = "gt1"
 ZERG = "gz1"
+PROTOSS = "gp1"
 # matchup -> (side A's manifest, side B's), or the reason it isn't played
 MATCHUPS = {"TvZ": (TERRAN, ZERG), "ZvZ": (ZERG, ZERG), "TvT": (TERRAN, TERRAN),
-            "PvT": "no Protoss executor yet (docs/REFACTOR.md Phase 4)",
-            "PvZ": "no Protoss executor yet (docs/REFACTOR.md Phase 4)",
-            "PvP": "no Protoss executor yet (docs/REFACTOR.md Phase 4)"}
+            "PvT": (PROTOSS, TERRAN), "PvZ": (PROTOSS, ZERG), "PvP": (PROTOSS, PROTOSS)}
 
 
 def _play(path, a: str, b: str) -> tuple[str, str]:

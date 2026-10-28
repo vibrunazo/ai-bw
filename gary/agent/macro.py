@@ -433,7 +433,9 @@ class LearnedMacro:
                             self.held = (k, hi.frame)
                         record(None, "dice" if self.decoder == "dice" else "favorite", f"waits: {name(k)} needs money")
                         return
-                    if not g.executor.burst(act, uid) and not affordable:
+                    # (a unit trained from a building isn't parked: it is the goal until its money comes, or queued for
+                    # its busy building; a Zealot parked while its Gateway was busy was never unparked, Gary-P)
+                    if not g.executor.burst(act, uid) and act != TRAIN and not affordable:
                         if self.saved is None:
                             self.saved = {"act": act, "id": uid, "p": float(probs[0, k]), "since": hi.frame,
                                           "name": describe(g.race, act, uid)}

@@ -18,6 +18,7 @@ from gary.agent.army import LearnedArmy, WaveArmy
 from gary.agent.arbiter import DrillArbiter, FixedPriority
 from gary.agent.terran_executor import TerranExecutor
 from gary.agent.zerg_executor import ZergExecutor
+from gary.agent.protoss_executor import ProtossExecutor
 from gary.agent.fight import RULES, FightLayer, PullRule
 from gary.agent.gary import Gary
 from gary.agent.macro import LearnedMacro, LingFloodDefense, OneBaseDefense
@@ -326,6 +327,16 @@ MANIFESTS: dict[str, dict] = {
             # its fight roles from the pros' Zerg units in whole games to 30 minutes, old and modern (round R30Z against
             # B30: the Zerg ahead or winning at 30:00 in 9 of 48 games to 6, its gap at 21-30 minutes 0.40 to 0.46)
             "fight": {"provider": "zerg", "roles_data": "response_Z_30min.npz"}, "arbiter": "fixed_priority/v1"},
+    # the one Gary playing Protoss (docs/REFACTOR.md Phase 4), crude: the Protoss executor, the Protoss macro model with
+    # the gas head (train/macro.py --race P, every matchup) rolled (dice), its probes on gas the head's (gaswaits), one-offs and expansions by summed odds, builds parked as the money comes (three at once), a Pylon
+    # ahead of production and for power; the army's commitments from the matchup's commit model; its fights by the
+    # roles' rules (no Protoss role model yet)
+    "gp1": {"version": "gp0.1", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
+            "macro": {"provider": "learned", "model": "runs/macro_exp/P_all_gas/model.pt", "builds": [], "decoder": "dice",
+                      "odds_mass": 1.0, "expand_mass": 1.0, "park": True, "supply_ahead": True, "parked_max": 3,
+                      "gas_waits": True},
+            "army": {"provider": "learned", "model": "commit/latest", "commit": True, "draw": True, "hunt": True},
+            "fight": {"provider": "roles", "model": None, "roles": {"post": 3}}, "arbiter": "fixed_priority/v1"},
     # the fight layer alone, for micro drills (gary/drills.py)
     "drill": {"version": "drill", "posture": "normal", "macro": None, "army": None,
               "fight": {"provider": "command", "model": "fight_cmd/latest_memory", "workers": False},
@@ -1113,7 +1124,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
             g.key_pools = (layout["hall"], layout["production"])
     g.leases.enforced = m.get("leases") == "enforced"
     if m["macro"] is not None or m["army"] is not None:
-        g.executor = {"T": TerranExecutor, "Z": ZergExecutor}[g.race.letter](g)
+        g.executor = {"T": TerranExecutor, "Z": ZergExecutor, "P": ProtossExecutor}[g.race.letter](g)
         g.rally_plan = m.get("rally")
         g.home_scvs = m.get("home_scvs", False)
         g.builder_back = m.get("builder_back", False)

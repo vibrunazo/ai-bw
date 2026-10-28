@@ -192,13 +192,13 @@ class Executor:
                     # fails): the same SCV again from where it stands, a new order clears that
                     g.failed_at[r] = g.hi.frame
                     g.retry_with[ut] = builder["tag"]
-                    g.say(f"its {g.race.names.get(ut, ut)} didn't start: again, with the same SCV")
+                    g.say(f"its {g.race.names.get(ut, ut)} didn't start: again, with the same {g.race.names[g.race.worker]}")
                     LOG.order(g.hi.side, g.hi.frame, f"{g.race.names.get(ut, ut)} at {(tx, ty)}", "retried",
-                              "its SCV stopped and nothing started: again, the same SCV", by="executor")
+                              f"its {g.race.names[g.race.worker]} stopped and nothing started: again, the same {g.race.names[g.race.worker]}", by="executor")
             elif not built and age < 24 * 40:
                 g.say(f"its {g.race.names.get(ut, ut)} order was lost: again")
                 LOG.order(g.hi.side, g.hi.frame, f"{g.race.names.get(ut, ut)} at {(tx, ty)}", "retried",
-                          "no SCV on its way to it: the order was lost", by="executor")
+                          f"no {g.race.names[g.race.worker]} on its way to it: the order was lost", by="executor")
             g.reserved_at.pop(r, None)
             g.builder_of.pop(r, None)
         g.reserved = keep
@@ -500,7 +500,7 @@ class Executor:
                 # taken back for it waited 40 s more on an SCV pacing behind marines posted on the ramp,
                 # and the Refinery asked for meanwhile was given up twice)
                 g.parked.remove(t)
-                self.fail_build(t, "its SCV didn't get to the base")
+                self.fail_build(t, f"its {g.race.names[g.race.worker]} didn't get to the base")
                 return False
         else:
             budget = obs["me"]["minerals"] - sum(g.race.minerals[ut] for ut, *_ in g.reserved) \
@@ -875,9 +875,9 @@ class Executor:
         g = self.g
         if t.data.get("lost", 0) >= self.builder_retries:
             if why == "its worker is gone":
-                why = "its SCV is gone"              # (the records' words, as before)
+                why = f"its {g.race.names[g.race.worker]} is gone"              # (the records' words, as before)
             elif why == "its worker was pulled or is gone":
-                why = "its SCV was pulled or is gone"
+                why = f"its {g.race.names[g.race.worker]} was pulled or is gone"
             self.fail_build(t, why)
             return False
         t.data["lost"] = t.data.get("lost", 0) + 1
@@ -965,7 +965,7 @@ class Executor:
                 t.data["from"] = others[0]
                 return
             if not w:
-                self.fail_build(t, "no free SCV")
+                self.fail_build(t, f"no free {g.race.names[g.race.worker]}")
                 return
             t.data["worker"] = w["tag"]
             tries[w["tag"]] = tries.get(w["tag"], 0) + 1
@@ -1002,7 +1002,7 @@ class Executor:
             t.data["clicked"] = list(obs["selection"])   # (what was selected before this click)
             t.data["reselects"] = t.data.get("reselects", 0) + 1
             if t.data["reselects"] > RESELECT_TRIES:
-                self.fail_build(t, "its SCV wouldn't be selected again")                   # (the macro layer decides again)
+                self.fail_build(t, f"its {g.race.names[g.race.worker]} wouldn't be selected again")                   # (the macro layer decides again)
                 return
             self.select_worker(obs, w)
             return
@@ -1033,7 +1033,7 @@ class Executor:
                     t.data["resent_at"] = hi.frame
                     t.data["resent"] = t.data.get("resent", 0) + 1
                     if t.data["resent"] > RESEND_TRIES:
-                        self.fail_build(t, "its SCV wouldn't walk to the base")
+                        self.fail_build(t, f"its {g.race.names[g.race.worker]} wouldn't walk to the base")
                         return
                     hi.minimap_right_click(*center)
                 elif not going:

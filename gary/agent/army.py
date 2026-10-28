@@ -1013,7 +1013,7 @@ class LearnedArmy:
             # not moving (its box once took nothing and an SCV still selected became the scout: it
             # went on mining, and nothing seen by 2:20 called a hatch first an early pool)
             if self.scout_resends >= SCOUT_RESENDS:
-                g.say("scout isn't going: another SCV")
+                g.say(f"scout isn't going: another {g.race.names[g.race.worker]}")
                 g.scout, self.scout_resends = None, 0
                 return False
             self.scout_resends += 1

@@ -1578,6 +1578,17 @@ plan and the full log).
   a second Evolution Chamber, 138 supply at 20-30 minutes against 84), the fight part -0.040 [-0.107, +0.018]. In
   gz1dev (gz0.9dev): an execution leak and an input fixed; the gas it banks is the next thing (#57). TvZ is frozen
   here for the Protoss (#36): what's left is in the issues with the measure that closes each.
+- **Gary plays Protoss (2026-10-27, #36, gp0.1).** gary/agent/protoss_executor.py over the shared executor and a crude
+  `gp1` (docs/REFACTOR.md Phase 4 "Begun"): every matchup plays (tests/test_matchups.py: PvT, PvZ, PvP with workers at
+  3:00 14-15), and the parity test holds a PvT game. The game's placement check holds a Pylon's power (beside the Nexus
+  with no Pylon: 0 Gateway spots, 254 Pylon spots), so the plug places Pylons ahead of production and for power. Its
+  macro model retrained with the gas head (runs/macro_exp/P_all_gas, every Protoss matchup: modern held-out top-1 0.478,
+  the shared one's 0.482; gas exact 0.80). First 15-minute PvT against gt1 (Fighting Spirit, seed 4004): Pylon 0:31,
+  Gateway 1:05, Cybernetics Core 2:04, the natural at 3:00, then Dragoons, Singularity Charge, a Robotics Facility and
+  Reavers; by 12:00 62 Probes, 24 Dragoons and 11 Zealots trained, 28 units lost, mostly attacking under the army's
+  commitments with the roles' rules (no Protoss role model). Shared code the third race found: messages naming an SCV
+  for every race, unit names without the Protoss, and a unit trained from a building parked for its money and never
+  unparked while its building was busy.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

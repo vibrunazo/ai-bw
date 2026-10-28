@@ -36,6 +36,7 @@ from collections import deque
 from dataclasses import dataclass, field, replace
 
 from gary import commands as C
+from gary import protoss as P
 from gary import terran as T
 from gary import zerg as Z
 from gary.decision_log import LOG
@@ -839,7 +840,8 @@ COMMAND_NAMES = {0x09: "select", 0x0A: "shift-select", 0x0C: "build", 0x14: "rig
 
 
 def unit_name(unit_type: int) -> str:
-    return T.NAMES.get(unit_type) or Z.NAMES.get(unit_type) or OTHER_NAMES.get(unit_type) or f"unit {unit_type}"
+    return T.NAMES.get(unit_type) or Z.NAMES.get(unit_type) or P.NAMES.get(unit_type) or OTHER_NAMES.get(unit_type) \
+        or f"unit {unit_type}"
 
 
 def screen_of(obs: dict, x: int, y: int) -> tuple[int, int] | None:

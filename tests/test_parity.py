@@ -26,13 +26,14 @@ FIXTURE = REPO / "tests" / "fixtures" / "parity.json"
 
 TERRAN = "gt1"                                     # the Terran default (gary/agent/manifests.py)
 # (map, seed, side A, side B): TvZ on three maps, and a mirror of each race that plays (docs/REFACTOR.md
-# "Tests across matchups")
+# "Tests across matchups"), and the Protoss against the Terran
 GAMES = [("KnockOut 1.4", 4004, "T", "Z"), ("Fighting Spirit 1.4", 4005, "T", "Z"), ("Odyssey-RE 2.0", 4006, "T", "Z"),
-         ("KnockOut 1.4", 6001, "Z", "Z"), ("Radeon 1.2", 7001, "T", "T")]
+         ("KnockOut 1.4", 6001, "Z", "Z"), ("Radeon 1.2", 7001, "T", "T"), ("Fighting Spirit 1.4", 8001, "P", "T")]
 MINUTES = 8
 LOGS = (".pov.jsonl", ".bpov.jsonl", ".trace.jsonl", ".btrace.jsonl", ".records.jsonl")
 ZERG = "gz1"
-BY_RACE = {"T": TERRAN, "Z": ZERG}
+PROTOSS = "gp1"
+BY_RACE = {"T": TERRAN, "Z": ZERG, "P": PROTOSS}
 GIT = re.compile(r"git [0-9a-f]{7,40}\+?")
 
 

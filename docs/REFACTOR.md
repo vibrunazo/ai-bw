@@ -2,7 +2,8 @@
 
 **Status (2026-10-24): done.** Phases 0-3 landed on 2026-10-19/20 (each phase's "Done" note below): one agent
 for every race, the Zerg on it as `gz1`, one launcher (eval/match.py). Gary-Z's separate stack (gary/bots/) is
-deleted. Phase 4 (Protoss) is not started. The rest of this file is the plan as written, kept as the record.
+deleted. Phase 4 (Protoss) started 2026-10-27: gary/agent/protoss_executor.py and the crude `gp1` (its "Begun" note
+below). The rest of this file is the plan as written, kept as the record.
 
 A plan for a session to build. The goal is RACES.md step 3: one agent that plays any race, where
 a race is a plug and everything above the plug is shared. Gary-Z's separate stack (gary/bots/,
@@ -241,6 +242,17 @@ the smoke games play gz1. A Gary's hands are its manifest's (`hands`, pro by def
 the placement rule, gateway/robotics/stargate production, archon merges as a morph kind, shuttles
 as transports), the PvT/PvZ/PvP models (the datasets exist for the modern pack). Not in this
 plan's scope; the plan above must leave nothing that assumes two races (no `"T" if ... else "Z"`).
+
+**Begun 2026-10-27.** `ProtossExecutor(Executor)`: units trained from their buildings as the Terran's, probes place
+with the Protoss order and leave (nothing to resume, no add-ons), Assimilators, research and upgrades (the second
+level's building per upgrade). Power is the game's own placement rule (can_place: no Gateway spot beside a Nexus
+without a Pylon), so the plug's part is the Pylons: one ahead of production (supply_due, option depots) and one when a
+powered building found no spot. `gp1` (gp0.1): the Protoss macro model with the gas head (train/macro.py --race P),
+dice, builds parked three at once, the army's commit model, the fights by the roles' rules. Shared code it fixed:
+the shared messages named an SCV (the race's worker now), unit names had no Protoss, a unit trained from a building
+was parked for its money and never unparked while its building was busy (units aren't parked now). Every matchup
+plays (tests/test_matchups.py) and the parity test holds a PvT game. Left: a Protoss role model (no response
+dataset for the Protoss yet), archon merges, shuttles, the over-made probes and the army's attacks.
 
 ## Later: building placement (after the refactor and attack execution)
 
