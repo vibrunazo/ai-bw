@@ -178,8 +178,8 @@ def _job(job: tuple) -> dict:
     return out
 
 
-def select(games: int, race: str = "T", era: str = "both") -> list[tuple]:
-    """games of the race's side of TvZ, clean, 6+ minutes: era "old", the 1.16 games on MAPS; "modern", the
+def select(games: int, race: str = "T", era: str = "both", matchups: tuple = ("TvZ",)) -> list[tuple]:
+    """games of the race's side of the matchups (TvZ; the Protoss's PvT and PvZ), clean, 6+ minutes: era "old", the 1.16 games on MAPS; "modern", the
     ladder games (data/raw/cwal) on any map; "both", half each."""
     from eval.humanlike import clean_replays
     from ingest.inventory import data_root
@@ -189,7 +189,7 @@ def select(games: int, race: str = "T", era: str = "both") -> list[tuple]:
         r = json.loads(line)
         sha[r["rel_path"]] = r["sha1"]
     recs = [r for r in map(json.loads, open(data_root() / "interim" / "build_orders.jsonl", encoding="utf-8"))
-            if r["matchup"] == "TvZ" and r["race"] == race and r["rel_path"] in clean and r.get("duration_s", 0) >= 360]
+            if r["matchup"] in matchups and r["race"] == race and r["rel_path"] in clean and r.get("duration_s", 0) >= 360]
     old = [r for r in recs if any(m in re.sub(r"[^a-z ]", "", r.get("map", "").lower()) for m in MAPS)]
     modern = [r for r in recs if r["rel_path"].startswith("cwal/")]
     random.Random(0).shuffle(old)
@@ -201,7 +201,8 @@ def select(games: int, race: str = "T", era: str = "both") -> list[tuple]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--race", choices=("T", "Z"), default="T", help="whose side (TvZ games)")
+    ap.add_argument("--race", choices=("T", "Z", "P"), default="T", help="whose side")
+    ap.add_argument("--matchups", help="comma-joined (default: TvZ; the Protoss: PvT,PvZ)")
     ap.add_argument("--games", type=int, default=600)
     ap.add_argument("--era", choices=("old", "modern", "both"), default="both",
                     help="old: the 1.16 games on the three fixture maps (all until 2026-10-20); modern: ladder games")
@@ -212,7 +213,8 @@ def main() -> None:
     args = ap.parse_args()
     priority.apply(args.priority)
     from ingest.inventory import data_root
-    jobs = [(*j, args.own_extras) for j in select(args.games, args.race, args.era)]
+    matchups = tuple(args.matchups.split(",")) if args.matchups else ("PvT", "PvZ") if args.race == "P" else ("TvZ",)
+    jobs = [(*j, args.own_extras) for j in select(args.games, args.race, args.era, matchups)]
     with ProcessPoolExecutor(args.parallel) as pool:
         results = list(monitor.track(pool.map(_job, jobs, chunksize=1), len(jobs), "games"))
     n = sum(len(r["rows"]) for r in results)

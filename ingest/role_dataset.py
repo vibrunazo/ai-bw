@@ -26,13 +26,13 @@ import numpy as np
 from eval import monitor, priority
 from eval.micro_roles import ATTACK, CONTACT, GROUP, MOVE, NEAR, RETREAT_PX, SIDEWAYS, STAND, TARGETED_FOR
 from gary.agent.fight import MAX_HP
-from gary.policy.roles import EXTRA, MAX_UNITS, ROLES, Ground, extra_features, own_extras, terrain_features
+from gary.policy.roles import EXTRA, MAX_UNITS, RACE_SHELTERS, ROLES, Ground, extra_features, own_extras, terrain_features
 
 SLICE = 12
 
 
-HALLS = {"T": {106}, "Z": {131, 132, 133}}          # its bases: Command Centers; Hatcheries, Lairs, Hives
-SHELTERS = {"T": {125}, "Z": {146}}                  # where its units shelter: bunkers; sunken colonies
+HALLS = {"T": {106}, "Z": {131, 132, 133}, "P": {154}}   # its bases: Command Centers; Hatcheries, Lairs, Hives; Nexuses
+SHELTERS = RACE_SHELTERS                            # where its units shelter (gary/policy/roles.py)
 
 
 class Probe:

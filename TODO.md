@@ -61,8 +61,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#16](https://github.com/vibrunazo/gary/issues/16) Learn building placement and scouting from replays
 - [#25](https://github.com/vibrunazo/gary/issues/25) Walls: copy the pros' walls per map and start location
 - [#23](https://github.com/vibrunazo/gary/issues/23) Map analysis: split maps at their chokes
-- [#36](https://github.com/vibrunazo/gary/issues/36) Protoss: the executor (refactor Phase 4) begun, `gp1` plays every matchup;
-  next a Protoss role model, PvT then PvZ rounds
+- [#36](https://github.com/vibrunazo/gary/issues/36) Protoss: the executor (refactor Phase 4) begun, `gp1` plays every matchup
+  with its role model and styles; next style adherence per matchup, PvT then PvZ rounds
 - Later, as supervised skills: [#21](https://github.com/vibrunazo/gary/issues/21) worker drilling,
   [#22](https://github.com/vibrunazo/gary/issues/22) bunker rush
 

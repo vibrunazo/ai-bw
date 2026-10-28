@@ -328,15 +328,22 @@ MANIFESTS: dict[str, dict] = {
             # B30: the Zerg ahead or winning at 30:00 in 9 of 48 games to 6, its gap at 21-30 minutes 0.40 to 0.46)
             "fight": {"provider": "zerg", "roles_data": "response_Z_30min.npz"}, "arbiter": "fixed_priority/v1"},
     # the one Gary playing Protoss (docs/REFACTOR.md Phase 4), crude: the Protoss executor, the Protoss macro model with
-    # the gas head (train/macro.py --race P, every matchup) rolled (dice), its probes on gas the head's (gaswaits), one-offs and expansions by summed odds, builds parked as the money comes (three at once), a Pylon
-    # ahead of production and for power; the army's commitments from the matchup's commit model; its fights by the
-    # roles' rules (no Protoss role model yet)
+    # every game's style (PvT and PvZ plans, taxonomy/label_all.py; a style rolled by the modern pros' shares) and the gas
+    # head (train/macro.py --race P --styles v2, every matchup) rolled (dice), its probes on gas the head's (gaswaits), one-offs and expansions by summed odds, builds parked as the money comes (three at once), a Pylon
+    # ahead of production and for power; the army's commitments from the matchup's commit model
     "gp1": {"version": "gp0.1", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
-            "macro": {"provider": "learned", "model": "runs/macro_exp/P_all_gas/model.pt", "builds": [], "decoder": "dice",
+            "macro": {"provider": "learned", "model": "runs/macro_exp/P_all_v2gas/model.pt", "builds": [], "decoder": "dice",
                       "odds_mass": 1.0, "expand_mass": 1.0, "park": True, "supply_ahead": True, "parked_max": 3,
-                      "gas_waits": True},
-            "army": {"provider": "learned", "model": "commit/latest", "commit": True, "draw": True, "hunt": True},
-            "fight": {"provider": "roles", "model": None, "roles": {"post": 3}}, "arbiter": "fixed_priority/v1"},
+                      "gas_waits": True, "style": "roll", "look_seen": True, "unit_count": True},
+            # (its inputs as its datasets count them: what is in sight looked at every second, the probes inside the
+            # Assimilators: seenall, unitcount, armyseen; the inputs test, a PvT game)
+            "army": {"provider": "learned", "model": "commit/latest", "commit": True, "draw": True, "hunt": True,
+                     "army_seen": True},
+            # its fights by the Protoss role model (the pros' Protoss units in 600 modern PvT and PvZ games to 30 minutes,
+            # train/roles.py --decisions --move), in contact too (as gt1dev's), no Terran rules (repair, pull, load, stim)
+            "fight": {"provider": "roles", "model": "roles/latest", "roles_data": "response_P_30min.npz", "workers": False,
+                      "watch_tiles": 12, "roles": {"post": 3, "draw": True}, "data_extras": True},
+            "arbiter": "fixed_priority/v1"},
     # the fight layer alone, for micro drills (gary/drills.py)
     "drill": {"version": "drill", "posture": "normal", "macro": None, "army": None,
               "fight": {"provider": "command", "model": "fight_cmd/latest_memory", "workers": False},
@@ -459,6 +466,11 @@ def rolled_style(model, matchup: str, race: str, seed: int) -> int | None:
         shares = [modern["shares"].get(str(k), 0.0) for k in range(max(int(k) for k in modern["shares"]) + 1)]
     except Exception:
         pass
+    if shares is None:                        # (else the v2 catalogue's modern shares: the Protoss's, label_all.py)
+        from gary import styles as catalogue
+        c = catalogue.catalog(matchup, race)
+        if c is not None:
+            return random.Random(seed).choices(styles, weights=[c["shares"].get(s, 0.0) for s in styles])[0]
     weights = [shares[s] if shares and s < len(shares) else 1.0 for s in styles]
     return random.Random(seed).choices(styles, weights=weights)[0]
 

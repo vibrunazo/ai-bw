@@ -6,6 +6,10 @@ data/interim/taxonomy/v2/<matchup>_<race>.json (gary/styles.py reads it):
               accuracy 1.00 on the clustered games)
   TvZ Zerg    its plans (plans.py's rules: every game has one), with the ids and names of the plan taxonomy the macro
               models were trained with (a combination it didn't have is "other")
+  PvT, PvZ    Protoss plans by the same kind of rules: the opening (which of the first Gateway, the second Nexus and
+              the Forge came first) and the first tech by P_TECH_BY (Robotics Facility, Citadel of Adun or Stargate);
+              a combination under MIN_SHARE of the modern games is "other". PvZ's ids start at PVZ_FROM, so the
+              shared Protoss macro model's style input means one build per id across its matchups
 
 The macro dataset's index can then be restyled from it (train/macro.py --styles v2) and the
 macro models trained on every game's style. The v1 files (data/interim/taxonomy/*.json) are left as they are:
@@ -28,6 +32,11 @@ from plans import PRESSURE_BY, TECH_BY, lings_by, plan_of   # noqa: E402
 
 WINDOW, NEVER = 480, 600.0
 T_NAMES = {1: "standard bio", 2: "Factory and vultures", 3: "Factory and Starport", 4: "two-Barracks marines"}
+P_TECH_BY = 8 * 60
+MIN_SHARE = 0.01
+PVZ_FROM = 20
+P_OPENINGS = (("gate1", "gateway first"), ("nexus2", "nexus first"), ("forge", "forge first"))
+P_TECHS = (("robo", "robotics first"), ("citadel", "citadel first"), ("stargate", "stargate first"))
 
 
 def is_modern(r: dict) -> bool:
@@ -62,13 +71,34 @@ def label_zerg(rows: list[dict], tax: Path) -> tuple[dict, dict]:
     return out, {i: n for i, n in enumerate(names)}
 
 
+def protoss_plan(t: dict[str, float], duration: float) -> str:
+    never = 9e9
+    opening = min(P_OPENINGS, key=lambda o: t.get(o[0], never))[1]
+    techs = [(t[k], name) for k, name in P_TECHS if k in t and t[k] <= P_TECH_BY]
+    tech = min(techs)[1] if techs else "no tech" if duration >= P_TECH_BY else "undecided"
+    return f"{opening}, {tech}"
+
+
+def label_protoss(rows: list[dict], tax: Path, first: int = 0) -> tuple[dict, dict]:
+    plan = {f"{r['rel_path']}|{r['player']}": protoss_plan(first_times(r["items"], "P", P_TECH_BY), r["duration_s"])
+            for r in rows}
+    modern = Counter(plan[f"{r['rel_path']}|{r['player']}"] for r in rows if is_modern(r))
+    n = max(1, sum(modern.values()))
+    kept = [p for p, c in modern.most_common() if c / n >= MIN_SHARE]
+    names = {first + i: p for i, p in enumerate(kept)}
+    names[first + len(kept)] = "other"
+    ids = {p: k for k, p in names.items()}
+    return {k: ids.get(p, first + len(kept)) for k, p in plan.items()}, names
+
+
 def main() -> None:
     root = data_root() / "interim"
     tax = root / "taxonomy"
     out_dir = tax / "v2"
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = [json.loads(l) for l in open(root / "build_orders.jsonl", encoding="utf-8")]
-    for matchup, race, labeller in (("TvZ", "T", label_terran), ("TvZ", "Z", label_zerg)):
+    for matchup, race, labeller in (("TvZ", "T", label_terran), ("TvZ", "Z", label_zerg), ("PvT", "P", label_protoss),
+                                    ("PvZ", "P", lambda rs, tax: label_protoss(rs, tax, PVZ_FROM))):
         rs = [r for r in rows if r.get("matchup") == matchup and r.get("race") == race]
         assignments, names = labeller(rs, tax)
         share = lambda sel: {k: v / max(1, len(sel)) for k, v in Counter(assignments[f"{r['rel_path']}|{r['player']}"] for r in sel).items()}

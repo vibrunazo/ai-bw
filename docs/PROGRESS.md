@@ -1589,6 +1589,22 @@ plan and the full log).
   commitments with the roles' rules (no Protoss role model). Shared code the third race found: messages naming an SCV
   for every race, unit names without the Protoss, and a unit trained from a building parked for its money and never
   unparked while its building was busy.
+- **The Protoss's fights, styles and inputs (2026-10-27, #36, #54, gp0.1).** A Protoss response dataset
+  (ingest/response_dataset.py --race P: 600 modern PvT and PvZ games to 30 minutes, 2.0M labelled units, no errors, 50
+  minutes) and its role model (train/roles.py --decisions --move: validation accuracy 0.776, the Terran's 0.754), in
+  gp1 through the shared fight layer with none of the Terran's rules. The race tables it needed: where each race's
+  units shelter (one table for the dataset and play), the roles rules' ranges and flyers. Protoss styles by rules, as
+  the Zerg's plans (taxonomy/label_all.py: the opening, the first tech by 8:00): PvT gateway first then robotics
+  62.5% of modern games, nexus first then robotics 17.8%, gateway first then citadel 12.7%; PvZ gateway first then
+  stargate 38.0%, forge first then stargate 37.8%, nexus first then stargate 9.5% (PvZ's ids from 20: one build per id
+  in the shared model). The macro model with them and the gas head (runs/macro_exp/P_all_v2gas: top-1 0.480); read as
+  the citadel style its Citadel odds at 2-4 minutes 2.4-3.6% against 0.3-0.4% (the pros of that style 5.7%); a style
+  rolled by the catalogue's modern shares where no older table exists. tests/test_inputs.py on a PvT game (side A gp1):
+  the critic compared in TvZ only (its belief model is TvZ's), the army rows built under the game's matchup; gp1 with
+  seenall, unitcount, armyseen and its role model's extras as its data's: every block matches. In play it still loses:
+  without an army early (ten probes lost to the first zerglings at 4:30 in PvZ, floating 1,000 gas after), two
+  Gateways to 7:40 in PvT where the pros have three or four by 6:00, and its decisions at 5-12 minutes in PvZ 35%
+  Probes and 5% Zealots against the pros' 25% and 18% at the same rate (13 a minute).
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

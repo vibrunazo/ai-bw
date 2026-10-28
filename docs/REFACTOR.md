@@ -251,8 +251,9 @@ powered building found no spot. `gp1` (gp0.1): the Protoss macro model with the 
 dice, builds parked three at once, the army's commit model, the fights by the roles' rules. Shared code it fixed:
 the shared messages named an SCV (the race's worker now), unit names had no Protoss, a unit trained from a building
 was parked for its money and never unparked while its building was busy (units aren't parked now). Every matchup
-plays (tests/test_matchups.py) and the parity test holds a PvT game. Left: a Protoss role model (no response
-dataset for the Protoss yet), archon merges, shuttles, the over-made probes and the army's attacks.
+plays (tests/test_matchups.py) and the parity test holds a PvT game. Then the Protoss role model (its response
+dataset, 600 modern PvT and PvZ games), styles (PvT and PvZ plans) and the inputs test on a PvT game. Left:
+archon merges, shuttles, its early defense and its unit mix (docs/PROGRESS.md 2026-10-27).
 
 ## Later: building placement (after the refactor and attack execution)
 

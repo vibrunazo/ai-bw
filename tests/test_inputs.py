@@ -194,8 +194,10 @@ def _play(seconds: int):
     with contextlib.redirect_stdout(io.StringIO()):
         m = Match(1, SIDES[0], REPO / "tests" / "fixtures" / "replays" / "stardata_tvz_standard_ozp3w.rep",
                   opponent=SIDES[1])
-    sides = {"T": m.gary, "Z": m.zerg}
-    views = {r: ValueView(g, BeliefModel.load(model_for("belief", "TvZ", r))) for r, g in sides.items()}
+    sides = {"T": m.gary, "Z": m.zerg}         # (side A and side B, whatever their races)
+    # (the critic and its belief model are TvZ's: compared in a TvZ game only)
+    views = {r: ValueView(g, BeliefModel.load(model_for("belief", "TvZ", r))) for r, g in sides.items()} \
+        if m.gary.matchup == "TvZ" else {}
     reads = {r: {} for r in sides}
     for r, g in sides.items():                  # (the role models' inputs: what they are fed, as fed)
         layer = getattr(getattr(g, "fight", None), "roles", None)
@@ -207,14 +209,15 @@ def _play(seconds: int):
             m.step()
         for r, g in sides.items():
             obs = g.hi.observe()
-            views[r].look(obs)                                   # (once a second: it skips a second it has)
+            if views:
+                views[r].look(obs)                               # (once a second: it skips a second it has)
             f = obs["frame"] - (obs["frame"] - FIRST) % TICK     # (a side's looks can land a frame after the tick)
             if obs["frame"] - f > 1 or f < FIRST + TICK or f in reads[r]:
                 continue
             mine = [u for u in obs["units"] if u["owner"] == g.slot]
             macro = g.macro.model_inputs(obs, mine, g.macro.tracker.copy())[0]
             grid, glob = g.army.tracker.copy().inputs(obs, [])
-            reads[r][f] = {"macro": macro, "grid": grid[0], "glob": glob[0], "critic": views[r].features(obs)[0],
+            reads[r][f] = {"macro": macro, "grid": grid[0], "glob": glob[0], "critic": views[r].features(obs)[0] if views else None,
                            "style": g.macro.tracker.style, "map": g.macro.tracker.map_hash,
                            "matchup": g.macro.tracker.matchup}
     return m, sides, reads
@@ -231,7 +234,8 @@ def _replay_rows(m, sides, reads, tmp: Path):
     m.game.close()
     lines = M.run_resim(str(rep))
     mac = M.game_arrays(lines)
-    row = A.build_game({"sha1": "inputs-test", "rel_path": str(rep), "matchup": "TvZ", "out": str(tmp / "army.npz")})
+    row = A.build_game({"sha1": "inputs-test", "rel_path": str(rep), "matchup": m.gary.matchup,
+                        "out": str(tmp / "army.npz")})
     assert row.get("ok"), row
     with np.load(tmp / "army.npz") as z:
         arm = {k: z[k] for k in z.files}
@@ -252,8 +256,9 @@ def _replay_rows(m, sides, reads, tmp: Path):
             f = int(mac["frames"][k])
             rd = reads[r][f]
             x, _ = encode_rows(mac, i, spec, np.array([k]), rd["style"], rd["map"], None, rd["matchup"])
-            crit = view_rows(mac, i, spec, r, np.array([k]))[0]
-            entry = {"macro": x[0], "critic": crit}
+            entry = {"macro": x[0]}
+            if rd["critic"] is not None:
+                entry["critic"] = view_rows(mac, i, spec, r, np.array([k]))[0]
             j = np.nonzero(tf == f)[0]
             if len(j):
                 j = int(j[0])
@@ -280,7 +285,7 @@ def compare(sides, reads, rows) -> tuple[list[str], list[str], list[str]]:
         spec, aspec = g.macro.tracker.spec, g.army.tracker.spec
         grid_blocks, num_blocks = _blocks_army(aspec)
         checks = [("macro", "macro", b) for b in _blocks_macro(spec)] + \
-                 [("critic", "critic", b) for b in _blocks_macro(spec, len(EXTRAS))] + \
+                 ([("critic", "critic", b) for b in _blocks_macro(spec, len(EXTRAS))] if g.matchup == "TvZ" else []) + \
                  [("army", "glob", b) for b in num_blocks]
         for model, key, (name, cols, kind, tol) in checks:
             got = [_off(reads[r][f][key][cols], rows[r][f][key][cols], kind) for f in rows[r] if key in rows[r][f]]

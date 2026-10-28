@@ -52,6 +52,8 @@ PACK_DIST_SCALE = 320.0              # pixels
 PACK_SIZE_SCALE = 12.0
 PACK_LINK = 4 * 32                   # units this close to each other are one bunch
 SHELTERS = {125}                     # bunkers: in the bunch, weighing 8 (supply x2)
+RACE_SHELTERS = {"T": {125}, "Z": {146}, "P": {162, 172}}   # where each race's units shelter (the terrain inputs):
+                                     # bunkers; sunken colonies; photon cannons and shield batteries
 
 
 def biggest_bunch(units: list[dict]) -> list[dict]:

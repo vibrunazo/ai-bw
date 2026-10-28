@@ -91,6 +91,7 @@ import math
 
 import numpy as np
 
+from gary import protoss as P
 from gary import terran as T
 from gary import zerg as Z
 from gary.agent.intents import Intent
@@ -100,14 +101,17 @@ from gary.policy.army import is_building, is_worker, supply_x2
 # alone (human game 3: "1 Marine -> close in" on 3 mutalisks, across the map, dying alone, five times);
 # in range they are fired at, at home they are closed in on over the mineral line as before
 FLYERS = {Z.MUTALISK, Z.SCOURGE, Z.GUARDIAN, Z.DEVOURER, Z.QUEEN, Z.OVERLORD,
-          T.WRAITH, T.VALKYRIE, T.BC, T.VESSEL, T.DROPSHIP}
+          T.WRAITH, T.VALKYRIE, T.BC, T.VESSEL, T.DROPSHIP,
+          P.CORSAIR, P.SCOUT, P.ARBITER, P.CARRIER, P.SHUTTLE, P.OBSERVER}
 FOLLOW = 6 * 32                      # medics this close to a group that fires or closes in go with it
 
 ATTACK = {10, 12, 14}
 MOVE = {6}
 # weapon ranges (pixels): what a unit can hit from how far, roughly, edges included
 RANGE = {0: 160, 32: 48, 1: 224, 2: 192, 5: 224, 30: 224, 3: 192,             # marine, firebat, ghost, vulture, tanks, goliath
-         37: 32, 38: 160, 103: 224, 39: 48, 43: 128, 44: 0, 46: 0, 47: 32, 50: 32}   # ling, hydra, lurker, ultra, muta...
+         37: 32, 38: 160, 103: 224, 39: 48, 43: 128, 44: 0, 46: 0, 47: 32, 50: 32,    # ling, hydra, lurker, ultra, muta...
+         65: 32, 66: 160, 61: 32, 68: 96, 83: 288, 67: 0, 60: 192, 70: 160, 72: 288, 71: 192}   # zealot, dragoon, DT, archon,
+                                                                                               # reaver, HT, corsair, scout...
 NEAR = 10 * 32                       # units this close to the group's middle count for its strength
 RETREAT_RATIO = 2.5
 CLOSE_RATIO = 1.0                    # close in only when not weaker than this
@@ -229,7 +233,7 @@ class RoleRules:
     def _terrain_extra(self, extra, tags: list[int], obs: dict, positions: dict) -> None:
         """The role model's terrain extras (gary/policy/roles.py terrain_features): the ground under
         each unit, and the way to Gary's Command Centers, bunkers and main ramp."""
-        from gary.policy.roles import Ground, terrain_features
+        from gary.policy.roles import RACE_SHELTERS, Ground, terrain_features
         g = self.g
         if self._ground is None:
             self._ground = False
@@ -242,7 +246,7 @@ class RoleRules:
         own = [u for u in obs["units"] if u["owner"] == g.slot]
         extra[:, 6:] = terrain_features(tags, positions, self._ground or None,
                                         [(u["x"], u["y"]) for u in own if u["type"] in g.race.town_halls],
-                                        [(u["x"], u["y"]) for u in own if u["type"] == T.BUNKER and u["completed"]],
+                                        [(u["x"], u["y"]) for u in own if u["type"] in RACE_SHELTERS[g.race.letter] and u["completed"]],
                                         g.flip)
 
     def _own_extra(self, extra, tags: list[int], by_tag: dict, now: int):
