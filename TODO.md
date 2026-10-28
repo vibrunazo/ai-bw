@@ -63,7 +63,9 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#23](https://github.com/vibrunazo/gary/issues/23) Map analysis: split maps at their chokes
 - [#36](https://github.com/vibrunazo/gary/issues/36) Protoss: the executor (refactor Phase 4) begun, `gp1` plays every matchup
   with its role model and styles, plays its styles as the pros do (PV161a, PZ161a); next the dev builds' fights in PvT and
-  PvZ (response datasets for the Terran in PvT and the Zerg in PvZ), PvP
+  PvZ by their matchups' role models (gt0.21dev, gz0.10dev); next PvP
+- [#60](https://github.com/vibrunazo/gary/issues/60) The role models' "other" role does nothing in play (the Terran in PvT: siege
+  and mines, 28% of its labels)
 - Later, as supervised skills: [#21](https://github.com/vibrunazo/gary/issues/21) worker drilling,
   [#22](https://github.com/vibrunazo/gary/issues/22) bunker rush
 

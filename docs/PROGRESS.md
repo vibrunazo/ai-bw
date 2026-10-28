@@ -18,8 +18,8 @@ Since 2026-10-15 every piece of the self-play loop is being built crude before a
 learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the league isn't trained
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-24): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
-(gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.20dev) and `gz1dev`
-(gz0.9dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
+(gt0.10) and Zerg as `gz1` (gz0.3); learning is trained and judged in `gt1dev` (gt0.21dev) and `gz1dev`
+(gz0.10dev), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
 on paired branches with the forced arm locked at the pros' hazard, learned offline: at chance on 1,004
@@ -41,7 +41,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.20dev, gz1 gz0.3, gz1dev gz0.9dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.21dev, gz1 gz0.3, gz1dev gz0.10dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -80,10 +80,10 @@ definition in gary/agent/manifests.py and in the entries of "Next" below:
   the model's odds (gt0.11dev), its buildings placed beyond a full main (widespot, gt0.12dev), the macro model's inputs as its replays count
   them (seenall, gt0.13dev), the army model's counts as its dataset's (armyseen, gt0.14dev), its
   building history as the replays count it (builtcount, gt0.15dev), its unit counts too (unitcount, gt0.16dev), the pros' build styles by
-  their shares (styleroll, gt0.17dev), without the early-pool posture (noalarm, gt0.18dev), the macro model trained with every game's style (stylev2, gt0.19dev), the workers on gas its decision (gastarget, gt0.20dev).
+  their shares (styleroll, gt0.17dev), without the early-pool posture (noalarm, gt0.18dev), the macro model trained with every game's style (stylev2, gt0.19dev), the workers on gas its decision (gastarget, gt0.20dev), against a Protoss its PvT role model (pvtroles, gt0.21dev).
 - **gz0.1-gz0.2** (2026-10-20/22): the Zerg on the shared agent, then its army on control groups by type.
   **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev), seenall (gz0.4dev), enemy HP as its data (zfullhp, gz0.5dev), its eggs counted as its data
-  (eggs, gz0.6dev), the drones on gas its macro model's decision (zgastarget, gz0.7dev), its buildings' history its own (ownbuilds, gz0.8dev), three builds parked at once and the gas head reading waiting decisions (parkmany, gaswaits, gz0.9dev).
+  (eggs, gz0.6dev), the drones on gas its macro model's decision (zgastarget, gz0.7dev), its buildings' history its own (ownbuilds, gz0.8dev), three builds parked at once and the gas head reading waiting decisions (parkmany, gaswaits, gz0.9dev), against a Protoss its PvZ role model (pvzroles, gz0.10dev).
 
 ## Versions
 
@@ -1621,6 +1621,16 @@ plan and the full log).
   51), its army 42 (29; 59), its gap 0.31 (0.36), the Protoss's score -0.062 +- 0.160. Left for the dev builds against a
   Protoss: their fights (gz1dev's role model is the TvZ Zerg's, gt1dev's PvT fights the roles' rules: response
   datasets for PvZ Zerg and PvT Terran), and gt1dev's army still half the pros' at 15:00.
+- **The dev builds' fights against a Protoss (2026-10-28, #36, gt0.21dev, gz0.10dev).** Response datasets for the
+  Terran's side of 600 modern PvT games (1.76M labelled units, 28% "other": siege and mines, most likely) and the
+  Zerg's of 600 PvZ games (3.23M), and their role models (accuracy 0.707 and 0.754). A manifest's roles data can be
+  given per matchup (pvzroles: the Zerg's PvZ data in PvZ, its TvZ data elsewhere); the Terran's goes in its "vs P"
+  section (pvtroles), where the roles' rules played, its pinned TvZ role model cleared there. tests/test_inputs.py's
+  known faults keyed by the side's race (the Terran is side B in PvT): every block matches in PvT, PvZ and TvZ. 48 paired
+  games each against rounds 162: PvZ, the Protoss's score -0.031 +- 0.095, the Zerg's fight gap -0.077 [-0.202, +0.038]
+  nearer (25-30 minutes -0.253 [-0.420, -0.083]); PvT, -0.016 +- 0.152, the Terran's fight gap +0.067 [-0.015, +0.143]
+  further, no feature more than 0.2 sd: the pros' "other" role is carried out as nothing (#60). Both in the dev builds
+  (learned in place of rules or another matchup's data, no game lost): gt1dev gt0.21dev, gz1dev gz0.10dev; TvZ unchanged.
 - **Dice in gt1dev, the hunt model in games, gz1dev (2026-10-24).** Dice over 96 paired games (DC100a+b against DV90a+b):
   lost 18 (29), +0.058 +- 0.083, the gap -0.073 (-0.096 to -0.035), macro -0.105 (-0.143 to -0.049): adopted, gt1dev
   gt0.11dev. The hunt model (cmhunt, HM100a) against its control (cmv5, HC100a), both gt0.10dev: paired -0.005 +-

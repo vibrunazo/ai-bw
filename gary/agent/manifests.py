@@ -477,12 +477,16 @@ def rolled_style(model, matchup: str, race: str, seed: int) -> int | None:
     return random.Random(seed).choices(styles, weights=weights)[0]
 
 
+def _by_matchup(ref, matchup: str):
+    """A manifest value given per matchup ({matchup: value, "*": the others'}), or the value itself."""
+    return ref.get(matchup, ref["*"]) if isinstance(ref, dict) else ref
+
+
 def model_path(ref, matchup: str, race: str) -> Path:
     """A manifest's model reference ("macro/latest", ...) for this matchup and race, or a checkpoint path; or a dict of
     them by matchup, "*" for the others (a checkpoint trained for one matchup: gz1dev's TvZ macro model played PvZ blind
     to the Protoss, none of its units among its inputs)."""
-    if isinstance(ref, dict):
-        ref = ref.get(matchup, ref["*"])
+    ref = _by_matchup(ref, matchup)
     if ref in REFS:
         return model_for(REFS[ref], matchup, race)
     if ref.endswith("/latest"):
@@ -827,6 +831,14 @@ OPTIONS = {
     "gastarget": lambda m: m["macro"].update(model="runs/macro_exp/T_all_v2gas/model.pt"),
     # the Zerg's: its TvZ macro model trained with every game's style (v2) and the gas head, its drones on gas
     "zgastarget": lambda m: m["macro"].update(model={"TvZ": "runs/macro_exp/Z_TvZ_v2gas/model.pt", "*": "macro/latest"}),
+    # the Zerg's fights against a Protoss by its role model from the pros' Zerg in PvZ (ingest/response_dataset.py --race Z
+    # --matchups PvZ), not the TvZ one
+    "pvzroles": lambda m: m["fight"].update(roles_data={"PvZ": "response_Z_PvZ_30min.npz",
+                                                        "*": m["fight"].get("roles_data", "response_Z.npz")}),
+    # the Terran's fights against a Protoss by its role model from the pros' Terran in PvT (in its "vs" section: there the
+    # roles' rules played, and its pinned TvZ role model would come back with a model)
+    "pvtroles": lambda m: m.update(vs={**m.get("vs", {}), "P": {**m["vs"]["P"], "fight": {
+        **m["vs"]["P"]["fight"], "model": "roles/latest", "roles_model": None, "roles_data": "response_T_PvT_30min.npz"}}}),
     # the strategy selector (gary/agent/selector.py; its table: eval/selector_table.py): the build style
     # per map with the best expected score (selector_explore: a draw from each, Thompson sampling).
     # On v0.18 (fresh seeds 101+, 333 games): lost 30 (57), won 64 (57); Zerg v2 on Fighting Spirit
@@ -1055,9 +1067,14 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # per style, 96 paired games (GT152a+b against GW151a+b): style 2's gas mined by 150/180/210 s 36/124/184 (48/200/356;
 # pros 104/108/188), its natural at 3.6 minutes in 100% (4.6 in 72%; 3.2 in 98%), a Starport 81% (59%; 69%); style 1 a
 # Factory by 8:00 in 95% (73%; 88%); results +0.036 +- 0.123 and -0.010 +- 0.131, lost 28 (32)
+# gt0.21dev: against a Protoss, its fights by the role model of the pros' Terran in PvT (pvtroles) in place of the roles'
+# rules. 48 paired games against gt0.20dev (PV163a against PV162a): the Protoss's score -0.016 +- 0.152, its fight gap
+# +0.067 [-0.015, +0.143] (10-15 minutes +0.149): no measurable difference; the pros' "other" role (28% of the labels,
+# siege and mines) is carried out as nothing (#60). TvZ unchanged
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
-                                     "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm+gastarget"),
-                       "version": "gt0.20dev"}
+                                     "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm+gastarget"
+                                     "+pvtroles"),
+                       "version": "gt0.21dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
@@ -1087,8 +1104,12 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # 930 minerals (1,676; pros 819), drones 36 (32; pros 37), the Lair at 3.0-3.3 minutes (3.5-3.9; pros 2.9-3.1); the
 # Terran's score -0.193 +- 0.078 (Gary-Z won 22, 11); the gap +0.063 [+0.007, +0.126] further, its macro part: gas banked
 # (920 at 10-15 minutes, pros 499) and 138 supply at 20-30 (84), the fight part -0.040 [-0.107, +0.018]
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+zgastarget+ownbuilds+gaswaits+parkmany"),
-                       "version": "gz0.9dev"}     # (ownsupply in gz1 since gz0.3)
+# gz0.10dev: against a Protoss, its fights by the role model of the pros' Zerg in PvZ (pvzroles), not the TvZ one. 48
+# paired games against gz0.9dev (PZ163a against PZ162a): the Protoss's score -0.031 +- 0.095, its fight gap -0.077 [-0.202,
+# +0.038] nearer (25-30 minutes -0.253 [-0.420, -0.083]). TvZ unchanged
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+zgastarget+ownbuilds+gaswaits+parkmany"
+                                     "+pvzroles"),
+                       "version": "gz0.10dev"}     # (ownsupply in gz1 since gz0.3)
 
 
 def _against(m: dict, vs: dict) -> dict:
@@ -1262,7 +1283,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
     if m["fight"] is not None and m["fight"]["provider"] == "zerg":
         from gary.agent.zerg_fight import ZergFight
         g.fight = ZergFight(g, m["fight"].get("roles", True), m["fight"].get("lurkers", True), seed,
-                            m["fight"].get("roles_data", "response_Z.npz"))
+                            _by_matchup(m["fight"].get("roles_data", "response_Z.npz"), g.matchup))
         models["fight"] = g.fight.model_path or "none"
     elif m["fight"] is not None:
         f = m["fight"]
@@ -1275,7 +1296,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
                 fight_path = f["roles_model"]                # (a pinned checkpoint: an RL run's, say)
             if f.get("roles_data") and fight_path is None and fight_model is None:
                 from gary.policy.roles import latest_trained_on
-                fight_path = latest_trained_on(f["roles_data"])
+                fight_path = latest_trained_on(_by_matchup(f["roles_data"], g.matchup))
                 if fight_path is None:
                     raise FileNotFoundError(f"no role model trained on {f['roles_data']}")
             fight = fight_model or RoleModel.load(fight_path or model_path(f["model"], g.matchup, g.race.letter))

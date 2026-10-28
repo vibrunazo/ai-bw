@@ -52,6 +52,7 @@ KNOWN = {
     ("Z", "critic", "own completed"): "#50: the same",
     ("Z", "army", "own units"): "#50: the same",
     ("Z", "army", "enemy seen lately"): "#50: the tanks' turrets, counted by the replays",
+    ("P", "army", "enemy seen lately"): "#50: the tanks' turrets, counted by the replays (against a Terran)",
     ("T", "roles", "extra 3"): "#52: a unit's age, filled in play, 0 in the role datasets (option dataextras)",
     ("T", "roles", "extra 4"): "#52: its distance to Gary's biggest bunch, the same",
     ("T", "roles", "extra 5"): "#52: that bunch's size, the same",
@@ -174,7 +175,7 @@ def compare_roles(sides) -> tuple[list[str], list[str], set]:
             pa, pb = float((a != 0).mean()) if len(a) else 0.0, float((b != 0).mean()) if len(b) else 0.0
             off = (pb < 0.01 and pa > 0.05) or (pb > 0.99 and pa < 0.95) or (name == "enemy HP 0" and pa - pb > 0.2)
             state = "ok"
-            key = (r, "roles", name)
+            key = (g.race.letter, "roles", name)      # (a known fault is the race's, whichever side it plays)
             if off:
                 if key in KNOWN:
                     state = "known"
@@ -297,7 +298,7 @@ def compare(sides, reads, rows) -> tuple[list[str], list[str], list[str]]:
             cols_off = [c for o, c in got if o > tol]
             most = max(set(cols_off), key=cols_off.count) if cols_off and labels else None
             _verdict(r, model, name + (f" (mostly {labels[most]})" if most is not None else ""), share, float(offs.max()),
-                     len(got), report, fails, seen_known, key_name=name)
+                     len(got), report, fails, seen_known, key_name=name, race=g.race.letter)
         for name, c in grid_blocks:
             offs = []
             for f in rows[r]:
@@ -308,13 +309,15 @@ def compare(sides, reads, rows) -> tuple[list[str], list[str], list[str]]:
                 offs.append((float(np.abs(a - b).sum()), tol))
             if offs:
                 share = float(np.mean([o > t for o, t in offs]))
-                _verdict(r, "army", f"grid: {name}", share, max(o for o, _ in offs), len(offs), report, fails, seen_known)
-    gone = [f"{k}: {why}" for k, why in KNOWN.items() if k not in seen_known and k[0] in sides]
+                _verdict(r, "army", f"grid: {name}", share, max(o for o, _ in offs), len(offs), report, fails, seen_known,
+                         race=g.race.letter)
+    races = {g.race.letter for g in sides.values()}
+    gone = [f"{k}: {why}" for k, why in KNOWN.items() if k not in seen_known and k[0] in races]
     return report, fails, gone
 
 
-def _verdict(r, model, name, share, worst, n, report, fails, seen_known, key_name=None):
-    key = (r, model, key_name or name)
+def _verdict(r, model, name, share, worst, n, report, fails, seen_known, key_name=None, race=None):
+    key = (race or r, model, key_name or name)          # (KNOWN by the side's race: side B is a Terran in PvT)
     why = INTENDED.get(("*", model, key_name or name)) or INTENDED.get(key)
     known = KNOWN.get(key)
     state = "ok"
