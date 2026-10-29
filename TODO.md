@@ -27,8 +27,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
   that counts what fighting costs the rest of the game, or 96 games
 - [#54](https://github.com/vibrunazo/gary/issues/54) Build styles by name for each side, every game labelled (done: every
   matchup's catalogue, each race's model trained with them, the style check in every matchup, one Zerg macro model for
-  every matchup in gz1dev, gz0.11dev); left: the Terran's allstyles (+0.115 +- 0.109 in 48 TvZ: its second 48), the
-  Protoss's, and why Gary-Z's own states draw more lurkers and scourge from the shared model
+  every matchup in gz1dev, gz0.11dev); and gt1dev, gt0.24dev); left: the critics retrained for
+  the new style columns, the Protoss's allstyles, and why Gary-Z's own states draw more lurkers and scourge from the shared model
 - [#57](https://github.com/vibrunazo/gary/issues/57) Gary-Z banks the gas it mines (920 at 10-15 minutes, pros 499)
 - [#58](https://github.com/vibrunazo/gary/issues/58) Gary-Z's builds per style: style 2 played as itself 31%, the third Hatchery
 - [#59](https://github.com/vibrunazo/gary/issues/59) Fold the dev manifests' execution fixes (parkmany, gaswaits, the gas head)

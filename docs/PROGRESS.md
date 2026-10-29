@@ -19,7 +19,7 @@ learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the lea
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-29): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
 (gt0.10), Zerg as `gz1` (gz0.3) and Protoss as `gp1` (gp0.2, crude); learning is trained and judged in `gt1dev`
-(gt0.23dev) and `gz1dev` (gz0.11dev: one macro model per race now in both, each matchup's fights by its own pros' role
+(gt0.24dev) and `gz1dev` (gz0.11dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
 model), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
@@ -42,7 +42,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.23dev, gz1 gz0.3, gz1dev gz0.11dev, gp1 gp0.2) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.11dev, gp1 gp0.2) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -81,7 +81,7 @@ definition in gary/agent/manifests.py and in the entries of "Next" below:
   the model's odds (gt0.11dev), its buildings placed beyond a full main (widespot, gt0.12dev), the macro model's inputs as its replays count
   them (seenall, gt0.13dev), the army model's counts as its dataset's (armyseen, gt0.14dev), its
   building history as the replays count it (builtcount, gt0.15dev), its unit counts too (unitcount, gt0.16dev), the pros' build styles by
-  their shares (styleroll, gt0.17dev), without the early-pool posture (noalarm, gt0.18dev), the macro model trained with every game's style (stylev2, gt0.19dev), the workers on gas its decision (gastarget, gt0.20dev), against a Protoss its PvT role model (pvtroles, gt0.21dev), its siege and mines there (pvtmodes, modedice, gt0.22dev), against a Terran its TvT role model (mirrorroles, gt0.23dev).
+  their shares (styleroll, gt0.17dev), without the early-pool posture (noalarm, gt0.18dev), the macro model trained with every game's style (stylev2, gt0.19dev), the workers on gas its decision (gastarget, gt0.20dev), against a Protoss its PvT role model (pvtroles, gt0.21dev), its siege and mines there (pvtmodes, modedice, gt0.22dev), against a Terran its TvT role model (mirrorroles, gt0.23dev), its macro model trained with every matchup's styles (allstyles, gt0.24dev).
 - **gz0.1-gz0.2** (2026-10-20/22): the Zerg on the shared agent, then its army on control groups by type.
   **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev), seenall (gz0.4dev), enemy HP as its data (zfullhp, gz0.5dev), its eggs counted as its data
   (eggs, gz0.6dev), the drones on gas its macro model's decision (zgastarget, gz0.7dev), its buildings' history its own (ownbuilds, gz0.8dev), three builds parked at once and the gas head reading waiting decisions (parkmany, gaswaits, gz0.9dev), against a Protoss its PvZ role model (pvzroles, gz0.10dev), one macro model for every matchup with every matchup's styles and against a Zerg its ZvZ role model (allstyles, mirrorroles, gz0.11dev).
@@ -1644,8 +1644,11 @@ plan and the full log).
   7.4, pros 3.2), scourge (5.8, 3.8, 2.9) and zerglings (25, 20, 14) come from Gary-Z's own states, not another
   matchup's data leaking in. (Queens are no measure: pros at 15-20 minutes have none in 90% of positions, the mean
   set by a few games with 20 or more.) The Terran's model with every matchup's styles (gt1dev+allstyles, TS169a against
-  ZB169a): +0.115 +- 0.109, the gap +0.012 [-0.046, +0.065], its styles played as before (standard bio 100%, Factory
-  and Starport 75%): a second 48 next. The mirrors' role models (mirrorroles), 96 paired games each, side A of the
+  ZB169a): +0.115 +- 0.109, its styles played as before (standard bio 100%, Factory and Starport 75%); its second 48
+  against gz0.11dev (TS170b against TB170b) +0.057 +- 0.110; over the 96 +0.086 +- 0.077, the gap -0.001 [-0.041,
+  +0.040] (macro -0.009, fight +0.009), Factory and vultures played as told in 94% (94%): adopted (gt1dev gt0.24dev),
+  so the Terran plays a style in PvT and TvT too. Both critics read the old models' style columns (the Terran's 421
+  features, its view 441 now; the Zerg's 431, 451): retrained next (tests/test_value.py). The mirrors' role models (mirrorroles), 96 paired games each, side A of the
   mirror against the same manifest: TvT (TR168a+b against TT168a+b) -0.029 +- 0.091, the fight gap -0.193 [-0.274,
   -0.049] nearer (10-15 minutes -0.493, 15-20 -0.302, 20-25 -0.316), the whole gap -0.056; ZvZ +0.016 +- 0.068, the
   fight gap +0.021 [-0.010, +0.057]; PvP -0.049 +- 0.098, +0.001 [-0.071, +0.093]. All three adopted: TvT on its

@@ -1125,10 +1125,13 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # not the TvZ one. 96 paired games against gt0.22dev, side A of the mirror (TR168a+b against TT168a+b): the score
 # -0.029 +- 0.091, the fight gap -0.193 [-0.274, -0.049] nearer (10-15 minutes -0.493, 15-20 -0.302, 20-25 -0.316).
 # TvZ and PvT unchanged
+# gt0.24dev: its macro model trained with every matchup's styles (allstyles: T_all_v2all), so it plays a style in PvT
+# and TvT too. 96 paired TvZ games against gt0.22dev/gt0.23dev (TS169a+TS170b against ZB169a+TB170b, the second half
+# against gz0.11dev): the Terran's score +0.086 +- 0.077, the gap -0.001 [-0.041, +0.040], its styles played as before
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
                                      "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm+gastarget"
-                                     "+pvtroles+pvtmodes+modedice+mirrorroles"),
-                       "version": "gt0.23dev"}
+                                     "+pvtroles+pvtmodes+modedice+mirrorroles+allstyles"),
+                       "version": "gt0.24dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
