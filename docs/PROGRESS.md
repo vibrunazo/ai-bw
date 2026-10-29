@@ -1648,7 +1648,13 @@ plan and the full log).
   against gz0.11dev (TS170b against TB170b) +0.057 +- 0.110; over the 96 +0.086 +- 0.077, the gap -0.001 [-0.041,
   +0.040] (macro -0.009, fight +0.009), Factory and vultures played as told in 94% (94%): adopted (gt1dev gt0.24dev),
   so the Terran plays a style in PvT and TvT too. Both critics read the old models' style columns (the Terran's 421
-  features, its view 441 now; the Zerg's 431, 451): retrained next (tests/test_value.py). The mirrors' role models (mirrorroles), 96 paired games each, side A of the
+  features, its view 441 now; the Zerg's 431, 451), and train/value.py built its view from the race's older shared
+  model, not the dev build's (now --manifest, default gt1dev or gz1dev). Retrained from the league's games since 10-23
+  (runs/value/TvZ_T_20261028-233401, TvZ_Z_20261028-234955; the first epoch kept again): held out, the Terran's win AUC
+  on Gary's games 0.867 (0.90 before), the pros' 0.684 (0.68), net60 25.0% (33%), net180 22.6% (35.4%), the discounted
+  head 32.1% (42%); the Zerg's 0.916 (0.90), 0.675, net60 19.9% (24.9%), net180 16.7% (27.7%), discounted 24.5% (38%).
+  Weaker net heads on a held-out split that now holds the 30-minute dev rounds (net180's sd 2,092); the pairs read the
+  discounted head and the win logit. The mirrors' role models (mirrorroles), 96 paired games each, side A of the
   mirror against the same manifest: TvT (TR168a+b against TT168a+b) -0.029 +- 0.091, the fight gap -0.193 [-0.274,
   -0.049] nearer (10-15 minutes -0.493, 15-20 -0.302, 20-25 -0.316), the whole gap -0.056; ZvZ +0.016 +- 0.068, the
   fight gap +0.021 [-0.010, +0.057]; PvP -0.049 +- 0.098, +0.001 [-0.071, +0.093]. All three adopted: TvT on its

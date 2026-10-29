@@ -243,15 +243,19 @@ def main() -> None:
     ap.add_argument("--race", default="T", choices=["T", "Z"], help="whose value (the league's games read from that "
                     "race's side)")
     ap.add_argument("--matchup", default="TvZ")
+    ap.add_argument("--manifest", help="the Gary whose macro model's view the critic reads (default: the race's dev "
+                    "build, gt1dev or gz1dev, where the critic is used: the pairs, tests/test_value.py)")
     from train.select import GameFilter
     GameFilter.add_args(ap)
     priority.add_argument(ap)
     args = ap.parse_args()
     priority.apply(args.priority)
     keep = GameFilter.from_args(args)
-    from gary.agent.manifests import model_for
+    from gary.agent.manifests import manifest_of, model_path
     from gary.policy.macro import MacroModel
-    spec = MacroModel.load(str(model_for("macro", args.matchup, args.race))).spec      # (the one Gary plays with)
+    manifest = args.manifest or {"T": "gt1dev", "Z": "gz1dev"}[args.race]
+    spec = MacroModel.load(str(model_path(manifest_of(manifest)["macro"]["model"], args.matchup, args.race))).spec
+    print(f"the view of {manifest}'s macro model: {spec.size} inputs", flush=True)
     run = REPO_ROOT / "runs" / "value" / f"{args.matchup}_{args.race}_{time.strftime('%Y%m%d-%H%M%S')}"
     run.mkdir(parents=True, exist_ok=True)
     src = Path(args.reuse) if args.reuse else run
