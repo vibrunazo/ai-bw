@@ -331,7 +331,7 @@ MANIFESTS: dict[str, dict] = {
     # every game's style (PvT and PvZ plans, taxonomy/label_all.py; a style rolled by the modern pros' shares) and the gas
     # head (train/macro.py --race P --styles v2, every matchup) rolled (dice), its probes on gas the head's (gaswaits), one-offs and expansions by summed odds, builds parked as the money comes (three at once), a Pylon
     # ahead of production and for power; the army's commitments from the matchup's commit model
-    "gp1": {"version": "gp0.2", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
+    "gp1": {"version": "gp0.3", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
             "macro": {"provider": "learned", "model": "runs/macro_exp/P_all_v2gas/model.pt", "builds": [], "decoder": "dice",
                       "odds_mass": 1.0, "expand_mass": 1.0, "park": True, "supply_ahead": True, "parked_max": 3,
                       "gas_waits": True, "style": "roll", "look_seen": True, "unit_count": True},
@@ -339,12 +339,16 @@ MANIFESTS: dict[str, dict] = {
             # Assimilators: seenall, unitcount, armyseen; the inputs test, a PvT game)
             "army": {"provider": "learned", "model": "commit/latest", "commit": True, "draw": True, "hunt": True,
                      "army_seen": True},
-            # its fights by the Protoss role model (the pros' Protoss units in 600 modern PvT and PvZ games to 30 minutes,
-            # train/roles.py --decisions --move), in contact too (as gt1dev's), no Terran rules (repair, pull, load, stim);
-            # in PvP the PvP pros' (gp0.2, as mirrorroles: 96 paired games against gp0.1, PR168a+b against PP168a+b, -0.049
-            # +- 0.098, the fight gap +0.001 [-0.071, +0.093]: no measurable difference, each matchup by its own pros)
+            # its fights by the matchup's Protoss role model (the pros' Protoss units in 600 modern games of the matchup to
+            # 30 minutes, ingest/response_dataset.py --race P --matchups, train/roles.py --decisions --move), in contact too
+            # (as gt1dev's), no Terran rules (repair, pull, load, stim). Each matchup by its own pros: PvP's in gp0.2 (as
+            # mirrorroles: 96 paired games against gp0.1, PR168a+b against PP168a+b, -0.049 +- 0.098, the fight gap +0.001
+            # [-0.071, +0.093]), PvT's and PvZ's in gp0.3 in place of one model over both (96 paired games each against
+            # gp0.2, QV170a+b against PV170a+b and QZ170a+b against PZ170a+b: PvT +0.000 +- 0.077, the fight gap +0.044
+            # [-0.039, +0.096]; PvZ -0.021 +- 0.067, -0.006 [-0.064, +0.058]: no measurable difference)
             "fight": {"provider": "roles", "model": "roles/latest", "workers": False,
-                      "roles_data": {"PvP": "response_P_PvP_30min.npz", "*": "response_P_30min.npz"},
+                      "roles_data": {"PvT": "response_P_PvT_30min.npz", "PvZ": "response_P_PvZ_30min.npz",
+                                     "PvP": "response_P_PvP_30min.npz"},
                       "watch_tiles": 12, "roles": {"post": 3, "draw": True}, "data_extras": True},
             "arbiter": "fixed_priority/v1"},
     # the fight layer alone, for micro drills (gary/drills.py)
@@ -488,7 +492,7 @@ def rolled_style(model, matchup: str, race: str, seed: int) -> int | None:
 
 def _by_matchup(ref, matchup: str):
     """A manifest value given per matchup ({matchup: value, "*": the others'}), or the value itself."""
-    return ref.get(matchup, ref["*"]) if isinstance(ref, dict) else ref
+    return (ref[matchup] if matchup in ref else ref["*"]) if isinstance(ref, dict) else ref
 
 
 def model_path(ref, matchup: str, race: str) -> Path:

@@ -21,7 +21,7 @@ and its line removed; a new one gets an issue and a line).
 
 ## The Garys and how to judge a change
 
-- One Gary for every race: manifest `gt1` plays Terran, `gz1` Zerg, `gp1` Protoss (crude, gp0.2: docs/REFACTOR.md
+- One Gary for every race: manifest `gt1` plays Terran, `gz1` Zerg, `gp1` Protoss (crude, gp0.3: docs/REFACTOR.md
   Phase 4) (`gary/agent/manifests.py`). Every game
   runs through `python -m eval.match --a <manifest> --b <manifest>`; `python -m eval.league` plays Terran
   (`--vs`, default gt1) against Zerg (`--zerg`, default gz1); `gary/play.py --live` plays a human. A side's build

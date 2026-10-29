@@ -18,7 +18,7 @@ Since 2026-10-15 every piece of the self-play loop is being built crude before a
 learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the league isn't trained
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-29): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
-(gt0.10), Zerg as `gz1` (gz0.3) and Protoss as `gp1` (gp0.2, crude); learning is trained and judged in `gt1dev`
+(gt0.10), Zerg as `gz1` (gz0.3) and Protoss as `gp1` (gp0.3, crude); learning is trained and judged in `gt1dev`
 (gt0.24dev) and `gz1dev` (gz0.11dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
 model), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
@@ -42,7 +42,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.11dev, gp1 gp0.2) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.11dev, gp1 gp0.3) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -1661,6 +1661,15 @@ plan and the full log).
   fights, ZvZ and PvP so every matchup plays by its own pros' role model, as the macro (gt1dev gt0.23dev, gz1dev
   gz0.11dev, gp1 gp0.2; the Protoss's PvT and PvZ still one model over both). eval/style_adherence.py judges every
   matchup's styles now (taxonomy/label_all.py's plans; --side in a mirror).
+- **The Protoss's PvT and PvZ fights apart (2026-10-29, #36, gp0.3).** The Protoss's one role model over PvT and PvZ was
+  a leftover of its order (built as the third race, before the other races' role models went per matchup), so each
+  now has its own: response datasets of the Protoss's side of 600 modern PvT games (1.78M labelled units) and 600 PvZ
+  games (2.93M), no errors, and their role models (validation accuracy 0.757 and 0.795; the one over both 0.776).
+  96 paired games each against gp0.2, the baselines replayed (gt1dev and gz1dev had changed): PvT against gt1dev
+  (QV170a+b against PV170a+b) +0.000 +- 0.077, the fight gap +0.044 [-0.039, +0.096], the whole gap -0.007; PvZ against
+  gz1dev (QZ170a+b against PZ170a+b) -0.021 +- 0.067, the fight gap -0.006 [-0.064, +0.058], the whole gap +0.019. No
+  measurable difference either way; adopted as the mirrors were, so every race fights every matchup by that
+  matchup's pros (gp1 gp0.3: its roles data per matchup, no shared fallback).
 - **Every matchup's styles, the mirrors' fight models and their judging (2026-10-28, #54, #36).** One Zerg macro model
   for TvZ, PvZ and ZvZ (option zall, Z_all_v2gas: modern held-out non-routine top-1 TvZ 0.489 against Z_TvZ_v2gas's
   0.481, PvZ 0.556 against its own 0.530, ZvZ 0.637 against 0.635) in 96 paired TvZ games against gz0.10dev (ZA167a+b
