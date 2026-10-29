@@ -26,9 +26,9 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#53](https://github.com/vibrunazo/gary/issues/53) No fight-scenario reward ranks the roles checkpoints as games do: a reward
   that counts what fighting costs the rest of the game, or 96 games
 - [#54](https://github.com/vibrunazo/gary/issues/54) Build styles by name for each side, every game labelled (done: every
-  matchup's catalogue, each race's model trained with them, option allstyles); left: judge allstyles per style in each
-  matchup (the Terran's and the Zerg's style checks in eval/style_adherence.py know TvZ only), and one Zerg model for
-  every matchup without zall's TvZ losses
+  matchup's catalogue, each race's model trained with them, the style check in every matchup, one Zerg macro model for
+  every matchup in gz1dev, gz0.11dev); left: the Terran's allstyles (+0.115 +- 0.109 in 48 TvZ: its second 48), the
+  Protoss's, and why Gary-Z's own states draw more lurkers and scourge from the shared model
 - [#57](https://github.com/vibrunazo/gary/issues/57) Gary-Z banks the gas it mines (920 at 10-15 minutes, pros 499)
 - [#58](https://github.com/vibrunazo/gary/issues/58) Gary-Z's builds per style: style 2 played as itself 31%, the third Hatchery
 - [#59](https://github.com/vibrunazo/gary/issues/59) Fold the dev manifests' execution fixes (parkmany, gaswaits, the gas head)
@@ -47,7 +47,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#40](https://github.com/vibrunazo/gary/issues/40) Opponent model: a belief over the enemy's plan
 - [#42](https://github.com/vibrunazo/gary/issues/42) The army model's fight estimate from Gary's own fights
 - [#45](https://github.com/vibrunazo/gary/issues/45) The macro answers what the scout sees, without the scripted answers
-- [#35](https://github.com/vibrunazo/gary/issues/35) TvT Gary-T: its own fight, belief, plan and engage models
+- [#35](https://github.com/vibrunazo/gary/issues/35) TvT Gary-T: its own fight model (done, gt0.23dev: the TvT role model),
+  belief, plan and engage models
 - [#34](https://github.com/vibrunazo/gary/issues/34) More modern replays
 
 ## Gameplay
@@ -64,7 +65,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#23](https://github.com/vibrunazo/gary/issues/23) Map analysis: split maps at their chokes
 - [#36](https://github.com/vibrunazo/gary/issues/36) Protoss: the executor (refactor Phase 4) begun, `gp1` plays every matchup
   with its role model and styles, plays its styles as the pros do (PV161a, PZ161a); next the dev builds' fights in PvT and
-  PvZ by their matchups' role models (gt0.21dev, gz0.10dev); next PvP
+  PvZ by their matchups' role models (gt0.21dev, gz0.10dev), every mirror by its own (gt0.23dev, gz0.11dev, gp0.2);
+  next the Protoss's PvT and PvZ role models apart (one model over both now)
 - [#61](https://github.com/vibrunazo/gary/issues/61) The Terran's modes in PvT (gt0.22dev siege and lay mines): held as long as the
   pros hold them, the pros' mines outside fights, Spider Mines four minutes late
 - [#62](https://github.com/vibrunazo/gary/issues/62) Type gg and leave when the critic's win odds stay under 20% (default;

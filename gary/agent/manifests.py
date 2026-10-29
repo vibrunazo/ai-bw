@@ -331,7 +331,7 @@ MANIFESTS: dict[str, dict] = {
     # every game's style (PvT and PvZ plans, taxonomy/label_all.py; a style rolled by the modern pros' shares) and the gas
     # head (train/macro.py --race P --styles v2, every matchup) rolled (dice), its probes on gas the head's (gaswaits), one-offs and expansions by summed odds, builds parked as the money comes (three at once), a Pylon
     # ahead of production and for power; the army's commitments from the matchup's commit model
-    "gp1": {"version": "gp0.1", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
+    "gp1": {"version": "gp0.2", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
             "macro": {"provider": "learned", "model": "runs/macro_exp/P_all_v2gas/model.pt", "builds": [], "decoder": "dice",
                       "odds_mass": 1.0, "expand_mass": 1.0, "park": True, "supply_ahead": True, "parked_max": 3,
                       "gas_waits": True, "style": "roll", "look_seen": True, "unit_count": True},
@@ -340,8 +340,11 @@ MANIFESTS: dict[str, dict] = {
             "army": {"provider": "learned", "model": "commit/latest", "commit": True, "draw": True, "hunt": True,
                      "army_seen": True},
             # its fights by the Protoss role model (the pros' Protoss units in 600 modern PvT and PvZ games to 30 minutes,
-            # train/roles.py --decisions --move), in contact too (as gt1dev's), no Terran rules (repair, pull, load, stim)
-            "fight": {"provider": "roles", "model": "roles/latest", "roles_data": "response_P_30min.npz", "workers": False,
+            # train/roles.py --decisions --move), in contact too (as gt1dev's), no Terran rules (repair, pull, load, stim);
+            # in PvP the PvP pros' (gp0.2, as mirrorroles: 96 paired games against gp0.1, PR168a+b against PP168a+b, -0.049
+            # +- 0.098, the fight gap +0.001 [-0.071, +0.093]: no measurable difference, each matchup by its own pros)
+            "fight": {"provider": "roles", "model": "roles/latest", "workers": False,
+                      "roles_data": {"PvP": "response_P_PvP_30min.npz", "*": "response_P_30min.npz"},
                       "watch_tiles": 12, "roles": {"post": 3, "draw": True}, "data_extras": True},
             "arbiter": "fixed_priority/v1"},
     # the fight layer alone, for micro drills (gary/drills.py)
@@ -1118,10 +1121,14 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # mines a game (a mine is never a Vulture's likeliest role). Drawn, against it (PV166a+b against PV165a+b): +0.039 +-
 # 0.082, the fight gap -0.112 [-0.168, -0.040] nearer, by 20:00 sieges 101 (27; pros 52), mines 17 (0.2; 114), its tanks
 # sieged 21% of their time (10%; 47%)
+# gt0.23dev: against a Terran, its fights by the role model of the pros' Terran in TvT (mirrorroles, its modes drawn),
+# not the TvZ one. 96 paired games against gt0.22dev, side A of the mirror (TR168a+b against TT168a+b): the score
+# -0.029 +- 0.091, the fight gap -0.193 [-0.274, -0.049] nearer (10-15 minutes -0.493, 15-20 -0.302, 20-25 -0.316).
+# TvZ and PvT unchanged
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
                                      "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm+gastarget"
-                                     "+pvtroles+pvtmodes+modedice"),
-                       "version": "gt0.22dev"}
+                                     "+pvtroles+pvtmodes+modedice+mirrorroles"),
+                       "version": "gt0.23dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
@@ -1154,9 +1161,16 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # gz0.10dev: against a Protoss, its fights by the role model of the pros' Zerg in PvZ (pvzroles), not the TvZ one. 48
 # paired games against gz0.9dev (PZ163a against PZ162a): the Protoss's score -0.031 +- 0.095, its fight gap -0.077 [-0.202,
 # +0.038] nearer (25-30 minutes -0.253 [-0.420, -0.083]). TvZ unchanged
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+zgastarget+ownbuilds+gaswaits+parkmany"
-                                     "+pvzroles"),
-                       "version": "gz0.10dev"}     # (ownsupply in gz1 since gz0.3)
+# gz0.11dev: one macro model for every Zerg matchup, as the Terran's and the Protoss's (allstyles: Z_all_v2all, the
+# matchup an input, every matchup's styles, the pros' history per style), in place of the TvZ model and the older
+# shared one. 48 paired games against gz0.10dev, both against gt1dev (ZS169a against ZB169a): the Zerg's score -0.062
+# +- 0.107, not measurably different (Z_all_v2gas, zall: -0.078 +- 0.076 over 96), its style played as told in 56% of
+# games (48%), the fight gap -0.059 [-0.091, +0.002]. And against a Zerg, its fights by the role model of the pros' Zerg
+# in ZvZ (mirrorroles): 96 paired games against gz0.10dev (ZR168a+b against ZZ168a+b) +0.016 +- 0.068, the fight gap
+# +0.021 [-0.010, +0.057]: no measurable difference, each matchup by its own pros as the other races
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allstyles+ownbuilds+gaswaits+parkmany"
+                                     "+pvzroles+mirrorroles"),
+                       "version": "gz0.11dev"}     # (ownsupply in gz1 since gz0.3)
 
 
 def _against(m: dict, vs: dict) -> dict:
