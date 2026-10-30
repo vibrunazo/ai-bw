@@ -17,10 +17,10 @@ rather than scripted, because the replay pipeline made that the quicker way to a
 Since 2026-10-15 every piece of the self-play loop is being built crude before any is polished: a
 learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the league isn't trained
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
-Where it stands (2026-10-29): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
+Where it stands (2026-10-30): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
 (gt0.10), Zerg as `gz1` (gz0.3) and Protoss as `gp1` (gp0.4, crude); learning is trained and judged in `gt1dev`
-(gt0.24dev) and `gz1dev` (gz0.11dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
-model), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
+(gt0.24dev) and `gz1dev` (gz0.12dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
+model, the Zerg's reading its own decision history), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
 on paired branches with the forced arm locked at the pros' hazard, learned offline: at chance on 1,004
@@ -42,7 +42,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.11dev, gp1 gp0.4) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.12dev, gp1 gp0.4) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -84,7 +84,7 @@ definition in gary/agent/manifests.py and in the entries of "Next" below:
   their shares (styleroll, gt0.17dev), without the early-pool posture (noalarm, gt0.18dev), the macro model trained with every game's style (stylev2, gt0.19dev), the workers on gas its decision (gastarget, gt0.20dev), against a Protoss its PvT role model (pvtroles, gt0.21dev), its siege and mines there (pvtmodes, modedice, gt0.22dev), against a Terran its TvT role model (mirrorroles, gt0.23dev), its macro model trained with every matchup's styles (allstyles, gt0.24dev).
 - **gz0.1-gz0.2** (2026-10-20/22): the Zerg on the shared agent, then its army on control groups by type.
   **gz1dev**: gz1 without its stop-gaps (gz0.2dev), its overlord history its own (gz0.3dev), seenall (gz0.4dev), enemy HP as its data (zfullhp, gz0.5dev), its eggs counted as its data
-  (eggs, gz0.6dev), the drones on gas its macro model's decision (zgastarget, gz0.7dev), its buildings' history its own (ownbuilds, gz0.8dev), three builds parked at once and the gas head reading waiting decisions (parkmany, gaswaits, gz0.9dev), against a Protoss its PvZ role model (pvzroles, gz0.10dev), one macro model for every matchup with every matchup's styles and against a Zerg its ZvZ role model (allstyles, mirrorroles, gz0.11dev).
+  (eggs, gz0.6dev), the drones on gas its macro model's decision (zgastarget, gz0.7dev), its buildings' history its own (ownbuilds, gz0.8dev), three builds parked at once and the gas head reading waiting decisions (parkmany, gaswaits, gz0.9dev), against a Protoss its PvZ role model (pvzroles, gz0.10dev), one macro model for every matchup with every matchup's styles and against a Zerg its ZvZ role model (allstyles, mirrorroles, gz0.11dev), its own decision history (ownhist, gz0.12dev).
 
 ## Versions
 
@@ -1681,6 +1681,15 @@ plan and the full log).
   goes robotics: citadel by 8:00 in 41% of games, the pros' 100%). Adopted: one macro model per race, every
   matchup's styles. style_adherence.py read a mirror's told style by the replay's player id, not the game slot its
   records carry, so a side out of slot 0 read as told none; it reads the side's slot from its trace now.
+- **Gary-Z's own decision history (2026-10-30, gz0.12dev).** The pros' history in the Zerg's macro inputs (its "decided
+  so far" the pros' mean per style, fading to its own over 12 minutes) was scripted for a feedback loop of its own
+  drones (60-70% of its decisions at 6:00-7:30, before the dice decoder and the queue of waiting decisions) and broke
+  the rule that inputs in play are counted as the data counts them; tagged a stop-gap (AGENTS.md). Off (ownhist) in 96
+  paired games against gz0.11dev, both against gt1dev (HO172a+b against HB172a+TS170b): drones 27% of its decisions at
+  6:00-7:30 (26% with it, the pros 17-24%), 24% at 7:30-10 (21%), workers at 12:30 30.9 (31.5); the Zerg's score +0.039
+  +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
+  loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
+  it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
 - **Every matchup's styles, the mirrors' fight models and their judging (2026-10-28, #54, #36).** One Zerg macro model
   for TvZ, PvZ and ZvZ (option zall, Z_all_v2gas: modern held-out non-routine top-1 TvZ 0.489 against Z_TvZ_v2gas's
   0.481, PvZ 0.556 against its own 0.530, ZvZ 0.637 against 0.635) in 96 paired TvZ games against gz0.10dev (ZA167a+b

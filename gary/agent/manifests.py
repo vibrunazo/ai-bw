@@ -906,13 +906,12 @@ OPTIONS = {
     # gt1's own marine-heavy states the model, calibrated on the pros', asked for Marines 42% and no mech (the macro
     # check); its own past fed back on itself
     "prohist": lambda m: m["macro"].update(history="pro"),
+    # the Zerg's macro model reading its own decisions so far, as its data counts them (the pros' history off: the stop-gap
+    # "the pros' decision history", AGENTS.md; ownsupply, its exception, then has nothing to act on)
+    "ownhist": lambda m: m["macro"].update(history=None),
     # gary/policy/macro.py own_keys: with the pros' history, the supply provider's entry its own (the pros' early
     # overlord in it told Gary-Z's model one was coming: at 9/9 it gave Overlord under 1%, blocked 67% of 2:00)
     "ownsupply": lambda m: m["macro"].update(own_supply=True),
-    # with the pros' history, the buildings, tech and expansions among its decisions so far its own (the units' stay the
-    # pros', the feedback loop the history is for): the pros' mean told Gary-Z's model at 1:22 its natural was a third
-    # decided, and the hatchery-first styles opened pool first (#56); a pro's own count of a building is 0 or 1
-    "ownbuilds": lambda m: m["macro"].update(own_builds=True),
     # the gas head reads the decisions waiting for their money (the goal, the parked decision) as decided: a Lair parked
     # for its gas read as no Lair at 3:00, where pros pull off gas, and the Lair waited 30 s for gas that never came (#51)
     "gaswaits": lambda m: m["macro"].update(gas_waits=True),
@@ -1179,9 +1178,14 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # games (48%), the fight gap -0.059 [-0.091, +0.002]. And against a Zerg, its fights by the role model of the pros' Zerg
 # in ZvZ (mirrorroles): 96 paired games against gz0.10dev (ZR168a+b against ZZ168a+b) +0.016 +- 0.068, the fight gap
 # +0.021 [-0.010, +0.057]: no measurable difference, each matchup by its own pros as the other races
-MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allstyles+ownbuilds+gaswaits+parkmany"
-                                     "+pvzroles+mirrorroles"),
-                       "version": "gz0.11dev"}     # (ownsupply in gz1 since gz0.3)
+# gz0.12dev: its macro model reading its own decisions so far, as its data counts them (ownhist: the pros' history off,
+# and with it ownbuilds, gz0.8dev's exception to it). 96 paired games against gz0.11dev, both against gt1dev (HO172a+b
+# against HB172a+TS170b): the Zerg's score +0.039 +- 0.092; drones 27% of its decisions at 6:00-7:30 (26% with the history,
+# pros 17-24%): the feedback loop the history was for didn't come back; the macro gap -0.022 [-0.142, +0.094] (10-15
+# minutes +0.051 [+0.013, +0.081] further, 20-30 nearer)
+MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allstyles+gaswaits+parkmany"
+                                     "+pvzroles+mirrorroles+ownhist"),
+                       "version": "gz0.12dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
@@ -1303,8 +1307,8 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
             g.macro.count_first = bool(m["macro"].get("unit_count"))
             g.macro.eggs_seen = bool(m["macro"].get("eggs_seen")) and g.race.production_in_sight
         if m["macro"].get("history") == "pro":
-            # (Gary-Z's: the pros' decision history in the model's inputs, fading to its own over HISTORY_FADE
-            # minutes, so its own drone-heavy past doesn't feed back on itself)
+            # STOP-GAP (AGENTS.md): Gary-Z's: the pros' decision history in the model's inputs, fading to its own over
+            # HISTORY_FADE minutes, so its own drone-heavy past doesn't feed back on itself
             from gary.policy.macro import pro_history
             g.macro.tracker.history = pro_history(g.race.letter, style, g.matchup, m["macro"].get("history_styles"))
             g.macro.tracker.history_weight = 1.0
@@ -1312,9 +1316,6 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
             spec = g.macro.model.spec
             if m["macro"].get("own_supply"):
                 g.macro.tracker.own_keys = [k for k, (act, uid) in enumerate(spec.decisions) if uid == g.race.supply_provider]
-            if m["macro"].get("own_builds"):     # (ACT_NAMES: bmorph, build, research, upgrade, expand)
-                g.macro.tracker.own_keys += [k for k, (act, uid) in enumerate(spec.decisions) if act in (2, 3, 4, 5, 6)
-                                             and k not in g.macro.tracker.own_keys]
         if m["macro"].get("answers"):
             from gary.agent.answers import Answers
             g.macro.answers = Answers(g, **m["macro"].get("answer_options", {}))

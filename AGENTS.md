@@ -198,6 +198,16 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   rushes (v0.11-v0.18, losses 27 of 48 to the pro-timed 9-pool before it). Replace with the posture as a learned
   read of the scouting (the posture's alarm a model input). Measure: losses to early pools (eval/vs_rush.py) and
   the gap at 0-10 minutes with it off.
+- **The pros' decision history** (in gz1; off in gz1dev since gz0.12dev; `manifests.py` history "pro",
+  `gary/policy/macro.py` the tracker's history). The macro model's "decisions so far" inputs are the pros' mean for its
+  style at that minute, fading to its own over 12 minutes, its overlords (ownsupply) its own. Scripted because
+  Gary-Z's own drone-heavy past fed back on itself (60-70% drones at 6:00-7:30, the pros' 17-24%), before the dice
+  decoder and the queue of waiting decisions; the Terran and the Protoss read their own (the Terran with it, prohist,
+  won 21 lost 10 of 48 against 30 and 5, 2026-10-23). It breaks the rule that inputs in play are counted as the data
+  counts them. Measured off in gz1dev (option ownhist, 2026-10-30, 96 paired games against gt1dev): drones 27% of its
+  decisions at 6:00-7:30 (26% with it), the Zerg's score +0.039 +- 0.092, the macro gap -0.022 [-0.142, +0.094]: no
+  measurable difference, so off there. It goes from gz1 when gz1dev replaces it (gz1's older model untested without it);
+  if the loop comes back, the fix is in training (the history noised, or dropped as an input), the same for every race.
 - **Older rules, to review** (scripted before 2026-10-20; each needs a full entry when next worked on): Gary-Z's
   alarm and the natural colonies; the first producer by a time (`rax_by`); the v0.16 hunt and base scans; the fight
   layer's rules (repair, pull, load, reinforce, stim, detect; the Zerg roles' retreat when outweighed; RoleAhead's
