@@ -8,8 +8,8 @@ Gary a manifest; the arbiter with a trace; intents and the "direct" motor layer;
 priority since v0.10, `intents.priority`: the rules, then the fight's decisions, then the army; roles per
 unit, by hand rules and by a model learned from the pros); step 7 is under way (docs/SELF_PLAY.md). Not
 yet: `Candidate` (the arbiter still hands the one task slot to the first layer that wants it, by fixed
-priority; Gary-Z's turns are its `rotate` option). Today's manifests are `gt1`, `gt1dev`, `gz1` and
-`gz1dev` (AGENTS.md); the v0.9 examples below show the contract.
+priority; Gary-Z's turns are its `rotate` option). Today's manifests are `gt1`, `gt1dev`, `gz1`,
+`gz1dev`, `gp1` and `gp1dev` (AGENTS.md); the v0.9 examples below show the contract.
 
 ## Why now
 

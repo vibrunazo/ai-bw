@@ -1187,6 +1187,15 @@ MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allsty
                                      "+pvzroles+mirrorroles+ownhist"),
                        "version": "gz0.12dev"}
 
+# gp0.4dev: gp1 without the stop-gaps over its learned layers (unscripted: the hunt, a Pylon ahead of production) and
+# its army on control groups by type (grouping, as gt1dev's and gz1's): the Protoss's dev build, where its learning is
+# done and judged as the other races'. 96 paired games each against gp1: PvT against gt1dev (DV173a+b against
+# AV171a+b) -0.029 +- 0.096, the gap -0.024 [-0.076, +0.020]; PvZ against gz1dev (DZ173a+b against BZ173a+b) -0.068
+# +- 0.065, -0.021 [-0.060, +0.018] (10-30 minutes further: Dragoons decided by 20:00 21 a game, 34 with gp1, more
+# cannons and Pylons); PvP against gp1 (DP173a+b against BP173a+b) -0.076 +- 0.101, +0.014 [-0.053, +0.057]. Its keys:
+# 3 army keys, 2.0 assigns and 3.7 recalls a minute in PvT (the Protoss pros 4, 5.9 and 44.6; gp1 none)
+MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping"), "version": "gp0.4dev"}
+
 
 def _against(m: dict, vs: dict) -> dict:
     """A manifest with its overrides for the enemy's race (its "vs" section): a layer's dict merged key by key, the

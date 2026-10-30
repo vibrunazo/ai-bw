@@ -19,7 +19,7 @@ learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the lea
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-30): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
 (gt0.10), Zerg as `gz1` (gz0.3) and Protoss as `gp1` (gp0.4, crude); learning is trained and judged in `gt1dev`
-(gt0.24dev) and `gz1dev` (gz0.12dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
+(gt0.24dev), `gp1dev` (gp0.4dev) and `gz1dev` (gz0.12dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
 model, the Zerg's reading its own decision history), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
@@ -42,7 +42,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.12dev, gp1 gp0.4) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.12dev, gp1 gp0.4, gp1dev gp0.4dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -1690,6 +1690,19 @@ plan and the full log).
   +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
   loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
   it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
+- **The Protoss's dev build (2026-10-30, gp1dev gp0.4dev).** gp1 without the stop-gaps over its learned layers
+  (unscripted: the hunt, a Pylon ahead of production) and its army on control groups by type, keys 1-3, so each race
+  now has a playing build and a dev build (docs/RACES.md: what still differs between them). 96 paired games each
+  against gp1: PvT against gt1dev (DV173a+b against AV171a+b) -0.029 +- 0.096, the Protoss's gap -0.024 [-0.076,
+  +0.020]; PvZ against gz1dev (DZ173a+b against new baselines BZ173a+b, gz1dev having changed) -0.068 +- 0.065, the gap
+  -0.021 [-0.060, +0.018] but further at 10-30 minutes (+0.034 to +0.056); PvP against gp1 (DP173a+b against BP173a+b,
+  AP171a's opponent was gp0.3) -0.076 +- 0.101, +0.014 [-0.053, +0.057]. It decides fewer army units: Dragoons by
+  20:00 21 a game in PvZ (gp1 34; the pros keep 9 standing at 10-20 minutes, gp1 9.2, gp1dev 5.7), Zealots in PvT 31
+  (46), and more Pylons (PvT 32 against 29, PvZ 28 against 26) and, in PvZ, cannons (34 against 27; standing at 10-20
+  minutes 12.8, gp1 9.5, the pros 7.3); supply-blocked at 20-30 minutes 3.1% of the time in PvZ (gp1 0.1%, the pros
+  4.7%). The likeliest cause, untested: the Pylons now all the model's decisions, at the units' expense. Its control
+  groups in PvT (ingest/hotkey_dataset.py, 100 modern games of the pros): 3 army keys, 2.0 assigns and 3.7 recalls a
+  minute (the Protoss pros 4, 5.9 and 44.6; gp1 none); 30% of the pros' assigns are Shuttles, which it doesn't use.
 - **Every matchup's styles, the mirrors' fight models and their judging (2026-10-28, #54, #36).** One Zerg macro model
   for TvZ, PvZ and ZvZ (option zall, Z_all_v2gas: modern held-out non-routine top-1 TvZ 0.489 against Z_TvZ_v2gas's
   0.481, PvZ 0.556 against its own 0.530, ZvZ 0.637 against 0.635) in 96 paired TvZ games against gz0.10dev (ZA167a+b

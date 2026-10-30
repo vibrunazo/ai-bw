@@ -36,7 +36,9 @@ and its line removed; a new one gets an issue and a line).
   measurably helps, and its
   job in gt1dev is the learned layer's or nobody's. `gz1dev` is the same for the Zerg (gz1 with `unscripted`: join,
   sweep, press, the hunt, the caps, the bank escape and overlords ahead off; its overlord posts and mutalisk raid
-  kept, as no model moves those units; decoders such as the tech floor are not stop-gaps and stay). gt1dev against
+  kept, as no model moves those units; decoders such as the tech floor are not stop-gaps and stay). `gp1dev` is the
+  same for the Protoss (gp1 with `unscripted`: the hunt and a Pylon ahead of production off; its army on control
+  groups by type); its PvT and PvZ rounds play gt1dev and gz1dev, its PvP rounds gp1dev. gt1dev against
   gz1dev is the TvZ self-play pairing (balanced: each side wins or leads in 38% of 96 games; gt0.18dev against gz0.6dev
   35% and 42% of 48, docs/PROGRESS.md). A learned layer's work (data, training, the
   pipe check, RL) is done and judged in gt1dev; gt1dev replaces gt1 when it beats it in 96 paired games, with a
@@ -112,7 +114,7 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   hydralisks and dragoons listed, not yet played). Scripted because neither the army nor the fight layer
   decides small detachments. Replace with a learned detachment decision (split off N units for a target).
   Measure: overlords killed by 8:00 with no more marines lost (16 games: 8 to 21, 116 to 107 lost).
-- **The hunt far ahead and squad search** (options `hunt4`, `split`, in gt1; `army.py` hunt_ahead,
+- **The hunt far ahead and squad search** (options `hunt4`, `split`, in gt1; the hunt in gp1 too; `army.py` hunt_ahead,
   hunt_split). The hunt also runs at 4x the enemy fighters seen in the last minute; with no enemy building
   known, squads of 8+ search the unseen bases at once. Scripted because the commit model's engages scatter
   when the enemy is nearly dead, and it has no notion of finishing or searching. Replace with the commit or
