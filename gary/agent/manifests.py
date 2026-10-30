@@ -328,13 +328,17 @@ MANIFESTS: dict[str, dict] = {
             # B30: the Zerg ahead or winning at 30:00 in 9 of 48 games to 6, its gap at 21-30 minutes 0.40 to 0.46)
             "fight": {"provider": "zerg", "roles_data": "response_Z_30min.npz"}, "arbiter": "fixed_priority/v1"},
     # the one Gary playing Protoss (docs/REFACTOR.md Phase 4), crude: the Protoss executor, the Protoss macro model with
-    # every game's style (PvT and PvZ plans, taxonomy/label_all.py; a style rolled by the modern pros' shares) and the gas
-    # head (train/macro.py --race P --styles v2, every matchup) rolled (dice), its probes on gas the head's (gaswaits), one-offs and expansions by summed odds, builds parked as the money comes (three at once), a Pylon
+    # every game's style (every matchup's plans, taxonomy/label_all.py; a style rolled by the modern pros' shares) and the
+    # gas head (train/macro.py --race P --styles v2, every matchup: P_all_v2all, gp0.4, as allstyles in place of
+    # P_all_v2gas, which knew no PvP styles: 96 paired games each against gp0.3, AV171a+b, AZ171a+b, AP171a+b against
+    # QV170a+b, QZ170a+b, PR168a+b: PvT -0.010 +- 0.091, PvZ -0.005 +- 0.074, PvP +0.143 +- 0.090; its style as told
+    # PvT citadel first 50% of games (12%), PvZ nexus first 88% (62%), PvP robotics first 91%, nexus first 75%, citadel
+    # first 19% (no style told before)) rolled (dice), its probes on gas the head's (gaswaits), one-offs and expansions by summed odds, builds parked as the money comes (three at once), a Pylon
     # ahead of production and for power; the army's commitments from the matchup's commit model
-    "gp1": {"version": "gp0.3", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
-            "macro": {"provider": "learned", "model": "runs/macro_exp/P_all_v2gas/model.pt", "builds": [], "decoder": "dice",
+    "gp1": {"version": "gp0.4", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
+            "macro": {"provider": "learned", "model": "runs/macro_exp/P_all_v2all/model.pt", "builds": [], "decoder": "dice",
                       "odds_mass": 1.0, "expand_mass": 1.0, "park": True, "supply_ahead": True, "parked_max": 3,
-                      "gas_waits": True, "style": "roll", "look_seen": True, "unit_count": True},
+                      "gas_waits": True, "style": "roll", "look_seen": True, "unit_count": True, "history_styles": "v2"},
             # (its inputs as its datasets count them: what is in sight looked at every second, the probes inside the
             # Assimilators: seenall, unitcount, armyseen; the inputs test, a PvT game)
             "army": {"provider": "learned", "model": "commit/latest", "commit": True, "draw": True, "hunt": True,

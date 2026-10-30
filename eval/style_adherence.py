@@ -39,15 +39,23 @@ def vec(items):
     return np.array([min(t.get(f, NEVER), NEVER) for f in FEATS], np.float32) / 60.0, t
 
 
-def told_style(rep: str, seed: int, slot: int) -> int | None:
+def told_style(rep: str, seed: int) -> int | None:
     """The style the game's Gary was told: its records' "style" decision (since 2026-10-26), else rebuilt from its
-    manifest, map and seed (right only while the manifest's definition is the one the game played)."""
+    manifest, map and seed (right only while the manifest's definition is the one the game played). In a mirror the
+    side's by its game slot (its trace's header: side A's .trace.jsonl, B's .btrace.jsonl; not the replay's player id)."""
+    slot = None
+    if MIRROR:
+        trace = Path(rep.replace(".rep", ".trace.jsonl" if SIDE == "A" else ".btrace.jsonl"))
+        if not trace.exists():
+            return None
+        with open(trace, encoding="utf-8") as f:
+            slot = json.loads(f.readline()).get("slot")
     rec = Path(rep.replace(".rep", ".records.jsonl"))
     if rec.exists():
         for line in open(rec, encoding="utf-8"):
             if '"layer": "style"' in line:
                 r = json.loads(line)
-                if r.get("side") == RACE and r.get("slot", slot) == slot:
+                if r.get("side") == RACE and (slot is None or r.get("slot", slot) == slot):
                     return int(r["choice"])
             elif '"f": ' in line and not line.startswith('{"f": 0'):
                 break
@@ -75,14 +83,14 @@ def _match(rep: str, seed: int):
 
 
 def gary_items(rep: str, cache: Path):
-    """The judged player's build items and slot (in a mirror the side's: A the lower slot), or None."""
+    """The judged player's build items (in a mirror the side's: A the lower slot), or None."""
     game = load_game(find_screp(None), Path(rep), hashlib.sha1(rep.encode()).hexdigest(), cache)
     ps = sorted((p for p in game["players"] if not p["observer"] and p["race"] == RACE), key=lambda p: p["id"])
     nth = "AB".index(SIDE) if MIRROR else 0
     if len(ps) <= nth:
         return None
     t = ps[nth]
-    return extract_player([c for c in game["cmds"] if c[P] == t["id"]], RACE)[0], t["id"]
+    return extract_player([c for c in game["cmds"] if c[P] == t["id"]], RACE)[0]
 
 
 def main():
@@ -148,11 +156,11 @@ def main():
             got = gary_items(rep, cache)
             if got is None:
                 continue
-            items, slot = got
-            style = told_style(rep, seed, slot)
+            items = got
+            style = told_style(rep, seed)
             told[style].append((label(items), vec(items)[1]))
         print(f"== {arg}")
-        for s, g in sorted(told.items()):
+        for s, g in sorted(told.items(), key=lambda kv: (kv[0] is None, kv[0] or 0)):   # (no style told last)
             plays = Counter(k for k, _ in g)
             print(f"  told style {s} ({NAMES.get(s, '?')}), {len(g)} games: plays as " +
                   ", ".join(f"style {k} {n / len(g):.0%}" for k, n in plays.most_common()))
