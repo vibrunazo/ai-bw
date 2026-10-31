@@ -66,7 +66,7 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#36](https://github.com/vibrunazo/gary/issues/36) Protoss: the executor (refactor Phase 4) begun, `gp1` plays every matchup
   with its role model and styles, plays its styles as the pros do (PV161a, PZ161a); next the dev builds' fights in PvT and
   PvZ by their matchups' role models (gt0.21dev, gz0.10dev), every mirror by its own (gt0.23dev, gz0.11dev, gp0.2),
-  the Protoss's PvT and PvZ apart (gp0.3), its dev build (gp1dev, docs/RACES.md); left: archon merges, shuttles, its
+  the Protoss's PvT and PvZ apart (gp0.3), its dev build (gp1dev, docs/RACES.md), the Terran's queue of two (gp0.5dev); left: archon merges, shuttles, its
   early defense and unit mix (gp1dev decides fewer army units, more Pylons and cannons: PvZ -0.068 +- 0.065), its key
   layout from the pros' hotkeys (4 army keys)
 - [#61](https://github.com/vibrunazo/gary/issues/61) The Terran's modes in PvT (gt0.22dev siege and lay mines): held as long as the

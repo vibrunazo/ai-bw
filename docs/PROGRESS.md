@@ -17,9 +17,9 @@ rather than scripted, because the replay pipeline made that the quicker way to a
 Since 2026-10-15 every piece of the self-play loop is being built crude before any is polished: a
 learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the league isn't trained
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
-Where it stands (2026-10-30): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
+Where it stands (2026-10-31): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
 (gt0.10), Zerg as `gz1` (gz0.3) and Protoss as `gp1` (gp0.4, crude); learning is trained and judged in `gt1dev`
-(gt0.24dev), `gp1dev` (gp0.4dev) and `gz1dev` (gz0.12dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
+(gt0.24dev), `gp1dev` (gp0.5dev) and `gz1dev` (gz0.12dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
 model, the Zerg's reading its own decision history), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
@@ -42,7 +42,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.12dev, gp1 gp0.4, gp1dev gp0.4dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.12dev, gp1 gp0.4, gp1dev gp0.5dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -1690,6 +1690,22 @@ plan and the full log).
   +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
   loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
   it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
+- **One macro decoder: what carries between races (2026-10-31, gp1dev gp0.5dev; docs/RACES.md step 2).** Each race's
+  decoder differs; each difference was tried on the other races, 96 paired games against gz1dev (PvZ against DZ173a+b,
+  TvZ against HO172a+b). The Zerg's rules for the Terran and the Protoss (zdecoder: pace, hold and the 5% floor while a
+  decision waits, in place of the under-half rule; ZP174a+b, ZT174a+b): PvZ -0.086 +- 0.061, TvZ -0.159 +- 0.079, the
+  macro gap further at 5-25 minutes in both. Pace looks at the model when its timing head says the pros' next decision
+  comes: a third fewer decisions at 5-20 minutes (the Terran 163 a game, 235 without; the Protoss 203, 266), the bank up
+  (the Terran's 2,631 minerals at 10-20 minutes, 1,834) and the army down (33 supply, 45): the pros' wait follows a
+  larva burst for the Zerg, one unit otherwise. Without pace (holdwait; HP175a+b, HT175a+b): PvZ -0.055 +- 0.065, TvZ
+  +0.070 +- 0.095, the macro gap further at 5-10 minutes in both (+0.062 [+0.035, +0.083], +0.071 [+0.046, +0.085]): the
+  5% floor spent the money while a Probe waited for its Nexus (26 workers at 5-10 minutes, 31 without, the pros 36).
+  The under-half rule keeps a busy building's favorite; the Zerg's rules are the larvae's, and stay its own. The other
+  way, the Terran's queue in the building (gamequeue: the model's units trained into a busy building's queue two deep
+  and paid for; train_depth now in the shared executor, the Protoss's read it) for the Protoss (QP176a+b): +0.023 +-
+  0.065, the macro gap nearer at 0-5 (-0.028 [-0.037, -0.002]) and 5-10 minutes (-0.024 [-0.044, -0.001]); at 10-20
+  minutes workers 46.7 (43.6, the pros 46.4), army supply 44.2 (40.6, 53.3), Dragoons 6.7 (5.7, 9.2). Adopted in gp1dev
+  (gp0.5dev).
 - **The Protoss's dev build (2026-10-30, gp1dev gp0.4dev).** gp1 without the stop-gaps over its learned layers
   (unscripted: the hunt, a Pylon ahead of production) and its army on control groups by type, keys 1-3, so each race
   now has a playing build and a dev build (docs/RACES.md: what still differs between them). 96 paired games each

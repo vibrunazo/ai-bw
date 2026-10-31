@@ -34,7 +34,7 @@ class ProtossExecutor(Executor):
         if act == TRAIN and uid in g.race.producer:
             if me["supply_used"] + g.race.supply[uid] > me["supply_max"]:
                 return self.wait("supply: a Pylon is coming") if self._pylon_coming(mine) else self.no("supply")
-            b = self.free_building(obs, mine, done, g.race.producer[uid])
+            b = self.free_building(obs, mine, done, g.race.producer[uid], depth=self.train_depth)
             return self._command_or_wait(b, done, g.race.producer[uid], act, uid, g.race.costs[uid])
         if act == BUILD and uid == g.race.gas_building:
             spot = self.free_geyser(obs, mine)

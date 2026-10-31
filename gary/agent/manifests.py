@@ -850,6 +850,20 @@ OPTIONS = {
     # macro.py dice_t 0.7: dice from the odds raised to 1/0.7 (a 4.5% option about 1%, a 30% one about 30%): gt1dev's
     # dice drew 8.9 bunkers a game at 4.5% (pros build 0.5-1 by 10:00)
     "dice07": lambda m: m["macro"].update(dice_t=0.7),
+    # docs/RACES.md step 2 (one macro decoder): the Zerg's decoder rules that aren't the larvae's, for any race: the next
+    # look when the model's timing head says the pros' next decision comes (pace), a roll that waits for supply kept as
+    # the roll for 30 s (hold), and while one waits anything doable at 5% or more taken (wait_min_p, in place of the
+    # under-half rule). All three (ZP174a+b, ZT174a+b, 2026-10-30, 96 paired games against gz1dev): PvZ -0.086 +- 0.061,
+    # TvZ -0.159 +- 0.079, the macro gap further at 5-25 minutes in both; pace took a third fewer decisions at 5-20
+    # minutes (the Terran 163 a game, 235 without; the Protoss 203, 266), the bank up (the Terran's 2,631 minerals at
+    # 10-20 minutes, 1,834), the army down: the pros' wait to their next decision is a larva burst's for the Zerg, one
+    # unit's otherwise. So the two apart: pace alone, and holdwait (hold and the 5% floor)
+    "zdecoder": lambda m: m["macro"].update(pace=True, hold=True, wait_min_p=0.05),
+    # holdwait (HP175a+b, HT175a+b): PvZ -0.055 +- 0.065, TvZ +0.070 +- 0.095, the macro gap further at 5-10 minutes in
+    # both (+0.062 [+0.035, +0.083], +0.071 [+0.046, +0.085]): the Protoss's 26 workers there (31 without, pros 36), the
+    # 5% taken while a Probe waited for its Nexus; the under-half rule keeps a busy building's favorite, the 5% floor is
+    # the larvae's
+    "holdwait": lambda m: m["macro"].update(hold=True, wait_min_p=0.05),
     # training (docs/CONTROL.md step 7): the macro draws its next decision at temperature 1 (or
     # sample_t05: 0.5), each draw logged (g.macro.draws)
     "sample": lambda m: m["macro"].update(decoder="sample", temperature=1.0),
@@ -1194,7 +1208,12 @@ MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allsty
 # +- 0.065, -0.021 [-0.060, +0.018] (10-30 minutes further: Dragoons decided by 20:00 21 a game, 34 with gp1, more
 # cannons and Pylons); PvP against gp1 (DP173a+b against BP173a+b) -0.076 +- 0.101, +0.014 [-0.053, +0.057]. Its keys:
 # 3 army keys, 2.0 assigns and 3.7 recalls a minute in PvT (the Protoss pros 4, 5.9 and 44.6; gp1 none)
-MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping"), "version": "gp0.4dev"}
+# gp0.5dev: its model's units trained into a busy building's queue, two deep and paid for (gamequeue, as gt1dev's;
+# docs/RACES.md step 2). PvZ against gz1dev, 96 paired games (QP176a+b against DZ173a+b): +0.023 +- 0.065, the macro
+# gap nearer at 0-5 (-0.028 [-0.037, -0.002]) and 5-10 minutes (-0.024 [-0.044, -0.001]), no measurable difference
+# later; at 10-20 minutes workers 46.7 (43.6 without, pros 46.4), army supply 44.2 (40.6, pros 53.3), Dragoons 6.7 (5.7,
+# pros 9.2)
+MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue"), "version": "gp0.5dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
@@ -1301,7 +1320,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
         g.macro.dice_t = m["macro"].get("dice_t", 1.0)
         if hasattr(g.executor, "scv_saturation"):
             g.executor.scv_saturation = m.get("scv_saturation", True)
-            g.executor.train_depth = m.get("train_depth", 1)
+        g.executor.train_depth = m.get("train_depth", 1)
         g.executor.wide_spot = m.get("wide_spot", False)
         if hasattr(g.executor, "addon_room"):
             g.executor.addon_room = m.get("addon_room", False)

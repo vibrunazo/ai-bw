@@ -134,6 +134,7 @@ class Executor:
         self._bases_by_walk: list | None = None       # free_base: the bases by a worker's walk from the natural
         self.why: str | None = None                   # why carry_out's last None or WAIT (no, wait)
         self.wide_spot = False                        # option widespot: spot() widens the main, then the natural
+        self.train_depth = 1                          # units in a building's own queue Gary trains into (option gamequeue: 2)
         # the map's own creep (map knowledge, read now: at the start of a game, before any zerg's)
         creep = getattr(g.hi.game, "creep", None)
         self._map_creep = creep() if creep else None

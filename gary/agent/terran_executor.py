@@ -28,7 +28,6 @@ class TerranExecutor(Executor):
         g.task_runners["resume"] = self._run_basic
         self.addon_room = False                       # option addonroom: room for its add-on (addon_fits)
         self.scv_saturation = True                    # SCVs capped at the bases' saturation (option noscvcap: off)
-        self.train_depth = 1                          # units in a building's own queue Gary trains into (option gamequeue: 2)
 
     def carry_out(self, act: int, uid: int, obs: dict, mine: list[dict], done: list[dict], me: dict) -> dict | None:
         """What a macro decision means for Terran hands now (LearnedMacro.plan's gates passed): a command
