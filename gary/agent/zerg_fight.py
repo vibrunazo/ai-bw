@@ -7,9 +7,11 @@
             come near, up again to move on once it's calm (v3's routine, LURK_STREAK turns in a row at
             most, then a rest: alone it took every army turn of a probe game from 9:00 to 14:00)
 
+  rules     the shared fight rules a manifest asks for (gary/agent/fight.py RULES: the workers' pull, the new
+            fighters sent to a fight at home), asked first as in the other races' fight layer
+
 The fight contract the arbiter reads: decide(obs, mine) -> who acted or None; block(obs, mine) for the
-fight turns that put a task aside (none here: the roles act on the army's turn, as Gary-Z's did);
-next_fight, center, ctrl_click, rl_log, rng.
+fight turns that put a task aside; next_fight, center, ctrl_click, rl_log, rng.
 """
 
 from __future__ import annotations
@@ -64,8 +66,9 @@ class ZergFight:
     rl_log = None
 
     def __init__(self, g: Gary, roles: bool = True, lurkers: bool = True, seed: int = 0,
-                 roles_data: str = "response_Z.npz"):
+                 roles_data: str = "response_Z.npz", before: list = (), in_fight: list = ()):
         self.g = g
+        self.before, self.in_fight = list(before), list(in_fight)    # rules, as the FightLayer's
         self.rng = random.Random(seed)
         self.host = _Host(g, seed)
         model = latest_zerg_model(roles_data) if roles else None
@@ -89,13 +92,20 @@ class ZergFight:
         return self.roles.next_ask
 
     def block(self, obs: dict, mine: list[dict]) -> str | None:
-        """The fight turn: the roles; after one, the macro's turn (production isn't starved by fights)."""
+        """The fight turn: the rules, then the roles; after one, the macro's turn (production isn't starved by
+        fights)."""
+        for rule in self.before + self.in_fight:
+            if rule.step(obs, mine):
+                return f"rule:{rule.name}"
         if self.roles is not None and self.roles.step(obs, mine):
             self.g.macro_turn = True
             return "fight:roles"
         return None
 
     def decide(self, obs: dict, mine: list[dict]) -> str | None:
+        for rule in self.in_fight:
+            if rule.step(obs, mine):
+                return f"rule:{rule.name}"
         if self.roles is not None and self.roles.step(obs, mine):
             return "fight:roles"
         if self.lurkers and any(u["type"] == Z.LURKER for u in mine) and self._lurkers_turn(obs, mine):

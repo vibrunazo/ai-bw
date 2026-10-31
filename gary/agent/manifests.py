@@ -865,6 +865,11 @@ OPTIONS = {
     # both (+0.062 [+0.035, +0.083], +0.071 [+0.046, +0.085]): the Protoss's 26 workers there (31 without, pros 36), the
     # 5% taken while a Probe waited for its Nexus; the under-half rule keeps a busy building's favorite, the 5% floor is
     # the larvae's
+    # docs/RACES.md step 3 (the fight rules for every race): the Terran's workers' pull against an attack on a base
+    # (its options: 3 workers an attacker, flyers not counted, not against more than 8 zergling's worth) and its new
+    # fighters sent to a fight at home, for any race's fight layer
+    "fightrules": lambda m: m["fight"].update(before=["pull"], in_fight=["reinforce"],
+                                              rule_options={"pull": {"per_enemy": 3, "ground_only": True, "max_enemy": 8}}),
     "holdwait": lambda m: m["macro"].update(hold=True, wait_min_p=0.05),
     # training (docs/CONTROL.md step 7): the macro draws its next decision at temperature 1 (or
     # sample_t05: 0.5), each draw logged (g.macro.draws)
@@ -1399,10 +1404,12 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
             g.army.gather_on = m["army"].get("gather", False)
             if m["army"].get("army_seen"):
                 g.army.tracker.extra_units = g.army.unseen_own
+    rule = lambda r: RULES[r](g, **m["fight"].get("rule_options", {}).get(r, {}))
     if m["fight"] is not None and m["fight"]["provider"] == "zerg":
         from gary.agent.zerg_fight import ZergFight
         g.fight = ZergFight(g, m["fight"].get("roles", True), m["fight"].get("lurkers", True), seed,
-                            _by_matchup(m["fight"].get("roles_data", "response_Z.npz"), g.matchup))
+                            _by_matchup(m["fight"].get("roles_data", "response_Z.npz"), g.matchup),
+                            [rule(r) for r in m["fight"].get("before", [])], [rule(r) for r in m["fight"].get("in_fight", [])])
         models["fight"] = g.fight.model_path or "none"
     elif m["fight"] is not None:
         f = m["fight"]
@@ -1423,7 +1430,6 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
         else:
             fight = fight_model or load("fight", str(fight_path or model_path(f["model"], g.matchup, g.race.letter)))
             models["fight"] = getattr(fight, "path", "?")
-        rule = lambda r: RULES[r](g, **f.get("rule_options", {}).get(r, {}))
         g.fight = FightLayer(g, fight, f["provider"], [rule(r) for r in f.get("before", [])],
                              [rule(r) for r in f.get("in_fight", [])], f.get("guard_rail", False),
                              f.get("workers", True), seed, f.get("ctrl_click", False),

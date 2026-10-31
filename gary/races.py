@@ -32,6 +32,13 @@ ENEMY = {
 }
 
 
+# flyers, of every race: what the ground army and workers can't catch or hit (the roles don't close in on a group of
+# them alone away from home, the workers' pull doesn't count them)
+FLYERS = frozenset({Z.MUTALISK, Z.SCOURGE, Z.GUARDIAN, Z.DEVOURER, Z.QUEEN, Z.OVERLORD, Z.COCOON,
+                    T.WRAITH, T.VALKYRIE, T.BC, T.VESSEL, T.DROPSHIP,
+                    P.CORSAIR, P.SCOUT, P.ARBITER, P.CARRIER, P.SHUTTLE, P.OBSERVER})
+
+
 def enemy_of(matchup: str, race: str) -> Enemy:
     """The enemy in a matchup for a player of this race: "ZvZ", "Z" -> the Zerg (a mirror)."""
     races = matchup.split("v")

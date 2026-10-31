@@ -95,14 +95,12 @@ from gary import protoss as P
 from gary import terran as T
 from gary import zerg as Z
 from gary.agent.intents import Intent
+from gary.races import FLYERS
 from gary.policy.army import is_building, is_worker, supply_x2
 
-# flyers: units the ground army can't catch. Away from home the rules don't close in on a group of them
-# alone (human game 3: "1 Marine -> close in" on 3 mutalisks, across the map, dying alone, five times);
+# flyers (gary/races.py FLYERS): units the ground army can't catch. Away from home the rules don't close in on a group
+# of them alone (human game 3: "1 Marine -> close in" on 3 mutalisks, across the map, dying alone, five times);
 # in range they are fired at, at home they are closed in on over the mineral line as before
-FLYERS = {Z.MUTALISK, Z.SCOURGE, Z.GUARDIAN, Z.DEVOURER, Z.QUEEN, Z.OVERLORD,
-          T.WRAITH, T.VALKYRIE, T.BC, T.VESSEL, T.DROPSHIP,
-          P.CORSAIR, P.SCOUT, P.ARBITER, P.CARRIER, P.SHUTTLE, P.OBSERVER}
 FOLLOW = 6 * 32                      # medics this close to a group that fires or closes in go with it
 
 ATTACK = {10, 12, 14, 21, 100, 176, 177}   # (turrets fire with StayInRange and WatchTarget, medics heal: eval/micro_roles.py)

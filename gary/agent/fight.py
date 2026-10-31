@@ -35,7 +35,7 @@ from pathlib import Path
 import numpy as np
 
 from gary import terran as T
-from gary.races import ENEMY
+from gary.races import ENEMY, FLYERS
 from gary.agent.gary import Gary
 from gary.agent.intents import Intent
 from gary.interface import screen_of
@@ -95,7 +95,6 @@ LOAD_AGAIN = 20 * 24                 # a marine sent to a bunker isn't sent agai
 STIM_TECH, STIM_RESEARCH = 0, 1200   # Stim Packs: its tech id, and frames to research it
 STIM_GROUP = 5 * 32                 # px: bio this close to a unit the model picks is stimmed with it
 STIM_HP = 20                        # a marine this hurt isn't stimmed (it costs 10 HP)
-ZERG_FLYERS = {42, 43, 44, 45, 47, 59, 62}   # overlord, mutalisk, guardian, queen, scourge, cocoon, devourer
 CALM_FRAMES = 24 * 5                 # pulled workers go back to mining after 5 s without a threat
 REPAIR_ORDER = 34
 REPAIRERS = 2
@@ -434,7 +433,7 @@ class PullRule:
         g = self.g
         hi = g.hi
         enemy = [u for u in obs["units"] if u["owner"] not in (g.slot, 11) and supply_x2(u["type"]) > 0
-                 and not (self.ground_only and u["type"] in ZERG_FLYERS)]
+                 and not (self.ground_only and u["type"] in FLYERS)]
         for cc in (u for u in mine if u["type"] in g.race.town_halls and u["completed"]):
             near = [u for u in enemy if math.dist((u["x"], u["y"]), (cc["x"], cc["y"])) < THREAT_PX]
             if self.attacked_only and not any(u.get("order_target") in {m["tag"] for m in mine} for u in near):
