@@ -8,8 +8,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 
 - [#47](https://github.com/vibrunazo/gary/issues/47) Pipe checks: do the learned layers' decisions reach the game, and do
   their inputs in play match their training data? (placement fixed, widespot; the macro's enemy history and the
-  bunkered units, seenall and armyseen; tests/test_inputs.py checks the inputs now; left: the decisions so far, off by
-  up to 7 Marines on the Terran; built counts in every dev build, 2026-10-31)
+  bunkered units, seenall and armyseen; tests/test_inputs.py checks the inputs now; the decisions so far as the replays
+  count them in every build, 2026-10-31; left: the fight roles' extras, #52)
 - [#50](https://github.com/vibrunazo/gary/issues/50) Play and the replays count units differently: workers in gas buildings,
   turrets, the in-building queue's units, undetected cloaked units (the dataset's)
 - [#28](https://github.com/vibrunazo/gary/issues/28) Commit decision: a learning signal from locked paired branches

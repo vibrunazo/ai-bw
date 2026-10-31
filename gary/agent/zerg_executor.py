@@ -293,7 +293,7 @@ class ZergExecutor(Executor):
             if hi.ctrl_click_portrait(Z.LARVA).accepted:
                 return
         if sel and all(u["type"] == Z.LARVA and u["tag"] not in self.used_larva for u in sel):
-            if hi.morph(uid).accepted:
+            if self.given(hi.morph(uid), "morph", t.data.get("act", -1), uid):
                 for u in sel:
                     self.used_larva[u["tag"]] = hi.frame
                 self.morphs.append((hi.frame, uid, self._frames_to_make(uid)))
@@ -343,7 +343,7 @@ class ZergExecutor(Executor):
             return
         if not self._select_one(obs, mine, units):
             return
-        ok = hi.morph_building(d["id"]).accepted if building else hi.morph(d["id"]).accepted
+        ok = self.given(hi.morph_building(d["id"]), "morph_building", d.get("act", -1), d["id"]) if building else             self.given(hi.morph(d["id"]), "morph", d.get("act", -1), d["id"])
         if not ok:
             LOG.order(g.hi.side, hi.frame, g.race.names.get(d["id"], str(d["id"])), "dropped", "the morph wasn't taken",
                       by="executor")
@@ -360,8 +360,8 @@ class ZergExecutor(Executor):
         """The decision this task carried didn't happen: out of the model's "decisions so far" (noted when the task
         started; Gary-Z noted a decision once carried out, and the one Gary's history counted the larvae's that
         let go: more mutalisks and fewer zerglings than Gary-Z decided at 5-9 min, the parity diff)."""
-        if self.g.macro is not None and "act" in t.data:
-            self.g.macro.tracker.unnote_decision(t.data["act"], t.data["id"])
+        if "act" in t.data:
+            self.undecided(t.data["act"], t.data["id"])
 
     def _select_one(self, obs: dict, mine: list[dict], units: list[dict]) -> bool:
         """One of these selected (the camera on it, then a click): one with nothing of Gary's on top of it,

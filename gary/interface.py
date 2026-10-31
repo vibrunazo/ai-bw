@@ -130,6 +130,9 @@ class HumanInterface:
         # target tag), kinds as in gary/policy/fight_memory.py (the command model's memory)
         self.commands: list[tuple] = []
         self.last_macro_frame = -10 ** 6      # last train / morph / research / upgrade / build sent
+        # what the game made of each production command, in order, (kind, unit or tech, accepted): one it refused isn't
+        # in the replay, so a decision it carried didn't happen (the executor takes it back, #47)
+        self.production_results: list[tuple[str, int, bool]] = []
         self.hotkeys: dict[int, list[int]] = {}
         self.pending: list[_Pending] = []
         # a snapshot every frame, [frame, observation], for the last HISTORY frames; kept undecoded
@@ -337,11 +340,14 @@ class HumanInterface:
         arrives later through _record_result."""
         ok = self.game.act(self.slot, command)
         self._sent_ok = ok is not False
-        if ok is False:
-            self._record_result(command, False)
+        if ok is not None:
+            self._record_result(command, ok)
         return ok is not False
 
     def _record_result(self, command: bytes, ok: bool) -> None:
+        if command[0] in PRODUCTION_KINDS:
+            what = command[1] if command[0] in (0x30, 0x32) else int.from_bytes(command[1:3], "little")
+            self.production_results = self.production_results[-31:] + [(PRODUCTION_KINDS[command[0]], what, ok)]
         if not ok:
             self._log_pov(act=f"\u2717 rejected: {COMMAND_NAMES.get(command[0], hex(command[0]))}")
             self.stats["rejected_by_game"] += 1
@@ -835,6 +841,7 @@ class HumanInterface:
         last = self._snapshot(self.history[-1])
         return {u["tag"] for u in last["units"] if u["owner"] == self.slot}
 
+PRODUCTION_KINDS = {0x1F: "train", 0x23: "morph", 0x35: "morph_building", 0x30: "research", 0x32: "upgrade"}  # (by byte)
 # the actions that are orders to units (the rest select, look or set hotkeys): their fates are recorded
 ORDER_KINDS = {"train", "morph", "morph_building", "research", "upgrade", "build", "right_click",
                "minimap_right_click", "minimap_order", "order_click", "stop", "hold", "burrow", "unburrow",

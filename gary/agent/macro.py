@@ -180,6 +180,7 @@ class LearnedMacro:
 
     def step(self, obs: dict, mine: list[dict], done: list[dict], me: dict) -> None:
         g = self.g
+        g.executor.take_back_refused()
         if g.hi.frame >= self.next_gas and self.model.net.gas is not None:   # (asked on its own clock: a goal waiting
             self.next_gas = g.hi.frame + GAS_EVERY                           # for its money is when pros pull off gas)
             tracker = None
@@ -615,6 +616,7 @@ class LearnedMacro:
             plan = self.plan(*key, obs, mine, done, me)
             if plan is None or g.hi.frame - since > GOAL_TIMEOUT:
                 self.queued.remove(entry)
+                self.tracker.unnote_decision(*key)       # (never trained: the replays count the commands given, #47)
                 continue
             if plan is WAIT or g.task is not None:
                 continue

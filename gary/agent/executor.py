@@ -135,6 +135,7 @@ class Executor:
         self.why: str | None = None                   # why carry_out's last None or WAIT (no, wait)
         self.wide_spot = False                        # option widespot: spot() widens the main, then the natural
         self.train_depth = 1                          # units in a building's own queue Gary trains into (option gamequeue: 2)
+        self.sent: list[tuple[str, int, int]] = []    # decisions' production keys given, not yet run: (kind, act, uid)
         # the map's own creep (map knowledge, read now: at the start of a game, before any zerg's)
         creep = getattr(g.hi.game, "creep", None)
         self._map_creep = creep() if creep else None
@@ -866,6 +867,8 @@ class Executor:
     def _run_command(self, obs: dict, mine: list[dict], t: Task) -> None:
         if self.g.hi.frame - t.started > COMMAND_TIMEOUT:
             LOG.order(self.g.hi.side, self.g.hi.frame, t.kind, "dropped", f"not done in {COMMAND_TIMEOUT // 24} s", by="executor")
+            if "act" in t.data:
+                self.undecided(t.data["act"], t.data["id"])
             self.g.task = None
             return
         self.commands[t.kind](obs, mine, t)
@@ -1350,25 +1353,64 @@ class Executor:
         b = next((u for u in mine if u["tag"] == d["building"]["tag"]), None)
         if b is None:
             LOG.order(g.hi.side, hi.frame, f"{d['act']}:{d['id']}", "dropped", "its building is gone", by="executor")
+            self.undecided(d["act"], d["id"])
             g.task = None
             return
         if not self.select(obs, b):
             return
         act, uid = d["act"], d["id"]
+        # (a key the hands didn't give, no APM left, is given again next turn: it ended the task, the decision lost and
+        # still counted among the model's decisions so far, 4 of 7 Marines over the replay's at 9:00, #47)
         if act == TRAIN:
-            if hi.train(uid).accepted:
-                g.producing[b["tag"]] = (g.producing.get(b["tag"], []) + [uid])[-5:]
-                g.ordered_at[b["tag"]] = obs["now"]
+            if not self.given(hi.train(uid), "train", act, uid):
+                return
+            g.producing[b["tag"]] = (g.producing.get(b["tag"], []) + [uid])[-5:]
+            g.ordered_at[b["tag"]] = obs["now"]
         elif act == RESEARCH:
-            if hi.research(uid).accepted:
-                g.researched.add(uid)
-                g.researched_at[uid] = hi.frame
+            if not self.given(hi.research(uid), "research", act, uid):
+                return
+            g.researched.add(uid)
+            g.researched_at[uid] = hi.frame
         elif act == UPGRADE:
-            if hi.upgrade(uid).accepted:
-                g.upgraded[uid] += 1
+            if not self.given(hi.upgrade(uid), "upgrade", act, uid):
+                return
+            g.upgraded[uid] += 1
         elif act == BUILD and not self.command_build(obs, b, uid):
             return
         g.task = None
+
+    def given(self, r, kind: str, act: int, uid: int) -> bool:
+        """A decision's production key the hands took (r: its ActionResult), kept until the game takes it."""
+        if r.accepted:
+            self.sent = self.sent[-15:] + [(kind, act, uid)]
+        return r.accepted
+
+    def take_back_refused(self) -> None:
+        """Decisions whose key the game refused (a second Mutalisk a second after the first: 4 of 17 at 6:30-9:00
+        weren't in the replay) didn't happen: not among the decisions so far, nor researched (#47). Each result is
+        the oldest key given of its kind and unit (the game runs them in order)."""
+        from gary.agent.macro import RESEARCH, UPGRADE
+        g = self.g
+        for kind, what, ok in g.hi.production_results:
+            s = next((s for s in self.sent if s[0] == kind and s[2] == what), None)
+            if s is None:
+                continue                                   # (a key no decision carried)
+            self.sent.remove(s)
+            if ok:
+                continue
+            self.undecided(s[1], s[2])
+            if s[1] == RESEARCH:
+                g.researched.discard(s[2])
+            elif s[1] == UPGRADE and g.upgraded[s[2]] > 0:
+                g.upgraded[s[2]] -= 1
+        g.hi.production_results = []
+
+    def undecided(self, act: int, uid: int) -> None:
+        """A decision that ended without its command: not among the model's decisions so far (the replays count the
+        commands given)."""
+        tracker = getattr(self.g.macro, "tracker", None)
+        if tracker is not None and act >= 0:                    # (-1: a key no decision carried)
+            tracker.unnote_decision(act, uid)
 
     def command_build(self, obs: dict, b: dict, uid: int) -> bool:
         """A building built by a selected building (a race's add-on): False to come back next turn."""

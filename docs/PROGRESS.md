@@ -18,8 +18,8 @@ Since 2026-10-15 every piece of the self-play loop is being built crude before a
 learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the league isn't trained
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-31): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
-(gt0.10), Zerg as `gz1` (gz0.3) and Protoss as `gp1` (gp0.4, crude); learning is trained and judged in `gt1dev`
-(gt0.24dev), `gp1dev` (gp0.6dev) and `gz1dev` (gz0.13dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
+(gt0.11), Zerg as `gz1` (gz0.4) and Protoss as `gp1` (gp0.5, crude); learning is trained and judged in `gt1dev`
+(gt0.25dev), `gp1dev` (gp0.7dev) and `gz1dev` (gz0.14dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
 model, the Zerg's reading its own decision history), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
@@ -1690,6 +1690,18 @@ plan and the full log).
   +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
   loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
   it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
+- **Decisions that never reached the game taken back (2026-10-31, every build: gt1 gt0.11, gz1 gz0.4, gp1 gp0.5, gt1dev
+  gt0.25dev, gz1dev gz0.14dev, gp1dev gp0.7dev; #47).** The macro model's decisions so far are noted when it decides;
+  the replays count the production commands given. On the input check's game the Terran's Marines decided ran 7 over
+  its replay's by 9:00 (the decided block off at 57% of the moments) and the Zerg's Mutalisks 4 over. Three leaks: a
+  unit waiting for its building dropped after 30 s (3 Marines, 2 SCVs), a train key the hands didn't give for want of
+  APM, which ended the task and lost the decision (the other 4 Marines), and keys the game refused (4 of 17 Mutalisk
+  morphs, each sent a second after another). Each is now taken back (the interface keeps what the game made of each
+  production command, the executor matches them to the decisions' keys; a refused research or upgrade is no longer
+  counted as done), and a key the hands didn't give is given again. The decided block is now checked in
+  tests/test_inputs.py rather than skipped as intended (gz1's pros' history excepted): the Terran off at 5% of the
+  moments, the Zerg at 0%. Plain fixes, adopted on the check (AGENTS.md); every build's games change (parity
+  recorded again), so every baseline is to be replayed.
 - **The decisions so far counted the same for every race (2026-10-31, gz1dev gz0.13dev, gp1dev gp0.6dev).** builtcount
   (gt1dev's: the buildings among the macro model's decisions so far as the replays count them, every building that
   started, a decided one that never did taken back) for the Zerg and the Protoss. On gp1dev it first counted 2.3 Pylons
@@ -1701,7 +1713,7 @@ plan and the full log).
   the replay's). Adopted on the input check, without rounds: an input counted as the data counts it is the dev builds'
   rule, and a model playing worse with it was leaning on the wrong count, to be looked into, not kept. The baselines for
   the next changes are to be replayed. (In the same check the Terran's Marines decided are up to 7 over its replay's,
-  57% of the moments: #47.)
+  57% of the moments: #47, fixed in the entry above.)
 - **One macro decoder: what carries between races (2026-10-31, gp1dev gp0.5dev; docs/RACES.md step 2).** Each race's
   decoder differs; each difference was tried on the other races, 96 paired games against gz1dev (PvZ against DZ173a+b,
   TvZ against HO172a+b). The Zerg's rules for the Terran and the Protoss (zdecoder: pace, hold and the 5% floor while a

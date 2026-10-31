@@ -37,9 +37,9 @@ MIN_MOMENTS = 40                # a side with fewer moments compared fails (a te
 # (side, model, block) -> why play and the data differ on purpose
 INTENDED = {
     ("*", "macro", "since last decision"): "play counts the model's decisions, the replays the production commands",
-    ("*", "macro", "decided"): "the same (at most a decision or two apart); and with the pros' history (gz1's) another input",
+    ("*", "macro", "decided, the pros' history"): "another input: the pros' decisions for the style, fading to its own (gz1)",
     ("*", "critic", "since last decision"): "as the macro's",
-    ("*", "critic", "decided"): "as the macro's",
+    ("*", "critic", "decided, the pros' history"): "as the macro's",
     ("*", "army", "grid: own losses"): "play knows a unit lost once it's out of sight GONE_AFTER, the replay at its death",
     ("*", "army", "grid: enemy army seen 30 s"): "its memory's window starts at play's look, the replay's at each second",
 }
@@ -298,7 +298,9 @@ def compare(sides, reads, rows) -> tuple[list[str], list[str], list[str]]:
             cols_off = [c for o, c in got if o > tol]
             most = max(set(cols_off), key=cols_off.count) if cols_off and labels else None
             _verdict(r, model, name + (f" (mostly {labels[most]})" if most is not None else ""), share, float(offs.max()),
-                     len(got), report, fails, seen_known, key_name=name, race=g.race.letter)
+                     len(got), report, fails, seen_known, race=g.race.letter,
+                     key_name=name + (", the pros' history" if name == "decided" and g.macro.tracker.history is not None
+                                      else ""))
         for name, c in grid_blocks:
             offs = []
             for f in rows[r]:

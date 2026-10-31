@@ -315,7 +315,8 @@ MANIFESTS: dict[str, dict] = {
     # gz0.3: the overlord's history its own (ownsupply) and overlords ahead of production gone, the model's own (96
     # paired games against gt1, ZS100a+b against B100a+b: the Terran's score -0.029 +- 0.103, the Zerg's gap +0.026,
     # -0.024 to +0.083: no measurable difference, so the stop-gap goes)
-    "gz1": {"version": "gz0.3", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True, "rotate": True,
+    # gz0.4: every build's fix of 2026-10-31 (as gt0.11's)
+    "gz1": {"version": "gz0.4", "race": "Z", "posture": "zerg", "leases": "enforced", "balance": True, "rotate": True,
             "grouping": "types",
             "macro": {**_LEARNED, "builds": ["alarm"], "decoder": "dice", "odds_mass": 1.0, "hatch_mass": 0.5, "park": True, "pace": True,
                       "tech_min_p": 0.10, "wait_min_p": 0.05, "own_supply": True, "rax_by": 165 * 24, "history": "pro", "style": "roll",
@@ -335,7 +336,8 @@ MANIFESTS: dict[str, dict] = {
     # PvT citadel first 50% of games (12%), PvZ nexus first 88% (62%), PvP robotics first 91%, nexus first 75%, citadel
     # first 19% (no style told before)) rolled (dice), its probes on gas the head's (gaswaits), one-offs and expansions by summed odds, builds parked as the money comes (three at once), a Pylon
     # ahead of production and for power; the army's commitments from the matchup's commit model
-    "gp1": {"version": "gp0.4", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
+    # gp0.5: every build's fix of 2026-10-31 (as gt0.11's)
+    "gp1": {"version": "gp0.5", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
             "macro": {"provider": "learned", "model": "runs/macro_exp/P_all_v2all/model.pt", "builds": [], "decoder": "dice",
                       "odds_mass": 1.0, "expand_mass": 1.0, "park": True, "supply_ahead": True, "parked_max": 3,
                       "gas_waits": True, "style": "roll", "look_seen": True, "unit_count": True, "history_styles": "v2"},
@@ -1080,8 +1082,10 @@ def manifest_of(name: str | dict) -> dict:
 # gap +0.018, -0.010 to +0.037; macro decisions 20.1 a minute, the pros' 20.3)
 # gt0.10: the static guard a nudge, not a veto (softguard; 96 paired games against the hard guard, SG80a+b against
 # ND70a+b: better in 4, worse in 9, -0.016 +- 0.035, the gap +0.001: no measurable difference, so the veto goes)
+# gt0.11: every build's fix of 2026-10-31: the model's decisions that ended without their command taken back from its
+# decisions so far, and a key the hands didn't give (no APM left) given again (#47, as gt0.25dev's)
 MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords+hunt4+split+static+roles30+lone"
-                                  "+addonroom+gamequeue+softguard"), "version": "gt0.10"}
+                                  "+addonroom+gamequeue+softguard"), "version": "gt0.11"}
 # gt1dev: the Terran Gary that learning is trained and judged in (AGENTS.md): gt1 with the role model deciding in
 # contact as well (attended pro units with their re-issues as a decision, again, Gary's own order rate as input, its
 # moves kept current, several orders a turn) and the army on control groups by type, a key's units drawing their
@@ -1149,10 +1153,14 @@ MANIFESTS["gt1"] = {**manifest_of("v029+commit+draw+floor+mass+nonatbunker+lords
 # gt0.24dev: its macro model trained with every matchup's styles (allstyles: T_all_v2all), so it plays a style in PvT
 # and TvT too. 96 paired TvZ games against gt0.22dev/gt0.23dev (TS169a+TS170b against ZB169a+TB170b, the second half
 # against gz0.11dev): the Terran's score +0.086 +- 0.077, the gap -0.001 [-0.041, +0.040], its styles played as before
+# gt0.25dev: every build's fix of 2026-10-31: decisions that ended without their command (dropped while waiting, their
+# building gone, refused by the game) taken back from its decisions so far, as the replays count the commands given, and a
+# key the hands didn't give (no APM left) given again, not lost; plain fixes, adopted on the input check (#47: 7 Marines
+# and 2 SCVs decided over the replay's at 9:00 of its game, now none; the decided block off at 57% of moments, now 5%)
 MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping+together+rl1+unscripted+huntadvice"
                                      "+dice+widespot+seenall+armyseen+builtcount+unitcount+styleroll+noalarm+gastarget"
                                      "+pvtroles+pvtmodes+modedice+mirrorroles+allstyles"),
-                       "version": "gt0.24dev"}
+                       "version": "gt0.25dev"}
 
 # gz0.2dev: gz1 without the stop-gaps over its learned layers (unscripted): the Zerg side of TvZ self-play;
 # gz0.3dev: the overlord's history its own (ownsupply: the pros' history in its inputs held their 9-supply overlord,
@@ -1201,9 +1209,12 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # input fix adopted on the input check (tests/test_inputs.py: the Spire and the Mutalisks decided no longer counted over
 # the replay's, +0.37 each without it), with the tracker copy's pending fixed (a copy for the gas head, gaswaits, put its
 # decisions in the live tracker's pending)
+# gz0.14dev: every build's fix of 2026-10-31 (as gt0.25dev's): decisions that ended without their command taken back
+# from its decisions so far; 4 of the input check game's 17 Mutalisk morphs were refused by the game (sent a second
+# after another) and still counted, now none (#47)
 MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allstyles+gaswaits+parkmany"
                                      "+pvzroles+mirrorroles+ownhist+builtcount"),
-                       "version": "gz0.13dev"}
+                       "version": "gz0.14dev"}
 
 # gp0.4dev: gp1 without the stop-gaps over its learned layers (unscripted: the hunt, a Pylon ahead of production) and
 # its army on control groups by type (grouping, as gt1dev's and gz1's): the Protoss's dev build, where its learning is
@@ -1219,7 +1230,8 @@ MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allsty
 # pros 9.2)
 # gp0.6dev: builtcount, as gt1dev's and gz1dev's (its decisions so far as the replays count them: the same through 9
 # minutes of the input check's game, every building it decided started)
-MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue+builtcount"), "version": "gp0.6dev"}
+# gp0.7dev: every build's fix of 2026-10-31 (as gt0.25dev's: decisions that ended without their command taken back)
+MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue+builtcount"), "version": "gp0.7dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
