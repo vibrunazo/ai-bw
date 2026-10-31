@@ -19,7 +19,7 @@ learned Zerg opponent (Gary-Z), a humanlikeness classifier as the anchor the lea
 on, the league itself, and RL on paired branches (a moment saved and played twice, both bots live).
 Where it stands (2026-10-31): one Gary for every race (the refactor, 2026-10-20), playing Terran as `gt1`
 (gt0.10), Zerg as `gz1` (gz0.3) and Protoss as `gp1` (gp0.4, crude); learning is trained and judged in `gt1dev`
-(gt0.24dev), `gp1dev` (gp0.5dev) and `gz1dev` (gz0.12dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
+(gt0.24dev), `gp1dev` (gp0.6dev) and `gz1dev` (gz0.13dev: one macro model per race now in both, with every matchup's styles, each matchup's fights by its own pros' role
 model, the Zerg's reading its own decision history), which run without the stop-gaps over the layers being learned (AGENTS.md), and gt1dev against
 gz1dev is the TvZ self-play pairing, balanced (each side wins or leads in 38% of 96 games). The one RL run
 that held is on the Terran's fight roles (rl1, in gt1dev); the army's commit decision is the target now,
@@ -42,7 +42,7 @@ pairs so far (docs/SELF_PLAY.md).
 
 ## Components by version
 
-| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.12dev, gp1 gp0.4, gp1dev gp0.5dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
+| Component | What it is | Now (gt1 gt0.10, gt1dev gt0.24dev, gz1 gz0.3, gz1dev gz0.13dev, gp1 gp0.4, gp1dev gp0.6dev) | v0.29 | v0.28 | v0.27 | v0.26 | v0.25 | v0.24 | v0.23 | v0.22 | v0.21 | v0.20 | v0.19 | v0.18 | v0.17 | v0.16 | v0.15 | v0.14 | v0.13 | v0.12 | v0.11 | v0.10 | v0.9 | v0.8 | v0.7 | v0.6 | v0.5 | v0.4 | v0.3 | v0.2 | v0.1 | v0 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Game: headless | OpenBW game Gary plays in for development and tests (`env/`, `gary/env.py`) | Melee games on any map, network-style command delay, replays saved | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | Game: live Remastered | Gary in a real StarCraft: Remastered client over LAN (`adapters/scr_bridge`) | Plays, 1:1 with OpenBW (a LAN game re-simulates to the same state); known gaps in the bridge's map checks and hotkeys (its README) | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ | — |
@@ -1690,6 +1690,18 @@ plan and the full log).
   +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
   loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
   it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
+- **The decisions so far counted the same for every race (2026-10-31, gz1dev gz0.13dev, gp1dev gp0.6dev).** builtcount
+  (gt1dev's: the buildings among the macro model's decisions so far as the replays count them, every building that
+  started, a decided one that never did taken back) for the Zerg and the Protoss. On gp1dev it first counted 2.3 Pylons
+  under the replay's and a Gateway, Forge and cannon under, a bug: the tracker's copy that gaswaits notes its waiting
+  decisions on for the gas head shared the live tracker's pending list, so a Pylon decided once was pending three times
+  and each extra taken back (gaswaits is the Zerg's and the Protoss's, builtcount the Terran's, so no build had both).
+  Fixed (MacroTracker.copy), the Protoss's counts are the replay's as without it (every building it decided started,
+  through the input check's 9 minutes) and the Zerg's nearer (the Spire and Mutalisks decided no longer +0.37 each over
+  the replay's). Adopted on the input check, without rounds: an input counted as the data counts it is the dev builds'
+  rule, and a model playing worse with it was leaning on the wrong count, to be looked into, not kept. The baselines for
+  the next changes are to be replayed. (In the same check the Terran's Marines decided are up to 7 over its replay's,
+  57% of the moments: #47.)
 - **One macro decoder: what carries between races (2026-10-31, gp1dev gp0.5dev; docs/RACES.md step 2).** Each race's
   decoder differs; each difference was tried on the other races, 96 paired games against gz1dev (PvZ against DZ173a+b,
   TvZ against HO172a+b). The Zerg's rules for the Terran and the Protoss (zdecoder: pace, hold and the 5% floor while a

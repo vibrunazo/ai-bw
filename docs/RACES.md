@@ -69,7 +69,7 @@ dev build where learning is done and judged without the stop-gaps (AGENTS.md):
 | | Terran | Zerg | Protoss |
 |---|---|---|---|
 | Plays | `gt1` gt0.10 | `gz1` gz0.3 | `gp1` gp0.4 (crude) |
-| Dev build | `gt1dev` gt0.24dev | `gz1dev` gz0.12dev | `gp1dev` gp0.5dev (gp0.4dev, 2026-10-30: 96 paired games a matchup against gp1, PvT -0.029, PvZ -0.068, PvP -0.076) |
+| Dev build | `gt1dev` gt0.24dev | `gz1dev` gz0.13dev | `gp1dev` gp0.6dev (gp0.4dev, 2026-10-30: 96 paired games a matchup against gp1, PvT -0.029, PvZ -0.068, PvP -0.076) |
 
 ## What still differs between the races
 
@@ -80,7 +80,7 @@ tables over time. In the dev builds:
 
 | Area | Terran (`gt1dev`) | Zerg (`gz1dev`) | Protoss (`gp1dev`) |
 |---|---|---|---|
-| Macro decoder | dice, summed odds for expansions, a queue of two in the building, built and unit counts | dice, its own extras: `pace`, `hold`, a tech floor (10%), a wait floor (5%), `hatch_mass`; no unit count | dice, summed odds, a queue of two in the building (gp0.5dev), unit count |
+| Macro decoder | dice, summed odds for expansions, a queue of two in the building, built and unit counts | dice, its own extras: `pace`, `hold`, a tech floor (10%), a wait floor (5%), `hatch_mass`; built counts (gz0.13dev), no unit count | dice, summed odds, a queue of two in the building (gp0.5dev), built (gp0.6dev) and unit counts |
 | Scripted macro | the answers to lurkers and mutalisks (TvZ, AGENTS.md) | the early-pool alarm's builds (the Terran's are off since gt0.18dev) | none |
 | First producer by a time (`rax_by`) | 78 s | 2:45 | none |
 | Fight | TvZ: the RL'd role model and the fight rules (repair, pull, load, detect, stim, reinforce); PvT and TvT: the matchup's role model | its own provider (`zerg_fight.py`: the role model, lurkers, retreat when outweighed) | the matchup's role model, no rules: no archon merges, no shuttles |
@@ -97,9 +97,8 @@ The playing builds differ more: `gt1` keeps every stop-gap, `gz1` the pros' deci
 2. **One macro decoder.** Measured (2026-10-31, docs/PROGRESS.md): the Terran's queue of two in the building carries to
    the Protoss (gp0.5dev, nearer the pros at 0-10 minutes); the Zerg's `pace`, `hold` and 5% wait floor don't carry to
    the Terran or the Protoss (further from the pros in both: they are the larvae's), so they stay the Zerg's, as its
-   `hatch_mass` and tech floor; the under-half rule stays for races that wait for a busy building. Left: the Terran's
-   built counts (`built_count`) for the Protoss, and the Pylon ahead (off in every dev build; gp1dev decides fewer army
-   units and more Pylons).
+   `hatch_mass` and tech floor; the under-half rule stays for races that wait for a busy building. The Terran's built
+   counts are every dev build's (gz0.13dev, gp0.6dev). Left: the Zerg's unit count (its eggs counted otherwise, #50).
 3. **The fight rules as race tables**: the Terran's hand rules and the Zerg's retreat, then the army rules (posts,
    raid) for any race's flyers.
 4. **A critic per matchup** (#62), then the belief model per matchup.

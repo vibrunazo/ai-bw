@@ -49,7 +49,9 @@ and its line removed; a new one gets an issue and a line).
   for a close call). An adopted option is folded into the manifest with a version bump, so the name
   never grows into a chain of options. A close 48-game round gets its second 48 (`--first 4010`) at the first
   round's priority, without asking. A baseline is replayed whenever its code or the opponent's manifest changed (a
-  baseline from a worktree against an older gz1 once misjudged an option). A stop-gap that makes no measurable
+  baseline from a worktree against an older gz1 once misjudged an option). A plain bug fix, or a model's input counted
+  as its training data counts it, is adopted on its own check (the records, tests/test_inputs.py), not on rounds: if
+  Gary plays worse with it, a model was leaning on the bug, and that is what to look into. A stop-gap that makes no measurable
   difference in 96 paired games goes. A
   learned change that fails its 96 games is reviewed before the next try: a bug (the records, `eval.why`), inputs
   the model lacks for the decision, or the limit of what the data teaches; the finding goes in docs/PROGRESS.md.

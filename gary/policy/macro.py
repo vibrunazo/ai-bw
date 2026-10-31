@@ -351,6 +351,11 @@ class MacroTracker:
         change it, and a tracker that updates only when read was the fault seenall fixed."""
         c = copy.copy(self)
         c.seen_max, c.decided, c.tag_types = self.seen_max.copy(), self.decided.copy(), dict(self.tag_types)
+        # (builtcount's lists too: a copy's decisions noted for the gas head, option gaswaits, went into the live
+        # tracker's pending, three for a Pylon decided once, each taken back when it didn't start: 2.3 Pylons short)
+        c.pending, c.buildings_seen, c.building_tags = [list(p) for p in self.pending], set(self.buildings_seen), \
+            set(self.building_tags)
+        c.halls_at, c.workers_at = list(self.halls_at), dict(self.workers_at)
         return c
 
     def note_decision(self, act: int, uid: int, frame: int) -> None:

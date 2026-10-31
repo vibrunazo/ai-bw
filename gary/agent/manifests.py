@@ -1197,9 +1197,13 @@ MANIFESTS["gt1dev"] = {**manifest_of("gt1+again+refresh+incontact+batch+grouping
 # against HB172a+TS170b): the Zerg's score +0.039 +- 0.092; drones 27% of its decisions at 6:00-7:30 (26% with the history,
 # pros 17-24%): the feedback loop the history was for didn't come back; the macro gap -0.022 [-0.142, +0.094] (10-15
 # minutes +0.051 [+0.013, +0.081] further, 20-30 nearer)
+# gz0.13dev: the buildings among its decisions so far counted as the replays count them (builtcount, as gt1dev's), an
+# input fix adopted on the input check (tests/test_inputs.py: the Spire and the Mutalisks decided no longer counted over
+# the replay's, +0.37 each without it), with the tracker copy's pending fixed (a copy for the gas head, gaswaits, put its
+# decisions in the live tracker's pending)
 MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allstyles+gaswaits+parkmany"
-                                     "+pvzroles+mirrorroles+ownhist"),
-                       "version": "gz0.12dev"}
+                                     "+pvzroles+mirrorroles+ownhist+builtcount"),
+                       "version": "gz0.13dev"}
 
 # gp0.4dev: gp1 without the stop-gaps over its learned layers (unscripted: the hunt, a Pylon ahead of production) and
 # its army on control groups by type (grouping, as gt1dev's and gz1's): the Protoss's dev build, where its learning is
@@ -1213,7 +1217,9 @@ MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allsty
 # gap nearer at 0-5 (-0.028 [-0.037, -0.002]) and 5-10 minutes (-0.024 [-0.044, -0.001]), no measurable difference
 # later; at 10-20 minutes workers 46.7 (43.6 without, pros 46.4), army supply 44.2 (40.6, pros 53.3), Dragoons 6.7 (5.7,
 # pros 9.2)
-MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue"), "version": "gp0.5dev"}
+# gp0.6dev: builtcount, as gt1dev's and gz1dev's (its decisions so far as the replays count them: the same through 9
+# minutes of the input check's game, every building it decided started)
+MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue+builtcount"), "version": "gp0.6dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
