@@ -1699,8 +1699,11 @@ plan and the full log).
   +0.060], the fight gap +0.014 [-0.023, +0.052]; PvZ, gp1dev with them against gz1dev, +0.016 [-0.034, +0.065], the
   fight gap -0.058 [-0.104, -0.005] nearer (5-15 minutes); PvT against gt1dev, +0.005 [-0.036, +0.047], the fight gap
   +0.030 [-0.046, +0.142]. No measurable difference in games and one fight gap of three just nearer: stop-gaps that make
-  no measurable difference go (AGENTS.md), so the dev builds stay without them and the option stays. It also asks
-  whether gt1dev's own rules (repair, pull, load, detect, stim, reinforce) earn their place: the same measure, off.
+  no measurable difference go (AGENTS.md), so the dev builds stay without them and the option stays. This says nothing
+  of the Terran's own rules: they were written for its bio and bunkers, and no learned layer has an output for their
+  jobs, so off they'd only show a Gary that never pulls, loads or scans; their stop-gap entries (AGENTS.md) say what
+  must own each job first. At 96 paired games the intervals were about +-0.05 (a detectable effect about 0.08): rules
+  worth less were never going to show.
 - **Decisions that never reached the game taken back (2026-10-31, every build: gt1 gt0.11, gz1 gz0.4, gp1 gp0.5, gt1dev
   gt0.25dev, gz1dev gz0.14dev, gp1dev gp0.7dev; #47).** The macro model's decisions so far are noted when it decides;
   the replays count the production commands given. On the input check's game the Terran's Marines decided ran 7 over

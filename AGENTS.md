@@ -46,13 +46,16 @@ and its line removed; a new one gets an issue and a line).
 - A change is an option on them (`gt1+<option>`), judged in paired 48-game rounds on the ladder maps
   (`--maps ladder --seeds 6 --first 4004`, 30 minutes) and the gap score to modern pros; 24 games are too
   noisy for close calls, and a single round's gap score needs its spread (`eval/gap_windows.py`, 96 paired games
-  for a close call). An adopted option is folded into the manifest with a version bump, so the name
+  for a close call). A round is proposed only with its minimum detectable effect written first: 96 paired games
+  resolve about 0.08 of the paired score (its 90% interval about +-0.05), so an option expected to move less is
+  judged on its own check (the records, the fidelity measures) or not by rounds at all. An adopted option is folded into the manifest with a version bump, so the name
   never grows into a chain of options. A close 48-game round gets its second 48 (`--first 4010`) at the first
   round's priority, without asking. A baseline is replayed whenever its code or the opponent's manifest changed (a
   baseline from a worktree against an older gz1 once misjudged an option). A plain bug fix, or a model's input counted
   as its training data counts it, is adopted on its own check (the records, tests/test_inputs.py), not on rounds: if
   Gary plays worse with it, a model was leaning on the bug, and that is what to look into. A stop-gap that makes no measurable
-  difference in 96 paired games goes. A
+  difference in 96 paired games goes once a learned layer has an output for its job (one that has none is judged on
+  its entry's fidelity measure: a Gary that never stims can win as many games). A
   learned change that fails its 96 games is reviewed before the next try: a bug (the records, `eval.why`), inputs
   the model lacks for the decision, or the limit of what the data teaches; the finding goes in docs/PROGRESS.md.
 - **Fidelity before wins.** Gary is a sparring partner meant to play like the pros, so a change that moves it toward
@@ -212,10 +215,42 @@ odds become a choice: dice, hold, floors), and fixes of plain bugs.
   decisions at 6:00-7:30 (26% with it), the Zerg's score +0.039 +- 0.092, the macro gap -0.022 [-0.142, +0.094]: no
   measurable difference, so off there. It goes from gz1 when gz1dev replaces it (gz1's older model untested without it);
   if the loop comes back, the fix is in training (the history noised, or dropped as an input), the same for every race.
+- **The Terran's fight rules** (in gt1 and gt1dev; `fight.py` PullRule, LoadRule, RepairRule, ReinforceRule, DetectRule;
+  orders in 48 games of gt1dev, BT179a: load 3,156, reinforce 954, detect 922, repair 344, pull 313). No learned layer
+  has an output for any of these jobs: the role model's roles are fire, close in, pull back, retreat, reposition,
+  stand, siege, unsiege and mine, for fighters in contact, and it decides no workers (`workers: False`); the army
+  model moves clusters, not a unit just out of its Barracks. So none of them can be measured off on a score: off, Gary
+  simply never does the thing. Each goes when a learned layer owns its job in play (its output executed, the pipe
+  check) and, with the rule off, holds the rule's fidelity measure against the pros. For the other races they are
+  option `fightrules` (pull and reinforce), measured with no difference in TvZ, PvZ or PvT (2026-10-31,
+  docs/PROGRESS.md), so off there.
+  - *Pull* (per_enemy 3, ground only, up to 8 enemy supply): workers off the minerals against fighters at a base
+    that outweigh the army there, back once calm for 5 s. Replace with worker roles in the role model (the pros' pulls
+    in its fight data). Measure: the home defenses against the pros' (where they pull, when, how many, for how long;
+    in the rule's docstring Gary pulled in 44 of 239 where the pros didn't, at 3.0 s against their 7.6, 7.5 SCVs
+    against 6.5, 89 SCV-seconds against 62).
+  - *Load* (always: every finished bunker kept loaded): marines into a bunker that isn't full. Replace with a
+    bunker role (enter, leave) for marines in the role model. Measure: marines in bunkers per minute against the
+    pros' (their right-clicks on a bunker), and bunker deaths with marines outside.
+  - *Repair* (2 SCVs, 3 for a turret): the nearest free SCVs repair a damaged bunker or turret with zerg near.
+    Replace with a repair role for workers in the role model. Measure: SCVs repairing per damaged bunker and turret
+    against the pros', and bunkers and turrets lost.
+  - *Reinforce*: fighters just out of a Barracks while zerg are at the base attack-move to the fight. Replace with
+    the army model deciding new units' destination (a cluster at home under attack). Measure: army deaths with no
+    other fighter within 6 tiles (48% of Gary's in the rule's docstring, the pros' 12%) and late arrivals at
+    defenses (`eval/attacks.py`).
+  - *Detect*: a scan on a lurker seen burrowing near Gary's fighters, or where they lose HP with nothing in sight
+    (Comsat energy permitting). Scripted because no model decides scans (0 scans in 14 games against lurkers before
+    it). Replace with scans as a learned decision (the pros' scans in the fight data, with lurkers burrowed or
+    units hit unseen as inputs). Measure: time from a lurker burrowing near the army to the scan, against the
+    pros', and units lost to lurkers.
+  - *Stim* is not a stop-gap: its decision is the stim model's (`gary/policy/stim.py`, learned from the pros'
+    stims); the rule is its decoder (every half second, Stim Packs done, an HP floor). Measure that it stays: stims
+    per fight and HP at the stim against the pros'.
 - **Older rules, to review** (scripted before 2026-10-20; each needs a full entry when next worked on): Gary-Z's
   alarm and the natural colonies; the first producer by a time (`rax_by`); the v0.16 hunt and base scans; the fight
-  layer's rules (repair, pull, load, reinforce, stim, detect; the Zerg roles' retreat when outweighed; RoleAhead's
-  hand rules in contact, gt1's whole fight in contact); Gary-Z's army rules (posts, raid, join, sweep, press).
+  layer's other rules (the Zerg roles' retreat when outweighed; RoleAhead's hand rules in contact, gt1's whole fight
+  in contact); Gary-Z's army rules (posts, raid, join, sweep, press).
 
 ## When a new replay pack lands
 
