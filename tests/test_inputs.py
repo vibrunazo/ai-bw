@@ -259,7 +259,7 @@ def _replay_rows(m, sides, reads, tmp: Path):
             x, _ = encode_rows(mac, i, spec, np.array([k]), rd["style"], rd["map"], None, rd["matchup"])
             entry = {"macro": x[0]}
             if rd["critic"] is not None:
-                entry["critic"] = view_rows(mac, i, spec, r, np.array([k]))[0]
+                entry["critic"] = view_rows(mac, i, spec, r, m.gary.matchup, np.array([k]))[0]
             j = np.nonzero(tf == f)[0]
             if len(j):
                 j = int(j[0])

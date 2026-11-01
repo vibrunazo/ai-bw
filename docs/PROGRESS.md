@@ -1690,6 +1690,19 @@ plan and the full log).
   +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
   loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
   it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
+- **A critic per matchup (2026-11-01; docs/RACES.md step 4, #62).** train/value.py was TvZ's: it now trains any
+  matchup and race, from the matchup's pros and its league games (both sides in a mirror, deaths valued for every race),
+  on a belief model of the matchup (train/belief.py, trained for PvT, PvZ, PvP, TvT and ZvZ: the enemy army's supply
+  off by 1-5 at 3-10 minutes, 6-16 at 10-15, as TvZ's). Two bugs found on the way: in a mirror both players took one
+  row's result (the pros' win AUC 0.50), and old rounds' manifests with options since removed stopped the PvT and PvZ
+  runs. Held out, the win AUC on the pros' games 0.61-0.69 and on Gary's 0.84-0.92 (TvZ's 0.66 and 0.86-0.92, its two
+  critics trained again on the rounds since 2026-10-29: the Oct 28 ones read the Terran at 0.50-0.65 in games it won
+  26%). tests/test_value.py reads every critic from its dev build in play. eval/critic_gg.py, #62's check before a gg
+  plays: on decided games the odds read at 0.9 or more came true 96-100%, at 0.1 or less 0-5%; the games read at or
+  under 20% for a minute were won after in 0-12% of the decided ones, at 10% in 0-5% (TvZ 0 of 24 and 0 of 8), but most
+  such games went to 30:00 (PvZ, the Protoss read: 155 of 170), so the winner rarely finishes. In between the odds lean
+  to the pros' even games: where Gary's matchup isn't even (TvZ, Gary-T won 8 of its 32 decided held-out games) the
+  middle reads 0.5-0.65 for a side that won 31%.
 - **The fight rules for any race, measured (2026-10-31, option fightrules; docs/RACES.md step 3; not adopted).** The
   Terran's pull (workers against an attack on a base, 3 per enemy, ground only, up to 8 enemies) and reinforce (new
   units sent to a fight at home) now run in any race's fight layer, the Zerg's provider too (its `before` and

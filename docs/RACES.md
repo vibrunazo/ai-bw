@@ -86,7 +86,7 @@ tables over time. In the dev builds:
 | Fight | TvZ: the RL'd role model and the fight rules (repair, pull, load, detect, stim, reinforce); PvT and TvT: the matchup's role model | its own provider (`zerg_fight.py`: the role model, lurkers, retreat when outweighed) | the matchup's role model, no rules: no archon merges, no shuttles |
 | Army | the commit model, the hunt as advice, the static-defense nudge, scans | the commit model; overlord posts and mutalisk raid as rules (no model moves those units) | the commit model |
 | Control groups | by type, keys 1-4 (the pros' layout) | by type, keys 1-3 | by type, keys 1-3 (not yet read from the Protoss pros' hotkeys) |
-| Critic | TvZ | TvZ | none |
+| Critic | every matchup (2026-11-01) | every matchup | every matchup |
 
 The playing builds differ more: `gt1` keeps every stop-gap, `gz1` the pros' decision history in its macro inputs,
 `gp1` the hunt, a Pylon ahead of production and no control groups.
@@ -105,6 +105,8 @@ The playing builds differ more: `gt1` keeps every stop-gap, `gz1` the pros' deci
    Terran's rules have stop-gap entries (AGENTS.md): none can go before a learned layer owns its job. The Zerg's
    retreat and its overlord posts and raid stay its own until a model moves those units; observers with the
    Protoss's army are its mechanics (step 5).
-4. **A critic per matchup** (#62), then the belief model per matchup.
+4. **A critic per matchup** (#62), then the belief model per matchup. Both trained for every matchup and race
+   (2026-11-01, docs/PROGRESS.md); calibrated at the ends, the middle leaning to the pros' even games. Left: the gg
+   rule itself (#62) and the league's games at time graded by the critic rather than the supply ratio.
 5. **The Protoss's own mechanics** (#36): archon merges, shuttles, its early defense, its key layout from the pros'
    hotkeys.

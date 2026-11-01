@@ -1,6 +1,6 @@
 """Gary's value network (ARCHITECTURE.md P3; docs/CONTROL.md step 7): how good a moment is.
 
-Trained by train/value.py on pro TvZ games and Gary's own; judged as a critic by
+Trained by train/value.py per matchup and race on the pros' games and Gary's own; judged as a critic by
 eval/value_branches.py. Its view of a moment, the same in replays and in play:
 
   the macro model's   time, money, supply, own units, the enemy in sight now and the most seen, the
@@ -32,15 +32,12 @@ EXTRAS = ("belief army", "belief q50", "belief q80", "belief drones", "belief ha
 LOOKBACK_S = 30
 DISC_HALF_S = 60.0
 GAMMA_S = 0.5 ** (1 / DISC_HALF_S)     # the discount per second
-_T_ARMY = np.array(sorted(ARMY_SUPPLY["T"]))
-_T_SUP = np.array([ARMY_SUPPLY["T"][t] for t in _T_ARMY], np.float32)
-_Z_ARMY = np.array(sorted(ARMY_SUPPLY["Z"]))
-_Z_SUP = np.array([ARMY_SUPPLY["Z"][t] for t in _Z_ARMY], np.float32)
+_ARMY = {r: (np.array(sorted(s)), np.array([s[t] for t in sorted(s)], np.float32)) for r, s in ARMY_SUPPLY.items()}
 
 
 def army_supply(counts228: np.ndarray, race: str) -> np.ndarray:
     """Army supply x2 of unit counts by type id, (..., 228) -> (...)."""
-    types, sup = (_T_ARMY, _T_SUP) if race == "T" else (_Z_ARMY, _Z_SUP)
+    types, sup = _ARMY[race]
     return counts228[..., types] @ sup
 
 

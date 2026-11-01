@@ -12,7 +12,7 @@ and its line removed; a new one gets an issue and a line).
   interface (human-like hands) and the game environment.
 - `eval/`: the launcher (`match.py`), league rounds (`league.py`, which keeps each round's feature rows), measures
   against the pros (`humanlike.py`, `attacks.py`, `style_adherence.py`: the build per style), two versions compared game against game per time window with a
-  bootstrap spread (`gap_windows.py`), the records' queries (`why.py`), the run monitor (`monitor.py`,
+  bootstrap spread (`gap_windows.py`), the records' queries (`why.py`), the critic's calibration and would-gg games (`critic_gg.py`), the run monitor (`monitor.py`,
   `priority.py`).
 - `train/`, `ingest/`, `resim/`: models, datasets from replays, the replay re-simulator.
 - `adapters/scr_bridge`: playing StarCraft: Remastered. `tests/`: smoke, parity, matchups, game data.

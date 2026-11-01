@@ -72,8 +72,9 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 - [#61](https://github.com/vibrunazo/gary/issues/61) The Terran's modes in PvT (gt0.22dev siege and lay mines): held as long as the
   pros hold them, the pros' mines outside fights, Spider Mines four minutes late
 - [#62](https://github.com/vibrunazo/gary/issues/62) Type gg and leave when the critic's win odds stay under 20% (default;
-  an option plays on; dev builds play to the end and record their would-gg moments); first a critic per matchup and its
-  calibration
+  an option plays on; dev builds play to the end and record their would-gg moments); a critic per matchup and its
+  calibration done (eval/critic_gg.py: won after a would-gg in 0-12% of decided games at 20%, 0-5% at 10%); left the
+  pros' odds when they leave, then the rule
 - Later, as supervised skills: [#21](https://github.com/vibrunazo/gary/issues/21) worker drilling,
   [#22](https://github.com/vibrunazo/gary/issues/22) bunker rush
 
