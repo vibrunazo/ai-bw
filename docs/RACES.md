@@ -68,8 +68,8 @@ dev build where learning is done and judged without the stop-gaps (AGENTS.md):
 
 | | Terran | Zerg | Protoss |
 |---|---|---|---|
-| Plays | `gt1` gt0.11 | `gz1` gz0.4 | `gp1` gp0.5 (crude) |
-| Dev build | `gt1dev` gt0.25dev | `gz1dev` gz0.14dev | `gp1dev` gp0.7dev (gp0.4dev, 2026-10-30: 96 paired games a matchup against gp1, PvT -0.029, PvZ -0.068, PvP -0.076) |
+| Plays | `gt1` gt0.11 | `gz1` gz0.4 | `gp1` gp0.6 (crude) |
+| Dev build | `gt1dev` gt0.25dev | `gz1dev` gz0.14dev | `gp1dev` gp0.10dev (gp0.4dev, 2026-10-30: 96 paired games a matchup against gp1, PvT -0.029, PvZ -0.068, PvP -0.076) |
 
 ## What still differs between the races
 
@@ -85,7 +85,7 @@ tables over time. In the dev builds:
 | First producer by a time (`rax_by`) | 78 s | 2:45 | none |
 | Fight | TvZ: the RL'd role model and the fight rules (repair, pull, load, detect, stim, reinforce); PvT and TvT: the matchup's role model | its own provider (`zerg_fight.py`: the role model, lurkers, retreat when outweighed) | the matchup's role model, no rules; Archons merged as a macro decision (gp0.9dev), Reavers and Carriers kept armed; no shuttles, no storms |
 | Army | the commit model, the hunt as advice, the static-defense nudge, scans | the commit model; overlord posts and mutalisk raid as rules (no model moves those units) | the commit model |
-| Control groups | by type, keys 1-4 (the pros' layout) | by type, keys 1-3 | by type, keys 1-3 (not yet read from the Protoss pros' hotkeys) |
+| Control groups | by type, keys 1-4 (the pros' layout) | by type, keys 1-3 | by type, keys 1-4, production 5-8 (the Protoss pros' layout, gp0.10dev) |
 | Critic | every matchup (2026-11-01) | every matchup | every matchup |
 
 The playing builds differ more: `gt1` keeps every stop-gap, `gz1` the pros' decision history in its macro inputs,
@@ -111,4 +111,5 @@ The playing builds differ more: `gt1` keeps every stop-gap, `gz1` the pros' deci
 5. **The Protoss's own mechanics** (#36): archon merges, shuttles, its early defense, its key layout from the pros'
    hotkeys. Begun (2026-11-01, docs/PROGRESS.md): Reavers and Carriers kept full of Scarabs and Interceptors (they were
    built empty and never fired); Archons merged as a macro decision learned from the pros' merges, at about their rate
-   in PvZ (gp0.9dev). Left: storms (#4), shuttles, its early defense, its key layout.
+   in PvZ (gp0.9dev); its keys laid out as the Protoss pros' (gp0.10dev). Left: storms (#4), shuttles, its early
+   defense.

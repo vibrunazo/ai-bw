@@ -1690,6 +1690,19 @@ plan and the full log).
   +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
   loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
   it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
+- **The Protoss pros' key layout (2026-11-01, gp0.10dev; docs/RACES.md step 5, #36).** Gary-P's keys were the other
+  races' defaults: the army on 1-3, Nexuses on 4-5, production on 6-9. The Protoss pros' hotkeys
+  (ingest/hotkey_dataset.py, 100 modern games each of PvT and PvZ, recalls a minute after 5:00 by what the key held):
+  the army on 1-4 (PvT 19, 13, 10, 7; PvZ 21, 16, 11, 5), Gateways on 5-8 (PvT 8.3, 4.9, 2.2, 0.7; PvZ 7.3, 5.0, 2.7,
+  1.0), a Nexus seldom on a key after 5:00; 4 army keys, 5.9 (PvT) and 8.7 (PvZ) army assigns and 45 and 43 recalls a
+  minute, groups of 3 and 5 (Shuttles 30% of PvT assigns, Corsairs 19% and Zealots 19% of PvZ's). The layout is the
+  grouping's race table (grouping.py LAYOUTS: army 1-4, production 5-8, a Nexus on 9). Judged on fidelity (a layout
+  isn't expected to move 96 paired games' 0.08; the Terran's 3 keys against 4 made no difference, GT3a): PvT against
+  gt1dev (KP183a), 4 army keys in use (3 before, pros 4), 2.5 assigns and 3.5 recalls a minute (2.0 and 3.7; recalls
+  are orders given per key, a learned layer's, as for the Terran), groups of 3 (Dragoons 54%, Zealots 25%, High
+  Templar 10%, Reavers 8%: no Shuttle or Corsair on a key, as none is moved yet). Won 3 lost 13 of 48 (BV179a,
+  gp0.7dev: 5 and 9; paired over the three changes since, BV179a +0.052 +- 0.127, the gap no window apart). KP183a is
+  gp0.10dev's PvT baseline; AR182a (PvZ) is stale for the layout.
 - **Archons merged as the pros merge them (2026-11-01, gp0.9dev, option archons; docs/RACES.md step 5, #36).** Gary-P
   made High Templar at the pros' rate and merged none: a merge wasn't among the macro model's decisions. The
   re-simulator now emits accepted merge orders and a start event when Templar become an Archon (a Templar's own unit

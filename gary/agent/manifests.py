@@ -1247,7 +1247,9 @@ MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allsty
 # Templar merged and held). Judged on fidelity (AGENTS.md): PvZ against gz1dev (AR182a), Archons at 12, 16 and 20 minutes
 # 0.2, 0.6, 1.3 a game, in 13%, 35% and 55% of games (the pros 0.1, 0.4, 1.0; 11%, 24%, 44%; none before), 279 of 303
 # merges formed; won 10 lost 0 of 48 (BZ179a, gp0.7dev: 9 and 3)
-MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue+builtcount+archons"), "version": "gp0.9dev"}
+# gp0.10dev: the Protoss pros' key layout (gary/agent/grouping.py LAYOUTS: army on 1-4, production on 5-8, a Nexus on 9;
+# it was the army on 1-3, Nexuses on 4-5, production on 6-9)
+MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue+builtcount+archons"), "version": "gp0.10dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:

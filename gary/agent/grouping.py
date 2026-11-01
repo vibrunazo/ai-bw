@@ -4,7 +4,7 @@ one key and one click, an order to others is selected unit by unit as before. As
 clusters merge or split for good, not every turn.
 
 Providers:
-  types     scripted (the default): the pros' habit, one unit type of one cluster on a key (LAYOUTS: Terran 1-4, Zerg 1-3),
+  types     scripted (the default): the pros' habit, one unit type of one cluster on a key (LAYOUTS: Terran and Protoss 1-4, Zerg 1-3),
             the biggest such groups by supply; a key re-assigned (not added to) when its group grew or moved on
   clusters  scripted: the army's clusters (up to 3, LearnedArmy's clustering) on keys 1-3, a cluster keeping the key
             holding most of its units; an arrival added to its cluster's key once it is there; a key is re-formed
@@ -99,9 +99,12 @@ class ClusterGrouping:
 # town halls 4-5, production 6-9). The pros' (ingest/hotkey_dataset.py, assigns by what a key holds): Terran army on
 # 1-5 (1-4 mostly), production on 6-7, other buildings on 8, 9 and 0; Zerg army on 1-3, hatcheries on 4-5. Terran:
 # 4 army keys, its Command Centers on 5-6, production on 7-9 (one key fewer: a fourth building is clicked), the
-# scout on 0 (motor.py). Zerg: the hatcheries keep 4-5, a raid 9 and lurkers 0 (army_rules.py, zerg_fight.py)
+# scout on 0 (motor.py). Zerg: the hatcheries keep 4-5, a raid 9 and lurkers 0 (army_rules.py, zerg_fight.py).
+# Protoss (recalls a minute after 5:00, 100 games each): army on 1-4 (PvT 19, 13, 10, 7; PvZ 21, 16, 11, 5), Gateways
+# on 5-8 (PvT 8.3, 4.9, 2.2, 0.7; PvZ 7.3, 5.0, 2.7, 1.0), a Nexus seldom on a key after 5:00 (9 or 0 in PvT, a quarter
+# of games each): 4 army keys, production on 5-8, a Nexus on 9
 LAYOUTS = {"T": {"army": [1, 2, 3, 4], "hall": [5, 6], "production": [7, 8, 9]},
-           "Z": {"army": [1, 2, 3]}, "P": {"army": [1, 2, 3]}}
+           "Z": {"army": [1, 2, 3]}, "P": {"army": [1, 2, 3, 4], "hall": [9], "production": [5, 6, 7, 8]}}
 TYPE_MIN_SUPPLY = 8                   # (supply x2) a type's group in a cluster: 4 marines or zerglings x2, 2 tanks
 REFORM_AFTER = 10 * 24                # a key re-assigned at most this often
 GROWN = 2                             # re-assigned when this many of its type joined its cluster
