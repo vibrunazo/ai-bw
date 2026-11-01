@@ -83,7 +83,7 @@ tables over time. In the dev builds:
 | Macro decoder | dice, summed odds for expansions, a queue of two in the building, built and unit counts | dice, its own extras: `pace`, `hold`, a tech floor (10%), a wait floor (5%), `hatch_mass`; built counts (gz0.13dev), no unit count | dice, summed odds, a queue of two in the building (gp0.5dev), built (gp0.6dev) and unit counts |
 | Scripted macro | the answers to lurkers and mutalisks (TvZ, AGENTS.md) | the early-pool alarm's builds (the Terran's are off since gt0.18dev) | none |
 | First producer by a time (`rax_by`) | 78 s | 2:45 | none |
-| Fight | TvZ: the RL'd role model and the fight rules (repair, pull, load, detect, stim, reinforce); PvT and TvT: the matchup's role model | its own provider (`zerg_fight.py`: the role model, lurkers, retreat when outweighed) | the matchup's role model, no rules: no archon merges, no shuttles |
+| Fight | TvZ: the RL'd role model and the fight rules (repair, pull, load, detect, stim, reinforce); PvT and TvT: the matchup's role model | its own provider (`zerg_fight.py`: the role model, lurkers, retreat when outweighed) | the matchup's role model, no rules; Archons merged as a macro decision (gp0.9dev), Reavers and Carriers kept armed; no shuttles, no storms |
 | Army | the commit model, the hunt as advice, the static-defense nudge, scans | the commit model; overlord posts and mutalisk raid as rules (no model moves those units) | the commit model |
 | Control groups | by type, keys 1-4 (the pros' layout) | by type, keys 1-3 | by type, keys 1-3 (not yet read from the Protoss pros' hotkeys) |
 | Critic | every matchup (2026-11-01) | every matchup | every matchup |
@@ -110,4 +110,5 @@ The playing builds differ more: `gt1` keeps every stop-gap, `gz1` the pros' deci
    rule itself (#62) and the league's games at time graded by the critic rather than the supply ratio (#63).
 5. **The Protoss's own mechanics** (#36): archon merges, shuttles, its early defense, its key layout from the pros'
    hotkeys. Begun (2026-11-01, docs/PROGRESS.md): Reavers and Carriers kept full of Scarabs and Interceptors (they were
-   built empty and never fired).
+   built empty and never fired); Archons merged as a macro decision learned from the pros' merges, at about their rate
+   in PvZ (gp0.9dev). Left: storms (#4), shuttles, its early defense, its key layout.

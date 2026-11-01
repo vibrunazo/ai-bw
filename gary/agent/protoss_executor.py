@@ -4,8 +4,9 @@ are trained from their buildings, as the Terran's are; a building other than a N
 Assimilator stands only in a Pylon's power field, which the game's placement check holds (can_place:
 no Gateway spot beside a Nexus without a Pylon), so the hands' part is the Pylons: one ahead of
 production for supply, and one when a powered building found no powered spot. An Archon or Dark Archon the
-macro decides is two of its Templar merged: the two with least energy (the pros merge Templar spent on
-storms), the second nearest the first, selected exactly and T (R) pressed."""
+macro decides is two of its Templar merged: the two nearest each other (the least energy between them breaking
+ties), selected exactly and T (R) pressed, held while they walk together, and its decision taken back if
+they don't (an order cancelled the merge, or one died): the dataset counts the Archons begun."""
 
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ UNPOWERED = {P.NEXUS, P.PYLON, P.ASSIMILATOR}    # what stands without a Pylon's
 POWER_SHORT_FOR = 20 * 24                        # a powered build that found no powered spot calls a Pylon this long
 MERGING = {105, 106, 183}                        # ArchonWarp, CompletingArchonSummon, DarkArchonMeld: merging already
 MERGE_FOR = 6 * 24                               # a merge not given by then is given up (its decision taken back)
+MERGE_SEEN = 2 * 24                              # a merge's key this long ago shows its Templar merging, or it didn't
 
 
 class ProtossExecutor(Executor):
@@ -31,6 +33,7 @@ class ProtossExecutor(Executor):
         super().__init__(g)
         self.power_short = -10 ** 9                  # when a powered building last found no powered spot
         g.task_runners["merge"] = self._task_merge
+        self.merges: list[dict] = []                 # merges given and not begun yet: their Templar, Archon, key's frame
 
     # --- what a decision means for Protoss hands ---------------------------------------------------
 
@@ -81,14 +84,30 @@ class ProtossExecutor(Executor):
     def _merge_plan(self, uid: int, mine: list[dict], done: list[dict]) -> dict | None:
         g = self.g
         kind = P.MERGE[uid]
-        free = sorted((u for u in done if u["type"] == kind and u["order"] not in MERGING
-                       and g.unselectable.get(u["tag"], 0) <= g.hi.frame), key=lambda u: u["energy"])
+        given = {t for m in self.merges for t in m["tags"]}
+        free = [u for u in done if u["type"] == kind and u["order"] not in MERGING and u["tag"] not in given
+                and g.unselectable.get(u["tag"], 0) <= g.hi.frame]
         if len(free) < 2:
             coming = sum(1 for u in mine if u["type"] == kind) + self.in_production(mine)[kind] >= 2
             return self.wait(f"two {P.NAMES[kind]} to merge: coming") if coming else self.no(f"no two {P.NAMES[kind]}")
-        first = free[0]
-        second = min(free[1:], key=lambda u: math.dist((u["x"], u["y"]), (first["x"], first["y"])))
-        return {"kind": "merge", "id": uid, "tags": [first["tag"], second["tag"]], "cost": (0, 0)}
+        a, b = min(((a, b) for i, a in enumerate(free) for b in free[i + 1:]),
+                   key=lambda p: (round(math.dist((p[0]["x"], p[0]["y"]), (p[1]["x"], p[1]["y"])) / 64),
+                                  p[0]["energy"] + p[1]["energy"]))
+        return {"kind": "merge", "id": uid, "tags": [a["tag"], b["tag"]], "cost": (0, 0)}
+
+    def release_reservations(self, mine: list[dict]) -> None:
+        super().release_reservations(mine)
+        g = self.g
+        units = {u["tag"]: u for u in mine}
+        for m in list(self.merges):
+            us = [units.get(t) for t in m["tags"]]
+            if any(u is not None and u["type"] == m["id"] for u in us):
+                g.leases.release(m["tags"])              # (an Archon began: what it does next is the fight's)
+                self.merges.remove(m)
+            elif g.hi.frame >= m["at"] + MERGE_SEEN and not all(u is not None and u["order"] in MERGING for u in us):
+                self.undecided(TRAIN, m["id"])           # (cancelled, or one died: no Archon)
+                g.leases.release(m["tags"])
+                self.merges.remove(m)
 
     def _task_merge(self, obs: dict, mine: list[dict], t: Task) -> None:
         """Exactly the two Templar selected (the motor's clicks), then the merge key. Given up, the decision taken
@@ -104,9 +123,11 @@ class ProtossExecutor(Executor):
             if g.task is None:                           # (its clicks didn't take them)
                 self.undecided(TRAIN, d["id"])
             return
-        if not g.hi.merge_archon(dark=d["id"] == P.DARK_ARCHON).accepted:
+        r = g.hi.merge_archon(dark=d["id"] == P.DARK_ARCHON)
+        if not r.accepted:
             return                                       # (no APM left: again next turn)
         g.leases.take(d["tags"], Intent("MERGE", list(d["tags"]), None, {}, "hands:merge"))
+        self.merges.append({"tags": list(d["tags"]), "id": d["id"], "at": max(r.land_frame, g.hi.frame)})
         g.say(f"merge: 2 {P.NAMES[P.MERGE[d['id']]]} -> {P.NAMES[d['id']]}")
         g.task = None
 

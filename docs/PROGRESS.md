@@ -1690,6 +1690,24 @@ plan and the full log).
   +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
   loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
   it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
+- **Archons merged as the pros merge them (2026-11-01, gp0.9dev, option archons; docs/RACES.md step 5, #36).** Gary-P
+  made High Templar at the pros' rate and merged none: a merge wasn't among the macro model's decisions. The
+  re-simulator now emits accepted merge orders and a start event when Templar become an Archon (a Templar's own unit
+  changes type, which its tracker reported only out of eggs); the macro dataset makes each Archon begun a train
+  decision, timed at its player's first merge order since the last one formed (spam once, one order on four Templar
+  two). PvT, PvZ and PvP rebuilt (7,787 games): an Archon in 38% of the Protoss players' PvZ games, 14% PvT, 10% PvP.
+  P_all_v2arch held out 47.8% top-1 against P_all_v2all's 47.5% on the same samples. The executor merges the nearest
+  two Templar (the least energy breaking ties), selected exactly, T pressed, held by a `hands:` lease above the
+  fight's; a merge whose Templar aren't merging 2 s after the key is taken back from the decisions so far. Three
+  48-game PvZ rounds against gz1dev found the leaks: in AR180a 178 of 213 merges formed, the army re-ordering pairs a
+  second after the key (it reads no leases), so army and fight orders now leave such units out of their lists and
+  take them out of a box or key's selection by their portraits; pairs far apart walked past the hold (nearest pairs
+  now, 30 s); a role-model order decided before the key took the pair after it. AR182a: 279 of 303 formed, Archons
+  at 12, 16 and 20 minutes 0.2, 0.6 and 1.3 a game, in 13%, 35% and 55% of games (the pros 0.1, 0.4, 1.0; 11%, 24%,
+  44%), High Templar 4.2 alive at 20:00 (5.6 before, pros 6.9); won 10 lost 0 (BZ179a 9 and 3). Adopted in gp1dev on
+  fidelity; AR182a is gp0.9dev's PvZ baseline, BV179 stale for PvT. The Protoss critics trained again for its macro
+  features (374); the PvZ one is less safe for a gg (#62): of its held-out decided games read at 10% or less for a
+  minute the Protoss won 3 of 14 after (0-5% before). The High Templar still cast no storms (#4).
 - **The Protoss's Reavers and Carriers armed (2026-11-01, gp0.6, gp0.8dev; docs/RACES.md step 5, #36).** Step 5 began
   with Gary-P's unit counts against the modern pros' (the league's rows, BV179 and BZ179, against the cached pro rows):
   it makes High Templar as the pros do (PvZ 5.6 at 20:00, pros 6.9) and merges none (the pros have an Archon in 44% of

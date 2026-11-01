@@ -276,7 +276,7 @@ class DirectMotor:
         """Select the group (or keep the selection if it already is the group), with the camera on
         the group, then give the order."""
         g, hi, d = self.g, self.g.hi, t.data
-        units = [u for u in mine if u["tag"] in set(d["tags"])]
+        units = [u for u in mine if u["tag"] in set(d["tags"]) and not g.leases.handed(u["tag"])]
         if not units:
             g.task = None
             return
@@ -319,6 +319,8 @@ class DirectMotor:
                 return
         if not sel & want:
             g.task = None
+            return
+        if self._unhand(t):
             return
         want = sel & want
         key = d["key"]
@@ -391,6 +393,21 @@ class DirectMotor:
             t.stage = "start"
             return
         g.task = None
+
+    def _unhand(self, t: Task) -> bool:
+        """The selection holds units the hands are carrying something out with (Templar merging, which a box or key
+        took): shift+clicks on their portraits take them out, as the panel shows them, before the order; with nothing
+        else selected the order ends. True if this turn went to it."""
+        g, hi = self.g, self.g.hi
+        handed = [s for s in hi.selection if g.leases.handed(s)]
+        if not handed:
+            return False
+        if len(handed) == len(hi.selection):
+            g.task = None
+            return True
+        for s in handed:
+            hi.shift_click_portrait(s)
+        return True
 
     def _out_of_mode(self, selected: list[dict], d: dict, at: str) -> bool:
         """Whether this turn goes to taking the selected units out of a mode they can't move in (a sieged tank, see
@@ -753,15 +770,8 @@ class DirectMotor:
             g.task = None
             return
         if t.stage == "selected":
-            handed = [u for u in mine if u["tag"] in set(obs["selection"]) and g.leases.handed(u["tag"])]
-            if handed and not d.get("unhanded"):     # (the box took Templar merging: shift+clicks take them out first)
-                for u in handed:
-                    p = screen_of(obs, *self._hit_point(obs, u))
-                    if p:
-                        hi.click(*p, shift=True)
-                d["unhanded"] = True
+            if self._unhand(t):
                 return
-            d["unhanded"] = False
             sel = [s for s in obs["selection"] if s in set(d["tags"])]
             if g.executor.army_select == "portrait" and sel and len(sel) < len(obs["selection"]) and not d.get("narrowed"):
                 # the box took more than the order's units (drones and overlords at the rally point): a ctrl+click
