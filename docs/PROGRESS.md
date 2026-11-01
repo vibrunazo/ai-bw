@@ -1690,6 +1690,17 @@ plan and the full log).
   +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
   loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
   it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
+- **The fight rules for any race, measured (2026-10-31, option fightrules; docs/RACES.md step 3; not adopted).** The
+  Terran's pull (workers against an attack on a base, 3 per enemy, ground only, up to 8 enemies) and reinforce (new
+  units sent to a fight at home) now run in any race's fight layer, the Zerg's provider too (its `before` and
+  `in_fight` rules), with one list of flyers for every race (gary/races.py FLYERS). On the check game both fire for
+  both races (the Zerg pulled 10 times and reinforced 11). Each over 96 paired games against fresh baselines (BT179,
+  BZ179, BV179, which replace the stale ones): TvZ, gz1dev with them against gt1dev, the Zerg's score +0.010 [-0.039,
+  +0.060], the fight gap +0.014 [-0.023, +0.052]; PvZ, gp1dev with them against gz1dev, +0.016 [-0.034, +0.065], the
+  fight gap -0.058 [-0.104, -0.005] nearer (5-15 minutes); PvT against gt1dev, +0.005 [-0.036, +0.047], the fight gap
+  +0.030 [-0.046, +0.142]. No measurable difference in games and one fight gap of three just nearer: stop-gaps that make
+  no measurable difference go (AGENTS.md), so the dev builds stay without them and the option stays. It also asks
+  whether gt1dev's own rules (repair, pull, load, detect, stim, reinforce) earn their place: the same measure, off.
 - **Decisions that never reached the game taken back (2026-10-31, every build: gt1 gt0.11, gz1 gz0.4, gp1 gp0.5, gt1dev
   gt0.25dev, gz1dev gz0.14dev, gp1dev gp0.7dev; #47).** The macro model's decisions so far are noted when it decides;
   the replays count the production commands given. On the input check's game the Terran's Marines decided ran 7 over

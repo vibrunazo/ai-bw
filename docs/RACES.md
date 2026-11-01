@@ -99,8 +99,11 @@ The playing builds differ more: `gt1` keeps every stop-gap, `gz1` the pros' deci
    the Terran or the Protoss (further from the pros in both: they are the larvae's), so they stay the Zerg's, as its
    `hatch_mass` and tech floor; the under-half rule stays for races that wait for a busy building. The Terran's built
    counts are every dev build's (gz0.13dev, gp0.6dev). Left: the Zerg's unit count (its eggs counted otherwise, #50).
-3. **The fight rules as race tables**: the Terran's hand rules and the Zerg's retreat, then the army rules (posts,
-   raid) for any race's flyers.
+3. **The fight rules as race tables.** The Terran's pull and reinforce run in any race's fight layer (option
+   `fightrules`, one list of flyers for every race); measured (2026-10-31, docs/PROGRESS.md): no measurable difference
+   in TvZ for the Zerg or in PvZ and PvT for the Protoss over 96 paired games each, so off in the dev builds. Left: the
+   Terran's own rules measured off in gt1dev; the Zerg's retreat and the army rules (posts, raid) for any race's flyers
+   only where a model doesn't own those units; detection for the Protoss (observers with the army) as its mechanics.
 4. **A critic per matchup** (#62), then the belief model per matchup.
 5. **The Protoss's own mechanics** (#36): archon merges, shuttles, its early defense, its key layout from the pros'
    hotkeys.
