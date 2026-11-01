@@ -39,7 +39,7 @@ BOX_MARGIN = 20                      # screen pixels around the group's units wh
 SCOUT_KEY = 0
 HK_ARMY = [1, 2]
 COMMANDS = {"MOVE", "ATTACK_MOVE", "ATTACK_UNIT", "GATHER", "OWN_UNIT", "STOP", "HOLD", "STIM", "RETURN_CARGO",
-            "TRAIN_FIGHTER"}
+            "TRAIN_FIGHTER", "CAST"}
 UPKEEP = {"train_fighter"}           # keys that leave the units' orders as they were: no lease taken
 ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT", "BRACE", "REGROUP", "POST", "SKIRMISH",
          "REPOSITION", "SIEGE", "UNSIEGE", "MINE"}  # roles.py: carried out as commands
@@ -353,6 +353,13 @@ class DirectMotor:
             g.say(f"fight: {len(want)} {_names(units)} -> placed")
         elif a in ("move", "attack_move") and (t.intent is None or t.intent.kind not in STAY_IN_MODE)                 and self._out_of_mode([u for u in units if u["tag"] in want], d, "unsiege_at"):
             return
+        elif a == "cast":                        # a spell's key, then a click on the spot (on a unit: cast where it is)
+            p = screen_of(obs, key[1], key[2])
+            if p:
+                hi.order_click(d["order"], *p)
+            else:
+                hi.minimap_command(d["order"], key[1], key[2])
+            g.say(f"fight: {_names(units)} -> {d['spell']}")
         elif a == "mine":                        # (I, then a click on the ground there: on a unit it targets the unit)
             gx, gy = self._ground_near(obs, key[1], key[2])
             p = screen_of(obs, gx, gy)

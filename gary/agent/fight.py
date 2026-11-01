@@ -926,5 +926,75 @@ class StimRule:
         g.motor.start(intent)
         return True
 
-RULES = {"stim": StimRule, "block": BlockRule, "pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule,
+class CastRule:
+    """Cast a spell when the pros would, where they would (gary/policy/cast.py: Psionic Storm, learned from the pros'
+    storms). Every half second in a fight, each caster with the energy (its research done) is drawn at the when
+    model's odds (dice: P(a cast within CAST_WITHIN) as a rate over the time since its last draw, up to two windows: a
+    threshold cast a third as often as the pros, Gary's fights scoring moderate odds, ST184a; a draw a turn half, the
+    fight's turns coming when the hands are free, ST185a); the likeliest drawn casts at the spot the where model ranks
+    first, selected alone, its spell's key and a click. A
+    decoder, not a stop-gap: the decisions are the models'. Option model: a train/cast.py checkpoint (default: the
+    latest of the spell in runs/cast)."""
+
+    name = "cast"
+
+    def __init__(self, g: Gary, spell: str = "storm", model: str | None = None):
+        from gary.policy.cast import CastModel
+        self.g = g
+        if model is None:
+            found = sorted(Path("runs/cast").glob(f"{spell}_*.pkl"))
+            if not found:
+                raise FileNotFoundError(f"no {spell} model in runs/cast: python -m train.cast --spell {spell}")
+            model = found[-1]
+        self.model = CastModel(model)
+        self.spell = self.model.spell
+        self.next = 0
+        self.casts: list[tuple[int, int, int, int]] = []   # (frame, caster, x, y): Gary's own, for the inputs
+        self.hp: dict[int, int] = {}                        # caster -> hp and shields half a second ago
+        self.rng = np.random.default_rng(g.game_seed)
+        self.drawn_at: dict[int, int] = {}                  # caster -> when it was last drawn
+
+    def step(self, obs: dict, mine: list[dict]) -> bool:
+        from gary.policy.cast import CAST_AGAIN, CAST_WITHIN, RECENT, SAMPLE_EVERY, cast_features, enemy_units, in_fight, spots
+        g, hi, sp = self.g, self.g.hi, self.spell
+        at = g.researched_at.get(sp.tech)
+        if hi.frame < self.next or at is None or hi.frame - at < sp.research:
+            return False
+        self.next = hi.frame + SAMPLE_EVERY
+        f = hi.frame
+        self.casts = [c for c in self.casts if f - c[0] < max(RECENT, CAST_AGAIN)]
+        enemies = enemy_units(obs["units"], g.slot)
+        own = [u for u in mine if u["completed"]]
+        hp, self.hp = self.hp, {u["tag"]: u["hp"] + u.get("shields", 0) for u in own if u["type"] == sp.caster}
+        busy = {c[1] for c in self.casts if f - c[0] < CAST_AGAIN}
+        casters = [u for u in own if u["type"] == sp.caster and (u.get("energy") or 0) >= sp.energy
+                   and u["tag"] not in busy and not g.leases.handed(u["tag"]) and in_fight(u, enemies)]
+        if not casters:
+            return False
+        recent = [(x, y) for fr, _, x, y in self.casts if f - fr < RECENT]
+        X = np.stack([cast_features(sp, u, own, enemies, f, recent, hp.get(u["tag"])) for u in casters])
+        p = self.model.wants(X)
+        # (dice: P(a cast within CAST_WITHIN) as a rate, drawn for the time since this caster's last draw: the fight
+        # layer's turns come when the hands are free, not every half second)
+        since = np.array([min(f - self.drawn_at.get(u["tag"], f - SAMPLE_EVERY), 2 * CAST_WITHIN) for u in casters])
+        self.drawn_at.update({u["tag"]: f for u in casters})
+        drawn = self.rng.random(len(p)) < 1 - (1 - np.minimum(p, 0.999)) ** (since / CAST_WITHIN)
+        if not drawn.any():
+            return False
+        i = int(np.argmax(np.where(drawn, p, -1)))
+        u = casters[i]
+        pts, rows = spots(sp, u, own, enemies, recent)
+        if not pts:
+            return False
+        x, y = pts[self.model.spot(rows)]
+        self.casts.append((f, u["tag"], x, y))
+        intent = command_intent(("cast", x, y), [u["tag"]], (u["x"], u["y"]))
+        intent.kind, intent.source = "CAST", "hands:cast"
+        intent.params.update(order=sp.order, spell=sp.name, exact=True)
+        g.motor.start(intent)
+        g.say(f"{sp.name} at {x // 32},{y // 32} (odds {p[i]:.2f})")
+        return True
+
+
+RULES = {"cast": CastRule, "stim": StimRule, "block": BlockRule, "pull": PullRule, "load": LoadRule, "repair": RepairRule, "reinforce": ReinforceRule,
          "unload": UnloadRule, "detect": DetectRule}

@@ -81,6 +81,7 @@ class Gary:
         self.researched: set[int] = set()
         self.researched_at: dict[int, int] = {}          # tech -> frame its research was ordered
         self.stimmed_at: dict[int, int] = {}             # unit tag -> frame Gary stimmed it
+        self.game_seed = 0                               # the game's seed (manifests.build_gary)
         self.upgraded: Counter = Counter()
         self.gas_workers: dict[int, set[int]] = {}       # refinery tag -> workers on it
         self.ignore_idle_until: dict[int, int] = {}      # workers (or refineries) to leave alone until then

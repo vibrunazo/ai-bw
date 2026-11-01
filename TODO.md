@@ -54,7 +54,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 ## Gameplay
 
 - [#2](https://github.com/vibrunazo/gary/issues/2) Hold early zergling harass and all-ins (and how much to commit to defense)
-- [#4](https://github.com/vibrunazo/gary/issues/4) Micro: spreading, sieging, spells as learned decisions
+- [#4](https://github.com/vibrunazo/gary/issues/4) Micro: spreading, sieging, spells as learned decisions (Psionic Storm
+  learned, gp0.11dev: gary/policy/cast.py's spell table takes the others' area spells next)
 - [#26](https://github.com/vibrunazo/gary/issues/26) Strategy layer: pick among proven builds and follow the timeline
   (and rebuild the selector's table from league games)
 - [#37](https://github.com/vibrunazo/gary/issues/37) Human game 4's failure list
@@ -68,8 +69,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
   PvZ by their matchups' role models (gt0.21dev, gz0.10dev), every mirror by its own (gt0.23dev, gz0.11dev, gp0.2),
   the Protoss's PvT and PvZ apart (gp0.3), its dev build (gp1dev, docs/RACES.md), the Terran's queue of two (gp0.5dev),
   Reavers and Carriers armed (gp0.8dev: they never fired before), Archons merged as the pros do (gp0.9dev), the pros' key
-  layout (gp0.10dev); left: storms (#4), shuttles, its early defense and unit mix (gp1dev decides fewer army units, more
-  Pylons and cannons: PvZ -0.068 +- 0.065)
+  layout (gp0.10dev), storms (gp0.11dev); left: shuttles, its early defense and unit mix (gp1dev decides fewer army
+  units, more Pylons and cannons: PvZ -0.068 +- 0.065; High Templar two thirds of the pros')
 - [#61](https://github.com/vibrunazo/gary/issues/61) The Terran's modes in PvT (gt0.22dev siege and lay mines): held as long as the
   pros hold them, the pros' mines outside fights, Spider Mines four minutes late
 - [#62](https://github.com/vibrunazo/gary/issues/62) Type gg and leave when the critic's win odds stay under 20% (default;
@@ -83,6 +84,8 @@ closed and its line leaves this file; docs/PROGRESS.md keeps what was done and h
 
 - [#31](https://github.com/vibrunazo/gary/issues/31) Mirror health rounds and the Protoss macro models (rounds played, no errors;
   left: the death records' slot in mirrors; the Protoss PvT/PvZ misses are Zealot/Dragoon and reactive buildings)
+- [#64](https://github.com/vibrunazo/gary/issues/64) The army layer's draws use seed 0 in every game (fix with the next version
+  bump of every build: every baseline replayed)
 - [#63](https://github.com/vibrunazo/gary/issues/63) Grade games at time by the critic's win odds, not the supply ratio
   (regrade past rounds both ways first: adopt only if the minimum detectable effect shrinks)
 - [#32](https://github.com/vibrunazo/gary/issues/32) The gap score disagrees with results

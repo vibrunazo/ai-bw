@@ -798,6 +798,9 @@ OPTIONS = {
     # fight.py StimRule: stims when the pros would (gary/policy/stim.py, learned from 400 of their TvZ games;
     # human game 2: stim researched, never used)
     "stim": lambda m: m["fight"].__setitem__("before", m["fight"]["before"] + ["stim"]),
+    # fight.py CastRule: Psionic Storms when and where the pros cast them (gary/policy/cast.py, train/cast.py; #4)
+    "storm": lambda m: (m["fight"].update(before=list(m["fight"].get("before", [])) + ["cast"]),
+                        m["fight"].setdefault("rule_options", {}).setdefault("cast", {}).update(spell="storm")),
     "repair_turrets": lambda m: m["fight"].setdefault("rule_options", {}).setdefault("repair", {}).update(turrets=3),
     "pull_cap": lambda m: m["fight"].setdefault("rule_options", {}).setdefault("pull", {}).update(ground_only=True, max_enemy=8),
     # posture.py v3: a pool finished by 2:40 is an early pool, with a natural or not. On v0.16 (v2),
@@ -1249,7 +1252,12 @@ MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allsty
 # merges formed; won 10 lost 0 of 48 (BZ179a, gp0.7dev: 9 and 3)
 # gp0.10dev: the Protoss pros' key layout (gary/agent/grouping.py LAYOUTS: army on 1-4, production on 5-8, a Nexus on 9;
 # it was the army on 1-3, Nexuses on 4-5, production on 6-9)
-MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue+builtcount+archons"), "version": "gp0.10dev"}
+# gp0.11dev: Psionic Storms when and where the pros cast them (storm: fight.py CastRule, gary/policy/cast.py; #4).
+# Judged on fidelity: PvZ against gz1dev (ST186a), storms in 88% of games, 3.9 by 15:00 and 7.3 by 20:00 (the pros 84%,
+# 5.9, 10.9; its High Templar 3.3 and 4.2 at 16 and 20 minutes, the pros' 4.1 and 6.9), the spot's enemy supply 4.7
+# (6.1); PvT against gt1dev (SV187a) 73%, 0.7 and 3.2 (46%, 1.2, 3.5). Paired, no measurable difference: PvZ against
+# ZB184a -0.026 +- 0.066, PvT against KP183a -0.005 +- 0.037
+MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue+builtcount+archons+storm"), "version": "gp0.11dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:
@@ -1280,6 +1288,7 @@ def build_gary(hi, mapinfo, manifest: str | dict, style: int | str | None = None
     torch.set_num_threads(1)       # its models are small: games run side by side (14 at once: 2.7x faster)
     m = manifest_of(manifest)
     g = Gary(hi, mapinfo, m["version"], verbose, m.get("race", "T"))
+    g.game_seed = seed                            # (the rules that draw: fight.py CastRule)
     if style is not None:                         # (by id or by name, for this race in this matchup: gary/styles.py)
         from gary.styles import resolve
         style = resolve(g.matchup, g.race.letter, style)

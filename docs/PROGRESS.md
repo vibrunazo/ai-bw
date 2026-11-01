@@ -1690,6 +1690,27 @@ plan and the full log).
   +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
   loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
   it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
+- **Psionic Storms as the pros cast them (2026-11-01, gp0.11dev, option storm; docs/RACES.md step 5, #4, #36).** Gary-P
+  researched Psionic Storm in three quarters of its games and never cast one. A spell is now an entry of a table
+  (gary/policy/cast.py SPELLS: the caster, the order, the energy, the area), with two models learned from the pros'
+  casts (ingest/cast_dataset.py: the re-simulator's orders give each cast's clicks and point, the game stepped in
+  OpenBW gives which caster lost the energy; 1,200 PvZ, PvT and PvP games, 10,273 storms in 646). When: each Templar
+  with the energy in a fight, every half second, P(the pro casts with it within a second), trees, test AUC 0.83, its
+  odds calibrated (mean 0.074, the casts 0.069). Where: the visible enemy units within reach as candidate spots, a
+  small network's score and a softmax over a cast's spots (trees on each spot alone 0.18 top-1, the softmax 0.25, the
+  plain most-supply ranking 0.21, random 0.14); its spots hit what the pros' do (enemy supply 8.0 against 7.4, own
+  units 0.13 against 0.21; the plain ranking 10.0 and 0.06). Enemy HP isn't an input: the game shows it only for a
+  unit selected. Gary's fight layer carries them out (fight.py CastRule, a decoder: the Templar selected alone, its
+  key and a click; a `hands:` lease while it walks). The decoder in three PvZ rounds against gz1dev, storms a game by
+  15:00 and 20:00 (the pros 5.9 and 10.9, in 84% of games): a threshold 1.8 and 3.6 (ST184a: Gary's thinner fights
+  score moderate odds that never pass it); a draw at the odds each fight turn 3.0 and 5.2 (ST185a: the fight's turns
+  come when the hands are free, about one half-second in two); a draw at the odds over the time since the Templar's
+  last draw 3.9 and 7.3, in 88% of games (ST186a), 90% of decisions landing. What's left is the unit mix: Gary-P has
+  3.3 and 4.2 High Templar at 16 and 20 minutes, the pros 4.1 and 6.9, so a Templar storms about as often as theirs.
+  Its spots are thinner (enemy supply 4.7, the pros' 6.1; own 0.35 and 0.25). PvT against gt1dev (SV187a): storms in
+  73% of games, 0.7 and 3.2 (the pros 46%, 1.2, 3.5). Paired, no measurable difference: PvZ against ZB184a (gp0.10dev)
+  -0.026 +- 0.066, PvT against KP183a -0.005 +- 0.037. Adopted in gp1dev on fidelity; ST186a and SV187a are gp0.11dev's
+  PvZ and PvT baselines. On the way: the army layer's draws were never seeded per game (#64).
 - **The Protoss pros' key layout (2026-11-01, gp0.10dev; docs/RACES.md step 5, #36).** Gary-P's keys were the other
   races' defaults: the army on 1-3, Nexuses on 4-5, production on 6-9. The Protoss pros' hotkeys
   (ingest/hotkey_dataset.py, 100 modern games each of PvT and PvZ, recalls a minute after 5:00 by what the key held):
