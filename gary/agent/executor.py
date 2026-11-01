@@ -24,6 +24,7 @@ from gary.mapinfo import Base
 
 SELECT_TRIES = 6                      # clicks on a building that select nothing before it's left alone...
 UNSELECTABLE_FOR = 60 * 24            # ...for this long (live, one took 1,335 clicks and froze production)
+REARM_EVERY = 24                      # Reavers and Carriers looked over for ammunition this often
 HK_CC = [4, 5]                        # one hotkey per Command Center (buildings can't share one)
 HK_RAX = [6, 7, 8, 9]                 # (another layout with control groups: gary/agent/grouping.py LAYOUTS)
 
@@ -127,6 +128,7 @@ class Executor:
         self.next_sweep = 0                           # next look for idle workers off screen
         self.born = {}                                # worker tag -> the frame it was first seen done (NEW_WORKER)
         self.next_gas_pull = 0
+        self.next_rearm = 0
         self._terrain_cache = None                    # see terrain()
         self._ramp = None                             # rerally: (spot inside the main's ramp, its bottom), or False
         self.danger: dict[tuple, int] = {}            # balance: base center -> frame zerg fighters were last seen near it
@@ -341,6 +343,29 @@ class Executor:
                                            "want": min(3, on[r["tag"]] + short)}, started=g.hi.frame)
                 return True
         return False
+
+    def rearm(self, obs: dict, done: list[dict]) -> bool:
+        """Reavers and Carriers kept full, as players keep them (the race's ammo table: a Scarab, an Interceptor): those
+        of a type short of their room and building none get one more each, selected together (they are built empty:
+        Gary-P's never fired before 2026-11-01)."""
+        from gary.agent.fight import command_intent
+        g = self.g
+        if not g.race.ammo or g.hi.frame < self.next_rearm:
+            return False
+        self.next_rearm = g.hi.frame + REARM_EVERY
+        short = [u for u in done if u["type"] in g.race.ammo and u["queue"] == 0 and u["ammo"] < u["ammo_max"]
+                 and g.unselectable.get(u["tag"], 0) <= g.hi.frame]
+        if not short:
+            return False
+        kind = short[0]["type"]
+        short = [u for u in short if u["type"] == kind][:obs["me"]["minerals"] // g.race.ammo[kind][1]]
+        if not short:
+            return False
+        center = (sum(u["x"] for u in short) / len(short), sum(u["y"] for u in short) / len(short))
+        intent = command_intent(("train_fighter",), [u["tag"] for u in short], center)
+        intent.source = "executor:ammo"
+        g.motor.start(intent)
+        return True
 
     def adopt_hotkeys(self) -> None:
         """For a game Gary takes over midway (eval/scenarios.py): its production buildings get

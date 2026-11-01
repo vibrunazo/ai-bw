@@ -107,6 +107,7 @@ The playing builds differ more: `gt1` keeps every stop-gap, `gz1` the pros' deci
    Protoss's army are its mechanics (step 5).
 4. **A critic per matchup** (#62), then the belief model per matchup. Both trained for every matchup and race
    (2026-11-01, docs/PROGRESS.md); calibrated at the ends, the middle leaning to the pros' even games. Left: the gg
-   rule itself (#62) and the league's games at time graded by the critic rather than the supply ratio.
+   rule itself (#62) and the league's games at time graded by the critic rather than the supply ratio (#63).
 5. **The Protoss's own mechanics** (#36): archon merges, shuttles, its early defense, its key layout from the pros'
-   hotkeys.
+   hotkeys. Begun (2026-11-01, docs/PROGRESS.md): Reavers and Carriers kept full of Scarabs and Interceptors (they were
+   built empty and never fired).

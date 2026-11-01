@@ -1690,6 +1690,16 @@ plan and the full log).
   +- 0.092, the macro gap -0.022 [-0.142, +0.094] (10-15 minutes +0.051 [+0.013, +0.081] further, 20-30 nearer). The
   loop didn't come back: gz1dev reads its own history (gz0.12dev), and ownbuilds, its exception, went with it. gz1 keeps
   it until gz1dev replaces it; no training fix (noised or dropped history) needed now.
+- **The Protoss's Reavers and Carriers armed (2026-11-01, gp0.6, gp0.8dev; docs/RACES.md step 5, #36).** Step 5 began
+  with Gary-P's unit counts against the modern pros' (the league's rows, BV179 and BZ179, against the cached pro rows):
+  it makes High Templar as the pros do (PvZ 5.6 at 20:00, pros 6.9) and merges none (the pros have an Archon in 44% of
+  PvZ games by then), Shuttles as often (PvT 49-65% of games), Reavers more (PvT 39% at 12:00, pros 29%), and one
+  Odyssey game made 13 Carriers. A Reaver or Carrier is built empty (OpenBW sets its Scarabs and Interceptors to none)
+  and nothing in Gary trained them, so every one Gary-P made never fired. A plain bug, adopted on its check: the
+  environment shows a unit's ammunition (`ammo`, `ammo_max`), and the hands keep them full (executor.rearm, the race's
+  ammo table: those of a type short and building none selected together, R, as a player does; no lease taken, the
+  unit's order stands). On KnockOut seed 4004 the Reavers sat at 5 of 5 from 8:00, fired and were refilled. Parity's
+  PvT game changed, the other matchups' did not. The Protoss baselines (BV179, BZ179) are stale for gp0.8dev.
 - **A critic per matchup (2026-11-01; docs/RACES.md step 4, #62).** train/value.py was TvZ's: it now trains any
   matchup and race, from the matchup's pros and its league games (both sides in a mirror, deaths valued for every race),
   on a belief model of the matchup (train/belief.py, trained for PvT, PvZ, PvP, TvT and ZvZ: the enemy army's supply

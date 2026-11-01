@@ -44,6 +44,8 @@ PRODUCER = {PROBE: NEXUS, ZEALOT: GATEWAY, DRAGOON: GATEWAY, HIGH_TEMPLAR: GATEW
             SHUTTLE: ROBOTICS, REAVER: ROBOTICS, OBSERVER: ROBOTICS,
             SCOUT: STARGATE, CORSAIR: STARGATE, CARRIER: STARGATE, ARBITER: STARGATE}
 MERGE = {ARCHON: HIGH_TEMPLAR, DARK_ARCHON: DARK_TEMPLAR}
+# what a unit fires that it builds itself (it is built empty): its ammunition and the minerals of one
+AMMO = {REAVER: (SCARAB, 15), CARRIER: (INTERCEPTOR, 25)}
 
 # what must exist (completed) before something can be made (buildings also need a pylon's power)
 REQUIRES = {

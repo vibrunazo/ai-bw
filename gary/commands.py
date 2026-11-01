@@ -94,6 +94,16 @@ def stim() -> bytes:
     return struct.pack("<B", 0x36)
 
 
+def train_fighter() -> bytes:
+    """The selected Reavers build a Scarab, Carriers an Interceptor (R, I)."""
+    return struct.pack("<B", 0x27)
+
+
+def merge_archon(dark: bool = False) -> bytes:
+    """The two (or more) selected High Templar merge into Archons (T); Dark Templar into Dark Archons (R)."""
+    return struct.pack("<B", 0x5A if dark else 0x2A)
+
+
 def return_cargo() -> bytes:
     return struct.pack("<BB", 0x1E, 0)
 

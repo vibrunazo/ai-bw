@@ -337,7 +337,9 @@ MANIFESTS: dict[str, dict] = {
     # first 19% (no style told before)) rolled (dice), its probes on gas the head's (gaswaits), one-offs and expansions by summed odds, builds parked as the money comes (three at once), a Pylon
     # ahead of production and for power; the army's commitments from the matchup's commit model
     # gp0.5: every build's fix of 2026-10-31 (as gt0.11's)
-    "gp1": {"version": "gp0.5", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
+    # gp0.6: Reavers and Carriers kept full of Scarabs and Interceptors (the hands, executor.rearm: they are built empty,
+    # and every one Gary-P made before never fired)
+    "gp1": {"version": "gp0.6", "race": "P", "posture": "normal", "leases": "enforced", "balance": True, "builder_back": True,
             "macro": {"provider": "learned", "model": "runs/macro_exp/P_all_v2all/model.pt", "builds": [], "decoder": "dice",
                       "odds_mass": 1.0, "expand_mass": 1.0, "park": True, "supply_ahead": True, "parked_max": 3,
                       "gas_waits": True, "style": "roll", "look_seen": True, "unit_count": True, "history_styles": "v2"},
@@ -1236,7 +1238,8 @@ MANIFESTS["gz1dev"] = {**manifest_of("gz1+unscripted+seenall+zfullhp+eggs+allsty
 # gp0.6dev: builtcount, as gt1dev's and gz1dev's (its decisions so far as the replays count them: the same through 9
 # minutes of the input check's game, every building it decided started)
 # gp0.7dev: every build's fix of 2026-10-31 (as gt0.25dev's: decisions that ended without their command taken back)
-MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue+builtcount"), "version": "gp0.7dev"}
+# gp0.8dev: Reavers and Carriers kept full (as gp0.6's)
+MANIFESTS["gp1dev"] = {**manifest_of("gp1+unscripted+grouping+gamequeue+builtcount"), "version": "gp0.8dev"}
 
 
 def _against(m: dict, vs: dict) -> dict:

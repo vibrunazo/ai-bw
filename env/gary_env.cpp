@@ -296,7 +296,7 @@ GARY_API const char* gary_env_observe(void* h) {
 		         "{\"tag\":%u,\"owner\":%d,\"type\":%d,\"x\":%d,\"y\":%d,\"hp\":%d,\"shields\":%d,"
 		         "\"completed\":%d,\"visible_to\":%d,\"order\":%d,\"resources\":%d,\"queue\":%d,"
 		         "\"cooldown\":%d,\"order_target\":%u,\"tx\":%d,\"ty\":%d,\"carrying\":%d,\"hp_max\":%d,\"energy\":%d,"
-		         "\"stim\":%d}",
+		         "\"stim\":%d,\"ammo\":%d,\"ammo_max\":%d}",
 		         (unsigned)f.get_unit_id(u).raw_value, u->owner, (int)u->unit_type->id, u->sprite->position.x,
 		         u->sprite->position.y, u->hp.integer_part(),
 		         u->unit_type->has_shield ? u->shield_points.integer_part() : 0,
@@ -304,7 +304,8 @@ GARY_API const char* gary_env_observe(void* h) {
 		         f.ut_resource(u->unit_type) ? u->building.resource.resource_count : 0, (int)u->build_queue.size(),
 		         (int)u->ground_weapon_cooldown, target ? (unsigned)f.get_unit_id(target).raw_value : 0u,
 		         u->order_target.pos.x, u->order_target.pos.y, (int)u->carrying_flags, u->unit_type->hitpoints.integer_part(), u->energy.integer_part(),
-		         (int)u->stim_timer);
+		         (int)u->stim_timer, (int)(f.unit_scarab_count(u) + f.unit_interceptor_count(u)),
+		         (int)(f.unit_max_scarab_count(u) + f.unit_max_interceptor_count(u)));
 		o += buf;
 	}
 	o += "]}";

@@ -44,6 +44,7 @@ class Race:
     worker_speed: float = 4.92           # its worker's top speed, px a frame (SCV 4.92; Drone and Probe 5.49)
     in_mode: dict = field(default_factory=dict)    # unit type in a mode -> the type it counts as (a sieged tank: a tank)
     modes: dict = field(default_factory=dict)      # the fight's modes: role -> (types, tech, research frames, order, uses)
+    ammo: dict = field(default_factory=dict)       # unit -> (the ammunition it builds itself, its minerals): Scarabs
     production_in_sight: bool = False    # what it makes shows while made (Zerg: an egg, the morphing building still the
                                          # old one), as the replays count it; Terran and Protoss units in training don't
     minerals: dict = field(init=False)   # unit -> its mineral cost
@@ -79,5 +80,5 @@ class Race:
         if letter == "P":
             return Race("P", P, P.PROBE, frozenset(P.TOWN_HALLS), P.NEXUS, P.PYLON, P.ASSIMILATOR, frozenset(P.PRODUCTION),
                         P.PRODUCER, P.COST, P.SIZE, P.REQUIRES, P.RESEARCH, P.UPGRADE, frozenset(P.ARMY), P.NAMES,
-                        P.TECH_NAMES, P.UPGRADE_NAMES, P.SUPPLY, P.SUPPLY_PROVIDED, worker_speed=5.49)
+                        P.TECH_NAMES, P.UPGRADE_NAMES, P.SUPPLY, P.SUPPLY_PROVIDED, worker_speed=5.49, ammo=P.AMMO)
         raise ValueError(f"no race {letter!r} (T, Z or P)")

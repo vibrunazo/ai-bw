@@ -38,7 +38,9 @@ from gary.interface import screen_of, unit_name
 BOX_MARGIN = 20                      # screen pixels around the group's units when drag-selecting
 SCOUT_KEY = 0
 HK_ARMY = [1, 2]
-COMMANDS = {"MOVE", "ATTACK_MOVE", "ATTACK_UNIT", "GATHER", "OWN_UNIT", "STOP", "HOLD", "STIM", "RETURN_CARGO"}
+COMMANDS = {"MOVE", "ATTACK_MOVE", "ATTACK_UNIT", "GATHER", "OWN_UNIT", "STOP", "HOLD", "STIM", "RETURN_CARGO",
+            "TRAIN_FIGHTER"}
+UPKEEP = {"train_fighter"}           # keys that leave the units' orders as they were: no lease taken
 ROLES = {"FIRE", "CLOSE_IN", "PULL_BACK", "RETREAT", "BRACE", "REGROUP", "POST", "SKIRMISH",
          "REPOSITION", "SIEGE", "UNSIEGE", "MINE"}  # roles.py: carried out as commands
 # a move for units that include some in a mode that can't move (a sieged tank) takes them out of it first (O, then the
@@ -375,9 +377,9 @@ class DirectMotor:
             g.say(f"fight: {len(sel & want)} {_names(units)} -> {what}")
         else:
             {"stop": hi.stop, "hold": hi.hold, "stim": hi.stim, "return_cargo": hi.return_cargo, "siege": hi.siege,
-             "unsiege": hi.unsiege}[a]()
+             "unsiege": hi.unsiege, "train_fighter": hi.train_fighter}[a]()
             g.say(f"fight: {len(sel & want)} {_names(units)} -> {a.replace('_', ' ')}")
-        if ordered:
+        if ordered and a not in UPKEEP:
             g.leases.take(want, t.intent)
             if "bunker" in d:                    # a retreat into a bunker: they're its marines now
                 g.loaded.setdefault(d["bunker"], set()).update(want)
