@@ -18,15 +18,16 @@ from dataclasses import dataclass, field
 
 # how long an intent holds its units (frames), by kind; the fight model's commands as long as a
 # unit isn't told the same thing again (fight.REPEAT_FRAMES)
-TTL = {"PULL": 24 * 30, "UNPULL": 24 * 3, "LOAD": 24 * 3, "UNLOAD": 24 * 3, "REPAIR": 24 * 3, "REINFORCE": 24 * 3,
+TTL = {"MERGE": 24 * 15, "PULL": 24 * 30, "UNPULL": 24 * 3, "LOAD": 24 * 3, "UNLOAD": 24 * 3, "REPAIR": 24 * 3, "REINFORCE": 24 * 3,
        "ARMY_MOVE": 24 * 10, "ARMY_ATTACK": 24 * 10, "SCOUT": 24 * 600, "SCAN": 24 * 3, "ATTACK_WAVE": 24 * 60}
 COMMAND_TTL = 48
 ROLE_TTL = {"PULL_BACK": 12, "FIRE": 24, "CLOSE_IN": 24, "RETREAT": 48, "BRACE": 24, "REGROUP": 24, "POST": 24, "SKIRMISH": 12}   # roles.py: re-decided every half second
 
 
 def priority(source: str) -> int:
-    """Whose lease beats whose: the rules, then the fight's decisions, then the army."""
-    return 3 if source.startswith("rule:") else 2 if source in ("fight", "roles") else 1
+    """Whose lease beats whose: the rules and what the hands carry out to its end (two Templar merging), then the
+    fight's decisions, then the army."""
+    return 3 if source.startswith(("rule:", "hands:")) else 2 if source in ("fight", "roles") else 1
 
 
 @dataclass
@@ -74,6 +75,11 @@ class Leases:
     def release(self, tags) -> None:
         for t in tags:
             self.held.pop(t, None)
+
+    def handed(self, tag: int) -> bool:
+        """Held by something the hands carry out to its end (two Templar merging): no army order takes it, leases
+        enforced or not."""
+        return (self.holder(tag) or "").startswith("hands:")
 
     def holder(self, tag: int) -> str | None:
         held = self.held.get(tag)

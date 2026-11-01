@@ -948,6 +948,10 @@ OPTIONS = {
     # gary/policy/macro.py reconcile: the buildings among the model's decisions so far as the replays count them (every
     # building started, a rule's too; a decided one never started taken back): its looks need seenall
     "builtcount": lambda m: m["macro"].update(built_count=True, look_seen=True),
+    # the Protoss macro model with Archon and Dark Archon merges among its decisions (the pros' merge orders, one decision
+    # an Archon begun: ingest/macro_dataset.py), carried out by two Templar merged (protoss_executor.py); P_all_v2arch,
+    # held out 47.8% top-1 against P_all_v2all's 47.5% on the same samples
+    "archons": lambda m: m["macro"].update(model="runs/macro_exp/P_all_v2arch/model.pt"),
     # macro.py count_first: the models' own counts as the replays count them (a building's queue past its unit in
     # training left out, the workers inside a gas building in; #50): its looks need seenall
     "unitcount": lambda m: m["macro"].update(unit_count=True, look_seen=True),

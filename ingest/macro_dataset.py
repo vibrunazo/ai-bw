@@ -12,7 +12,9 @@ state once per second *as that player knew it* and every production decision the
                                4 research, 5 upgrade, 6 expand (a town hall away from the
                                player's existing ones; x, y = tile). Builds are the buildings
                                that really started, timed at the player's first order for
-                               them; spam and failed orders are dropped.
+                               them; spam and failed orders are dropped. An Archon or Dark
+                               Archon merged is a train decision (id 68, 63), one an Archon
+                               formed, timed at the player's first merge order for it.
 
 A model samples (state at t, the player's next decision after t, and how long until it) from
 these. Own state is complete (a player knows their own units); the opponent only through "seen",
@@ -47,7 +49,9 @@ from inventory import data_root
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "resim"))
+sys.path.insert(0, str(REPO_ROOT))
 import scr_format  # noqa: E402  (resim/scr_format.py)
+from eval import monitor, priority  # noqa: E402
 
 VERSION = "v1"
 EVERY = 24                       # one sample per second of game time
@@ -57,6 +61,8 @@ EXPAND_PX = 12 * 32              # a town hall this far from all of a player's o
 BUILD_MATCH_S = 90               # orders for a building count up to this long before it started ...
 BUILD_MATCH_PX = 6 * 32          # ... and this close to where it started
 REPEAT_S = 10                    # repeats of a morph / research / upgrade order within this collapse
+MERGE_MATCH_S = 60               # merge orders count up to this long before their Archon formed
+ARCHONS = {68, 63}               # Archon, Dark Archon: merged, not trained
 ACTS = {"train": 0, "morph": 1, "bmorph": 2, "build": 3, "research": 4, "upgrade": 5}
 ACT_EXPAND = 6
 RACES = {0: "Z", 1: "T", 2: "P"}
@@ -135,9 +141,13 @@ def production_decisions(lines: list[dict], pidx: dict[int, int]) -> list[tuple]
     """
     out = []
     builds: list[dict] = []
+    merges: list[tuple] = []                        # (frame, slot, archon type) of every merge order
     last_order: dict[tuple, int] = {}
     for r in lines:
         if r["type"] != "cmd" or r["slot"] not in pidx:
+            continue
+        if r["act"] == "merge":
+            merges.append((r["frame"], r["slot"], r["id"]))
             continue
         act, f = ACTS[r["act"]], r["frame"]
         if act == ACTS["build"]:
@@ -178,6 +188,23 @@ def production_decisions(lines: list[dict], pidx: dict[int, int]) -> list[tuple]
             if all((h["x"] - e["x"]) ** 2 + (h["y"] - e["y"]) ** 2 > EXPAND_PX ** 2 for h in others):
                 act = ACT_EXPAND
         out.append((f, pidx[e["slot"]], act, e["unit"], e["x"] // 32, e["y"] // 32))
+
+    # Archons: each one begun is a decision at the first of its player's merge orders since the last Archon of that
+    # kind formed at an earlier frame (one order on four Templar makes two, both decided then; spam is one)
+    last_formed: dict[tuple, int] = {}
+    for e in lines:
+        if not (e["type"] == "event" and e["ev"] == "start" and e["unit"] in ARCHONS and e["slot"] in pidx):
+            continue
+        key, done = (e["slot"], e["unit"]), e["frame"]     # (when it began)
+        prev = last_formed.get(key, -10**9)
+        if prev == done:
+            prev = last_formed.get((key, "before"), -10**9)
+        else:
+            last_formed[(key, "before")] = prev
+        last_formed[key] = done
+        orders = [f for f, slot, uid in merges if slot == e["slot"] and uid == e["unit"]
+                  and max(prev, done - MERGE_MATCH_S * 24) < f <= done]
+        out.append((min(orders, default=done), pidx[e["slot"]], ACTS["train"], e["unit"], -1, -1))
     out.sort()
     return out
 
@@ -296,6 +323,7 @@ def main() -> None:
     ap.add_argument("--source", help="only games from this raw source folder (e.g. cwal), e.g. with --force after they were re-simulated")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--restyle", action="store_true", help="only rewrite the index's styles from the taxonomy")
+    priority.add_argument(ap)
     args = ap.parse_args()
     if args.report:
         report()
@@ -309,12 +337,13 @@ def main() -> None:
         todo = todo[:args.limit]
     styles = load_styles(args.matchup)
     print(f"{len(todo)} games to build ({len(done)} already done)", flush=True)
+    priority.apply(args.priority)
     out_dir().mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     with open(out_dir() / "index.jsonl", "a", encoding="utf-8") as index, \
             ProcessPoolExecutor(args.workers) as pool:
         futures = [pool.submit(build_game, r, styles) for r in todo]
-        for n, fut in enumerate(as_completed(futures), 1):
+        for n, fut in enumerate(monitor.track(as_completed(futures), len(futures), "games built"), 1):
             res = fut.result()
             if res.get("interrupted"):          # (killed, not failed: left out, so the next run builds it)
                 continue

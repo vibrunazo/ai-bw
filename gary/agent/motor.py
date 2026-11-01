@@ -753,6 +753,15 @@ class DirectMotor:
             g.task = None
             return
         if t.stage == "selected":
+            handed = [u for u in mine if u["tag"] in set(obs["selection"]) and g.leases.handed(u["tag"])]
+            if handed and not d.get("unhanded"):     # (the box took Templar merging: shift+clicks take them out first)
+                for u in handed:
+                    p = screen_of(obs, *self._hit_point(obs, u))
+                    if p:
+                        hi.click(*p, shift=True)
+                d["unhanded"] = True
+                return
+            d["unhanded"] = False
             sel = [s for s in obs["selection"] if s in set(d["tags"])]
             if g.executor.army_select == "portrait" and sel and len(sel) < len(obs["selection"]) and not d.get("narrowed"):
                 # the box took more than the order's units (drones and overlords at the rally point): a ctrl+click
@@ -780,6 +789,7 @@ class DirectMotor:
                                      "attack": bool(d["attack"])})
             t.stage = "start"
             return
+        d["tags"] = [s for s in d["tags"] if not g.leases.handed(s)]
         left = [u for u in mine if u["tag"] in set(d["tags"]) - set(d["done"])]
         if not left or d["boxes"] >= d.get("max_boxes", ARMY_BOXES):
             if d["done"]:

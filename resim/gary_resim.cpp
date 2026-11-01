@@ -16,7 +16,7 @@
 //   {"type":"header", ...}                      replay info
 //   {"type":"snapshot","frame":F,"players":[...]} every --every frames (default 24 = 1 s; 0 = off)
 //   {"type":"event","frame":F,"slot":P,"ev":"start|done|gone","unit":ID,"tag":T,...}  as they happen
-//   {"type":"cmd","frame":F,"slot":P,"act":"train|build|...","id":N}  accepted production commands
+//   {"type":"cmd","frame":F,"slot":P,"act":"train|build|merge|...","id":N}  accepted production commands
 //   {"type":"end", ...}                          totals
 //
 // Each snapshot reports, per player: minerals, gas, supply (in BW's displayed units), unit counts
@@ -119,8 +119,8 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 	}
 
 	// Accepted production decisions, for training data: what the player chose to make, when.
-	//   {"type":"cmd","frame":F,"slot":P,"act":"train|morph|build|bmorph|research|upgrade","id":N[,"x":X,"y":Y]}
-	// (build: tile position, so a new town hall's location tells an expansion from a macro hatch)
+	//   {"type":"cmd","frame":F,"slot":P,"act":"train|morph|build|bmorph|research|upgrade|merge","id":N[,"x":X,"y":Y]}
+	// (merge: the Archon or Dark Archon the selection's Templar merge into; build: tile position, so a new town hall's location tells an expansion from a macro hatch)
 	void print_production_command(int owner, int action_id, const uint8_t* cmd, const uint8_t* end) {
 		auto u16 = [&](int at) { return cmd + at + 1 < end ? (int)(cmd[at] | cmd[at + 1] << 8) : -1; };
 		auto u8 = [&](int at) { return cmd + at < end ? (int)cmd[at] : -1; };
@@ -133,6 +133,8 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 		case 0x0c: act = "build"; x = u16(3); y = u16(5); id = u16(7); break;
 		case 0x30: act = "research"; id = u8(2); break;
 		case 0x32: act = "upgrade"; id = u8(2); break;
+		case 0x2a: act = "merge"; id = 68; break;   // High Templar into Archons (the selection's pairs)
+		case 0x5a: act = "merge"; id = 63; break;   // Dark Templar into Dark Archons
 		default: return;
 		}
 		if (x >= 0) printf("{\"type\":\"cmd\",\"frame\":%d,\"slot\":%d,\"act\":\"%s\",\"id\":%d,\"x\":%d,\"y\":%d}\n",
@@ -384,7 +386,8 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 	// --- unit events -------------------------------------------------------------------------
 	// Diffing each player's unit list frame by frame, keyed by unit ID (the same IDs replays use
 	// in their Select commands), gives the true build order:
-	//   start  a building began (placed, or a drone/building morphed into it; "from" = old type)
+	//   start  a building began (placed, or a drone/building morphed into it; "from" = old type), or Templar began
+	//          merging into an Archon or Dark Archon
 	//   done   a building finished, or a unit was produced (eggs, larva, etc. are not reported)
 	//   gone   a building or unit died (or was removed when its owner left): its owner and where it
 	//          was last seen alive (for losses by place: ingest/army_dataset.py)
@@ -400,6 +403,10 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 		default:
 			return false;
 		}
+	}
+
+	bool merged(int type) const {
+		return (UnitTypes)type == UnitTypes::Protoss_Archon || (UnitTypes)type == UnitTypes::Protoss_Dark_Archon;
 	}
 
 	void emit(const char* ev, int slot, int type, uint16_t tag, int from = -1, const unit_t* u = nullptr,
@@ -426,7 +433,8 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 				auto it = known.find(tag);
 				if (it == known.end()) {
 					if (building) emit(done ? "done" : "start", p, type, tag, -1, u);  // done: starting buildings
-					else if (done && !transient(type)) emit("done", p, type, tag, -1, u);
+					else if (merged(type) && st.current_frame > 0) emit("start", p, type, tag, -1, u);
+					if (!building && done && !transient(type)) emit("done", p, type, tag, -1, u);
 					known[tag] = {type, done, true, p, ux, uy};
 					continue;
 				}
@@ -436,6 +444,7 @@ struct counting_replay_functions : scr_replay<replay_functions> {
 				if (ux >= 0) { t.x = ux; t.y = uy; }
 				if (t.type != type) {
 					if (building) emit("start", p, type, tag, t.type, u);           // drone -> building, hatchery -> lair
+					else if (merged(type)) emit("start", p, type, tag, t.type, u);  // a Templar into an Archon
 					else if (done && transient(t.type) && !transient(type)) emit("done", p, type, tag, t.type, u);
 					t.type = type;
 					t.completed = done;

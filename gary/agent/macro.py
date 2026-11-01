@@ -626,7 +626,7 @@ class LearnedMacro:
             ahead = sum(g.race.costs[p.unit_type][0] for p in g.parked if p.started > since)
             if me["minerals"] - g.committed() + ahead < minerals or me["gas"] < gas:
                 continue
-            g.task = Task("command", data=plan, started=g.hi.frame)
+            g.task = Task(plan["kind"], data=plan, started=g.hi.frame)
             g.spend(minerals)
             self.queued.remove(entry)
             return True
